@@ -108,7 +108,7 @@
       "explode": [
         0.0,
         0.0,
-        1.9
+        1.45
       ],
       "order": 1,
       "description": "Pectoralis major (clavicular and sternocostal parts).",
@@ -161,7 +161,7 @@
       "label": "Diaphragm",
       "explode": [
         0.0,
-        -1.1,
+        -1.25,
         0.0
       ],
       "order": 4,
@@ -265,8 +265,8 @@
       "layer": "muscle",
       "target": null,
       "explode": [
+        1.65,
         0.35,
-        0.0,
         0.0
       ],
       "description": "Clavicular and sternocostal parts of the left pectoralis major, the large fan-shaped muscle overlying the anterior chest wall.",
@@ -303,8 +303,8 @@
       "layer": "muscle",
       "target": null,
       "explode": [
-        -0.35,
-        0.0,
+        -1.65,
+        0.35,
         0.0
       ],
       "description": "Clavicular and sternocostal parts of the right pectoralis major.",
@@ -341,7 +341,7 @@
       "layer": "skeleton",
       "target": null,
       "explode": [
-        1.25,
+        1.35,
         0.0,
         0.15
       ],
@@ -389,7 +389,7 @@
       "layer": "skeleton",
       "target": null,
       "explode": [
-        -1.25,
+        -1.35,
         0.0,
         0.15
       ],
@@ -438,7 +438,7 @@
       "target": null,
       "explode": [
         0.0,
-        0.0,
+        -1.15,
         0.9
       ],
       "description": "Hyaline costal cartilages: the individual cartilages of ribs 1–7 forming the sternocostal joints, and the fused cartilages of ribs 8–10 that form the costal margin.",
@@ -490,8 +490,8 @@
       "target": null,
       "explode": [
         0.0,
-        0.0,
-        1.1
+        1.35,
+        1.0
       ],
       "description": "Manubrium, body and xiphoid process of the sternum; the heart lies directly behind its lower half.",
       "territory": null,
@@ -528,9 +528,9 @@
       "layer": "skeleton",
       "target": null,
       "explode": [
-        0.6,
-        0.45,
-        0.4
+        0.95,
+        0.95,
+        0.3
       ],
       "description": "Left collarbone, strut between the sternum and the shoulder.",
       "territory": null,
@@ -565,9 +565,9 @@
       "layer": "skeleton",
       "target": null,
       "explode": [
-        -0.6,
-        0.45,
-        0.4
+        -0.95,
+        0.95,
+        0.3
       ],
       "description": "Right collarbone, strut between the sternum and the shoulder.",
       "territory": null,
@@ -650,9 +650,9 @@
       "layer": "lungs",
       "target": null,
       "explode": [
-        1.6,
+        1.95,
         0.0,
-        0.0
+        -0.25
       ],
       "description": "Left lung (upper and lower lobes). Its cardiac notch accommodates the heart, which is why most of the heart lies left of the midline.",
       "territory": null,
@@ -688,9 +688,9 @@
       "layer": "lungs",
       "target": null,
       "explode": [
-        -1.6,
+        -1.95,
         0.0,
-        0.0
+        -0.25
       ],
       "description": "Right lung (upper, middle and lower lobes).",
       "territory": null,
@@ -728,8 +728,8 @@
       "target": null,
       "explode": [
         0.0,
-        0.9,
-        -0.2
+        1.05,
+        -0.25
       ],
       "description": "Trachea and bronchial tree; the tracheal bifurcation (carina) lies just above and behind the left atrium.",
       "territory": null,
@@ -1060,20 +1060,20 @@
         "FMA3784"
       ],
       "center": [
-        -0.097,
-        -0.7429,
-        -0.2808
+        -0.0969,
+        -0.7432,
+        -0.2809
       ],
       "bbox": {
         "min": [
-          -0.2956,
+          -0.2951,
           -2.5101,
-          -0.7377
+          -0.7375
         ],
         "max": [
-          0.1016,
-          1.0242,
-          0.1761
+          0.1013,
+          1.0236,
+          0.1757
         ]
       },
       "triangles": 12000
@@ -1896,14 +1896,14 @@
       },
       "aorta": {
         "position": [
-          2.1248,
-          1.2747,
-          -6.6287
+          2.1244,
+          1.274,
+          -6.6274
         ],
         "target": [
-          -0.097,
-          -0.7429,
-          -0.2808
+          -0.0969,
+          -0.7432,
+          -0.2809
         ],
         "fov": 35.0
       },
