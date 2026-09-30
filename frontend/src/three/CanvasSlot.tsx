@@ -6,6 +6,7 @@ import { cn } from '@/lib/cn';
 import { assetUrl } from '@/services/staticData';
 import { useViewerStore, type Stage } from '@/state/viewerStore';
 import { useCameraState } from './camera/cameraState';
+import { posterFor } from './posters';
 import { useSceneSlot } from './sceneSlot';
 
 export interface CanvasSlotProps {
@@ -15,8 +16,8 @@ export interface CanvasSlotProps {
   children?: ReactNode;
   className?: string;
   /**
-   * Painted under the canvas until WebGL draws its first frame with anatomy (no blank flash). The
-   * workstation defaults to its poster (`public/posters/workstation.webp`, V2 §5.18).
+   * Painted under the canvas until WebGL draws its first frame with anatomy (no blank flash), beneath the
+   * stage's own still (`POSTERS`, V2 §5.18) — e.g. the landing's backdrop gradient.
    */
   placeholder?: ReactNode;
 }
@@ -27,24 +28,22 @@ const CROSSFADE_MS = 300;
 const LOADER_DELAY_MS = 200;
 const LOADER_MIN_MS = 400;
 
-/** The workstation poster: a still of the live canvas at the workstation home pose (≤ 120 KB). */
+/** The workstation poster at 1440 (also the route fallback's). */
 export const WORKSTATION_POSTER = 'posters/workstation.webp';
 
-function WorkstationPoster() {
-  const [failed, setFailed] = useState(false);
+function StagePoster({ src }: { src: string }) {
+  const [failed, setFailed] = useState<string | null>(null);
+  if (failed === src) return null;
   return (
-    <div aria-hidden className="absolute inset-0 bg-void">
-      {!failed && (
-        <img
-          src={assetUrl(WORKSTATION_POSTER)}
-          alt=""
-          decoding="async"
-          draggable={false}
-          onError={() => setFailed(true)}
-          className="h-full w-full select-none object-cover"
-        />
-      )}
-    </div>
+    <img
+      src={assetUrl(src)}
+      alt=""
+      aria-hidden
+      decoding="async"
+      draggable={false}
+      onError={() => setFailed(src)}
+      className="absolute inset-0 h-full w-full select-none object-cover"
+    />
   );
 }
 
@@ -141,7 +140,19 @@ export function CanvasSlot({ stage, children, className, placeholder }: CanvasSl
   const tier = useViewerStore((s) => s.tier);
   const reduced = useIsReducedMotion();
   const ready = firstFrame || tier === 'D';
-  const poster = placeholder ?? (stage === 'workstation' ? <WorkstationPoster /> : null);
+  // The stage's still (for this slot's size) over the page's own placeholder (the landing's backdrop).
+  const [width, setWidth] = useState(() => (typeof window !== 'undefined' ? window.innerWidth : 1440));
+  const rootRef = useRef<HTMLDivElement>(null);
+  useLayoutEffect(() => {
+    const w = rootRef.current?.getBoundingClientRect().width ?? 0;
+    if (w > 0) setWidth(w);
+  }, []);
+  const poster = (
+    <div aria-hidden className="absolute inset-0 bg-void">
+      {placeholder}
+      <StagePoster src={posterFor(stage, width)} />
+    </div>
+  );
   // Keep the poster under the canvas until the crossfade has finished, then drop it.
   const [posterGone, setPosterGone] = useState(ready);
   useEffect(() => {
@@ -158,8 +169,8 @@ export function CanvasSlot({ stage, children, className, placeholder }: CanvasSl
   }, [stage, register, unregister]);
 
   return (
-    <div className={cn('relative isolate overflow-hidden bg-void', className)}>
-      {poster && !posterGone && <div className="absolute inset-0">{poster}</div>}
+    <div ref={rootRef} className={cn('relative isolate overflow-hidden bg-void', className)}>
+      {!posterGone && poster}
       <div
         ref={ref}
         data-ready={ready}

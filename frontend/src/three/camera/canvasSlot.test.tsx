@@ -3,6 +3,7 @@ import { act, render } from '@testing-library/react';
 import { afterEach, describe, expect, it } from 'vitest';
 import { useViewerStore } from '@/state/viewerStore';
 import { CanvasSlot, WORKSTATION_POSTER } from '../CanvasSlot';
+import { posterFor } from '../posters';
 import { useCameraState } from './cameraState';
 
 afterEach(() => {
@@ -14,7 +15,7 @@ describe('CanvasSlot loading', () => {
   it('paints the workstation poster and keeps the canvas layer transparent until the first frame', () => {
     const { container } = render(<CanvasSlot stage="workstation" />);
     const poster = container.querySelector('img');
-    expect(poster?.getAttribute('src')).toContain(WORKSTATION_POSTER);
+    expect(poster?.getAttribute('src')).toMatch(/posters\/workstation(-1280)?\.webp$/);
     const layer = container.querySelector('[data-ready]') as HTMLElement;
     expect(layer.dataset.ready).toBe('false');
     expect(layer.className).toContain('opacity-0');
@@ -23,10 +24,17 @@ describe('CanvasSlot loading', () => {
     expect(layer.className).toContain('opacity-100');
   });
 
-  it('uses the page placeholder instead of the poster (landing hero)', () => {
+  it('layers the hero still over the page placeholder (landing backdrop), never a blank hero', () => {
     const { container } = render(<CanvasSlot stage="hero" placeholder={<div data-testid="hero-poster" />} />);
-    expect(container.querySelector('img')).toBeNull();
     expect(container.querySelector('[data-testid="hero-poster"]')).not.toBeNull();
+    expect(container.querySelector('img')?.getAttribute('src')).toContain('posters/hero');
+  });
+
+  it('picks the still rendered for the stage size', () => {
+    expect(posterFor('workstation', 1440)).toBe(WORKSTATION_POSTER);
+    expect(posterFor('workstation', 1280)).toBe('posters/workstation-1280.webp');
+    expect(posterFor('workstation', 1600)).toBe(WORKSTATION_POSTER);
+    expect(posterFor('hero', 1270)).toBe('posters/hero-1280.webp');
   });
 
   it('treats the 2D schematic (tier D) as drawn', () => {

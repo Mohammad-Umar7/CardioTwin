@@ -15,24 +15,27 @@ if (host) {
 }
 
 /**
- * Dev helper for re-rendering the workstation poster (`public/posters/workstation.webp`, V2 §5.18): open
- * the workstation at 1440×900 with nothing selected, let the heart settle, then in the console
+ * Dev helper for re-rendering the stage stills (`public/posters/*.webp`, see posters.ts; V2 §5.18): open the
+ * page at the poster's viewport (1440×900 or 1280×720) with nothing selected, let the heart settle, then
+ * in the console
  *   const blob = await __ctPoster(); open(URL.createObjectURL(blob))
- * and save the image. It draws the next rendered frame at 1440×824 (the stage size, view offset included).
+ * and save the image. It renders one frame synchronously and captures the canvas at its CSS size (the
+ * stage size, view offset included), so the still matches the live first frame pixel for pixel.
  */
 function installPosterHelper(): void {
   if (!import.meta.env.DEV || typeof window === 'undefined') return;
   (window as unknown as { __ctPoster?: (quality?: number) => Promise<Blob | null> }).__ctPoster = (quality = 0.86) =>
     new Promise((resolve) => {
-      requestAnimationFrame(() => {
-        const canvas = host?.querySelector('canvas');
-        if (!canvas) return resolve(null);
-        const out = document.createElement('canvas');
-        out.width = 1440;
-        out.height = 824;
-        out.getContext('2d')?.drawImage(canvas, 0, 0, out.width, out.height);
-        out.toBlob((blob) => resolve(blob), 'image/webp', quality);
-      });
+      const canvas = host?.querySelector('canvas');
+      if (!canvas) return resolve(null);
+      const out = document.createElement('canvas');
+      out.width = Math.round(canvas.clientWidth);
+      out.height = Math.round(canvas.clientHeight);
+      // Render now and copy in the same task: the drawing buffer is not preserved across frames.
+      const step = (window as unknown as { __ct?: { frames?: (n: number, ms: number) => Promise<void> } }).__ct?.frames;
+      void step?.(1, 0);
+      out.getContext('2d')?.drawImage(canvas, 0, 0, out.width, out.height);
+      out.toBlob((blob) => resolve(blob), 'image/webp', quality);
     });
 }
 installPosterHelper();

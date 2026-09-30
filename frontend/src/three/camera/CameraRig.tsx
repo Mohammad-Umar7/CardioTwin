@@ -548,8 +548,11 @@ export function CameraRig() {
       framingVersion.current = sceneRuntime.framing.version;
       const st = stageRef.current;
       const atHome = st === 'hero' || (st === 'workstation' && useCameraState.getState().viewKind === 'home');
-      if (st !== 'hidden' && atHome && !userTouched.current && !peelOut.current && !openFit.current) flyHome(!reduced);
-      else if (st === 'workstation' && openFit.current && !userTouched.current) fitOpenHeart(!reduced);
+      // Before the first anatomy frame the poster is still up: snap, so the crossfade lands on the exact
+      // pose the poster was rendered at instead of a zoom.
+      const animate = !reduced && useCameraState.getState().firstFrame;
+      if (st !== 'hidden' && atHome && !userTouched.current && !peelOut.current && !openFit.current) flyHome(animate);
+      else if (st === 'workstation' && openFit.current && !userTouched.current) fitOpenHeart(animate);
     }
 
     // View offset: the orbit target sits at the centre of the free area; glides over `flyout`.
