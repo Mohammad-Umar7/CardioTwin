@@ -143,3 +143,22 @@ models:
       colsample_bytree: { uniform: [0.3, 1.0] }
       min_child_weight: { loguniform: [1.0, 10.0] }
       reg_lambda: { loguniform: [0.1, 20.0] }
+
+# Descriptive validation analyses: python -m cardiotwin_ml.analysis (docs/CONTRACTS.md §7.2). They never refit,
+# recalibrate or re-threshold the deployed model and only ADD keys to metrics.json (robustness, modality_ablation,
+# subgroups, analysis) plus metrics_summary.json.
+analysis:
+  robustness:              # Monte-Carlo repeated hold-out of the frozen recipe
+    n_splits: 200
+    test_size: 0.20
+    split_seed_start: 1000   # Monte-Carlo split i uses random_state = split_seed_start + i (the locked split uses seed)
+    hyperparameters: search  # search: re-run the final hyper-parameter search in every split | frozen: deployed values
+    sensitivity: frozen      # also run the other mode on the same splits (tuning-optimism check); null to skip
+  modality:                # development-set CV per modality set (same folds as the leaderboard)
+    n_repeats: 10
+    confidence: 0.95         # Nadeau-Bengio corrected resampled t intervals
+  subgroups:
+    age_bands: [50, 65]      # <50, 50-65, >65 years
+    small_n: { min_n: 30, min_class: 10 }   # flag estimates from fewer patients (or fewer per class) as unstable
+    n_bootstrap: 2000
+    confidence: 0.95
