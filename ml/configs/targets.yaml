@@ -1,6 +1,8 @@
 # Prediction targets. Adding a target = adding an entry here (plus its column in the dataset).
 #
 #   id               stable identifier used everywhere (API, UI, metrics)
+#   kind             overall (whole-heart CAD) | vessel (one coronary artery; summed into
+#                    summary.expected_diseased_vessels)
 #   source_column    dataset column holding the label
 #   positive_values  raw values counted as the positive class (all others are negative)
 #   anatomy          glTF node names the frontend colours with this target's probability
@@ -13,6 +15,7 @@ targets:
   - id: CAD
     label: Coronary artery disease
     short: CAD
+    kind: overall
     source_column: Cath
     positive_values: [CAD, Cad]
     anatomy: [heart]
@@ -21,6 +24,7 @@ targets:
   - id: LAD
     label: Left anterior descending artery
     short: LAD
+    kind: vessel
     source_column: LAD
     positive_values: [Stenotic]
     anatomy: [Coronary_LAD, Coronary_LAD_Septal]
@@ -29,6 +33,7 @@ targets:
   - id: LCX
     label: Left circumflex artery
     short: LCX
+    kind: vessel
     source_column: LCX
     positive_values: [Stenotic]
     anatomy: [Coronary_LCX]
@@ -37,6 +42,7 @@ targets:
   - id: RCA
     label: Right coronary artery
     short: RCA
+    kind: vessel
     source_column: RCA
     positive_values: [Stenotic]
     anatomy: [Coronary_RCA, Coronary_RCA_Marginal, Coronary_RCA_PDA, Coronary_RCA_PL, Coronary_RCA_Septal]

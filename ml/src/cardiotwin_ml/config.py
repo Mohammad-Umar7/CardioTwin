@@ -69,6 +69,7 @@ class TargetSpec:
     id: str
     label: str
     short: str
+    kind: str  # overall | vessel
     source_column: str
     positive_values: tuple[str, ...]
     anatomy: tuple[str, ...]
@@ -99,6 +100,10 @@ class TargetRegistry:
     @property
     def ids(self) -> list[str]:
         return [t.id for t in self.targets]
+
+    @property
+    def vessel_ids(self) -> list[str]:
+        return [t.id for t in self.targets if t.kind == "vessel"]
 
 
 def _read_yaml(path: Path) -> dict[str, Any]:
@@ -178,6 +183,7 @@ def load_target_registry(config_dir: Path = CONFIG_DIR) -> TargetRegistry:
             id=t["id"],
             label=t["label"],
             short=t.get("short", t["id"]),
+            kind=t.get("kind", "vessel"),
             source_column=t["source_column"],
             positive_values=tuple(t["positive_values"]),
             anatomy=tuple(t["anatomy"]),
@@ -188,6 +194,8 @@ def load_target_registry(config_dir: Path = CONFIG_DIR) -> TargetRegistry:
     )
     leakage = tuple(raw["leakage_columns"])
     for t in targets:
+        if t.kind not in ("overall", "vessel"):
+            raise ValueError(f"target {t.id}: kind must be overall|vessel")
         if t.source_column not in leakage:
             raise ValueError(f"target {t.id}: source column {t.source_column} must be listed in leakage_columns")
     return TargetRegistry(targets=targets, leakage_columns=leakage, risk_bands=tuple(raw["risk_bands"]))
