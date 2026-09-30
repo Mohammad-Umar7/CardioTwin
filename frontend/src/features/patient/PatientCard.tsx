@@ -146,6 +146,11 @@ function CardBody() {
   const shown = new Set(items.map((i) => i.key));
   const moreAbnormal = index ? abnormalKeys(index, features).filter((k) => !shown.has(k)).length : 0;
   const layout = reduced ? { duration: 0 } : { duration: MOTION.base / 1000, ease: EASE.out };
+  // Rows fade in only when they join an already-shown list, never on the card's own first paint.
+  const listShown = useRef(false);
+  useEffect(() => {
+    if (!loading) listShown.current = true;
+  }, [loading]);
 
   return (
     <>
@@ -180,21 +185,22 @@ function CardBody() {
           ))}
         </div>
       ) : (
+        // No exit animation (and so no AnimatePresence): a row that left and came back within an exit
+        // (fast 1 → 2 → Esc switching) could be revived by framer-motion at its exit opacity 0 and stay
+        // invisible. Leaving rows drop out at once; the rows that stay glide to their new place and the
+        // newcomers fade in.
         <ul className="m-0 flex list-none flex-col p-0" aria-label={`Inputs that drive ${target} most`}>
-          <AnimatePresence initial={false}>
-            {items.map((item) => (
-              <motion.li
-                key={item.key}
-                layout={reduced ? false : 'position'}
-                initial={{ opacity: 0 }}
-                animate={{ opacity: 1 }}
-                exit={{ opacity: 0, transition: { duration: 0.12 } }}
-                transition={layout}
-              >
-                <KeyRow item={item} value={features[item.key]} recorded={recorded[item.key]} target={target} compare={comparing} />
-              </motion.li>
-            ))}
-          </AnimatePresence>
+          {items.map((item) => (
+            <motion.li
+              key={item.key}
+              layout={reduced ? false : 'position'}
+              initial={listShown.current ? { opacity: 0 } : false}
+              animate={{ opacity: 1 }}
+              transition={layout}
+            >
+              <KeyRow item={item} value={features[item.key]} recorded={recorded[item.key]} target={target} compare={comparing} />
+            </motion.li>
+          ))}
         </ul>
       )}
       {moreAbnormal > 0 && (
