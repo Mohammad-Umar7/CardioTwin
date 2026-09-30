@@ -21,8 +21,10 @@ FlowParticles.tsx    one instanced draw call, uniforms refreshed in onBeforeRend
 overlayMaterial.ts   additive `_ARCLEN` overlay: pulse, ignition, tier-C dashes
 VesselOverlay.tsx    finds meshes with `_ARCLEN`, draws an additive twin sharing their geometry
 Atmosphere.tsx       backlight glow behind the heart + dust motes
-FXComposer.tsx       Bloom → Neutral tone mapping → Vignette → SMAA (§7.7), dithered, tiers A/B only
-FlowCaption.tsx      "Illustrative flow — not a haemodynamic simulation" chip (workstation, Flow on)
+FXComposer.tsx       SelectiveBloom (coronary tree only) → Neutral tone mapping → Vignette → SMAA, tiers A/B
+bloomSelection.ts    which meshes may bloom (every mesh under a `Coronary_*` node), mask tolerance
+FlowCaption.tsx      "Illustrative flow — not a haemodynamic simulation" note, placed in the free area
+caption.ts           caption wording + placement from `uiStore.stageInsets`
 ```
 
 ## For the 3D layer (`anatomy/`)
@@ -37,7 +39,13 @@ FlowCaption.tsx      "Illustrative flow — not a haemodynamic simulation" chip 
   terms must go through `BEAT_UNIFORMS` / `BEAT_VERTEX_PARS` (the particle and overlay shaders include them,
   coronaries in `BEAT_MODE.atrial`).
 * **Hidden nodes hide their flow** (`visible` anywhere up the chain).
-* The fx objects are named `FX_*`, flagged `userData.ctFx`, and never raycast.
+* **`sceneRuntime` (stage/sceneRuntime.ts) is read, never written:** the ignition waits for
+  `assembly.igniteAt` (cold-load fly-in), flow and pulse multiply by `nodes[name].solid` (isolate / ghost /
+  assembly dissolve), and both clip with `sectionPlanes` (a cut heart never shows flow in the removed half).
+* **Selective bloom** marks every coronary mesh with render layer `BLOOM_LAYER` (11) — a layer bit, nothing
+  else. Keep other override-material passes off that layer.
+* The fx objects are named `FX_*`, flagged `userData.ctFx`, stay on layer 0 only, and never raycast. The
+  particle quad is stored at ±1e-4 so an override-material pass that does draw it costs nothing.
 * R3F resets `state.clock.elapsedTime` to 0 whenever the frame-loop mode changes (always ↔ demand ↔ never);
   never time envelopes against it (the driver keeps its own monotonic time).
 
@@ -60,15 +68,19 @@ only carrier of risk, switchable with `FLOW_RISK_CODING = 0`, and always caption
 | | A | B | C | D |
 | --- | --- | --- | --- | --- |
 | Particles (instances) | 4096 | 2048 | 0 → arc-length dashes on the overlay | – |
-| Post | Bloom 5 levels ½ res | Bloom 4 levels ½ res | none (renderer Neutral TM) | – |
+| Post | Selective bloom, 5 levels ½ res | Selective bloom, 4 levels ½ res | none (renderer Neutral TM) | – |
 | Dust | 320 | 200 | – | – |
 
 * Reduced motion / Calm mode: no particles, pulse, ignition or dust (the backlight is static).
 * Flow toggle (`viewerStore.bloodFlow`, key F) fades particles and dashes over ≈ 300 ms.
 * Draw calls: particles 1, overlay ≤ 9 (only meshes the pulse/sweep can reach this frame), atmosphere 2.
-* GPU timer queries (RTX 4070 laptop, 1104×1236): the four fx layers add < 0.9 ms per frame measured
-  whole-frame (within run-to-run noise); the particle draw alone is a 16 k-vertex instanced pass. Per frame the
-  CPU uploads ~60 uniforms; nothing is re-uploaded per particle.
+* GPU timer queries (RTX 4070 laptop, tier A, 1800×1030 at DPR 1.25, 7 interleaved runs, medians): whole
+  frame 2.97 ms with the fx layer on vs 2.97 ms with it off — below measurement noise; the particle draw is a
+  16 k-vertex instanced pass, the selective-bloom mask ~30 k triangles of depth. Per frame the CPU uploads
+  ~60 uniforms; nothing is re-uploaded per particle.
+* Bloom is masked to the coronary tree by a depth-only pass of layer 11 (`SelectiveBloomEffect`), so the
+  glossy myocardium's specular highlights never glow; the flow, pulse and ignition light that lands on a
+  vessel does.
 
 ## Tests
 
