@@ -122,7 +122,7 @@ export function FxDriver() {
       if (has) f.p[slot] = reduced ? goal : MathUtils.damp(f.p[slot]!, goal, LAMBDA_P, dt);
       const availableGoal = has && !stale ? 1 : 0;
       f.available[slot] = reduced ? availableGoal : MathUtils.damp(f.available[slot]!, availableGoal, LAMBDA_FAST, dt);
-      const selected = viewer.selectedStructure;
+      const selected = viewer.stage === 'hero' ? null : viewer.selectedStructure;
       const dimGoal = selected && target && selected !== target ? 1 : selected && !target ? 1 : 0;
       f.dim[slot] = MathUtils.damp(f.dim[slot]!, dimGoal, LAMBDA_FAST, dt);
       f.hover[slot] = MathUtils.damp(f.hover[slot]!, viewer.hoveredStructure === target && target ? 1 : 0, LAMBDA_FAST * 1.5, dt);

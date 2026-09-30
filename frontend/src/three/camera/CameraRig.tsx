@@ -2,7 +2,7 @@ import { CameraControls } from '@react-three/drei';
 import { useFrame, useThree } from '@react-three/fiber';
 import CameraControlsImpl from 'camera-controls';
 import { useEffect, useMemo, useRef } from 'react';
-import { Vector3, type PerspectiveCamera } from 'three';
+import { Box3, Vector3, type PerspectiveCamera } from 'three';
 import { useManifest, useVessels } from '@/hooks/useData';
 import { useIsReducedMotion } from '@/hooks/useMediaQuery';
 import { useUiStore } from '@/state/uiStore';
@@ -45,6 +45,14 @@ export const CAMERA_FOV = 30;
 const PEEL_OUT_BELOW = 0.4;
 const PEEL_IN_ABOVE = 0.55;
 const THORAX_DISTANCE = 7;
+/**
+ * Open-heart framing: when the peel enters the heart's window the camera fits both exploded halves into the
+ * free area with an 8 % margin (the anterior half swings toward viewer-left, which would otherwise put it
+ * under the patient card), and glides back once the heart has closed below OPEN_RETURN_BELOW (hysteresis).
+ */
+const OPEN_FIT_AT = 0.7;
+const OPEN_RETURN_BELOW = 0.66;
+const OPEN_FIT_MARGIN = 0.08;
 /** Share of the trunk a best view must show (proximal 5–80 %). */
 const VIEW_WINDOW: readonly [number, number] = [0.05, 0.8];
 /** Margin (px) between the free-area edge and the visible great vessels (≥ 24 px from the canvas top). */
@@ -105,6 +113,8 @@ export function CameraRig() {
   const invalidate = useThree((s) => s.invalidate);
 
   const lastInteraction = useRef(0);
+  /** The user has orbited / zoomed / panned since the stage was entered (automatic re-framing stops). */
+  const userTouched = useRef(false);
   const lastReadout = useRef({ t: 0, az: NaN, el: NaN });
   const stageEnteredAt = useRef(0);
   const framedFreeHeight = useRef(0);
@@ -227,6 +237,7 @@ export function CameraRig() {
     };
     const onUser = () => {
       lastInteraction.current = performance.now();
+      userTouched.current = true;
       replaying.current = false;
       if (useCameraState.getState().viewKind !== 'custom') useCameraState.getState().setView('custom');
     };
@@ -258,22 +269,34 @@ export function CameraRig() {
   }, []);
 
   // Stage poses: the workstation home frames the heart in the free area; the hero sits on the torso axis.
+  // Entering a stage always starts from that stage's own pose: no peel pull-back, open-heart fit or
+  // selection pose carries over from another page (the landing hero is never left zoomed out).
   useEffect(() => {
     if (!ref.current) return;
     stageEnteredAt.current = performance.now();
+    userTouched.current = false;
+    peelOut.current = null;
+    openFit.current = null;
     flyHome(!reduced && stage !== 'hidden');
     if (stage === 'workstation') useCameraState.getState().setView('home');
+    // Arriving on an already opened heart (a deep link, a reload, the tour): frame it open straight away.
+    if (stage === 'workstation' && useViewerStore.getState().explode >= OPEN_FIT_AT) {
+      openFit.current = { back: poseOf(ref.current), bias: silhouetteBias.current, home: true };
+      fitOpenHeart(!reduced);
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [stage, geo]);
 
-  // A window resize keeps the home framing (62 % of the new free area) while the camera sits at home.
+  // A resize keeps the stage framing (62 % of the new free area / the hero share) while the camera sits at
+  // its untouched stage pose. The canvas also resizes while it moves between page slots: re-solving then
+  // (animated, so it only retargets the stage-change glide) is what keeps the hero from landing zoomed out.
   useEffect(() => {
     if (stage === 'hidden' || !(size.width > 0)) return;
     const t = window.setTimeout(() => {
-      // Not while the stage-change glide runs (the canvas moving between slots also resizes it).
-      if (performance.now() - stageEnteredAt.current < 1200) return;
-      if (useCameraState.getState().viewKind === 'home') flyHome(false);
-    }, 180);
+      const atHome = stage === 'hero' || useCameraState.getState().viewKind === 'home';
+      if (!atHome || userTouched.current || peelOut.current || openFit.current) return;
+      flyHome(!reducedRef.current && performance.now() - stageEnteredAt.current < 1500);
+    }, 120);
     return () => window.clearTimeout(t);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [size.width, size.height]);
@@ -286,8 +309,10 @@ export function CameraRig() {
         if (s.stageInsets === prev.stageInsets) return;
         invalidate();
         const st = stageRef.current;
-        if (st === 'hidden' || performance.now() - stageEnteredAt.current > 900) return;
-        if (lastInteraction.current > stageEnteredAt.current + 50) return;
+        // The hero re-frames whenever its copy / bands move the free area (web fonts load late); the
+        // workstation only right after the stage switch (later chrome changes glide the view offset only).
+        if (st === 'hidden' || (st === 'workstation' && performance.now() - stageEnteredAt.current > 900)) return;
+        if (userTouched.current || peelOut.current || openFit.current) return;
         const { width, height } = sizeRef.current;
         const free = freeArea(width, height, insetsFor(st));
         if (Math.abs(free.height - framedFreeHeight.current) > 0.08 * height) flyHome(!reducedRef.current);
@@ -383,14 +408,61 @@ export function CameraRig() {
     [],
   );
 
-  // Peel camera move (see PEEL_OUT_BELOW): pull back while the thorax is assembled, return for the heart.
+  // Peel camera moves: pull back while the thorax is assembled (see PEEL_OUT_BELOW), return for the heart;
+  // and once the heart opens, fit BOTH halves into the free area (see OPEN_FIT_AT), gliding back to the
+  // pose it came from when the heart closes again (⟲ Assemble, the slider, the tour).
   const peelOut = useRef<{ distance: number } | null>(null);
+  /** The pose to glide back to when the heart closes (`home`: re-solve home rather than replay a pose). */
+  const openFit = useRef<{ back: Pose; bias: Offset; home: boolean } | null>(null);
+
+  /** Frame the opened heart (both halves, the fat and the coronaries riding them) from the current angle. */
+  const fitOpenHeart = (animate: boolean) => {
+    const controls = ref.current;
+    const points = sceneRuntime.framing.open;
+    const { width, height } = sizeRef.current;
+    if (!controls || points.length === 0 || !(width > 0) || !(height > 0)) return;
+    const box = new Box3().setFromPoints(points);
+    const centre = box.getCenter(new Vector3());
+    const direction = controls.getPosition(new Vector3()).sub(controls.getTarget(new Vector3())).normalize();
+    const free = freeArea(width, height, insetsFor('workstation'));
+    const input = { box, points, target: centre, direction, fov: CAMERA_FOV, width, height, freeWidth: free.width, freeHeight: free.height };
+    const l = useCameraState.getState().freeOrbit ? ORBIT_LIMITS.free : ORBIT_LIMITS.clamped;
+    const d = Math.min(
+      l.maxDistance,
+      Math.max(
+        l.minDistance,
+        framingDistance({ ...input, share: 1 - 2 * OPEN_FIT_MARGIN, keep: points, keepMargin: OPEN_FIT_MARGIN * Math.min(free.width, free.height) }),
+      ),
+    );
+    const e = projectedExtent(input, points, d);
+    silhouetteBias.current = { x: -(e.right - e.left) / 2, y: -(e.down - e.up) / 2 };
+    const pos = centre.clone().addScaledVector(direction, d);
+    void controls.setLookAt(pos.x, pos.y, pos.z, centre.x, centre.y, centre.z, animate);
+    invalidate();
+  };
+
   useEffect(
     () =>
       useViewerStore.subscribe((s, prev) => {
         const controls = ref.current;
         if (!controls || s.explode === prev.explode || s.stage !== 'workstation') return;
         const animate = !reducedRef.current;
+        if (!openFit.current && s.explode >= OPEN_FIT_AT && prev.explode < OPEN_FIT_AT) {
+          const home = useCameraState.getState().viewKind === 'home' && !peelOut.current;
+          openFit.current = { back: poseOf(controls), bias: silhouetteBias.current, home };
+          fitOpenHeart(animate);
+          return;
+        }
+        if (openFit.current && s.explode < OPEN_RETURN_BELOW && prev.explode >= OPEN_RETURN_BELOW) {
+          const { back, bias, home } = openFit.current;
+          openFit.current = null;
+          if (home) flyHome(animate);
+          else {
+            silhouetteBias.current = bias;
+            flyToPose(back, animate);
+          }
+          return;
+        }
         if (!peelOut.current && s.explode < PEEL_OUT_BELOW && prev.explode >= PEEL_OUT_BELOW) {
           peelOut.current = { distance: controls.distance };
           const l = useCameraState.getState().freeOrbit ? ORBIT_LIMITS.free : ORBIT_LIMITS.clamped;
@@ -431,7 +503,8 @@ export function CameraRig() {
       framingVersion.current = sceneRuntime.framing.version;
       const st = stageRef.current;
       const atHome = st === 'hero' || (st === 'workstation' && useCameraState.getState().viewKind === 'home');
-      if (st !== 'hidden' && atHome && lastInteraction.current <= stageEnteredAt.current + 50 && !peelOut.current) flyHome(!reduced);
+      if (st !== 'hidden' && atHome && !userTouched.current && !peelOut.current && !openFit.current) flyHome(!reduced);
+      else if (st === 'workstation' && openFit.current && !userTouched.current) fitOpenHeart(!reduced);
     }
 
     // View offset: the orbit target sits at the centre of the free area; glides over `flyout`.

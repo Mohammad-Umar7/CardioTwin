@@ -4,7 +4,7 @@ import { useCallback, useEffect, useMemo, useRef } from 'react';
 import { Box3, Mesh, Vector3, type Object3D } from 'three';
 import { useManifest, useSchemaIndex, useVessels } from '@/hooks/useData';
 import { useReducedMotion } from '@/hooks/useMediaQuery';
-import { useViewerStore } from '@/state/viewerStore';
+import { PEEL_REST, useViewerStore } from '@/state/viewerStore';
 import type { AnatomyManifest, TargetId, TargetSpec } from '@/types/contracts';
 import { debugHandles } from '../stage/debug';
 import { pickPointer, usePickStore } from '../stage/pickStore';
@@ -286,12 +286,15 @@ export function GlbAnatomy({ url }: { url: string }) {
     if (viewer.tier !== 'D') rig.setTier(viewer.tier);
     const inp = (inputs.current ??= { ...EMPTY_INPUTS });
     inp.dt = delta;
-    inp.explodeTarget = viewer.explode;
+    // The landing hero always shows the heart unboxed at the peel rest state, with no workstation selection
+    // (isolate, ghost-others) leaking into it; the workstation's own values come back with its stage.
+    const hero = viewer.stage === 'hero';
+    inp.explodeTarget = hero ? PEEL_REST : viewer.explode;
     inp.look = read.look;
     inp.stage = viewer.stage;
     inp.layerVisibility = viewer.layerVisibility;
     inp.ghostLayers = viewer.ghostLayers;
-    inp.selected = viewer.selectedStructure;
+    inp.selected = hero ? null : viewer.selectedStructure;
     inp.isolate = read.isolate;
     inp.ghostOthers = read.ghostOthers;
     inp.showVeins = controls.showVeins;

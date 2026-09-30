@@ -102,7 +102,8 @@ export function useRiskAnimation({ vessels, territories }: RiskAnimationTargets)
       return Math.abs(next - to) <= 1e-4 ? to : next;
     };
 
-    const selected = viewer.selectedStructure;
+    // A workstation selection never dims vessels or tints a territory on the landing hero.
+    const selected = viewer.stage === 'hero' ? null : viewer.selectedStructure;
     for (const [target, materials] of vessels()) {
       const goal = prediction?.predictions[target]?.probability;
       const hasGoal = typeof goal === 'number';
