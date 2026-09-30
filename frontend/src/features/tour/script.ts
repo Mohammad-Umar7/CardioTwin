@@ -138,8 +138,8 @@ export const BEATS: readonly Beat[] = [
     chapter: 1,
     title: 'Open up the anatomy',
     caption: () =>
-      'Dissection (exploded view): the layers separate and the front wall of the heart hinges open to show the ' +
-      'valves inside, with its coronary arteries riding along. It all comes back together when you move on.',
+      'Exploded view: the great vessels lift and the front wall of the heart hinges open to show the chambers ' +
+      'and valves inside, with its coronary arteries riding along. It all comes back together when you move on.',
     spotlight: [{ stage: true }],
     durationMs: 12000,
     state: s({ selection: 'home', peel: 'dissect' }),

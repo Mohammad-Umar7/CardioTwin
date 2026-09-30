@@ -20,10 +20,14 @@ import { LEVER_KEY, type CaptionContext } from './script';
 /** LUMEN `peel` easing, cubic-bezier(.65,0,.35,1), approximated by ease-in-out cubic. */
 export const peelEase = (t: number): number => (t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2);
 
-/** Peel durations (LUMEN §6): 1400 ms forward, 1100 ms assemble; closing before a dissection is quicker. */
-export const PEEL_FORWARD_MS = 1400;
-export const PEEL_ASSEMBLE_MS = 1100;
-export const PEEL_CLOSE_MS = 500;
+/**
+ * Peel durations, matching the toolbar player (hud/peel.ts): ▶ Explode from the heart's range opens it over
+ * PEEL_OPEN_MS (scaled by the distance left), from a closed chest the whole dissection takes PEEL_FORWARD_MS;
+ * ⟲ Assemble takes PEEL_ASSEMBLE_MS.
+ */
+export const PEEL_OPEN_MS = 2400;
+export const PEEL_FORWARD_MS = 2800;
+export const PEEL_ASSEMBLE_MS = 1500;
 
 export interface PeelSegment {
   from: number;
@@ -32,15 +36,15 @@ export interface PeelSegment {
 }
 
 /**
- * Segments for a peel request. 'dissect' first closes the chest (so the whole dissection plays: skin,
- * ribs like a book, lungs aside, then the heart wall), then opens to e = 1. 'rest' assembles to 0.60.
+ * Segments for a peel request, the same path as the toolbar's ▶ Explode: 'dissect' goes straight from the
+ * current value to the open heart (e = 1) — heart-centric from rest, never snapping the chest closed first.
+ * 'rest' assembles back to 0.60.
  */
 export function peelSegments(current: number, to: 'dissect' | 'rest'): PeelSegment[] {
   if (to === 'rest') return Math.abs(current - PEEL_REST) < 1e-3 ? [] : [{ from: current, to: PEEL_REST, ms: PEEL_ASSEMBLE_MS }];
-  const segs: PeelSegment[] = [];
-  if (current > 0.02) segs.push({ from: current, to: 0, ms: PEEL_CLOSE_MS });
-  segs.push({ from: current > 0.02 ? 0 : current, to: 1, ms: PEEL_FORWARD_MS });
-  return segs;
+  if (current >= 1 - 1e-3) return [];
+  const ms = current >= PEEL_REST - 0.02 ? (PEEL_OPEN_MS * (1 - current)) / (1 - PEEL_REST) : PEEL_FORWARD_MS * (1 - current);
+  return [{ from: current, to: 1, ms: Math.max(500, Math.round(ms)) }];
 }
 
 export class PeelAnimator {

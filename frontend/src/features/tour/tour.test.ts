@@ -64,7 +64,7 @@ describe('script', () => {
       '2 of 3 flagged',
       'angiographic view',
       'inspector',
-      'Dissection (exploded view)',
+      'Exploded view',
       'SHAP',
       'Physiology',
       'ECG, laboratory and echocardiography',
@@ -235,12 +235,12 @@ describe('runtime', () => {
     useUiStore.setState({ drawer: null, explainTab: 'why', chrome: 'workstation' });
   });
 
-  it('plans the dissection from closed to open, and assembles back to rest', () => {
-    expect(peelSegments(PEEL_REST, 'dissect')).toEqual([
-      { from: PEEL_REST, to: 0, ms: 500 },
-      { from: 0, to: 1, ms: 1400 },
-    ]);
-    expect(peelSegments(1, 'rest')).toEqual([{ from: 1, to: PEEL_REST, ms: 1100 }]);
+  it('opens the heart straight from rest (never closing the chest first), and assembles back to rest', () => {
+    expect(peelSegments(PEEL_REST, 'dissect')).toEqual([{ from: PEEL_REST, to: 1, ms: 2400 }]);
+    expect(peelSegments(PEEL_REST, 'dissect').every((s) => Math.min(s.from, s.to) >= PEEL_REST)).toBe(true);
+    expect(peelSegments(0, 'dissect')).toEqual([{ from: 0, to: 1, ms: 2800 }]);
+    expect(peelSegments(1, 'dissect')).toEqual([]);
+    expect(peelSegments(1, 'rest')).toEqual([{ from: 1, to: PEEL_REST, ms: 1500 }]);
     expect(peelSegments(PEEL_REST, 'rest')).toEqual([]);
   });
 
