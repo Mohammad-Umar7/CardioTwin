@@ -708,13 +708,15 @@ def standard_blend(weights: np.ndarray, seg: np.ndarray, ventricular: np.ndarray
     for s_, g in AHA_STANDARD.items():
         std[seg == s_, g] = 1.0
     if septal is not None:
+        # septum: split between the LAD and RCA by which septal perforators are nearer (anterior two-thirds LAD,
+        # inferior third RCA in the typical heart) instead of the one-hot segment assignment
         sep = np.isin(seg, (2, 3, 8, 9, 14))
         std[sep] = 0.0
         std[sep, 0] = septal[sep]
         std[sep, 2] = 1.0 - septal[sep]
     has_std = std.sum(axis=1) > 0
     near = np.where(conf[:, None] > 1e-6, weights / np.maximum(conf[:, None], 1e-6), 0.0)
-    k = alpha * ventricular * has_std
+    k = alpha * mo.smoothstep(0.0, 0.3, ventricular) * has_std
     mixed = (1.0 - k)[:, None] * near + k[:, None] * std
     mixed /= np.maximum(mixed.sum(axis=1, keepdims=True), 1e-6)
     # vertices with a standard segment but little nearest-artery confidence still get part of it
@@ -925,10 +927,19 @@ def mesh_edges(F: np.ndarray) -> np.ndarray:
 
 
 def push_out(yielder: bpy.types.Object, masters: list[bpy.types.Object], margin: float, *, spread: int = 10,
-             mask=None, passes: int = 3) -> dict:
-    """Move ``yielder`` vertices that lie inside (or closer than ``margin`` to) any master surface out along
-    the master's normal, spreading the displacement over the neighbourhood so the dent stays smooth.
-    ``mask(V_world) -> bool`` limits which yielder vertices may move. Returns before/after penetration."""
+             mask=None, passes: int = 6, reach: float = 0.011) -> dict:
+    """Make ``yielder`` give way to ``masters`` (display-only neighbours yield to the structures they touch).
+
+    Two-sided test, because the yielder can be much coarser than the master (a lung triangle may cut through a
+    10 mm vein without any lung vertex inside it):
+
+    * yielder vertices inside (or closer than ``margin`` to) a master move out along the master's normal;
+    * master vertices inside the yielder pull the yielder surface around them inward (along the yielder's
+      normal) by their depth + ``margin``, with a quadratic falloff over ``reach``.
+
+    The displacement field is spread over the yielder's mesh so each dent stays smooth. ``mask(V_world) ->
+    bool`` limits which yielder vertices may move. Returns the deepest penetration found before the first pass.
+    """
     me = yielder.data
     V, F = mesh_arrays(me)
     M = np.array(yielder.matrix_world)
@@ -937,30 +948,62 @@ def push_out(yielder: bpy.types.Object, masters: list[bpy.types.Object], margin:
     e = mesh_edges(F)
     deg = np.bincount(e.ravel(), minlength=len(V)).astype(float)
     deg[deg == 0] = 1.0
-    trees = []
+    trees, master_pts = [], []
     for m in masters:
         mV = world_vertices(m)
         _, mF = mesh_arrays(m.data)
         trees.append((BVHTree.FromPolygons(mV.tolist(), mF.tolist(), all_triangles=True), mV.min(axis=0) - 3 * margin - 0.01, mV.max(axis=0) + 3 * margin + 0.01))
+        master_pts.append(mV)
+    master_pts = np.concatenate(master_pts) if master_pts else np.zeros((0, 3))
     first_depth = None
+    it = 0
     for it in range(passes):
         need = np.zeros_like(Vw)
         mag = np.zeros(len(Vw))
+        worst = 0.0
+        # (a) yielder vertices inside a master
         for bvh, lo, hi in trees:
             cand = np.nonzero(movable & np.all((Vw >= lo) & (Vw <= hi), axis=1))[0]
             for i in cand:
                 loc, nrm, _, dist = bvh.find_nearest(Vector(Vw[i]))
                 if loc is None:
                     continue
-                s = (Vector(Vw[i]) - loc).dot(nrm)
-                if s < margin and dist < 0.05:
-                    m_ = margin - s
+                s_ = (Vector(Vw[i]) - loc).dot(nrm)
+                if s_ < margin and dist < 0.05:
+                    m_ = margin - s_
+                    worst = max(worst, -s_)
                     if m_ > mag[i]:
                         mag[i] = m_
                         need[i] = np.array(nrm) * m_
-        depth = float(np.max(mag - margin)) if len(mag) else 0.0
+        # (b) master vertices inside the yielder
+        ybvh = BVHTree.FromPolygons(Vw.tolist(), F.tolist(), all_triangles=True)
+        lo, hi = Vw.min(axis=0) - margin, Vw.max(axis=0) + margin
+        cand = master_pts[np.all((master_pts >= lo) & (master_pts <= hi), axis=1)]
+        pen_loc, pen_vec = [], []
+        for q in cand:
+            loc, nrm, _, dist = ybvh.find_nearest(Vector(q))
+            if loc is None or dist > 0.05:
+                continue
+            s_ = (Vector(q) - loc).dot(nrm)
+            if s_ < margin:
+                worst = max(worst, -s_)
+                pen_loc.append(np.array(loc))
+                pen_vec.append(-np.array(nrm) * (margin - s_))
+        if pen_loc:
+            kd = _kdtree(np.array(pen_loc))
+            pv = np.array(pen_vec)
+            plo = np.min(pen_loc, axis=0) - reach
+            phi = np.max(pen_loc, axis=0) + reach
+            for i in np.nonzero(movable & np.all((Vw >= plo) & (Vw <= phi), axis=1))[0]:
+                for _co, j, d in kd.find_range(Vector(Vw[i]), reach):
+                    w = (1.0 - d / reach) ** 1.5
+                    cand_v = pv[j] * w
+                    m_ = float(np.linalg.norm(cand_v))
+                    if m_ > mag[i]:
+                        mag[i] = m_
+                        need[i] = cand_v
         if first_depth is None:
-            first_depth = max(0.0, depth)
+            first_depth = worst
         if not (mag > 1e-6).any():
             break
         disp = need.copy()
@@ -978,7 +1021,7 @@ def push_out(yielder: bpy.types.Object, masters: list[bpy.types.Object], margin:
     Vl = Vw @ Minv[:3, :3].T + Minv[:3, 3]
     me.vertices.foreach_set("co", Vl.astype(np.float32).ravel())
     me.update()
-    return {"max_penetration_before_mm": round(first_depth / 0.01, 2), "passes": it + 1}
+    return {"max_penetration_before_mm": round((first_depth or 0.0) / 0.01, 2), "passes": it + 1}
 
 
 # --------------------------------------------------------------------------------------------

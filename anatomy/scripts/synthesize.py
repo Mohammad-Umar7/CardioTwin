@@ -28,7 +28,6 @@ Usage::
 """
 from __future__ import annotations
 
-import json
 import math
 import sys
 import time
@@ -44,7 +43,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "blender"))
 import meshops as mo  # noqa: E402
 from common import BUILD_DIR, RAW_DIR, load_config, write_json  # noqa: E402
-from extract_centerlines import decompose, prune_spurs, skeleton_graph, smooth_resample  # noqa: E402
+from extract_centerlines import decompose, prune_spurs, smooth_resample  # noqa: E402
 
 SYNTH_DIR = BUILD_DIR / "synth"
 REPORT = SYNTH_DIR / "synth_report.json"
@@ -255,7 +254,6 @@ def sweep_tube(P: np.ndarray, R: np.ndarray, sides: int, *, cap_start: str = "fl
     T, N, B = frames(P)
     ang = np.linspace(0, 2 * np.pi, sides, endpoint=False)
     ca, sa = np.cos(ang), np.sin(ang)
-    rings_P, rings_R = [P], [R]
     verts = []
     ring_list = []
 
@@ -431,57 +429,89 @@ def build_veins(parts: Parts, hf: dict, surf: Surface) -> tuple[mo.Mesh, dict]:
     target[1] = min(o[1], ivc_top[1] - 6.0 * MM)  # Blender -Y = anterior
     target[0] = max(o[0], ivc_top[0] + 3.0 * MM)  # +X = medial (patient-left of the right-sided IVC)
     target[2] = max(o[2], ivc_top[2] + 2.0 * MM)
-    w = np.clip(1.0 - s_cs / 16.0, 0.0, 1.0) ** 2
+    w = 1.0 - mo.smoothstep(0.0, 16.0, s_cs)
     cs["P"] = cs["P"] + np.outer(w, target - o)
 
     # --- seat every vein on the epicardium (centre >= radius + clearance outside the wall) ----
+    squeezed = 0
     for p in paths:
         P, R = p["P"], p["R"]
+        ostium = p is cs
+        n_os = max(2, int(6.0 / 0.8))
         for _ in range(4):
             q, n, sd = surf.closest(P)
-            want = R + 0.25 * MM
-            push = np.maximum(0.0, want - sd)
-            if p is cs:  # the ostium itself opens into the right atrium
-                push[: max(2, int(4.0 / 0.8))] *= np.linspace(0.0, 1.0, max(2, int(4.0 / 0.8)))
-            push = ndimage.maximum_filter1d(push, 5)
-            push = ndimage.gaussian_filter1d(push, 2.0, mode="nearest")
-            P = P + n * push[:, None]
-        # tube wall test: sample the tube surface and push out where it still dips into the wall
-        for _ in range(3):
+            push = np.maximum(0.0, R + 0.25 * MM - sd)
+            if ostium:  # the ostium itself opens into the right atrium
+                push[:n_os] *= np.linspace(0.0, 1.0, n_os)[: len(push[:n_os])]
+            disp = ndimage.gaussian_filter1d(n * ndimage.maximum_filter1d(push, 5)[:, None], 2.0, axis=0, mode="nearest")
+            P = P + disp
+        # tube-wall test: sample the tube surface and push out where it still dips into the wall; the
+        # displacement field is smoothed along the vein so the course stays smooth
+        ang = np.linspace(0, 2 * np.pi, 12, endpoint=False)
+        for _ in range(5):
             T, N, B = frames(P)
-            ang = np.linspace(0, 2 * np.pi, 12, endpoint=False)
             ring = P[:, None, :] + R[:, None, None] * (np.cos(ang)[None, :, None] * N[:, None, :] + np.sin(ang)[None, :, None] * B[:, None, :])
-            flat = ring.reshape(-1, 3)
-            q, n, sd = surf.closest(flat)
+            q, n, sd = surf.closest(ring.reshape(-1, 3))
             depth = np.maximum(0.0, -sd + 0.15 * MM).reshape(len(P), -1)
             dirs = n.reshape(len(P), -1, 3)
-            k = depth.argmax(axis=1)
-            push = depth[np.arange(len(P)), k]
-            if p is cs:
-                push[: max(2, int(6.0 / 0.8))] = 0.0
-            if push.max() < 0.05 * MM:
+            disp = (dirs * depth[..., None]).max(axis=1)
+            if ostium:
+                disp[:n_os] = 0.0
+            if depth.max() < 0.05 * MM:
                 break
-            push = ndimage.gaussian_filter1d(ndimage.maximum_filter1d(push, 3), 1.5, mode="nearest")
-            P = P + dirs[np.arange(len(P)), k] * push[:, None]
-        p["P"] = P
-    # reconnect children to their (moved) parents
+            P = P + ndimage.gaussian_filter1d(disp, 1.5, axis=0, mode="nearest")
+        # a vein squeezed into a crevice (e.g. the GCV under the left auricle) is compressed rather than
+        # pushed into the opposite wall: shrink the lumen there by the depth that could not be cleared
+        T, N, B = frames(P)
+        ring = P[:, None, :] + R[:, None, None] * (np.cos(ang)[None, :, None] * N[:, None, :] + np.sin(ang)[None, :, None] * B[:, None, :])
+        _, _, sd = surf.closest(ring.reshape(-1, 3))
+        left = np.maximum(0.0, -sd.reshape(len(P), -1) + 0.1 * MM).max(axis=1)
+        if ostium:
+            left[:n_os] = 0.0
+        if left.max() > 0:
+            squeezed += int((left > 0).sum())
+            R = np.maximum(R - ndimage.maximum_filter1d(left, 5), 0.55 * R)
+            R = ndimage.gaussian_filter1d(R, 2.0, mode="nearest")
+        # the moves stretch the path unevenly: resample at 0.8 mm and relax it so the course stays smooth
+        s_old = arclen(P)
+        P2 = resample(smooth_polyline(P, 6), 0.8 * MM)
+        R2 = np.interp(arclen(P2) / max(arclen(P2)[-1], 1e-9) * s_old[-1], s_old, R)
+        p["P"], p["R"] = smooth_polyline(P2, 8), R2
+    log(f"veins: {squeezed} centreline points narrowed where a groove is narrower than the vein")
+
+    # --- the coronary sinus is the last CS_LENGTH_MM of the course (arc length after re-seating) ------
+    if gcv_from_cs is not None:
+        gc = paths[gcv_from_cs]
+        both_P = np.vstack([cs["P"], gc["P"][1:]])
+        k = int(np.searchsorted(arclen(both_P) / MM, CS_LENGTH_MM))
+        cs["P"], gc["P"] = both_P[: k + 1], both_P[k:]
+        cs["R"] = np.maximum(radius_profile("CS", arclen(cs["P"]) / MM), 0.45 * MM)
+        gc["R"] = np.minimum(radius_profile("GCV", arclen(gc["P"]) / MM), cs["R"][-1])
+        for p in paths:
+            if p["parent"] in (cs_idx, gcv_from_cs) and not p.get("continues"):
+                p["parent"] = min((cs_idx, gcv_from_cs), key=lambda j: np.min(np.linalg.norm(paths[j]["P"] - p["P"][0], axis=1)))
+
+    # --- reconnect children to their (moved) parents, parents first ---------------------------------
     for p in paths:
         if p["parent"] is None:
             continue
         par = paths[p["parent"]]
-        k = int(np.argmin(np.linalg.norm(par["P"] - p["P"][0], axis=1)))
-        if p.get("continues"):
-            k = len(par["P"]) - 1
+        k = len(par["P"]) - 1 if p.get("continues") else int(np.argmin(np.linalg.norm(par["P"] - p["P"][0], axis=1)))
         delta = par["P"][k] - p["P"][0]
         w = np.clip(1.0 - arclen(p["P"]) / (8.0 * MM), 0.0, 1.0)
         p["P"] = p["P"] + np.outer(w, delta)
-    for p in paths:
-        p["P"] = smooth_polyline(p["P"], 4)
+        if p.get("continues"):
+            p["R"] = np.minimum(p["R"], par["R"][-1])
 
     # --- tubes -----------------------------------------------------------------------------------
     meshes = []
     for p in paths:
         sides = 20 if p["R"].max() > 2.0 * MM else 14 if p["R"].max() > 1.0 * MM else 10
+        if p is cs:
+            t0 = mo.unit(p["P"][0] - p["P"][3])
+            ext = p["P"][0] + np.outer(np.linspace(1.0, 0.25, 4) * p["R"][0], t0)
+            meshes.append(sweep_tube(np.vstack([ext, p["P"]]), np.r_[np.full(4, p["R"][0]), p["R"]], sides, cap_start="flat", cap_end="round"))
+            continue
         start = "flat" if p["parent"] is not None or p["label"] == "CS" else "round"
         if p["label"] == "ACV" and p["parent"] is None:
             start = "flat"  # the drainage end sits in the right atrial wall
@@ -510,6 +540,9 @@ def build_veins(parts: Parts, hf: dict, surf: Surface) -> tuple[mo.Mesh, dict]:
 #: to BodyParts3D's (tilted) proximal cap and ROOT_EXTENSION_MM below it, which puts the left-main / RCA ostia
 #: at ~14 / ~18 mm above the annulus (MDCT 14.4 +/- 2.9 / 17.2 +/- 3.3 mm, REFERENCE.md §5.1).
 ROOT_EXTENSION_MM = 11.0
+#: The annulus is displaced towards the patient's right (fading out by the STJ) so it sits between the tricuspid
+#: and mitral annuli (valve order TA.x < AoV.x < MA.x, REFERENCE.md §4.2) instead of over the mitral centre.
+ROOT_RIGHTWARD_MM = 3.0
 ROOT_HEIGHT_MM = 21.0          # annulus -> sino-tubular junction (STJ)
 ROOT_R_ANNULUS_MM = 11.5       # annulus D 23 mm
 ROOT_R_SINUS_MM = 14.6         # inter-sinus (commissural) radius at mid-sinus height: inscribed D ~29 mm
@@ -563,7 +596,7 @@ def inflate_ascending(V: np.ndarray, F: np.ndarray, C: np.ndarray) -> np.ndarray
     rho = np.linalg.norm(rad, axis=1)
     s = arclen(C)
     L = s[-1]
-    g = 1.0 - mo.smoothstep(0.5 * L, 0.85 * L, s[k])
+    g = 1.0 - mo.smoothstep(0.7 * L, 1.0 * L, s[k])
     g = np.where(k == len(C) - 1, 0.0, g)  # the distal end joins the (unchanged) arch
     target = rho + g * np.maximum(0.0, ASC_MIN_RADIUS_MM * MM - rho)
     return V + rad / np.maximum(rho, 1e-9)[:, None] * (target - rho)[:, None]
@@ -592,6 +625,8 @@ def build_aorta(parts: Parts, hf: dict) -> tuple[mo.Mesh, mo.Mesh, mo.Mesh, dict
 
     # --- root frame -----------------------------------------------------------------------------
     c_ann = cap_c - a_root * ROOT_EXTENSION_MM * MM
+    right = np.array([-1.0, 0.0, 0.0])
+    shift = mo.unit(right - (right @ a_root) * a_root) * ROOT_RIGHTWARD_MM * MM
     e1 = mo.unit(np.cross(a_root, [1.0, 0.0, 0.0]))
     e2 = np.cross(a_root, e1)
 
@@ -637,7 +672,7 @@ def build_aorta(parts: Parts, hf: dict) -> tuple[mo.Mesh, mo.Mesh, mo.Mesh, dict
         e = np.cos(theta)[..., None] * e1 + np.sin(theta)[..., None] * e2
         z0 = -(R[..., None] * e @ n_cap) / (a_root @ n_cap)
         h = z0 * (1.0 - u) + u * H
-        return c_ann + R[..., None] * e + h[..., None] * a_root
+        return c_ann + R[..., None] * e + h[..., None] * a_root + (1.0 - u)[..., None] * shift
 
     # --- root surface (closed: flat annulus cap, open top closed by a cap inside the ascending aorta) -
     nu, nt = 36, 96
@@ -672,7 +707,7 @@ def build_aorta(parts: Parts, hf: dict) -> tuple[mo.Mesh, mo.Mesh, mo.Mesh, dict
         u_h = 0.03 + 0.86 * np.abs(tt) ** 1.6
         hinge = wall(u_h, phi) - 0.5 * MM * (np.cos(phi)[:, None] * e1 + np.sin(phi)[:, None] * e2)
         comm_lo, comm_hi = hinge[0], hinge[-1]
-        centre = c_ann + a_root * 0.62 * H
+        centre = c_ann + a_root * 0.62 * H + 0.38 * shift
         free = np.where((tt < 0)[:, None], centre + np.abs(tt)[:, None] * (comm_lo - centre), centre + np.abs(tt)[:, None] * (comm_hi - centre))
         S = hinge[:, None, :] * (1 - vv)[None, :, None] + free[:, None, :] * vv[None, :, None]
         belly = 3.0 * MM * np.sin(np.pi * vv)[None, :] * (1 - tt ** 2)[:, None]
@@ -686,7 +721,8 @@ def build_aorta(parts: Parts, hf: dict) -> tuple[mo.Mesh, mo.Mesh, mo.Mesh, dict
         n = nt_c * nv_c
         Vc = np.vstack([A_, B_])
         fc_ = []
-        idx = lambda a, b: a * nv_c + b  # noqa: E731
+        def idx(a, b, _n=nv_c):
+            return a * _n + b
         for a in range(nt_c - 1):
             for b in range(nv_c - 1):
                 p00, p10, p01, p11 = idx(a, b), idx(a + 1, b), idx(a, b + 1), idx(a + 1, b + 1)

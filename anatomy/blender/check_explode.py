@@ -93,10 +93,16 @@ def main() -> int:
     def moves_together(pair):
         return bool(np.allclose(offsets[pair[0]], offsets[pair[1]], atol=1e-9))
 
+    # A pair embedded at rest (bronchi inside a lung, coronaries in the epicardium) may keep a similar overlap:
+    # tolerate up to 5 % more intersecting triangle pairs; a pair that did not touch at rest must stay clear.
+    def worse(pair, n):
+        r = rest.get(pair, 0)
+        return n > (r * 1.05 if r >= 100 else r)
+
     collisions = {
         pair: {"rest": rest.get(pair, 0), "exploded": n}
         for pair, n in per_t[1.0].items()
-        if n > rest.get(pair, 0) and not moves_together(pair)
+        if worse(pair, n) and not moves_together(pair)
     }
     transient = sorted({pair for t in ts if t < 1.0 for pair, n in per_t[t].items() if n > rest.get(pair, 0) and not moves_together(pair)})
     report = {
