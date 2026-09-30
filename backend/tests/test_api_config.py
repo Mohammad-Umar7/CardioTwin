@@ -91,3 +91,10 @@ def test_blank_values_are_ignored() -> None:
 def test_invalid_values_fail_fast(env: dict[str, str], fragment: str) -> None:
     with pytest.raises(SettingsError, match=fragment):
         Settings.from_env(env)
+
+
+def test_out_of_range_policy() -> None:
+    assert Settings.from_env({}).out_of_range == "reject"
+    assert Settings.from_env({"CARDIOTWIN_OUT_OF_RANGE": "WARN"}).out_of_range == "warn"
+    with pytest.raises(SettingsError, match="out_of_range must be one of"):
+        Settings.from_env({"CARDIOTWIN_OUT_OF_RANGE": "clip"})

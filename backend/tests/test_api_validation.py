@@ -116,3 +116,39 @@ def test_malformed_bodies_are_422(client: TestClient, payload: bytes) -> None:
     assert body["error"] == "validation_error"
     assert body["detail"]
     assert "url" not in body["detail"][0]
+
+
+def test_out_of_range_rejection_explains_the_training_range(client: TestClient) -> None:
+    _, errors = errors_for(client, {"Age": 95})
+    assert "range of the training cohort" in errors["Age"]["msg"]
+
+
+def test_warn_policy_predicts_out_of_range_values_with_warnings(make_client: Any) -> None:
+    client = make_client(out_of_range="warn")
+    response = client.post("/api/predict", json={"features": {"Age": 95, "EF-TTE": 10, "BMI": 25}})
+    assert response.status_code == 200
+    body = response.json()
+    by_feature = {w["feature"]: w for w in body["warnings"]}
+    assert set(by_feature) == {"Age", "EF-TTE"}
+    assert by_feature["Age"] | {"msg": ""} == {"type": "out_of_range", "feature": "Age", "value": 95, "min": 30,
+                                                "max": 86, "unit": "years", "msg": ""}
+    assert "extrapolates" in by_feature["Age"]["msg"]
+    values = {c["feature"]: c["value"] for c in body["explanations"]["CAD"]["contributions"]}
+    assert values["Age"] == 95
+    # Warnings are cached with the prediction; in-range requests carry no warnings key at all.
+    assert client.post("/api/predict", json={"features": {"Age": 95, "EF-TTE": 10, "BMI": 25}}).json() == body
+    assert "warnings" not in client.post("/api/predict", json={"features": {"Age": 60}}).json()
+
+
+def test_warn_policy_still_rejects_invalid_values(make_client: Any) -> None:
+    client = make_client(out_of_range="warn")
+    response = client.post("/api/predict", json={"features": {"Age": "old", "Foo": 1}})
+    assert response.status_code == 422
+    assert {item["type"] for item in response.json()["detail"]} == {"type_error", "unknown_feature"}
+
+
+def test_warn_policy_applies_to_batches(make_client: Any) -> None:
+    client = make_client(out_of_range="warn")
+    body = client.post("/api/predict/batch", json={"rows": [{"features": {"Age": 20}}, {"features": {}}]}).json()
+    assert body["results"][0]["prediction"]["warnings"][0]["feature"] == "Age"
+    assert "warnings" not in body["results"][1]["prediction"]
