@@ -99,7 +99,9 @@ def test_predictor_missing_contract_members_is_rejected(tmp_path: Path, stub_ml_
 
 
 def test_missing_ml_package_explains_how_to_install(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setitem(sys.modules, "cardiotwin_ml", None)  # makes the import fail
+    # None entries make the import fail even if the real package was imported earlier in the session.
+    monkeypatch.setitem(sys.modules, "cardiotwin_ml", None)
+    monkeypatch.setitem(sys.modules, "cardiotwin_ml.inference", None)
     monkeypatch.setattr(loader, "ML_SRC_DIR", tmp_path / "no-src")
     with pytest.raises(PredictorLoadError, match="pip install -e ml"):
         load_real_predictor(write_artifacts(tmp_path / "art"))
