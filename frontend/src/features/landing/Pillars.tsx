@@ -196,7 +196,7 @@ export function Pillars({ onNavigate, className }: { onNavigate(destination: Lan
       <Pillar
         n="01"
         verb="Predict"
-        sentence="Calibrated probability for CAD and each artery."
+        sentence="Calibrated CAD and per-artery risk."
         visual={<PredictVisual />}
         destination={{ to: ROUTES.workstation }}
         linkLabel="Opens the workstation."
