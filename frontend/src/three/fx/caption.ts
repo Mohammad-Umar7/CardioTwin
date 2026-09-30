@@ -9,15 +9,17 @@ export const FLOW_CAPTION_DETAIL =
 
 /**
  * Where the caption goes: ONE fixed spot on the stage — horizontally centred on the canvas, just above the
- * toolbar row — whatever the chrome does (rest, focus mode, a drawer open), so it never jumps. The canvas
- * never resizes (V2 §4.1) and the toolbar row is reserved at the stage bottom, so this spot is always free.
+ * toolbar row — whatever the workstation chrome does (rest, focus mode, a drawer open), so it never jumps.
+ * The canvas never resizes (V2 §4.1) and the toolbar row is reserved at the stage bottom, so this spot is
+ * always free. The guided tour hides the toolbar and floats its chapter rail at that height instead, so
+ * there the caption drops into the free toolbar row, under the rail.
  */
-export function captionPlacement(): Partial<Record<'left' | 'right' | 'top' | 'bottom' | 'transform', string>> {
+export function captionPlacement(tour = false): Partial<Record<'left' | 'right' | 'top' | 'bottom' | 'transform', string>> {
   return {
     left: '50%',
     right: '',
     top: '',
-    bottom: 'calc(var(--stage-inset, 12px) + var(--toolbar-h, 40px) + 10px)',
+    bottom: tour ? 'var(--stage-inset, 12px)' : 'calc(var(--stage-inset, 12px) + var(--toolbar-h, 40px) + 10px)',
     transform: 'translateX(-50%)',
   };
 }

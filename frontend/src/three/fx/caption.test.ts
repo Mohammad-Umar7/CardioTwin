@@ -16,6 +16,8 @@ describe('illustrative-flow caption', () => {
     expect(p.bottom).toContain('var(--toolbar-h');
     expect(p.right).toBe('');
     expect(p.top).toBe('');
+    // Guided tour: the toolbar row is free and the chapter rail floats above it.
+    expect(captionPlacement(true).bottom).toBe('var(--stage-inset, 12px)');
   });
 
   it('shows only while flow is visible on uncovered, lit coronaries', () => {

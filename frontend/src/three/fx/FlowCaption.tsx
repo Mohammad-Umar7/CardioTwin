@@ -24,6 +24,7 @@ export function FlowCaption() {
   const reduced = useReducedMotion();
   const enabled = useViewerStore((s) => s.stage === 'workstation' && s.bloodFlow && s.tier !== 'D');
   const hintPending = useUiStore((s) => !s.hintSeen && s.chrome === 'workstation');
+  const tour = useUiStore((s) => s.chrome === 'tour');
   const chip = useRef<HTMLDivElement | null>(null);
   const shown = useRef<boolean | null>(null);
 
@@ -39,7 +40,6 @@ export function FlowCaption() {
     el.setAttribute('aria-label', `${FLOW_CAPTION}. ${FLOW_CAPTION_DETAIL}`);
     el.title = FLOW_CAPTION_DETAIL;
     el.dataset.fxCaption = 'flow';
-    Object.assign(el.style, captionPlacement());
     el.style.display = 'none';
     const dot = document.createElement('span');
     dot.setAttribute('aria-hidden', 'true');
@@ -56,6 +56,10 @@ export function FlowCaption() {
       chip.current = null;
     };
   }, [gl]);
+
+  useEffect(() => {
+    if (chip.current) Object.assign(chip.current.style, captionPlacement(tour));
+  }, [tour, gl]);
 
   // Per frame, without React state: only touch the DOM when visibility flips.
   useFrame(() => {
