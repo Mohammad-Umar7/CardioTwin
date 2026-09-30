@@ -4,6 +4,7 @@ import { SHAP_LOWERS, SHAP_RAISES } from '@/theme/risk';
 import type { TargetId } from '@/types/contracts';
 import type { ModalityRow, PointsScale } from './attribution';
 import type { ContributionUnit } from './explainPrefs';
+import { leadSentence } from './modalityLead';
 import { formatContribution } from './useExplainData';
 
 /** Column captions: short enough for seven columns in a 400 px drawer. */
@@ -40,18 +41,14 @@ export interface ModalityStripProps {
  */
 export function ModalityStrip({ rows, target, unit, scale, labelOf, onPick, active }: ModalityStripProps) {
   const max = Math.max(1e-6, ...rows.map((r) => Math.abs(r.sum)));
-  const lead = [...rows].sort((a, b) => b.abs - a.abs)[0];
+  const lead = leadSentence(rows, target, unit, scale);
   return (
     <section aria-labelledby="modality-title" className="flex flex-col gap-2">
-      <div className="flex h-6 items-center justify-between gap-2">
-        <h3 id="modality-title" className="eyebrow text-secondary">
+      <div className="flex min-h-6 items-center justify-between gap-3">
+        <h3 id="modality-title" className="eyebrow shrink-0 text-secondary">
           By data modality
         </h3>
-        {lead && lead.abs > 0 && (
-          <span className="truncate text-label font-normal text-tertiary">
-            {Math.round(lead.share * 100)}&thinsp;% of the evidence from {lead.label.toLowerCase().replace(/^resting ecg$/, 'the ECG')}
-          </span>
-        )}
+        {lead && <span className="min-w-0 text-right text-label font-normal leading-4 text-tertiary">{lead}</span>}
       </div>
       <ul className="-mx-1 flex justify-between" aria-label={`Contribution of each data modality to ${target}`}>
         {rows.map((r) => {
@@ -71,7 +68,9 @@ export function ModalityStrip({ rows, target, unit, scale, labelOf, onPick, acti
                 </span>
               ))}
               {r.contributions.length === 0 && <span className="text-tertiary">No inputs of this kind</span>}
-              <span className="text-tertiary">Share of all evidence: {Math.round(r.share * 100)}&thinsp;%</span>
+              <span className="text-tertiary">
+                Share of all evidence (absolute log-odds of every input): {Math.round(r.share * 100)}&thinsp;%
+              </span>
             </div>
           );
           return (
