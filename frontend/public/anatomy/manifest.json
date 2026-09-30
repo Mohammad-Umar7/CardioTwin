@@ -1,11 +1,11 @@
 {
   "version": "1.1.0",
   "glb": "cardiotwin_anatomy.glb",
-  "glb_bytes": 9379616,
-  "glb_sha256": "1725082d471d81448c43ff89729ce97cbd9ed3b127501c73f5f86d168cefe5d7",
+  "glb_bytes": 7695304,
+  "glb_sha256": "73f3bd11be9c75d40abcaf8233be89794ea46a7c1c7ebd5194441ddd5d2e85ce",
   "textures": {
-    "gpu_mib": 123.2,
-    "webp_mb": 4.44,
+    "gpu_mib": 46.4,
+    "webp_mb": 2.51,
     "priority": [
       "Heart_Wall_Anterior",
       "Heart_Wall_Posterior",
@@ -50,25 +50,25 @@
   "heart": {
     "cut_plane": {
       "point": [
-        0.18952,
-        -0.27303,
-        0.18293
+        0.18785,
+        -0.27167,
+        0.18597
       ],
       "normal": [
-        -0.44673,
-        0.22986,
-        0.86464
+        -0.45491,
+        0.23324,
+        0.85945
       ]
     },
     "long_axis": [
-      -0.76884,
-      0.39559,
-      -0.5024
+      -0.76478,
+      0.39213,
+      -0.51122
     ],
     "apex": [
-      0.46737,
-      -0.41599,
-      0.36448
+      0.46402,
+      -0.41327,
+      0.37058
     ],
     "base_center": [
       -0.08832,
@@ -287,11 +287,11 @@
         ],
         "max": [
           1.6988,
-          1.6001,
+          1.6002,
           1.0449
         ]
       },
-      "triangles": 12498,
+      "triangles": 9999,
       "realistic_color": "#d59e82"
     },
     {
@@ -416,7 +416,7 @@
       "center": [
         0.5298,
         -0.3833,
-        -0.2167
+        -0.2166
       ],
       "bbox": {
         "min": [
@@ -427,11 +427,11 @@
         "max": [
           1.1409,
           1.5053,
-          0.7483
+          0.7485
         ]
       },
-      "triangles": 15498,
-      "realistic_color": "#e0d2b4"
+      "triangles": 13000,
+      "realistic_color": "#e0d1b4"
     },
     {
       "id": "ribs_r",
@@ -483,8 +483,8 @@
           0.7489
         ]
       },
-      "triangles": 15498,
-      "realistic_color": "#e0d1b4"
+      "triangles": 12998,
+      "realistic_color": "#e0d2b4"
     },
     {
       "id": "costal_cartilage",
@@ -706,23 +706,23 @@
       "clinical_relevance": "Vertebral levels locate the carina (T4/T5), pulmonary-artery bifurcation (T5-T6) and IVC hiatus (T8); the descending aorta lies left anterolateral to the bodies.",
       "center": [
         -0.2359,
-        -0.083,
-        -0.7131
+        -0.0833,
+        -0.7142
       ],
       "bbox": {
         "min": [
           -0.597,
           -1.7371,
-          -1.2179
+          -1.216
         ],
         "max": [
           0.1252,
-          1.571,
-          -0.2084
+          1.5704,
+          -0.2124
         ]
       },
-      "triangles": 16000,
-      "realistic_color": "#e0d1b4"
+      "triangles": 12498,
+      "realistic_color": "#e0d2b4"
     },
     {
       "id": "lung_l",
@@ -748,23 +748,23 @@
       "definition": "Left lung: superior lobe (with the lingula) and inferior lobe; the cardiac notch of the superior lobe leaves a bare area of pericardium at the 5th intercostal space.",
       "clinical_relevance": "The cardiac notch is the acoustic window for apical echocardiography; lung tissue overlying the heart limits transthoracic imaging.",
       "center": [
-        0.4385,
-        0.0714,
-        -0.1484
+        0.4384,
+        0.0716,
+        -0.1485
       ],
       "bbox": {
         "min": [
-          -0.1611,
-          -1.2226,
+          -0.1614,
+          -1.2221,
           -1.0463
         ],
         "max": [
-          1.0381,
-          1.3655,
-          0.7495
+          1.0383,
+          1.3653,
+          0.7494
         ]
       },
-      "triangles": 12000,
+      "triangles": 16324,
       "realistic_color": "#c99a9b"
     },
     {
@@ -792,23 +792,23 @@
       "definition": "Right lung: superior, middle and inferior lobes; its mediastinal surface is grooved by the right atrium, superior vena cava and azygos vein.",
       "clinical_relevance": "The middle lobe abuts the right heart border; right pulmonary veins drain into the left atrium behind the right atrium and SVC.",
       "center": [
-        -0.8603,
+        -0.8624,
         0.0821,
-        -0.1491
+        -0.1488
       ],
       "bbox": {
         "min": [
-          -1.495,
+          -1.4951,
           -1.1901,
-          -1.0549
+          -1.0544
         ],
         "max": [
-          -0.2257,
+          -0.2297,
           1.3542,
           0.7567
         ]
       },
-      "triangles": 13000,
+      "triangles": 13744,
       "realistic_color": "#ca9a9c"
     },
     {
@@ -852,7 +852,7 @@
         ]
       },
       "triangles": 6500,
-      "realistic_color": "#d7baaf"
+      "realistic_color": "#c49d98"
     },
     {
       "id": "oesophagus",
@@ -878,23 +878,23 @@
       "clinical_relevance": "The window for transoesophageal echocardiography; at risk of atrio-oesophageal fistula during left-atrial (pulmonary-vein) ablation.",
       "center": [
         -0.1978,
-        0.4113,
-        -0.3569
+        0.4111,
+        -0.3629
       ],
       "bbox": {
         "min": [
           -0.3395,
           -0.7077,
-          -0.5791
+          -0.591
         ],
         "max": [
           -0.0561,
-          1.5303,
+          1.5299,
           -0.1347
         ]
       },
       "triangles": 2492,
-      "realistic_color": "#bc887a"
+      "realistic_color": "#bc877a"
     },
     {
       "id": "diaphragm",
@@ -920,23 +920,23 @@
       "clinical_relevance": "The inferior (diaphragmatic) wall of the heart, supplied by the PDA, lies on it; inferior myocardial infarction can mimic abdominal pain.",
       "center": [
         -0.2258,
-        -1.4014,
+        -1.4414,
         -0.0688
       ],
       "bbox": {
         "min": [
           -1.442,
-          -2.4833,
+          -2.5233,
           -0.8902
         ],
         "max": [
           0.9904,
-          -0.3194,
+          -0.3594,
           0.7526
         ]
       },
       "triangles": 6500,
-      "realistic_color": "#8f463e"
+      "realistic_color": "#78352f"
     },
     {
       "id": "heart_wall_anterior",
@@ -945,9 +945,9 @@
       "layer": "heart",
       "target": "CAD",
       "explode": [
-        -0.8074,
-        0.1839,
-        0.6917
+        -0.8139,
+        0.1866,
+        0.6876
       ],
       "description": "Anterior half of the heart wall (epicardial and endocardial surfaces), opened along the long axis. Vertex colours carry approximate LAD / LCX / RCA perfusion-territory weights (AHA 17-segment convention) — not a lesion map.",
       "territory": null,
@@ -957,28 +957,28 @@
         "FMA7274"
       ],
       "fma_id": "FMA7274",
-      "provenance": "BodyParts3D (tissue around the aortic root pushed out of the moved root)",
+      "provenance": "BodyParts3D, with three documented local corrections (synthesis stage): the wall yields round the moved aortic root, the posterolateral left atrium is stretched so the left pulmonary veins enter 25-37 mm from the mitral hinge, and the right-atrial roof round the SVC is lowered 10 mm; channels are carved for the vessels that pass under the fused tip of the left auricle",
       "definition": "Anterior half of the heart wall (myocardium of all four chambers), opened by a long-axis cut through both ventricles; carries the sternocostal surface: right ventricle, anterior interventricular groove and the anterior left ventricle.",
       "clinical_relevance": "Its COLOR_0 weights are the LAD / LCX / RCA perfusion territories used to colour model risk (a supply map, never a lesion map).",
       "center": [
-        -0.0213,
-        0.0113,
-        0.1323
+        -0.0229,
+        0.0001,
+        0.1305
       ],
       "bbox": {
         "min": [
-          -0.5773,
-          -0.5053,
-          -0.2831
+          -0.5774,
+          -0.5052,
+          -0.2867
         ],
         "max": [
-          0.5348,
-          0.528,
-          0.5476
+          0.5316,
+          0.5053,
+          0.5477
         ]
       },
-      "triangles": 53498,
-      "realistic_color": "#6a1f18",
+      "triangles": 51832,
+      "realistic_color": "#67221c",
       "territory_weights": {
         "attribute": "COLOR_0",
         "channels": {
@@ -1008,28 +1008,28 @@
         "FMA7274"
       ],
       "fma_id": "FMA7274",
-      "provenance": "BodyParts3D (tissue around the aortic root pushed out of the moved root)",
+      "provenance": "BodyParts3D, with three documented local corrections (synthesis stage): the wall yields round the moved aortic root, the posterolateral left atrium is stretched so the left pulmonary veins enter 25-37 mm from the mitral hinge, and the right-atrial roof round the SVC is lowered 10 mm; channels are carved for the vessels that pass under the fused tip of the left auricle",
       "definition": "Posterior half of the heart wall, opened by the same long-axis cut: left atrium, lateral and inferior (diaphragmatic) left-ventricular walls, posterior interventricular groove and crux.",
       "clinical_relevance": "Inferior and inferolateral walls (AHA segments 3-5, 9-11, 15) are RCA / LCX territory in a right-dominant heart.",
       "center": [
-        0.0219,
-        -0.0361,
-        -0.0909
+        0.0237,
+        0.0132,
+        -0.0963
       ],
       "bbox": {
         "min": [
-          -0.5336,
-          -0.5267,
-          -0.5485
+          -0.53,
+          -0.5264,
+          -0.5654
         ],
         "max": [
-          0.5775,
-          0.4544,
-          0.3666
+          0.5774,
+          0.5529,
+          0.3728
         ]
       },
-      "triangles": 55016,
-      "realistic_color": "#6b2018",
+      "triangles": 54920,
+      "realistic_color": "#67221c",
       "territory_weights": {
         "attribute": "COLOR_0",
         "channels": {
@@ -1051,7 +1051,7 @@
         0.0,
         0.0
       ],
-      "description": "Bicuspid valve between the left atrium and left ventricle; its leaflets are tethered to the LV papillary muscles by chordae tendineae.",
+      "description": "Bicuspid valve between the left atrium and left ventricle: the anterior (aortic) leaflet, in fibrous continuity with the aortic root, and the scalloped posterior leaflet, tethered by chordae tendineae to the anterolateral and posteromedial papillary muscles (designed on the BodyParts3D hinge and papillary muscles).",
       "territory": null,
       "category": "Valve",
       "material": "Valve_Mitral_Mat",
@@ -1059,28 +1059,28 @@
         "FMA7235"
       ],
       "fma_id": "FMA7235",
-      "provenance": "BodyParts3D",
-      "definition": "Left atrioventricular valve: anterior and posterior leaflets on the mitral annulus, tethered by chordae tendineae to the anterolateral and posteromedial papillary muscles; the anterior leaflet is in fibrous continuity with the aortic valve.",
+      "provenance": "Synthesised on the BodyParts3D annulus and papillary muscles (anatomy/scripts/valves.py)",
+      "definition": "Left atrioventricular valve, shown half open: the anterior (aortic) leaflet, about 22 mm tall on the third of the annulus next to the aortic root and in fibrous continuity with it, and the posterior leaflet, about 12.5 mm tall with three scallops (P1-P3), both thin veils thickening at the rough zone; first- and second-order chordae tendineae fan from the two heads of the anterolateral and posteromedial papillary muscles to the free edges and rough zones of both leaflets.",
       "clinical_relevance": "Mitral regurgitation after inferior or lateral infarction follows papillary-muscle dysfunction (posteromedial muscle: single RCA/PDA supply).",
       "center": [
-        0.1458,
-        -0.0996,
-        -0.1753
+        0.1088,
+        -0.0553,
+        -0.1256
       ],
       "bbox": {
         "min": [
-          -0.123,
-          -0.2729,
-          -0.3649
+          -0.1143,
+          -0.2319,
+          -0.3632
         ],
         "max": [
-          0.4147,
-          0.0737,
-          0.0142
+          0.3318,
+          0.1214,
+          0.112
         ]
       },
-      "triangles": 5000,
-      "realistic_color": "#e9ddca"
+      "triangles": 6600,
+      "realistic_color": "#eaddc1"
     },
     {
       "id": "valve_tricuspid",
@@ -1093,7 +1093,7 @@
         0.0,
         0.0
       ],
-      "description": "Three-leaflet valve between the right atrium and right ventricle.",
+      "description": "Three-leaflet valve between the right atrium and right ventricle (anterior, septal and posterior leaflets); the septal leaflet is hinged on the septum a little more apically than the anterior mitral leaflet.",
       "territory": null,
       "category": "Valve",
       "material": "Valve_Tricuspid_Mat",
@@ -1101,28 +1101,28 @@
         "FMA7234"
       ],
       "fma_id": "FMA7234",
-      "provenance": "BodyParts3D",
-      "definition": "Right atrioventricular valve with anterior, posterior and septal leaflets; the septal leaflet hinge sits slightly apical to the mitral hinge.",
+      "provenance": "Synthesised on the BodyParts3D annulus and papillary muscles (anatomy/scripts/valves.py)",
+      "definition": "Right atrioventricular valve with anterior (largest), septal and posterior leaflets, shown half open, tethered by chordae to the anterior, posterior and septal papillary muscles; the septal leaflet is hinged on the septum 7 mm more apically than the anterior mitral hinge (normal apical offset 5-10 mm; > 8 mm/m2 suggests Ebstein anomaly).",
       "clinical_relevance": "The RCA runs in the right AV groove next to its annulus (injury risk in tricuspid annuloplasty); apical displacement of the septal leaflet > 8 mm/m2 indicates Ebstein anomaly.",
       "center": [
-        -0.1614,
-        -0.1427,
-        0.0757
+        -0.2025,
+        -0.142,
+        0.1474
       ],
       "bbox": {
         "min": [
-          -0.4038,
-          -0.382,
-          -0.083
+          -0.4253,
+          -0.3824,
+          -0.0563
         ],
         "max": [
-          0.081,
-          0.0967,
-          0.2344
+          0.0203,
+          0.0984,
+          0.3512
         ]
       },
-      "triangles": 5000,
-      "realistic_color": "#e9ddc9"
+      "triangles": 5128,
+      "realistic_color": "#eaddc1"
     },
     {
       "id": "valve_pulmonary",
@@ -1131,9 +1131,9 @@
       "layer": "heart",
       "target": null,
       "explode": [
-        -0.8074,
-        0.1839,
-        0.6917
+        -0.8139,
+        0.1866,
+        0.6876
       ],
       "description": "Semilunar valve at the right-ventricular outflow into the pulmonary trunk.",
       "territory": null,
@@ -1164,7 +1164,7 @@
         ]
       },
       "triangles": 3000,
-      "realistic_color": "#e9ddc9",
+      "realistic_color": "#eaddc1",
       "rides": "Heart_Wall_Anterior"
     },
     {
@@ -1205,7 +1205,7 @@
         ]
       },
       "triangles": 3000,
-      "realistic_color": "#e9ddc9"
+      "realistic_color": "#eaddc1"
     },
     {
       "id": "papillary_muscles",
@@ -1230,32 +1230,32 @@
         "FMA9352nsn"
       ],
       "fma_id": "FMA12154",
-      "provenance": "BodyParts3D",
-      "definition": "Papillary muscles: left-ventricular anterolateral and posteromedial groups and the right-ventricular anterior, posterior and septal muscles, anchoring the atrioventricular valve chordae.",
+      "provenance": "Synthesised cones placed from the BodyParts3D papillary muscles (anatomy/scripts/valves.py)",
+      "definition": "Papillary muscles: the left-ventricular anterolateral and posteromedial muscles (each with two heads) and the right-ventricular anterior, posterior and septal muscles, rising from the ventricular wall and anchoring the chordae tendineae of the atrioventricular valves.",
       "clinical_relevance": "The posteromedial LV papillary muscle has a single (usually RCA/PDA) supply and is the one that ruptures after inferior infarction.",
       "fma_ids": [
         "FMA9352",
         "FMA7259"
       ],
       "center": [
-        0.1964,
-        -0.175,
-        0.1685
+        0.1954,
+        -0.2019,
+        0.1714
       ],
       "bbox": {
         "min": [
-          -0.1429,
-          -0.4852,
-          -0.1719
+          -0.1162,
+          -0.4828,
+          -0.1324
         ],
         "max": [
-          0.5357,
-          0.1352,
-          0.5089
+          0.5069,
+          0.079,
+          0.4752
         ]
       },
-      "triangles": 6000,
-      "realistic_color": "#6a1f17"
+      "triangles": 4000,
+      "realistic_color": "#6d231b"
     },
     {
       "id": "aorta",
@@ -1301,7 +1301,7 @@
         ]
       },
       "triangles": 12000,
-      "realistic_color": "#a72c24"
+      "realistic_color": "#a1362f"
     },
     {
       "id": "aortic_arch_branches",
@@ -1352,7 +1352,7 @@
         ]
       },
       "triangles": 5000,
-      "realistic_color": "#a82d25"
+      "realistic_color": "#a2372f"
     },
     {
       "id": "pulmonary_artery",
@@ -1394,7 +1394,7 @@
         ]
       },
       "triangles": 12000,
-      "realistic_color": "#4058a1"
+      "realistic_color": "#465a9c"
     },
     {
       "id": "pulmonary_veins",
@@ -1415,8 +1415,8 @@
         "FMA66643"
       ],
       "fma_id": "FMA66643",
-      "provenance": "BodyParts3D",
-      "definition": "Pulmonary veins (usually two right and two left) entering the smooth posterior-superior wall of the left atrium, with their intrapulmonary tributaries; they carry oxygenated blood.",
+      "provenance": "BodyParts3D; the left veins moved with the stretched posterolateral left atrium (synthesised: SYN_PulmonaryVeins)",
+      "definition": "Pulmonary veins (two right and two left) entering the smooth posterior-superior wall of the left atrium, with their intrapulmonary tributaries; the left ostia lie 25-32 mm from the mitral hinge (the mitral isthmus; in vivo 20-40 mm).",
       "clinical_relevance": "Pulmonary-vein isolation (ablation of atrial fibrillation) targets their left-atrial ostia; _DIST_HEART / _DIST_HILUM give the distance from those ostia and from the lung hilum.",
       "center": [
         -0.2136,
@@ -1436,7 +1436,7 @@
         ]
       },
       "triangles": 7000,
-      "realistic_color": "#b23930"
+      "realistic_color": "#ac4239"
     },
     {
       "id": "svc",
@@ -1457,28 +1457,28 @@
         "FMA4720"
       ],
       "fma_id": "FMA4720",
-      "provenance": "BodyParts3D",
-      "definition": "Superior vena cava, formed behind the right 1st costal cartilage by the brachiocephalic veins, running vertically to the right of the ascending aorta into the roof of the right atrium (right 3rd costal cartilage).",
+      "provenance": "BodyParts3D, lengthened with the lowered right-atrial roof (synthesised: SYN_SVC)",
+      "definition": "Superior vena cava, formed behind the right 1st costal cartilage by the brachiocephalic veins, running vertically to the right of the ascending aorta into the roof of the right atrium at the level of the right 3rd costal cartilage; 45 mm long in this model (in vivo 60-80 mm: BodyParts3D's is short).",
       "clinical_relevance": "Route of central venous catheters and pacemaker leads; the sino-atrial node lies at its junction with the right atrium.",
       "center": [
-        -0.3691,
-        0.6562,
+        -0.3685,
+        0.6042,
         -0.0643
       ],
       "bbox": {
         "min": [
           -0.4815,
-          0.4806,
+          0.3806,
           -0.1833
         ],
         "max": [
-          -0.2566,
-          0.8319,
+          -0.2555,
+          0.8278,
           0.0547
         ]
       },
       "triangles": 1532,
-      "realistic_color": "#3d4e92"
+      "realistic_color": "#41508e"
     },
     {
       "id": "brachiocephalic_veins",
@@ -1525,7 +1525,7 @@
         ]
       },
       "triangles": 5000,
-      "realistic_color": "#3c4d92"
+      "realistic_color": "#41508e"
     },
     {
       "id": "ivc",
@@ -1567,7 +1567,7 @@
         ]
       },
       "triangles": 3000,
-      "realistic_color": "#3b4c90"
+      "realistic_color": "#3f4f8c"
     },
     {
       "id": "cardiac_veins",
@@ -1592,8 +1592,8 @@
         "FMA71567"
       ],
       "fma_id": "FMA12846",
-      "provenance": "Derived from BodyParts3D (courses re-routed around the corrected coronary tree, in-vivo calibres, one lumen)",
-      "definition": "Coronary venous tree: the coronary sinus (40 mm) in the posterior left AV groove on the atrial side of the mitral annulus, opening flush into the posteroinferior right atrium in front of the IVC orifice beside the crux; the great cardiac vein in the left AV groove (atrial to the LCX) continuing at the left-main bifurcation as the anterior interventricular vein beside the LAD; the middle cardiac vein with the PDA, joining the CS about 9 mm from its ostium; the posterior vein of the LV and the left marginal vein; the small cardiac vein from the inferior right ventricle to the CS; and two anterior cardiac veins that cross the RCA and open directly into the right atrium. Per-vertex _VEIN labels (manifest veins[]).",
+      "provenance": "Designed on this heart around the corrected coronary tree (anatomy/scripts/veins.py): BodyParts3D courses where they agree, in-vivo calibres, one lumen",
+      "definition": "Coronary venous tree: the coronary sinus (48 mm) in the posterior left AV groove on the atrial side of the mitral annulus, opening flush into the posteroinferior right atrium in front of the IVC orifice; the great cardiac vein (110 mm) in the left AV groove on the atrial side of the LCX, below the left auricle, turning at the left-main bifurcation into the anterior interventricular vein (115 mm) beside the LAD; the middle cardiac vein with the PDA, joining the sinus 14 mm from its ostium; the posterior vein of the LV and the left marginal vein; the small cardiac vein (63 mm) in the posterior right AV groove beside the RCA, receiving the right marginal vein from the acute margin; and 2 short anterior cardiac veins that cross the RCA and open directly into the right atrium. Per-vertex _VEIN labels (manifest veins[]).",
       "clinical_relevance": "The coronary sinus and its tributaries are the route for left-ventricular leads in cardiac resynchronisation therapy and for retrograde cardioplegia; the LCX runs between the coronary sinus and the mitral annulus in ~70 % (percutaneous annuloplasty risk).",
       "accompanies": [
         "lad",
@@ -1602,24 +1602,24 @@
         "rca"
       ],
       "center": [
-        0.0137,
-        -0.133,
-        -0.008
+        0.0086,
+        -0.1724,
+        0.0023
       ],
       "bbox": {
         "min": [
-          -0.5425,
-          -0.5318,
-          -0.5684
+          -0.5476,
+          -0.532,
+          -0.4902
         ],
         "max": [
-          0.5698,
-          0.2658,
-          0.5524
+          0.5648,
+          0.1873,
+          0.4948
         ]
       },
-      "triangles": 26794,
-      "realistic_color": "#37498f",
+      "triangles": 24000,
+      "realistic_color": "#40569e",
       "rides": "Heart_Wall_Posterior"
     },
     {
@@ -1629,9 +1629,9 @@
       "layer": "heart",
       "target": null,
       "explode": [
-        -0.8074,
-        0.1839,
-        0.6917
+        -0.8139,
+        0.1866,
+        0.6876
       ],
       "description": "Epicardial adipose tissue filling the atrioventricular and interventricular grooves around the coronary trunks and veins (synthesised).",
       "territory": null,
@@ -1640,27 +1640,27 @@
       "fma": [],
       "fma_id": "FMA9871",
       "provenance": "synthesised",
-      "definition": "Epicardial adipose tissue of the anterior half: the fat bed of the right atrioventricular groove and the anterior interventricular groove, 3-8 mm thick, in which the RCA, LAD, anterior interventricular vein and their proximal branches lie about two-thirds embedded; it thins towards the apex and feathers out onto the myocardium. Synthesised from the vessel courses (BodyParts3D has no epicardial fat).",
+      "definition": "Epicardial adipose tissue of the anterior half: the fat bed of the right atrioventricular groove and the anterior interventricular groove (up to ~8 mm, feathering out over 6-9 mm), lobulated, along the proximal course of the diagonal and acute marginal branches, thinning to a film over the apex; its surface lies 0.35 of a vessel radius above each groove vessel's axis, so about two-thirds of each trunk is embedded and its crown runs as a continuous ridge. Synthesised from the vessel courses (BodyParts3D has no epicardial fat).",
       "clinical_relevance": "Epicardial and pericoronary fat is metabolically active; CT pericoronary fat attenuation around the proximal RCA, LAD and LCX is a marker of coronary inflammation and risk.",
       "center": [
-        -0.0044,
-        -0.1395,
-        0.1764
+        -0.0062,
+        -0.1231,
+        0.2048
       ],
       "bbox": {
         "min": [
-          -0.5496,
-          -0.5268,
-          -0.1375
+          -0.546,
+          -0.5149,
+          -0.054
         ],
         "max": [
-          0.5407,
-          0.2477,
-          0.4904
+          0.5335,
+          0.2686,
+          0.4636
         ]
       },
-      "triangles": 7816,
-      "realistic_color": "#d1a64d",
+      "triangles": 18018,
+      "realistic_color": "#d2a147",
       "rides": "Heart_Wall_Anterior"
     },
     {
@@ -1681,27 +1681,27 @@
       "fma": [],
       "fma_id": "FMA9871",
       "provenance": "synthesised",
-      "definition": "Epicardial adipose tissue of the posterior half: the fat bed of the posterior atrioventricular groove (coronary sinus, circumflex, distal RCA) and the posterior interventricular groove (PDA and middle cardiac vein), 3-8 mm thick, with the vessels about two-thirds embedded; feathers out onto the myocardium. Synthesised from the vessel courses.",
+      "definition": "Epicardial adipose tissue of the posterior half: the fat bed of the posterior atrioventricular groove (coronary sinus, circumflex, distal RCA) and the posterior interventricular groove (PDA, middle cardiac vein), lobulated, feathering out over 6-9 mm; about two-thirds of each groove vessel is embedded. Synthesised from the vessel courses.",
       "clinical_relevance": "Surrounds the coronary sinus and circumflex artery; excess epicardial fat is associated with atrial fibrillation and coronary artery disease.",
       "center": [
-        0.0594,
-        -0.0761,
-        -0.0994
+        0.1193,
+        -0.0892,
+        -0.0768
       ],
       "bbox": {
         "min": [
-          -0.4616,
-          -0.5401,
-          -0.5715
+          -0.3241,
+          -0.5333,
+          -0.5291
         ],
         "max": [
-          0.5803,
-          0.388,
-          0.3726
+          0.5626,
+          0.355,
+          0.3755
         ]
       },
-      "triangles": 11200,
-      "realistic_color": "#d1a54d",
+      "triangles": 21534,
+      "realistic_color": "#d2a147",
       "rides": "Heart_Wall_Posterior"
     },
     {
@@ -1724,26 +1724,26 @@
       ],
       "fma_id": "FMA4685",
       "provenance": "Derived from BodyParts3D (re-routed from the moved left sinus to the start of the left AV groove)",
-      "definition": "Left main coronary artery (SCCT 5): from its ostium in the left sinus of Valsalva, leftward behind the pulmonary trunk to its bifurcation into the LAD and LCX (about 10 mm long, 3.5-4.5 mm wide).",
+      "definition": "Left main coronary artery (SCCT 5): from its ostium in the left sinus of Valsalva, leftward behind the pulmonary trunk to its bifurcation into the LAD and LCX at the anterior end of the left AV groove, under the left auricle (about 16 mm long in this model; in vivo 10 +/- 5 mm, 3.5-4.5 mm wide).",
       "clinical_relevance": "Feeds both the LAD and LCX territories (~70 % of the LV); significant left-main disease is a surgical indication. Not a model target itself.",
       "center": [
-        0.124,
-        0.1768,
-        -0.0892
+        0.1288,
+        0.179,
+        -0.1097
       ],
       "bbox": {
         "min": [
-          0.0534,
-          0.1153,
-          -0.1264
+          0.0637,
+          0.1129,
+          -0.1351
         ],
         "max": [
-          0.1947,
-          0.2383,
-          -0.052
+          0.1938,
+          0.2451,
+          -0.0844
         ]
       },
-      "triangles": 308,
+      "triangles": 280,
       "feeds": [
         "LAD",
         "LCX"
@@ -1769,37 +1769,37 @@
         "FMA3862nsn"
       ],
       "fma_id": "FMA3862",
-      "provenance": "BodyParts3D course with a new origin at the moved left-main bifurcation; RV branches trimmed, D2 synthesised",
-      "definition": "Left anterior descending artery in the anterior interventricular groove from the LM bifurcation to (and around) the apex, with diagonal branches to the anterolateral LV; SCCT 6 pLAD (to D1 / first septal), 7 mLAD (to half-way to the apex), 8 dLAD, 9 D1, 10 D2.",
+      "provenance": "BodyParts3D course with a new origin at the moved left-main bifurcation; the first diagonal re-attached more proximally, RV branches trimmed, D2 and a left conus branch synthesised",
+      "definition": "Left anterior descending artery in the anterior interventricular groove from the LM bifurcation to (and around) the apex: SCCT 6 pLAD (to the first septal perforator or D1, whichever is first), 7 mLAD (to half-way to the apex), 8 dLAD, 9 D1 and 10 D2 (diagonals leaving it at 40-55 deg over the anterolateral LV), short right-ventricular branches and a small left conus branch over the infundibulum (the LAD half of the ring of Vieussens).",
       "clinical_relevance": "Supplies the anterior wall, anterior two-thirds of the septum and the apex (AHA 1, 2, 7, 8, 13, 14, 17; ~42 % of the LV); proximal LAD occlusion causes the largest infarcts.",
       "center": [
-        0.3355,
-        -0.1402,
-        0.2126
+        0.3321,
+        -0.1389,
+        0.1893
       ],
       "bbox": {
         "min": [
-          0.0799,
-          -0.4879,
-          -0.0841
+          0.0791,
+          -0.4825,
+          -0.1247
         ],
         "max": [
-          0.5911,
-          0.2076,
-          0.5092
+          0.5851,
+          0.2048,
+          0.5032
         ]
       },
-      "triangles": 11528,
+      "triangles": 12000,
       "rides": "Heart_Wall_Posterior",
       "labelAnchor": [
-        0.3186,
-        0.0936,
-        0.252
+        0.3162,
+        0.0804,
+        0.2278
       ],
       "labelNormal": [
-        0.7644,
-        0.2244,
-        0.6044
+        0.7946,
+        0.2021,
+        0.5724
       ],
       "bestView": {
         "azimuth": -30.0,
@@ -1814,9 +1814,9 @@
       "layer": "coronary",
       "target": "LAD",
       "explode": [
-        -0.8074,
-        0.1839,
-        0.6917
+        -0.8139,
+        0.1866,
+        0.6876
       ],
       "description": "Septal perforating branches of the LAD penetrating the interventricular septum.",
       "territory": "Anterior two-thirds of the interventricular septum",
@@ -1830,20 +1830,20 @@
       "definition": "Septal perforating branches of the LAD leaving it at about 70 degrees and running inferoposteriorly through the interventricular septum (S1 25-40 mm, 1.5-2 mm wide; unnumbered in SCCT; labelled S1 ... S4 from proximal).",
       "clinical_relevance": "Supply the anterior two-thirds of the septum and the conduction system (bundle branches); the first septal is the target of alcohol septal ablation.",
       "center": [
-        0.2761,
-        0.0166,
-        0.3559
+        0.1954,
+        0.0888,
+        0.2557
       ],
       "bbox": {
         "min": [
-          0.1047,
-          -0.1996,
-          0.2574
+          0.0564,
+          -0.1764,
+          0.0888
         ],
         "max": [
-          0.4475,
-          0.2327,
-          0.4544
+          0.3344,
+          0.3539,
+          0.4225
         ]
       },
       "triangles": 2428,
@@ -1872,33 +1872,33 @@
       "definition": "Left circumflex artery from the left-main bifurcation in the left atrioventricular groove, between the left atrium / great cardiac vein and the mitral annulus (SCCT 11 pCx to the origin of OM1, 13 LCx beyond it), round the obtuse margin; it ends on the posterolateral wall before the crux (right dominance). Obtuse marginals OM1 (SCCT 12) and OM2 (14) run towards the apex over the lateral LV wall.",
       "clinical_relevance": "Supplies the lateral and inferolateral LV (AHA 5, 6, 11, 12, 16; ~29 % of the LV) and the left atrium; circumflex occlusions are often ECG-silent.",
       "center": [
-        0.3614,
-        -0.0361,
-        -0.128
+        0.3608,
+        -0.1079,
+        -0.1253
       ],
       "bbox": {
         "min": [
-          0.1318,
-          -0.2897,
-          -0.4381
+          0.134,
+          -0.4019,
+          -0.4441
         ],
         "max": [
-          0.5909,
-          0.2175,
-          0.182
+          0.5876,
+          0.1862,
+          0.1934
         ]
       },
-      "triangles": 5800,
+      "triangles": 6128,
       "rides": "Heart_Wall_Posterior",
       "labelAnchor": [
-        0.261,
-        0.1906,
-        -0.2664
+        0.2736,
+        0.1221,
+        -0.2938
       ],
       "labelNormal": [
-        0.6231,
-        0.455,
-        -0.6361
+        0.6521,
+        0.2909,
+        -0.7001
       ],
       "bestView": {
         "azimuth": -30.0,
@@ -1913,9 +1913,9 @@
       "layer": "coronary",
       "target": "RCA",
       "explode": [
-        -0.8074,
-        0.1839,
-        0.6917
+        -0.8139,
+        0.1866,
+        0.6876
       ],
       "description": "Arises from the right aortic sinus and runs in the right atrioventricular groove to the crux of the heart; supplies the right ventricle, the SA and AV nodes (in most people) and, in right-dominant hearts, the inferior wall.",
       "territory": "Right ventricle, inferior wall and inferior septum (AHA segments 3, 4, 9, 10, 15)",
@@ -1926,36 +1926,36 @@
       ],
       "fma_id": "FMA3802",
       "provenance": "Derived from BodyParts3D (re-routed into the right AV groove)",
-      "definition": "Right coronary artery from the right sinus of Valsalva, forward between the right auricle and pulmonary trunk, down the right atrioventricular groove (5-12 mm outside the tricuspid hinge), around the acute margin and along the inferior AV groove to the crux: SCCT 1 pRCA, 2 mRCA (to the acute margin), 3 dRCA (to the PDA origin), 16 R-PLB beyond the crux. Its first branch is the conus branch (over the right-ventricular outflow tract), then the sinoatrial-nodal artery.",
+      "definition": "Right coronary artery from the right sinus of Valsalva, forward between the right auricle and pulmonary trunk, down the right atrioventricular groove (5-12 mm outside the tricuspid hinge), around the acute margin and along the inferior AV groove to the crux: SCCT 1 pRCA, 2 mRCA (to the acute margin), 3 dRCA (to the PDA origin), 16 R-PLB beyond the crux. Its first branch, the conus branch, leaves where the proximal RCA reaches the front of the heart and crosses the anterior infundibulum ~11 mm below the pulmonary valve towards the LAD's conus branch; then the sinoatrial-nodal artery.",
       "clinical_relevance": "Dominant in ~85 %: supplies the right ventricle, inferior wall and inferior septum (AHA 3, 4, 9, 10, 15) and usually the SA and AV nodes (bradyarrhythmia in inferior infarction).",
       "center": [
-        -0.2207,
-        0.0185,
-        0.0102
+        -0.2804,
+        0.0034,
+        0.1153
       ],
       "bbox": {
         "min": [
-          -0.526,
-          -0.3544,
-          -0.2823
+          -0.5224,
+          -0.3668,
+          -0.2722
         ],
         "max": [
-          0.0846,
-          0.3915,
-          0.3028
+          -0.0384,
+          0.3736,
+          0.5027
         ]
       },
-      "triangles": 4652,
+      "triangles": 5000,
       "rides": "Heart_Wall_Anterior",
       "labelAnchor": [
-        -0.3227,
-        0.1394,
-        0.135
+        -0.3332,
+        0.1215,
+        0.156
       ],
       "labelNormal": [
-        -0.8569,
-        0.3703,
-        0.3586
+        -0.86,
+        0.3135,
+        0.4027
       ],
       "bestView": {
         "azimuth": 40.0,
@@ -1970,9 +1970,9 @@
       "layer": "coronary",
       "target": "RCA",
       "explode": [
-        -0.8074,
-        0.1839,
-        0.6917
+        -0.8139,
+        0.1866,
+        0.6876
       ],
       "description": "Right (acute) marginal branch of the RCA running along the acute margin of the right ventricle.",
       "territory": "Right-ventricular free wall",
@@ -1986,20 +1986,20 @@
       "definition": "Acute marginal and right-ventricular branches of the RCA running over the right-ventricular free wall towards the apex (unnumbered in SCCT).",
       "clinical_relevance": "Supply the RV free wall; proximal RCA occlusion above them causes right-ventricular infarction.",
       "center": [
-        -0.076,
-        -0.0937,
-        0.3444
+        -0.0758,
+        -0.0925,
+        0.3423
       ],
       "bbox": {
         "min": [
-          -0.4999,
-          -0.4985,
-          0.1336
+          -0.4976,
+          -0.4921,
+          0.1347
         ],
         "max": [
-          0.3479,
-          0.3111,
-          0.5553
+          0.3459,
+          0.3072,
+          0.5499
         ]
       },
       "triangles": 9500,
@@ -2028,23 +2028,23 @@
       "definition": "Posterior descending artery (SCCT 4 R-PDA) from the RCA at the crux, running in the posterior (inferior) interventricular groove towards the apex and giving inferior septal branches.",
       "clinical_relevance": "Defines right dominance; supplies the inferior wall, inferior third of the septum and the posteromedial papillary muscle.",
       "center": [
-        0.0803,
-        -0.4094,
-        0.1246
+        0.0805,
+        -0.4038,
+        0.124
       ],
       "bbox": {
         "min": [
-          -0.3028,
-          -0.53,
-          -0.0941
+          -0.2981,
+          -0.5244,
+          -0.0912
         ],
         "max": [
-          0.4634,
-          -0.2888,
-          0.3434
+          0.4592,
+          -0.2832,
+          0.3392
         ]
       },
-      "triangles": 5720,
+      "triangles": 5644,
       "rides": "Heart_Wall_Posterior"
     },
     {
@@ -2070,23 +2070,23 @@
       "definition": "Posterolateral branch of the RCA (SCCT 16 R-PLB) continuing beyond the crux in the left AV groove and onto the inferolateral LV base.",
       "clinical_relevance": "Supplies the inferior and inferolateral LV base in right-dominant hearts, overlapping with the LCX territory.",
       "center": [
-        0.2189,
-        -0.4027,
-        -0.0855
+        0.2163,
+        -0.3975,
+        -0.0828
       ],
       "bbox": {
         "min": [
-          -0.0889,
-          -0.5222,
-          -0.3411
+          -0.0892,
+          -0.5157,
+          -0.3357
         ],
         "max": [
-          0.5267,
-          -0.2833,
-          0.1701
+          0.5219,
+          -0.2792,
+          0.1702
         ]
       },
-      "triangles": 3984,
+      "triangles": 3876,
       "rides": "Heart_Wall_Posterior"
     },
     {
@@ -2112,20 +2112,20 @@
       "definition": "Inferior septal branches from the PDA (and RCA) into the posterior third of the interventricular septum (short, <= 15 mm; unnumbered in SCCT).",
       "clinical_relevance": "Supply the inferior septum and often the AV node region together with the AV-nodal artery.",
       "center": [
-        0.0008,
-        -0.4408,
-        0.0525
+        0.0124,
+        -0.4298,
+        0.0584
       ],
       "bbox": {
         "min": [
-          -0.1325,
-          -0.4969,
-          -0.0125
+          -0.1237,
+          -0.4905,
+          -0.0019
         ],
         "max": [
-          0.134,
-          -0.3847,
-          0.1174
+          0.1485,
+          -0.3691,
+          0.1188
         ]
       },
       "triangles": 1264,
@@ -2143,8 +2143,8 @@
       "definition": "From the RCA ostium to one-half the distance to the acute margin of the heart.",
       "source": "SCCT 2014 (Leipsic et al., J Cardiovasc Comput Tomogr 2014;8:342-358), adapted from AHA 1975",
       "present": true,
-      "length_mm": 49.5,
-      "total_branch_length_mm": 49.5
+      "length_mm": 47.8,
+      "total_branch_length_mm": 47.8
     },
     {
       "scct": 2,
@@ -2156,8 +2156,8 @@
       "definition": "From the end of the proximal RCA to the acute margin of the heart.",
       "source": "SCCT 2014 (Leipsic et al., J Cardiovasc Comput Tomogr 2014;8:342-358), adapted from AHA 1975",
       "present": true,
-      "length_mm": 48.7,
-      "total_branch_length_mm": 48.7
+      "length_mm": 46.9,
+      "total_branch_length_mm": 46.9
     },
     {
       "scct": 3,
@@ -2169,8 +2169,8 @@
       "definition": "From the end of the mid RCA (acute margin) to the origin of the posterior descending artery (crux).",
       "source": "SCCT 2014 (Leipsic et al., J Cardiovasc Comput Tomogr 2014;8:342-358), adapted from AHA 1975",
       "present": true,
-      "length_mm": 39.9,
-      "total_branch_length_mm": 39.9
+      "length_mm": 41.4,
+      "total_branch_length_mm": 41.4
     },
     {
       "scct": 4,
@@ -2182,8 +2182,8 @@
       "definition": "Branch of the RCA running in the posterior (inferior) interventricular groove from the crux towards the apex.",
       "source": "SCCT 2014 (Leipsic et al., J Cardiovasc Comput Tomogr 2014;8:342-358), adapted from AHA 1975",
       "present": true,
-      "length_mm": 96.5,
-      "total_branch_length_mm": 255.5
+      "length_mm": 98.6,
+      "total_branch_length_mm": 252.4
     },
     {
       "scct": 5,
@@ -2195,8 +2195,8 @@
       "definition": "From the left-main ostium in the left sinus of Valsalva to its bifurcation into the LAD and LCX.",
       "source": "SCCT 2014 (Leipsic et al., J Cardiovasc Comput Tomogr 2014;8:342-358), adapted from AHA 1975",
       "present": true,
-      "length_mm": 17.0,
-      "total_branch_length_mm": 17.0
+      "length_mm": 16.4,
+      "total_branch_length_mm": 16.4
     },
     {
       "scct": 6,
@@ -2208,8 +2208,8 @@
       "definition": "From the end of the left main to the first large septal perforator or first diagonal (> 1.5 mm), whichever is most proximal.",
       "source": "SCCT 2014 (Leipsic et al., J Cardiovasc Comput Tomogr 2014;8:342-358), adapted from AHA 1975",
       "present": true,
-      "length_mm": 40.0,
-      "total_branch_length_mm": 40.0
+      "length_mm": 39.2,
+      "total_branch_length_mm": 39.2
     },
     {
       "scct": 7,
@@ -2221,8 +2221,8 @@
       "definition": "From the end of the proximal LAD to one-half the distance to the apex.",
       "source": "SCCT 2014 (Leipsic et al., J Cardiovasc Comput Tomogr 2014;8:342-358), adapted from AHA 1975",
       "present": true,
-      "length_mm": 39.5,
-      "total_branch_length_mm": 39.5
+      "length_mm": 40.6,
+      "total_branch_length_mm": 40.6
     },
     {
       "scct": 8,
@@ -2234,8 +2234,8 @@
       "definition": "From the end of the mid LAD to the end of the LAD (including its wrap around the apex).",
       "source": "SCCT 2014 (Leipsic et al., J Cardiovasc Comput Tomogr 2014;8:342-358), adapted from AHA 1975",
       "present": true,
-      "length_mm": 48.9,
-      "total_branch_length_mm": 48.9
+      "length_mm": 50.5,
+      "total_branch_length_mm": 50.5
     },
     {
       "scct": 9,
@@ -2247,8 +2247,8 @@
       "definition": "First diagonal branch of the LAD, running over the anterolateral left-ventricular wall.",
       "source": "SCCT 2014 (Leipsic et al., J Cardiovasc Comput Tomogr 2014;8:342-358), adapted from AHA 1975",
       "present": true,
-      "length_mm": 72.1,
-      "total_branch_length_mm": 139.1
+      "length_mm": 40.2,
+      "total_branch_length_mm": 53.1
     },
     {
       "scct": 10,
@@ -2260,8 +2260,8 @@
       "definition": "Second diagonal branch of the LAD.",
       "source": "SCCT 2014 (Leipsic et al., J Cardiovasc Comput Tomogr 2014;8:342-358), adapted from AHA 1975",
       "present": true,
-      "length_mm": 49.3,
-      "total_branch_length_mm": 49.3
+      "length_mm": 72.2,
+      "total_branch_length_mm": 136.7
     },
     {
       "scct": 11,
@@ -2273,8 +2273,8 @@
       "definition": "From the end of the left main to the origin of the first obtuse marginal, in the left atrioventricular groove.",
       "source": "SCCT 2014 (Leipsic et al., J Cardiovasc Comput Tomogr 2014;8:342-358), adapted from AHA 1975",
       "present": true,
-      "length_mm": 24.7,
-      "total_branch_length_mm": 24.7
+      "length_mm": 26.3,
+      "total_branch_length_mm": 26.3
     },
     {
       "scct": 12,
@@ -2286,8 +2286,8 @@
       "definition": "First obtuse-marginal branch of the LCX, running towards the apex over the lateral left-ventricular wall.",
       "source": "SCCT 2014 (Leipsic et al., J Cardiovasc Comput Tomogr 2014;8:342-358), adapted from AHA 1975",
       "present": true,
-      "length_mm": 83.4,
-      "total_branch_length_mm": 83.4
+      "length_mm": 100.3,
+      "total_branch_length_mm": 100.3
     },
     {
       "scct": 13,
@@ -2299,8 +2299,8 @@
       "definition": "Circumflex beyond the first obtuse marginal in the atrioventricular groove, to the end of the vessel or the origin of the L-PDA.",
       "source": "SCCT 2014 (Leipsic et al., J Cardiovasc Comput Tomogr 2014;8:342-358), adapted from AHA 1975",
       "present": true,
-      "length_mm": 48.6,
-      "total_branch_length_mm": 48.6
+      "length_mm": 33.5,
+      "total_branch_length_mm": 33.5
     },
     {
       "scct": 14,
@@ -2312,8 +2312,8 @@
       "definition": "Second obtuse-marginal branch of the LCX.",
       "source": "SCCT 2014 (Leipsic et al., J Cardiovasc Comput Tomogr 2014;8:342-358), adapted from AHA 1975",
       "present": true,
-      "length_mm": 82.6,
-      "total_branch_length_mm": 82.6
+      "length_mm": 89.9,
+      "total_branch_length_mm": 89.9
     },
     {
       "scct": 15,
@@ -2336,8 +2336,8 @@
       "definition": "Posterolateral branch(es) of the RCA beyond the crux, supplying the inferior and inferolateral left-ventricular base.",
       "source": "SCCT 2014 (Leipsic et al., J Cardiovasc Comput Tomogr 2014;8:342-358), adapted from AHA 1975",
       "present": true,
-      "length_mm": 120.4,
-      "total_branch_length_mm": 222.1
+      "length_mm": 120.9,
+      "total_branch_length_mm": 218.0
     },
     {
       "scct": 17,
@@ -2371,7 +2371,7 @@
       "accompanies": [
         "lcx"
       ],
-      "definition": "Last 40 mm of the venous tree in the posterior left AV groove, 5-15 mm on the atrial side of the mitral annulus, from the valve of Vieussens / vein of Marshall to its ostium, which opens flush into the posteroinferior right atrium in front of and medial to the IVC orifice, beside the crux; about 9-10 mm wide."
+      "definition": "Last 48 mm of the venous tree in the posterior left AV groove, on the atrial side of the mitral annulus, from the valve of Vieussens / vein of Marshall to its ostium, which opens flush into the posteroinferior right atrium in front of and medial to the IVC orifice; about 9-10 mm wide."
     },
     {
       "code": 2,
@@ -2382,17 +2382,17 @@
         "lcx",
         "lm"
       ],
-      "definition": "Continuation of the anterior interventricular vein from the level of the LM bifurcation along the left AV groove beside the LCX, below the left auricle, to the coronary sinus; forms the triangle of Brocq and Mouchet with the proximal LAD and LCX."
+      "definition": "Great cardiac vein (110 mm): from the coronary sinus along the left AV groove, on the atrial side of the circumflex and never more than ~15 mm from the mitral hinge, below the left auricle to the left-main bifurcation, where it turns into the anterior interventricular vein (triangle of Brocq and Mouchet with the proximal LAD and LCX)."
     },
     {
       "code": 3,
       "label": "AIV",
       "name": "Anterior interventricular vein",
-      "fma_id": "FMA4707",
+      "fma_id": "FMA66403",
       "accompanies": [
         "lad"
       ],
-      "definition": "Part of the great cardiac vein ascending in the anterior interventricular groove beside the LAD, usually on its left-ventricular side, from the apex to the LM bifurcation."
+      "definition": "Anterior interventricular vein (115 mm): ascends in the anterior interventricular groove beside the LAD, mostly on its left-ventricular side, from near the apex to the left-main bifurcation, where it continues as the great cardiac vein."
     },
     {
       "code": 4,
@@ -2402,7 +2402,7 @@
       "accompanies": [
         "rca_pda"
       ],
-      "definition": "Runs from the apex in the posterior interventricular groove with the PDA and joins the coronary sinus about 9 mm from its ostium, next to the crux."
+      "definition": "Middle cardiac vein: runs from the apex in the posterior interventricular groove with the PDA and joins the coronary sinus 14 mm from its ostium, where the sinus passes the crux."
     },
     {
       "code": 5,
@@ -2413,7 +2413,7 @@
         "rca_pl",
         "lcx"
       ],
-      "definition": "Posterior (inferolateral) left-ventricular vein between the middle cardiac and left marginal veins; in this model it drains into the coronary sinus about 20 mm from its ostium."
+      "definition": "Posterior (inferolateral) left-ventricular vein between the middle cardiac and left marginal veins; in this model it drains into the great cardiac vein 62 mm from the coronary-sinus ostium."
     },
     {
       "code": 6,
@@ -2424,7 +2424,7 @@
         "rca",
         "rca_marginal"
       ],
-      "definition": "Small veins of the anterior right-ventricular wall that cross the right AV groove (over the RCA) and open directly into the right atrium above the tricuspid annulus, bypassing the coronary sinus (two in this model)."
+      "definition": "Small veins of the anterior right-ventricular wall (2 in this model, <= 45 mm) that cross the right AV groove over the RCA and open directly into the right atrium above the tricuspid annulus, bypassing the coronary sinus."
     },
     {
       "code": 7,
@@ -2442,12 +2442,41 @@
       "name": "Small cardiac vein",
       "fma_id": "FMA4714",
       "accompanies": [
-        "rca",
+        "rca"
+      ],
+      "definition": "Small cardiac vein (63 mm): runs in the posterior right AV groove beside the distal RCA, on its atrial side, from the acute margin (where it receives the right marginal vein) to the coronary sinus beside its ostium (present in ~40 %; designed on this heart, BodyParts3D has no mesh for it)."
+    },
+    {
+      "code": 9,
+      "label": "RMV",
+      "name": "Right marginal vein",
+      "fma_id": "FMA4716",
+      "accompanies": [
         "rca_marginal"
       ],
-      "definition": "Drains the inferior and right-marginal right-ventricular wall and joins the coronary sinus next to its ostium (in this model: the BodyParts3D 'anterior cardiac vein' tree, whose only drainage is on the inferior RV beside the middle cardiac vein)."
+      "definition": "Right marginal vein (74 mm): ascends along the acute margin of the right ventricle with the acute marginal artery and drains into the small cardiac vein in the right AV groove."
     }
   ],
+  "facts": {
+    "LM_MM": "16",
+    "CS_MM": "48",
+    "GCV_MM": "110",
+    "AIV_MM": "115",
+    "SCV_MM": "63",
+    "RMV_MM": "74",
+    "MCV_MM": "101",
+    "MCV_JOIN_MM": "14",
+    "N_ACV": "2",
+    "PVLV_JOIN_MM": "62",
+    "PVLV_HOST": "great cardiac vein",
+    "SVC_MM": "45",
+    "TV_OFFSET_MM": "7",
+    "MV_AML_MM": "22",
+    "MV_PML_MM": "12.5",
+    "ISTHMUS_MIN_MM": "25",
+    "ISTHMUS_MED_MM": "32",
+    "FAT_EMBED": "0.35"
+  },
   "attributes": {
     "COLOR_0": {
       "nodes": [
@@ -2477,7 +2506,12 @@
         "CardiacVeins"
       ],
       "type": "SCALAR float (integer values)",
-      "meaning": "cardiac-vein code of the nearest labelled vein centreline point, see veins[] (1 CS, 2 GCV, 3 AIV, 4 MCV, 5 PVLV, 6 ACV, 7 LMV, 8 SCV; 7-8 added in v1.1)"
+      "meaning": "cardiac-vein code of the nearest labelled vein centreline point, see veins[] (1 CS, 2 GCV, 3 AIV, 4 MCV, 5 PVLV, 6 ACV, 7 LMV, 8 SCV, 9 RMV; 7-8 added in v1.1, 9 in round 3)"
+    },
+    "_RADIUS": {
+      "nodes": "Coronary_* and CardiacVeins",
+      "type": "SCALAR float, scene units",
+      "meaning": "lumen radius of the nearest labelled centreline point (vessels.json radius): inflate a vessel in proportion to its calibre (e.g. r' = max(1.15 r, minimum pixel width)) and fade sub-pixel tips instead of adding a fixed offset"
     },
     "_TERRITORY": {
       "nodes": [
@@ -2510,7 +2544,7 @@
       "position": [
         -0.1073,
         0.7487,
-        8.1331
+        8.1332
       ],
       "target": [
         -0.1073,
@@ -2535,13 +2569,13 @@
     "exploded": {
       "position": [
         -0.2153,
-        0.9874,
-        12.9996
+        0.9752,
+        13.0657
       ],
       "target": [
         -0.2153,
-        -0.5701,
-        0.0204
+        -0.5901,
+        0.0213
       ],
       "fov": 35.0,
       "aspect": 1.7778
@@ -2550,8 +2584,8 @@
       "skin_torso": {
         "position": [
           -0.2147,
-          2.9377,
-          11.154
+          2.9378,
+          11.1541
         ],
         "target": [
           -0.2147,
@@ -2588,14 +2622,14 @@
       },
       "ribs_l": {
         "position": [
-          8.6036,
+          8.6037,
           2.0422,
-          0.208
+          0.2093
         ],
         "target": [
           0.5298,
           -0.3833,
-          -0.2167
+          -0.2166
         ],
         "fov": 35.0
       },
@@ -2666,40 +2700,40 @@
       },
       "spine_thoracic": {
         "position": [
-          -0.5362,
-          1.8583,
-          -7.1774
+          -0.5353,
+          1.8568,
+          -7.1744
         ],
         "target": [
           -0.2359,
-          -0.083,
-          -0.7131
+          -0.0833,
+          -0.7142
         ],
         "fov": 35.0
       },
       "lung_l": {
         "position": [
-          6.5302,
-          1.9235,
-          0.8535
+          6.5294,
+          1.9234,
+          0.853
         ],
         "target": [
-          0.4385,
-          0.0714,
-          -0.1484
+          0.4384,
+          0.0716,
+          -0.1485
         ],
         "fov": 35.0
       },
       "lung_r": {
         "position": [
-          -6.9524,
-          1.9345,
-          0.8585
+          -6.9515,
+          1.9336,
+          0.8573
         ],
         "target": [
-          -0.8603,
+          -0.8624,
           0.0821,
-          -0.1491
+          -0.1488
         ],
         "fov": 35.0
       },
@@ -2719,78 +2753,78 @@
       "oesophagus": {
         "position": [
           -0.1978,
-          1.6746,
-          3.8541
+          1.6754,
+          3.8517
         ],
         "target": [
           -0.1978,
-          0.4113,
-          -0.3569
+          0.4111,
+          -0.3629
         ],
         "fov": 35.0
       },
       "diaphragm": {
         "position": [
           -0.6221,
-          0.6023,
+          0.5623,
           6.5982
         ],
         "target": [
           -0.2258,
-          -1.4014,
+          -1.4414,
           -0.0688
         ],
         "fov": 35.0
       },
       "heart_wall_anterior": {
         "position": [
-          -1.3553,
-          1.5936,
-          2.7142
+          -1.3694,
+          1.5784,
+          2.6744
         ],
         "target": [
-          -0.0213,
-          0.0113,
-          0.1323
+          -0.0229,
+          0.0001,
+          0.1305
         ],
         "fov": 35.0
       },
       "heart_wall_posterior": {
         "position": [
-          1.547,
-          0.2033,
-          -3.0427
+          1.6379,
+          0.2501,
+          -3.146
         ],
         "target": [
-          0.0219,
-          -0.0361,
-          -0.0909
+          0.0237,
+          0.0132,
+          -0.0963
         ],
         "fov": 35.0
       },
       "valve_mitral": {
         "position": [
-          0.5958,
-          0.309,
-          1.1102
+          0.5574,
+          0.3521,
+          1.1561
         ],
         "target": [
-          0.1458,
-          -0.0996,
-          -0.1753
+          0.1088,
+          -0.0553,
+          -0.1256
         ],
         "fov": 35.0
       },
       "valve_tricuspid": {
         "position": [
-          0.2933,
-          0.2703,
-          1.3749
+          0.2645,
+          0.2821,
+          1.4817
         ],
         "target": [
-          -0.1614,
-          -0.1427,
-          0.0757
+          -0.2025,
+          -0.142,
+          0.1474
         ],
         "fov": 35.0
       },
@@ -2822,14 +2856,14 @@
       },
       "papillary_muscles": {
         "position": [
-          0.8886,
-          0.4536,
-          2.1463
+          0.8221,
+          0.3672,
+          1.9621
         ],
         "target": [
-          0.1964,
-          -0.175,
-          0.1685
+          0.1954,
+          -0.2019,
+          0.1714
         ],
         "fov": 35.0
       },
@@ -2887,13 +2921,13 @@
       },
       "svc": {
         "position": [
-          0.0739,
-          1.0585,
+          0.0744,
+          1.0065,
           1.2014
         ],
         "target": [
-          -0.3691,
-          0.6562,
+          -0.3685,
+          0.6042,
           -0.0643
         ],
         "fov": 35.0
@@ -2926,157 +2960,157 @@
       },
       "cardiac_veins": {
         "position": [
-          1.084,
-          0.839,
-          3.05
+          1.0074,
+          0.7347,
+          2.856
         ],
         "target": [
-          0.0137,
-          -0.133,
-          -0.008
+          0.0086,
+          -0.1724,
+          0.0023
         ],
         "fov": 35.0
       },
       "epicardial_fat_anterior": {
         "position": [
-          0.8895,
-          0.6723,
-          2.7305
+          0.8595,
+          0.663,
+          2.6782
         ],
         "target": [
-          -0.0044,
-          -0.1395,
-          0.1764
+          -0.0062,
+          -0.1231,
+          0.2048
         ],
         "fov": 35.0
       },
       "epicardial_fat_posterior": {
         "position": [
-          1.0787,
-          0.8496,
-          2.8129
+          1.0553,
+          0.7609,
+          2.5977
         ],
         "target": [
-          0.0594,
-          -0.0761,
-          -0.0994
+          0.1193,
+          -0.0892,
+          -0.0768
         ],
         "fov": 35.0
       },
       "lm": {
         "position": [
-          0.9357,
-          1.7926,
-          -0.6726
+          0.9328,
+          1.7583,
+          -0.795
         ],
         "target": [
-          0.124,
-          0.1768,
-          -0.0892
+          0.1288,
+          0.179,
+          -0.1097
         ],
         "fov": 35.0
       },
       "lad": {
         "position": [
-          2.0264,
-          -0.2098,
-          1.2837
+          2.0908,
+          -0.2281,
+          1.1916
         ],
         "target": [
-          0.3355,
-          -0.1402,
-          0.2126
+          0.3321,
+          -0.1389,
+          0.1893
         ],
         "fov": 35.0
       },
       "lad_septal": {
         "position": [
-          1.3797,
-          0.6233,
-          1.7785
+          1.1903,
+          1.0506,
+          1.5576
         ],
         "target": [
-          0.2761,
-          0.0166,
-          0.3559
+          0.1954,
+          0.0888,
+          0.2557
         ],
         "fov": 35.0
       },
       "lcx": {
         "position": [
-          2.115,
-          0.3494,
-          -0.7493
+          2.1548,
+          -0.0523,
+          -0.7486
         ],
         "target": [
-          0.3614,
-          -0.0361,
-          -0.128
+          0.3608,
+          -0.1079,
+          -0.1253
         ],
         "fov": 35.0
       },
       "rca": {
         "position": [
-          -2.2308,
-          0.7932,
-          0.1034
+          -2.2663,
+          0.6717,
+          0.9316
         ],
         "target": [
-          -0.2207,
-          0.0185,
-          0.0102
+          -0.2804,
+          0.0034,
+          0.1153
         ],
         "fov": 35.0
       },
       "rca_marginal": {
         "position": [
-          -0.5891,
-          0.0128,
-          2.6683
+          -0.5856,
+          0.0173,
+          2.6435
         ],
         "target": [
-          -0.076,
-          -0.0937,
-          0.3444
+          -0.0758,
+          -0.0925,
+          0.3423
         ],
         "fov": 35.0
       },
       "rca_pda": {
         "position": [
-          0.5638,
-          -2.0869,
-          0.8745
+          0.5708,
+          -2.077,
+          0.879
         ],
         "target": [
-          0.0803,
-          -0.4094,
-          0.1246
+          0.0805,
+          -0.4038,
+          0.124
         ],
         "fov": 35.0
       },
       "rca_pl": {
         "position": [
-          1.3984,
-          -1.8192,
-          -0.5461
+          1.3982,
+          -1.8148,
+          -0.5348
         ],
         "target": [
-          0.2189,
-          -0.4027,
-          -0.0855
+          0.2163,
+          -0.3975,
+          -0.0828
         ],
         "fov": 35.0
       },
       "rca_septal": {
         "position": [
-          0.0054,
-          -2.3138,
-          0.3719
+          0.0894,
+          -2.2931,
+          0.4219
         ],
         "target": [
-          0.0008,
-          -0.4408,
-          0.0525
+          0.0124,
+          -0.4298,
+          0.0584
         ],
         "fov": 35.0
       }
