@@ -86,6 +86,40 @@ export function reconcilingSentence(target: TargetId, p: TargetPrediction): stri
   return `${bandSentence(p.risk_band)} ${vesselDecisionSentence(target, p)}`;
 }
 
+const listIds = (ids: readonly string[]) =>
+  ids.length <= 1 ? (ids[0] ?? '') : `${ids.slice(0, -1).join(', ')} and ${ids.at(-1)}`;
+
+/**
+ * One plain sentence when the CAD answer and the per-vessel verdicts (or CAD's band and its verdict) seem to
+ * disagree, e.g. "CAD 66 % · High · Not flagged" next to "LAD · Flagged". Each target has its own model and
+ * its own threshold (§3.1), so both can be right; the sentence says so without repeating any number (the
+ * thresholds' homes are the verdict line and the inspector, §3.3). Null when nothing needs reconciling.
+ */
+export function cadReconciliation(
+  cad: Pick<TargetPrediction, 'probability' | 'threshold' | 'risk_band'> & { label?: number | null },
+  vessels: readonly { id: TargetId; p: Pick<TargetPrediction, 'probability' | 'threshold'> & { label?: number | null } }[],
+): string | null {
+  const cadFlagged = isFlagged(cad);
+  const flagged = vessels.filter((v) => isFlagged(v.p));
+  const band = RISK_BAND_STYLES[cad.risk_band]?.label ?? 'High';
+  const bandHigh = cad.risk_band === 'high' || cad.risk_band === 'critical';
+  if (!cadFlagged && flagged.length > 0) {
+    const one = flagged.length === 1;
+    const lower = flagged.every((v) => v.p.threshold < cad.threshold);
+    const lead = bandHigh ? `${band} probability, but below CAD’s threshold` : 'Below CAD’s threshold';
+    return (
+      `${lead}; ${listIds(flagged.map((v) => v.id))} ${one ? 'is' : 'are'} flagged at ${one ? 'its' : 'their'} own` +
+      `${lower ? ', lower' : ''} threshold${one ? '' : 's'}. Each target is judged separately.`
+    );
+  }
+  if (cadFlagged && vessels.length > 0 && flagged.length === 0) {
+    return 'Flagged for CAD, yet no single artery reaches its own threshold. Each target is judged separately.';
+  }
+  if (!cadFlagged && bandHigh) return `${band} probability, yet below CAD’s decision threshold, so not flagged.`;
+  if (cadFlagged && !bandHigh) return `${band} probability, yet above CAD’s decision threshold, so flagged.`;
+  return null;
+}
+
 export interface FlaggedCount {
   /** Flagged vessels (count of `label` = 1). */
   k: number;

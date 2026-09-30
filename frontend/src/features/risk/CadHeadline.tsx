@@ -1,5 +1,6 @@
 import { AnimatePresence, motion } from 'framer-motion';
 import { AlertCircle, Info } from 'lucide-react';
+import { useRef } from 'react';
 import { BandChip, Probability, RiskTrack, Skeleton, Tooltip } from '@/design';
 import { useSchemaIndex } from '@/hooks/useData';
 import { useIsReducedMotion } from '@/hooks/useMediaQuery';
@@ -10,7 +11,7 @@ import { EASE, MOTION } from '@/theme/tokens';
 import { Collapse } from './Collapse';
 import { useFlipAnnouncement } from './useFlipAnnouncement';
 import { useRiskView } from './useRiskView';
-import { cadVerdictLine, spokenVerdict, verdictFor } from './verdict';
+import { cadReconciliation, cadVerdictLine, spokenVerdict, verdictFor } from './verdict';
 
 /**
  * "Model estimate" status tag (§3.2, §5.8): sits beside the numbers it qualifies; replaces the live-canvas
@@ -67,6 +68,16 @@ export function CadHeadline({ titleId, covered = false, showTrack = true }: CadH
   const verdictText = cad ? cadVerdictLine(cad) : null;
   const delta = cad && base ? formatDeltaPts(cad.probability - base.probability) : null;
   const band = cad ? RISK_BAND_STYLES[cad.risk_band] : null;
+  const vesselPs = (index?.vessels ?? []).flatMap((v) => {
+    const vp = view.prediction?.predictions[v.id];
+    return vp ? [{ id: v.id, p: vp }] : [];
+  });
+  // While an update is pending the sentence stays (dimmed like the numerals) instead of collapsing and
+  // re-opening on every edit; it follows the numbers it reconciles.
+  const reconcile = cad ? cadReconciliation(cad, vesselPs) : null;
+  // Keep the last sentence while the line collapses, so it never empties before it closes.
+  const lastReconcile = useRef<string | null>(null);
+  if (reconcile) lastReconcile.current = reconcile;
   const announcement = useFlipAnnouncement(
     cad && band
       ? `CAD ${formatProbability(cad.probability).spoken}, ${band.label}. ${spokenVerdict(cad)}.`
@@ -215,6 +226,15 @@ export function CadHeadline({ titleId, covered = false, showTrack = true }: CadH
               </motion.p>
             </AnimatePresence>
           </div>
+          {/* CAD and the arteries are judged against their own thresholds: say so when they seem to disagree. */}
+          <Collapse show={showTrack && reconcile !== null}>
+            <p
+              className={cn('mt-1 text-label font-normal text-secondary transition-opacity duration-fast', view.stale && 'opacity-50')}
+              data-reconcile="CAD"
+            >
+              {reconcile ?? lastReconcile.current}
+            </p>
+          </Collapse>
         </>
       )}
       <p className="sr-only text-body-s" aria-live="polite">

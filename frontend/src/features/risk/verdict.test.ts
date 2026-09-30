@@ -7,6 +7,7 @@ import fixturesRaw from '../../../public/model/fixtures.json?raw';
 import modelRaw from '../../../public/model/model.json?raw';
 import {
   bandSentence,
+  cadReconciliation,
   cadVerdictLine,
   cathComparison,
   flaggedCount,
@@ -104,5 +105,40 @@ describe('vocabulary (§3.2)', () => {
     expect(cathComparison('RCA', 0, tp(0.9, 0.32))).toMatchObject({ truthText: 'Not stenotic at cath', agrees: false });
     expect(cathComparison('CAD', 1, tp(0.9, 0.75))?.truthText).toBe('CAD at cath');
     expect(cathComparison('CAD', undefined, tp(0.9, 0.75))).toBeNull();
+  });
+});
+
+describe('cadReconciliation', () => {
+  const vessels = (lad: number, lcx: number, rca: number) => [
+    { id: 'LAD' as const, p: tp(lad, 0.55) },
+    { id: 'LCX' as const, p: tp(lcx, 0.33) },
+    { id: 'RCA' as const, p: tp(rca, 0.32) },
+  ];
+
+  it('explains a flagged vessel under an unflagged CAD (P-035 with EF 55: CAD 66 % High, LAD 60 % flagged)', () => {
+    expect(cadReconciliation(tp(0.66, 0.75), vessels(0.6, 0.17, 0.23))).toBe(
+      'High probability, but below CAD’s threshold; LAD is flagged at its own, lower threshold. Each target is judged separately.',
+    );
+    expect(cadReconciliation(tp(0.4, 0.75), vessels(0.6, 0.4, 0.23))).toBe(
+      'Below CAD’s threshold; LAD and LCX are flagged at their own, lower thresholds. Each target is judged separately.',
+    );
+  });
+
+  it('explains a High band that is not flagged, and a flagged CAD with no flagged artery', () => {
+    expect(cadReconciliation(tp(0.62, 0.75), vessels(0.3, 0.2, 0.2))).toBe(
+      'High probability, yet below CAD’s decision threshold, so not flagged.',
+    );
+    expect(cadReconciliation(tp(0.8, 0.75), vessels(0.3, 0.2, 0.2))).toMatch(/^Flagged for CAD, yet no single artery/);
+  });
+
+  it('stays silent when the answers agree, and never repeats a number', () => {
+    expect(cadReconciliation(tp(0.98, 0.75), vessels(0.65, 0.56, 0.47))).toBeNull();
+    expect(cadReconciliation(tp(0.2, 0.75), vessels(0.1, 0.1, 0.1))).toBeNull();
+    const all = [
+      cadReconciliation(tp(0.66, 0.75), vessels(0.6, 0.17, 0.23)),
+      cadReconciliation(tp(0.62, 0.75), vessels(0.3, 0.2, 0.2)),
+      cadReconciliation(tp(0.8, 0.75), vessels(0.3, 0.2, 0.2)),
+    ].join(' ');
+    expect(all).not.toMatch(/\d/);
   });
 });

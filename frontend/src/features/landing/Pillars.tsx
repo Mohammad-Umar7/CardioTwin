@@ -2,6 +2,7 @@ import { ChevronRight } from 'lucide-react';
 import { useMemo, type MouseEvent, type ReactNode } from 'react';
 import { Link } from 'react-router-dom';
 import { BandChip, Probability, RiskPip, Skeleton } from '@/design';
+import { verdictFor } from '@/features/risk/verdict';
 import { useSchemaIndex } from '@/hooks/useData';
 import { useResource } from '@/hooks/useResource';
 import { cn } from '@/lib/cn';
@@ -28,12 +29,23 @@ function PredictVisual() {
   const cad = usePatientStore((s) => s.prediction?.predictions.CAD);
   const stale = usePatientStore((s) => s.status === 'loading');
   if (!cad) return <Skeleton className="h-6 w-24" />;
+  // The CAD verdict sits under the band, like "k of 3 flagged" under the Map pips: a High band that is not
+  // flagged (CAD's threshold is 75 %) then never reads as a contradiction of the vessel count beside it.
+  const verdict = verdictFor(cad);
   return (
     <span className="flex items-center gap-2">
       <span data-prob="CAD">
         <Probability p={cad.probability} size="l" stale={stale} />
       </span>
-      <BandChip band={cad.risk_band} pending={stale} size="sm" showMeter={false} />
+      <span className="flex flex-col items-start gap-1">
+        <BandChip band={cad.risk_band} pending={stale} size="sm" showMeter={false} />
+        <span className={cn('whitespace-nowrap text-label font-normal text-tertiary', stale && 'opacity-50')}>
+          <span aria-hidden className="mr-1">
+            {verdict.glyph}
+          </span>
+          {verdict.word}
+        </span>
+      </span>
     </span>
   );
 }
