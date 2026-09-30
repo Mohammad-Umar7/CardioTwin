@@ -1,4 +1,5 @@
 /** Pure stage-layout rules (WORKSTATION_V2 §4.1, §4.7), shared by StageLayout and its tests. */
+import type { CSSProperties } from 'react';
 import type { Chrome, DrawerId, StageInsets } from '@/state/uiStore';
 
 /** Slots of the V2 stage (WORKSTATION_V2 §4.1, §9.2 item 3). */
@@ -45,4 +46,22 @@ export function computeStageInsets(m: InsetInput): StageInsets {
   const bottom = covers(show.bottom, m.bottom, m.bottom.height);
   const cardsShown = show.left || show.right || show.bottom;
   return { left, right, top: cardsShown ? g : 0, bottom: bottom || (cardsShown ? g : 0) };
+}
+
+/** Enter over `base` with the out curve; exit over 170 ms (0.7 × base) with the exit curve (LUMEN §6). */
+const ENTER = 'var(--dur-base) var(--ease-out)';
+const EXIT = '170ms var(--ease-exit)';
+/** The free-area glide of the centred slots and the column moves: `flyout`, never staggered. */
+const GLIDE = 'var(--dur-flyout) var(--ease-out)';
+
+/**
+ * Transition of a slot: opacity and transform (the enter / exit, staggered by `delay`) plus the layout
+ * glides (`translate` for the centred slots, `top` for the right column), which start at once so they stay
+ * in step with the camera's view offset.
+ */
+export function slotTransition(visible: boolean, delay: number, glide: 'translate' | 'top'): CSSProperties {
+  const fade = visible ? ENTER : EXIT;
+  return {
+    transition: `opacity ${fade} ${delay}ms, transform ${fade} ${delay}ms, ${glide} ${GLIDE} 0ms`,
+  };
 }

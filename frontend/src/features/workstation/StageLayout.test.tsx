@@ -201,3 +201,14 @@ describe('ChromeGate', () => {
     expect(gate).toHaveClass('grid-rows-[1fr]', 'opacity-100');
   });
 });
+
+describe('slot transitions', () => {
+  it('staggers the fade but never the glide, and exits faster than it enters', async () => {
+    const { slotTransition } = await import('./stageInsets');
+    expect(slotTransition(true, 120, 'translate').transition).toBe(
+      'opacity var(--dur-base) var(--ease-out) 120ms, transform var(--dur-base) var(--ease-out) 120ms, translate var(--dur-flyout) var(--ease-out) 0ms',
+    );
+    expect(slotTransition(false, 30, 'top').transition).toContain('opacity 170ms var(--ease-exit) 30ms');
+    expect(slotTransition(false, 30, 'top').transition).toContain('top var(--dur-flyout) var(--ease-out) 0ms');
+  });
+});

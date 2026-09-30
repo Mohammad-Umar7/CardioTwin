@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useLayoutEffect, useRef, useState, type CSSProperties, type ReactNode } from 'react';
 import { cn } from '@/lib/cn';
 import { useUiStore, type Chrome } from '@/state/uiStore';
-import { CHROME_SLOTS, computeStageInsets } from './stageInsets';
+import { CHROME_SLOTS, computeStageInsets, slotTransition } from './stageInsets';
 
 export interface StageLayoutProps {
   /** Full-bleed canvas layer (the workstation <CanvasSlot/>). It never changes size. */
@@ -43,6 +43,7 @@ function Slot({
   visible,
   hideTo,
   delay = 0,
+  glide = 'top',
   className,
   style,
   slotRef,
@@ -52,6 +53,8 @@ function Slot({
   visible: boolean;
   hideTo: 'left' | 'right' | 'top' | 'bottom' | 'none';
   delay?: number;
+  /** Layout property that glides without the stagger: `translate` (centred slots) or `top`. */
+  glide?: 'translate' | 'top';
   className?: string;
   style?: CSSProperties;
   slotRef?: (el: HTMLDivElement | null) => void;
@@ -71,10 +74,10 @@ function Slot({
       data-region={`slot-${name}`}
       data-visible={visible}
       aria-hidden={visible ? undefined : true}
-      style={{ ...style, transitionDelay: `${delay}ms` }}
+      style={{ ...style, ...slotTransition(visible, delay, glide) }}
       className={cn(
-        'absolute z-panels transition-[opacity,transform,left,top]',
-        visible ? 'opacity-100 duration-base ease-out' : 'pointer-events-none opacity-0 duration-[170ms] ease-exit',
+        'absolute z-panels',
+        visible ? 'opacity-100' : 'pointer-events-none opacity-0',
         !visible && hideTo === 'left' && '-translate-x-3 motion-reduce:translate-x-0',
         !visible && hideTo === 'right' && 'translate-x-3 motion-reduce:translate-x-0',
         !visible && hideTo === 'top' && '-translate-y-1 motion-reduce:translate-y-0',
@@ -216,10 +219,11 @@ export function StageLayout({
     };
   }, [measure]);
 
-  // Centre of the free area, for the context slot and the toolbar (glides over `flyout`).
-  const freeCentre = `calc((${insets.left}px + 100% - ${insets.right}px) / 2)`;
-  const centred: CSSProperties = { left: freeCentre };
-  const glide = 'transition-[opacity,transform,left] duration-flyout';
+  // Centre of the free area, for the context slot and the toolbar. They sit at the stage centre and move
+  // with the independent `translate` property (glides over `flyout`), never `left`: a translation is not
+  // a layout shift, so late-arriving cards never add to CLS (V2 §8.6).
+  const dx = (insets.left - insets.right) / 2;
+  const centred: CSSProperties = { left: '50%', translate: `calc(-50% + ${dx}px) 0` };
 
   return (
     <div
@@ -274,7 +278,8 @@ export function StageLayout({
         visible={show.top}
         hideTo="top"
         style={centred}
-        className={cn('top-[var(--stage-inset)] flex -translate-x-1/2 items-center gap-2', glide)}
+        glide="translate"
+        className="top-[var(--stage-inset)] flex items-center gap-2"
       >
         {top}
       </Slot>
@@ -286,7 +291,8 @@ export function StageLayout({
         delay={show.bottom ? enterAfter + 120 : 60}
         slotRef={(el) => (bottomRef.current = el)}
         style={centred}
-        className={cn('bottom-[var(--stage-inset)] flex -translate-x-1/2 items-end', glide)}
+        glide="translate"
+        className="bottom-[var(--stage-inset)] flex items-end"
       >
         {bottom}
       </Slot>
