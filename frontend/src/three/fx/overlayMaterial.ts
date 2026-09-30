@@ -162,7 +162,7 @@ export function createOverlayMaterial(shared: OverlayShared, arclenAttribute: st
           col += mix(uFlowWhite, ramp, uTintMix) * (0.7 * uDashAmp * uDensity * bead * facing * facing);
         }
 
-        col *= core * (1.0 - 0.7 * uDim) * uSolid;
+        col *= core * (1.0 - 0.85 * uDim) * uSolid;
         if (dot(col, vec3(1.0)) < 1e-4) discard;
         gl_FragColor = vec4(col, 1.0);
         #include <tonemapping_fragment>

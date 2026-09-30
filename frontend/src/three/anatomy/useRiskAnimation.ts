@@ -27,6 +27,19 @@ export const emissiveFor = (p: number, floorScale = 1) => {
 };
 
 /**
+ * Realistic look: the coronaries are LIT tubes, not self-lit ones — the risk hue lives in the albedo and the
+ * emission stays a faint warmth (≤ 0.15 at p = 1), so every tube keeps its lit-to-shadow gradient next to
+ * the baked walls, fat and veins. Only the selected vessel adds a lift on top (SELECTED_LIFT_REALISTIC).
+ */
+export const EMISSIVE_REALISTIC = { floor: 0.03, gain: 0.12 } as const;
+export const emissiveRealisticFor = (p: number) => {
+  const t = Math.min(1, Math.max(0, (p - EMISSIVE.onset) / (1 - EMISSIVE.onset)));
+  return EMISSIVE_REALISTIC.floor + EMISSIVE_REALISTIC.gain * t * t * (3 - 2 * t);
+};
+/** Realistic: the selected vessel's emission is raised by this much (absolute), so it reads as the hero. */
+export const SELECTED_LIFT_REALISTIC = 0.4;
+
+/**
  * Territory strength (V2 §5.15): selected mode 0.10 + 0.25·p, all mode 0.10 + 0.30·Σwp on the Clinical
  * clay. The Realistic look mixes the ramp into a baked red muscle, where the same share is invisible, so it
  * uses a stronger gain (still an approximate wash, never as saturated as the vessel itself).
@@ -35,6 +48,12 @@ export const TERRITORY_GAIN = { selected: 0.25, all: 0.3 } as const;
 export const TERRITORY_GAIN_REALISTIC = { selected: 0.42, all: 0.42 } as const;
 /** The selected vessel's glow is lifted by this share so it is the hero of the frame (V2 §5.14). */
 export const SELECTED_LIFT = 0.35;
+/**
+ * Selection dimming of the OTHER vessels: desaturated and dimmed to 24 % luminance, their glow cut to 12 %,
+ * so a low-risk selected vessel (blue, dim by nature) still out-shines an unselected very-high-risk one
+ * (V2 §5.14 "the selection is the hero": lum(selected) ≥ 1.2 × lum(any other)).
+ */
+export const DIM = { desaturate: 0.75, luminance: 0.24, glow: 0.12, gloss: 0.3 } as const;
 
 interface Anim {
   p: number;
@@ -48,6 +67,9 @@ export interface VesselLike {
   color: Color;
   emissive: Color;
   emissiveIntensity: number;
+  /** Reflections and clearcoat (MeshPhysical): a dimmed vessel's gloss is dimmed with it. */
+  envMapIntensity?: number;
+  clearcoat?: number;
   /** `userData.ct.floorScale`: Realistic vessels lower the emissive floor so their glossy shape reads. */
   userData?: Record<string, unknown>;
 }
@@ -69,7 +91,7 @@ export interface RiskAnimationTargets {
 /**
  * Drives risk colour on the 3D anatomy every frame WITHOUT React state (§7.4): the probability p is
  * damped and the ramp is sampled, so every intermediate frame sits on the legend ("animate p, not
- * colour"). Handles pending/stale (achromatic), selection dimming (desaturate 60 %, dim to 55 %), a 20 %
+ * colour"). Handles pending/stale (achromatic), selection dimming (DIM: colour, glow and gloss), a 20 %
  * emissive lift on hover and the territory mode (off · selected · all). Requests another frame while
  * anything is still settling (demand mode).
  */
@@ -132,19 +154,32 @@ export function useRiskAnimation({ vessels, territories }: RiskAnimationTargets)
       let r = r0 + (pr - r0) * a.pending;
       let g = g0 + (pg - g0) * a.pending;
       let b = b0 + (pb - b0) * a.pending;
-      // selection: desaturate 60 % and dim to 55 %, but stay opaque
+      // selection: the others desaturate and dim (DIM), but stay opaque
       const lum = 0.2126 * r + 0.7152 * g + 0.0722 * b;
-      const desat = 0.6 * a.dim;
-      const k = 1 - 0.45 * a.dim;
+      const desat = DIM.desaturate * a.dim;
+      const k = 1 - (1 - DIM.luminance) * a.dim;
       r = (r + (lum - r) * desat) * k;
       g = (g + (lum - g) * desat) * k;
       b = (b + (lum - b) * desat) * k;
-      const lift = (1 - a.pending) * (1 + 0.2 * a.hover + SELECTED_LIFT * a.sel) * (1 - 0.6 * a.dim);
+      const live = 1 - a.pending;
+      const dimGlow = 1 - (1 - DIM.glow) * a.dim;
+      const lift = live * (1 + 0.2 * a.hover + SELECTED_LIFT * a.sel) * dimGlow;
       for (const material of materials) {
         material.color.setRGB(r, g, b);
         material.emissive.setRGB(r, g, b);
-        const floorScale = (material.userData?.ct as { floorScale?: number } | undefined)?.floorScale ?? 1;
-        material.emissiveIntensity = emissiveFor(a.p, floorScale) * lift;
+        const ct = material.userData?.ct as { floorScale?: number; look?: string; gloss?: [number, number] } | undefined;
+        // A dimmed vessel's reflections and clearcoat dim too: its highlights would otherwise keep it as bright
+        // as the selection (gloss scales from the material's own values, recorded once).
+        if (ct) {
+          ct.gloss ??= [material.envMapIntensity ?? 0, material.clearcoat ?? 0];
+          const g = 1 - (1 - DIM.gloss) * a.dim;
+          if (material.envMapIntensity !== undefined) material.envMapIntensity = ct.gloss[0] * g;
+          if (material.clearcoat !== undefined) material.clearcoat = ct.gloss[1] * g;
+        }
+        material.emissiveIntensity =
+          ct?.look === 'realistic'
+            ? (emissiveRealisticFor(a.p) * (1 + 0.5 * a.hover) + SELECTED_LIFT_REALISTIC * a.sel) * live * dimGlow
+            : emissiveFor(a.p, ct?.floorScale ?? 1) * lift;
       }
     }
 
