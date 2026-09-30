@@ -6,6 +6,7 @@
 import { Info } from 'lucide-react';
 import type { ReactNode } from 'react';
 import { EN_DASH, formatCi, formatMetricValue, formatPercent, THIN_SPACE } from '@/lib/format';
+import { TEST_SET } from '@/lib/testSetCopy';
 import { CoronarySchematic, type SchematicVessel } from './CoronarySchematic';
 import { BandTag, DivergingBar, PaperProbability, PaperTrack, Pip, RampLegend, Verdict } from './marks';
 import { MODEL_PLAIN_NAME, type MetricCell, type PerformanceSummary } from './performance';
@@ -518,8 +519,8 @@ function About({ model, perf }: { model: ReportModel; perf: PerformanceSummary |
       <div>
         <h3>Calibration and validation</h3>
         <p>
-          Platt-calibrated. Thresholds were tuned on development folds and frozen before the held-out test set was scored
-          once. Not externally validated; performance elsewhere is unknown.
+          Platt-calibrated. Thresholds were tuned on development folds and frozen before the held-out test set was
+          scored. {TEST_SET.rescore} Not externally validated; performance elsewhere is unknown.
         </p>
       </div>
       <div>
