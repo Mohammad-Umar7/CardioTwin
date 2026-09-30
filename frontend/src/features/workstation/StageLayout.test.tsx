@@ -212,3 +212,18 @@ describe('slot transitions', () => {
     expect(slotTransition(false, 30, 'top').transition).toContain('top var(--dur-flyout) var(--ease-out) 0ms');
   });
 });
+
+describe('toolbar placement', () => {
+  it('centres on the free area at rest (x 684 at 1440) and clears the legend when the free area narrows', async () => {
+    const { toolbarOffset } = await import('./stageInsets');
+    const rest = { stageWidth: 1440, insets: { left: 304, right: 376, top: 12, bottom: 64 }, width: 560, legendRight: 224, rightLimit: 1440, gap: 12 };
+    expect(toolbarOffset(rest) + 720).toBe(684);
+    // Explain open (440 px drawer) with the patient rail: the centre would crowd the legend.
+    const explain = { ...rest, insets: { left: 64, right: 452, top: 12, bottom: 64 }, width: 600, rightLimit: 1000 };
+    const left = toolbarOffset(explain) + 720 - 300;
+    expect(left).toBeGreaterThanOrEqual(224 + 12);
+    expect(left + 600).toBeLessThanOrEqual(1000 - 12 + 0.001);
+    // No legend (tour, focus): pure free-area centre.
+    expect(toolbarOffset({ ...explain, legendRight: 0 }) + 720).toBe((64 + 1440 - 452) / 2);
+  });
+});

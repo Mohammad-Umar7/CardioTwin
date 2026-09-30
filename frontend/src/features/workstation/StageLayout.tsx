@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useLayoutEffect, useRef, useState, type CSSProperties, type ReactNode } from 'react';
 import { cn } from '@/lib/cn';
 import { useUiStore, type Chrome } from '@/state/uiStore';
-import { CHROME_SLOTS, computeStageInsets, slotTransition } from './stageInsets';
+import { CHROME_SLOTS, computeStageInsets, slotTransition, toolbarOffset } from './stageInsets';
 
 export interface StageLayoutProps {
   /** Full-bleed canvas layer (the workstation <CanvasSlot/>). It never changes size. */
@@ -173,7 +173,10 @@ export function StageLayout({
   const leftRef = useRef<HTMLDivElement | null>(null);
   const rightRef = useRef<HTMLDivElement | null>(null);
   const bottomRef = useRef<HTMLDivElement | null>(null);
+  const legendRef = useRef<HTMLDivElement | null>(null);
   const [rightScrolls, setRightScrolls] = useState(false);
+  /** Toolbar offset from the stage centre; null until measured (then it follows the free-area centre). */
+  const [bottomDx, setBottomDx] = useState<number | null>(null);
 
   const measure = useCallback(() => {
     const stage = stageRef.current;
@@ -192,6 +195,23 @@ export function StageLayout({
     useUiStore.getState().setStageInsets(next);
     const col = rightRef.current;
     if (col) setRightScrolls(col.scrollHeight > col.clientHeight + 1);
+    // The toolbar shares the bottom band with the legend chip (and a docked drawer): keep clear of both.
+    const g = cssPx(stage, '--stage-inset', INSET_FALLBACK);
+    const legendShown = CHROME_SLOTS[chrome].bottomLeft && drawer !== 'inputs';
+    const legendW = legendShown ? (legendRef.current?.offsetWidth ?? 0) : 0;
+    const stageWidth = stage.offsetWidth;
+    const toolbarW = bottomRef.current?.offsetWidth ?? 0;
+    if (stageWidth > 0 && toolbarW > 0) {
+      const dx = toolbarOffset({
+        stageWidth,
+        insets: next,
+        width: toolbarW,
+        legendRight: legendW > 0 ? g + legendW : 0,
+        rightLimit: drawer === 'explain' ? stageWidth - cssPx(stage, '--drawer-explain-w', 440) : stageWidth,
+        gap: g,
+      });
+      setBottomDx((prev) => (prev !== null && Math.abs(prev - dx) < 0.5 ? prev : dx));
+    }
   }, [chrome, drawer]);
 
   useLayoutEffect(() => {
@@ -206,13 +226,13 @@ export function StageLayout({
       ro.observe(el);
       for (const child of el.children) ro.observe(child);
     };
-    [stageRef.current, leftRef.current, rightRef.current, bottomRef.current].forEach(observe);
+    [stageRef.current, leftRef.current, rightRef.current, bottomRef.current, legendRef.current].forEach(observe);
     // Cards mount and unmount inside the slots (inspector on selection): re-observe their children.
     const mo = new MutationObserver(() => {
-      [leftRef.current, rightRef.current, bottomRef.current].forEach(observe);
+      [leftRef.current, rightRef.current, bottomRef.current, legendRef.current].forEach(observe);
       measure();
     });
-    [leftRef.current, rightRef.current, bottomRef.current].forEach((el) => el && mo.observe(el, { childList: true }));
+    [leftRef.current, rightRef.current, bottomRef.current, legendRef.current].forEach((el) => el && mo.observe(el, { childList: true }));
     return () => {
       ro.disconnect();
       mo.disconnect();
@@ -224,6 +244,7 @@ export function StageLayout({
   // a layout shift, so late-arriving cards never add to CLS (V2 §8.6).
   const dx = (insets.left - insets.right) / 2;
   const centred: CSSProperties = { left: '50%', translate: `calc(-50% + ${dx}px) 0` };
+  const toolbarPlaced: CSSProperties = { left: '50%', translate: `calc(-50% + ${bottomDx ?? dx}px) 0` };
 
   return (
     <div
@@ -293,7 +314,7 @@ export function StageLayout({
         hideTo="bottom"
         delay={show.bottom ? enterAfter + 120 : 60}
         slotRef={(el) => (bottomRef.current = el)}
-        style={centred}
+        style={toolbarPlaced}
         glide="translate"
         className="bottom-[var(--stage-inset)] flex items-end"
       >
@@ -305,6 +326,7 @@ export function StageLayout({
         visible={show.bottomLeft}
         hideTo="bottom"
         delay={show.bottomLeft ? enterAfter + 180 : 90}
+        slotRef={(el) => (legendRef.current = el)}
         className="bottom-[var(--stage-inset)] left-[var(--stage-inset)]"
       >
         {bottomLeft}

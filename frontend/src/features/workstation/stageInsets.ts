@@ -65,3 +65,30 @@ export function slotTransition(visible: boolean, delay: number, glide: 'translat
     transition: `opacity ${fade} ${delay}ms, transform ${fade} ${delay}ms, ${glide} ${GLIDE} 0ms`,
   };
 }
+
+export interface ToolbarPlacement {
+  stageWidth: number;
+  insets: StageInsets;
+  /** Measured toolbar width. */
+  width: number;
+  /** Right edge of the legend chip (stage px) while it shows, else 0. */
+  legendRight: number;
+  /** Left edge of a drawer docked on the right (stage px), else the stage width. */
+  rightLimit: number;
+  /** Minimum clearance to the legend and the drawer. */
+  gap: number;
+}
+
+/**
+ * Horizontal offset of the toolbar from the stage centre (px). It is centred on the free area (V2 §4.7),
+ * then nudged right just enough to clear the legend chip that shares its bottom band, and left to stay
+ * clear of a right-hand drawer. The legend wins when both cannot hold (a narrow free area).
+ */
+export function toolbarOffset(p: ToolbarPlacement): number {
+  const centre = (p.insets.left + p.stageWidth - p.insets.right) / 2;
+  const half = p.width / 2;
+  const min = p.legendRight > 0 ? p.legendRight + p.gap + half : -Infinity;
+  const max = p.rightLimit - p.gap - half;
+  const x = Math.max(min, Math.min(max, centre));
+  return x - p.stageWidth / 2;
+}
