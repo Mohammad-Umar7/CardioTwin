@@ -235,8 +235,11 @@ staggered peel windows hide most of that.
 `territories.jpg`, `xray.jpg` (1920×1080) and `heart_turntable.mp4` (1280×720, 7 s). The example risk profile is
 LAD critical `#ef4444`, LCX moderate `#f59e0b`, RCA low `#2dd4bf`. Close-ups stage the heart on its own (the
 intrapulmonary vein tree and IVC hidden, the pulmonary artery clipped at its bifurcation, the descending aorta cut
-behind the atria) using render-only copies — the published asset is never modified. The x-ray shot places emissive
-flow beads along `vessels.json`.
+behind the atria) using render-only copies — the published asset is never modified. The hero is a left-anterior-oblique
+view framing the whole heart and aortic arch (LAD centre-frame, RCA on the right border); the exploded shot is the
+head-on view the radial explode layout is designed for, cropped to the thorax, with the skin faded out as in the
+viewer. The x-ray shot places emissive flow beads along `vessels.json`. A full set renders in about 2 minutes on
+an RTX 4070 laptop GPU (the turntable is 84 s of that).
 
 ## Adding a new anatomical structure
 

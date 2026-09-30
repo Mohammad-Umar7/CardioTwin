@@ -8,10 +8,11 @@ vessels)::
 
 Shots (1920x1080 JPEG in ``docs/media/renders``):
 
-* ``hero_heart``      3/4 anterior close-up; subsurface myocardium, glossy coronary tree coloured by an
-                      example risk profile (LAD critical, LCX moderate, RCA low), dark studio, rim light, DOF.
-* ``exploded_torso``  every layer peeled apart with the manifest's explode vectors; glassy lungs,
-                      ivory bone, translucent skin, opened heart.
+* ``hero_heart``      left-anterior-oblique view of the whole heart and aortic arch; subsurface myocardium,
+                      glossy coronary tree coloured by an example risk profile (LAD critical, LCX moderate,
+                      RCA low), muted great vessels, dark studio, rim light, DOF.
+* ``exploded_torso``  head-on view of the manifest's collision-free exploded layout (t = 1): glassy lungs,
+                      ivory bone, opened heart; the skin shell is faded out as in the viewer.
 * ``territories``     heart walls shaded by their COLOR_0 perfusion-territory weights tinted with the
                       same risk profile — anterior and inferior views side by side.
 * ``xray``            fresnel "hologram" torso with the glowing coronary tree and flow particles
