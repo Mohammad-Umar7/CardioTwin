@@ -1,0 +1,39 @@
+name: Set up the CardioTwin Python environment
+description: >
+  Python 3.11 with a pip cache keyed on every requirements/constraints file, then the pinned ML stack,
+  the API, the anatomy test dependencies and the lint tools (scripts/requirements-dev.txt), plus an
+  editable install of the ML package - exactly what `scripts/dev.sh setup` installs locally.
+
+inputs:
+  python-version:
+    description: Python version (the published artifacts and pins were produced with 3.11)
+    required: false
+    default: "3.11"
+
+runs:
+  using: composite
+  steps:
+    - name: Set up Python ${{ inputs.python-version }}
+      uses: actions/setup-python@v7
+      with:
+        python-version: ${{ inputs.python-version }}
+        cache: pip
+        cache-dependency-path: |
+          scripts/requirements-dev.txt
+          scripts/constraints.txt
+          ml/requirements.txt
+          ml/pyproject.toml
+          backend/requirements.txt
+          backend/requirements-dev.txt
+
+    - name: Install Python dependencies
+      shell: bash
+      env:
+        PIP_DISABLE_PIP_VERSION_CHECK: "1"
+        PIP_PROGRESS_BAR: "off"
+      run: |
+        python -m pip install --upgrade pip
+        python -m pip install -r scripts/requirements-dev.txt
+        python -m pip install -e ml -c scripts/constraints.txt
+        python -m pip check
+        python --version
