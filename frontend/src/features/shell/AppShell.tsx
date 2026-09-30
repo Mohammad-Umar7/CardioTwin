@@ -1,10 +1,12 @@
 import { Suspense, lazy } from 'react';
-import { Outlet } from 'react-router-dom';
+import { Outlet, useLocation } from 'react-router-dom';
+import { useUiStore } from '@/state/uiStore';
 import { ReportCommands } from '@/features/report/ReportCommands';
 import { SceneHost } from '@/three/SceneHost';
 import { AppBootstrap } from './AppBootstrap';
 import CommandPalette from './CommandPalette';
 import { DisclaimerModal } from './DisclaimerModal';
+import { LayerBoundary, RouteErrorFallback } from './LayerBoundary';
 import { RouteFallback } from './RouteFallback';
 import { StatusLine } from './DisclaimerBanner';
 import { Toaster } from './Toaster';
@@ -13,12 +15,21 @@ import { TopNav } from './TopNav';
 const TourLayer = lazy(() => import('@/features/tour/TourLayer'));
 const ShortcutSheet = lazy(() => import('./ShortcutSheet'));
 
+const ui = () => useUiStore.getState();
+
+/** A failing guided demo ends (and restores the app) instead of blanking it. */
+function endTourAfterError() {
+  ui().closeTour(false);
+  ui().pushToast({ tone: 'warn', message: 'The guided demo stopped after an error; the app is back where it was.' });
+}
+
 /**
  * App shell: skip link → top bar → routed page → permanent status line (DESIGN_SYSTEM §9).
  * The single persistent 3D canvas is owned here (SceneHost) and moved into whichever page renders a
  * <CanvasSlot/>, so routes change the camera, never the WebGL context.
  */
 export function AppShell() {
+  const { pathname } = useLocation();
   return (
     <div id="app" className="relative flex min-h-screen flex-col bg-app text-primary">
       <a
@@ -34,9 +45,11 @@ export function AppShell() {
       </a>
       <TopNav />
       <main id="main" tabIndex={-1} className="flex min-h-0 flex-1 flex-col pb-[var(--status-h)] outline-none">
-        <Suspense fallback={<RouteFallback />}>
-          <Outlet />
-        </Suspense>
+        <LayerBoundary name="route" resetKey={pathname} fallback={<RouteErrorFallback />}>
+          <Suspense fallback={<RouteFallback />}>
+            <Outlet />
+          </Suspense>
+        </LayerBoundary>
       </main>
       <StatusLine />
       <SceneHost />
@@ -44,11 +57,34 @@ export function AppShell() {
       <ReportCommands />
       <DisclaimerModal />
       <Toaster />
-      <CommandPalette />
-      <Suspense fallback={null}>
-        <TourLayer />
-        <ShortcutSheet />
-      </Suspense>
+      <OverlayLayers />
     </div>
+  );
+}
+
+/**
+ * Palette, guided demo and shortcut sheet, each behind its own error boundary: a failure closes that
+ * overlay (the demo restores the app) and the next open renders it afresh.
+ */
+function OverlayLayers() {
+  const tourOpen = useUiStore((s) => s.tourOpen);
+  const paletteOpen = useUiStore((s) => s.paletteOpen);
+  const shortcutsOpen = useUiStore((s) => s.shortcutsOpen);
+  return (
+    <>
+      <LayerBoundary name="palette" resetKey={paletteOpen} onError={() => ui().setPaletteOpen(false)}>
+        <CommandPalette />
+      </LayerBoundary>
+      <LayerBoundary name="tour" resetKey={tourOpen} onError={endTourAfterError}>
+        <Suspense fallback={null}>
+          <TourLayer />
+        </Suspense>
+      </LayerBoundary>
+      <LayerBoundary name="shortcuts" resetKey={shortcutsOpen} onError={() => ui().setShortcutsOpen(false)}>
+        <Suspense fallback={null}>
+          <ShortcutSheet />
+        </Suspense>
+      </LayerBoundary>
+    </>
   );
 }

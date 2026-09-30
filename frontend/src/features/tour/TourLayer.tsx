@@ -369,7 +369,10 @@ function TourView() {
   const cardBounds = { ...bounds, top: bounds.top + 44, bottom: bounds.bottom - RAIL_CLEARANCE };
   // Never over a stage card or a probability numeral (e.g. the CAD numeral at 1280), nor over the other
   // spotlit regions; the stage spotlight is the exception, the card sits inside it by design.
-  const spotlitElements = rects.filter((r, i): r is Rect => r !== null && !('stage' in beat.spotlight[i]!));
+  const spotlitElements = rects.filter((r, i): r is Rect => {
+    const spec = beat.spotlight[i];
+    return r !== null && spec !== undefined && !('stage' in spec);
+  });
   const avoid = bounds.right > 0 ? keepClearRects(spotlitElements) : [];
   const pos = bounds.right > 0 ? placeCard(anchorRect, { width: CARD_W, height: cardH }, cardBounds, 16, avoid) : null;
   const chapter = CHAPTERS[beat.chapter]!;

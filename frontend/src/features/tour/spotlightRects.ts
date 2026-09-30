@@ -1,7 +1,7 @@
 /**
  * Measuring what the guided demo spotlights: DOM regions by selector, or the stage's free area.
  */
-import { useEffect, useState } from 'react';
+import { useLayoutEffect, useState } from 'react';
 import { useUiStore } from '@/state/uiStore';
 import { clip, inflate, type Bounds, type Rect } from './geometry';
 import type { SpotlightSpec } from './script';
@@ -74,30 +74,38 @@ const same = (a: readonly (Rect | null)[], b: readonly (Rect | null)[]) =>
 
 /**
  * Tracks the spotlit rectangles every frame while the tour is open (cards slide, drawers dock, routes
- * change), but re-renders only when a rectangle actually moves.
+ * change), but re-renders only when a rectangle actually moves. The rectangles always line up with
+ * `specs` (same length, same order): a beat change never hands back the previous beat's rectangles, and
+ * the first measurement runs before paint.
  */
 export function useSpotlightRects(specs: readonly SpotlightSpec[]): { rects: (Rect | null)[]; bounds: Bounds } {
-  const [state, setState] = useState<{ rects: (Rect | null)[]; bounds: Bounds }>(() => ({
+  const [state, setState] = useState<{ specs: readonly SpotlightSpec[]; rects: (Rect | null)[]; bounds: Bounds }>(() => ({
+    specs,
     rects: specs.map(() => null),
     bounds: { left: 0, top: 0, right: 0, bottom: 0 },
   }));
-  useEffect(() => {
+  useLayoutEffect(() => {
     let raf = 0;
     const revealed = new WeakSet<HTMLElement>();
-    const frame = () => {
+    const measure = () => {
       const bounds = viewportBounds();
       const rects = measureSpotlights(specs, bounds, revealed);
       setState((prev) => {
         const b = prev.bounds;
         const boundsSame =
           b.left === bounds.left && b.top === bounds.top && b.right === bounds.right && b.bottom === bounds.bottom;
-        return boundsSame && same(prev.rects, rects) ? prev : { rects, bounds };
+        return prev.specs === specs && boundsSame && same(prev.rects, rects) ? prev : { specs, rects, bounds };
       });
+    };
+    const frame = () => {
+      measure();
       raf = requestAnimationFrame(frame);
     };
+    measure();
     raf = requestAnimationFrame(frame);
     return () => cancelAnimationFrame(raf);
   }, [specs]);
+  // Between a beat change and its first measurement the stored rectangles belong to the previous beat.
+  if (state.specs !== specs) return { rects: specs.map(() => null), bounds: state.bounds };
   return state;
 }
-
