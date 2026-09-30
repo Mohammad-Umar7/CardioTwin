@@ -82,14 +82,20 @@ export function CoronarySchematic({ vessels, className }: { vessels: SchematicVe
         </radialGradient>
       </defs>
 
-      {/* great vessels (behind the heart) */}
+      {/* great vessels (behind the heart): arch with its three branches, SVC, pulmonary trunk in front */}
       <g fill="none" strokeLinecap="round">
-        <path d="M86 34 L 86 92" stroke={PAPER.vesselEdge} strokeWidth="17" />
-        <path d="M86 34 L 86 92" stroke={PAPER.vessel} strokeWidth="15" />
-        <path d="M118 100 C 112 72, 110 50, 118 34 C 128 16, 158 14, 172 28 L 178 44" stroke={PAPER.vesselEdge} strokeWidth="24" />
-        <path d="M118 100 C 112 72, 110 50, 118 34 C 128 16, 158 14, 172 28 L 178 44" stroke={PAPER.vessel} strokeWidth="22" />
-        <path d="M152 102 C 152 82, 158 66, 172 58 C 186 52, 198 54, 210 60" stroke={PAPER.vesselEdge} strokeWidth="20" />
-        <path d="M152 102 C 152 82, 158 66, 172 58 C 186 52, 198 54, 210 60" stroke={PAPER.vessel} strokeWidth="18" />
+        {['M130 32 L 125 12', 'M145 26 L 145 8', 'M159 28 L 164 11'].map((d) => (
+          <g key={d}>
+            <path d={d} stroke={PAPER.vesselEdge} strokeWidth="8" />
+            <path d={d} stroke={PAPER.vessel} strokeWidth="6.5" />
+          </g>
+        ))}
+        <path d="M120 100 C 115 76, 112 54, 120 40 C 130 22, 162 20, 174 34 L 182 58" stroke={PAPER.vesselEdge} strokeWidth="21" />
+        <path d="M120 100 C 115 76, 112 54, 120 40 C 130 22, 162 20, 174 34 L 182 58" stroke={PAPER.vessel} strokeWidth="19" />
+        <path d="M88 48 L 88 94" stroke={PAPER.vesselEdge} strokeWidth="15" />
+        <path d="M88 48 L 88 94" stroke={PAPER.vessel} strokeWidth="13.5" />
+        <path d="M151 104 C 151 86, 157 72, 169 64 C 183 57, 197 59, 208 66" stroke={PAPER.vesselEdge} strokeWidth="18" />
+        <path d="M151 104 C 151 86, 157 72, 169 64 C 183 57, 197 59, 208 66" stroke={PAPER.vessel} strokeWidth="16.5" />
       </g>
 
       {/* heart silhouette: right atrium, right ventricle, apex (left ventricle), left border */}
