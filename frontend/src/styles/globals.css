@@ -160,6 +160,12 @@
   }
 }
 
+/* A drawer presented inline (the compact "Why" tab, V2 §4.7) is always shown: its close button has no job. */
+[data-drawer-inline] > header button[aria-label^='Close'],
+[data-drawer-inline] > * > header button[aria-label^='Close'] {
+  display: none;
+}
+
 /* V2 stage cards enter with y 8 → 0 + fade over `base` (WORKSTATION_V2 §5.4, §8.1). */
 @keyframes stage-card-in {
   from {

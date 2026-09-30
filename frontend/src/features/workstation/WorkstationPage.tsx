@@ -1,21 +1,16 @@
-import { useEffect } from 'react';
+import { useEffect, type CSSProperties } from 'react';
 import { useParams, useSearchParams } from 'react-router-dom';
-import { Tabs } from '@/design';
+import { DrawerPresentation, Tabs } from '@/design';
 import { tabPanelId } from '@/design/tabIds';
 import { useCohort } from '@/hooks/useData';
 import { useLayoutMode } from '@/hooks/useMediaQuery';
 import { ExplainDrawer } from '@/features/explain/ExplainDrawer';
-import { ExplainPanel } from '@/features/explain/ExplainPanel';
-import { ClinicalForm } from '@/features/patient/ClinicalForm';
 import { InputsDrawer } from '@/features/patient/InputsDrawer';
 import { PatientCard } from '@/features/patient/PatientCard';
 import { WhatIfPill } from '@/features/patient/WhatIfPill';
 import { AnswerPill } from '@/features/risk/AnswerPill';
-import { CADHeroCard } from '@/features/risk/CADHeroCard';
-import { GroundTruthReveal } from '@/features/risk/GroundTruthReveal';
 import { RiskSummaryCard } from '@/features/risk/RiskSummaryCard';
 import { VesselInspector } from '@/features/risk/VesselInspector';
-import { VesselList } from '@/features/risk/VesselList';
 import { selectEditCount, usePatientStore } from '@/state/patientStore';
 import { useUiStore, type MobileTab } from '@/state/uiStore';
 import { CanvasSlot } from '@/three/CanvasSlot';
@@ -25,7 +20,7 @@ import { CanvasToolbar } from './hud/CanvasToolbar';
 import { FirstRunHint } from './hud/FirstRunHint';
 import { LegendChip } from './hud/LegendChip';
 import { SelectionChip } from './hud/SelectionChip';
-import { LeftPanel, PatientHeader, RightPanel, TabbedRightPanel } from './panels';
+import { LeftPanel, RightPanel, TabbedRightPanel } from './panels';
 import { ChromeGate, StageLayout } from './StageLayout';
 import { useWorkstationCommands } from './useWorkstationCommands';
 import { useWorkstationUrlState } from './useWorkstationUrlState';
@@ -110,6 +105,98 @@ function StageWorkstation() {
   );
 }
 
+// ----------------------------------------------------------------------------------------- compact
+
+/** Below 1100 px the cards fill the column (V2 §4.7): the owners size them with these variables. */
+const COMPACT_VARS = { '--card-left-w': '100%', '--card-right-w': '100%' } as CSSProperties;
+
+const COMPACT_TABS: { value: MobileTab; label: string }[] = [
+  { value: 'risk', label: 'Summary' },
+  { value: 'inputs', label: 'Record' },
+  { value: 'why', label: 'Why' },
+];
+
+/**
+ * Compact workstation, below 1100 px (WORKSTATION_V2 §4.7): the canvas takes 50vh at the top with the
+ * floating toolbar and the context chips; under it, tabs: Summary (Risk card, then the inspector inline),
+ * Record (the patient card) and Why (the Explain drawer's content inline). The Inputs drawer becomes a
+ * full-screen sheet; "Explain" (E, or the card's button) switches to the Why tab instead of a sheet, so
+ * P(CAD) never has two homes.
+ */
+function CompactWorkstation() {
+  const tab = useUiStore((s) => s.panels.mobileTab);
+  const drawer = useUiStore((s) => s.drawer);
+  const setPanels = useUiStore((s) => s.setPanels);
+  const edits = usePatientStore(selectEditCount);
+  const chrome = useUiStore((s) => s.chrome);
+
+  // Focus mode has no meaning in the stacked layout (nothing floats over the stage).
+  useEffect(() => {
+    if (chrome === 'focus') useUiStore.getState().setChrome('workstation');
+  }, [chrome]);
+
+  useEffect(() => {
+    if (drawer !== 'explain') return;
+    const ui = useUiStore.getState();
+    ui.setPanels({ mobileTab: 'why' });
+    ui.closeDrawer();
+    document.getElementById(tabPanelId('compact', 'why'))?.scrollIntoView({ block: 'start' });
+  }, [drawer]);
+
+  return (
+    <div className="flex flex-col" style={COMPACT_VARS} data-region="compact">
+      <PageTitle />
+      <div className="relative h-[50vh] min-h-[320px] shrink-0">
+        <StageLayout
+          canvas={<CanvasSlot stage="workstation" className="h-full w-full" />}
+          top={
+            <>
+              <SelectionChip />
+              <WhatIfPill />
+            </>
+          }
+          bottom={<CanvasToolbar />}
+          overlay={<FirstRunHint />}
+          frame={edits > 0}
+        />
+      </div>
+      <Tabs
+        idBase="compact"
+        label="Workstation sections"
+        value={tab}
+        onChange={(mobileTab: MobileTab) => setPanels({ mobileTab })}
+        size="md"
+        className="sticky top-[var(--topbar-h)] z-panels bg-app px-3"
+        items={COMPACT_TABS}
+      />
+      <div
+        id={tabPanelId('compact', tab)}
+        role="tabpanel"
+        aria-labelledby={`compact-tab-${tab}`}
+        className="flex flex-col gap-[var(--card-gap)] px-3 py-3"
+      >
+        {tab === 'risk' && (
+          <>
+            <RiskSummaryCard />
+            <VesselInspector />
+          </>
+        )}
+        {tab === 'inputs' && <PatientCard />}
+        {tab === 'why' && (
+          <DrawerPresentation mode="inline">
+            <div className="stage-card">
+              <ExplainDrawer />
+            </div>
+          </DrawerPresentation>
+        )}
+      </div>
+      <DrawerPresentation mode="sheet">
+        <InputsDrawer />
+      </DrawerPresentation>
+    </div>
+  );
+}
+
 // ------------------------------------------------------------------------------------------ legacy
 // The phase-1 layouts stay reachable at #/workstation?layout=legacy (and below 1100 px) until B–D replace
 // the panels; then GroupRail, panels.tsx and CanvasHud are deleted (V2 §9.3).
@@ -119,48 +206,6 @@ function LegacyCanvasStage({ className }: { className?: string }) {
     <CanvasSlot stage="workstation" className={className}>
       <CanvasHud />
     </CanvasSlot>
-  );
-}
-
-function CompactTabs() {
-  const tab = useUiStore((s) => s.panels.mobileTab);
-  const setPanels = useUiStore((s) => s.setPanels);
-  return (
-    <div className="flex flex-col">
-      <Tabs
-        idBase="compact"
-        label="Workstation sections"
-        value={tab}
-        onChange={(mobileTab: MobileTab) => setPanels({ mobileTab })}
-        size="md"
-        className="sticky top-0 z-panels bg-panel px-3"
-        items={[
-          { value: 'inputs', label: 'Inputs' },
-          { value: 'risk', label: 'Risk' },
-          { value: 'why', label: 'Why' },
-        ]}
-      />
-      <div id={tabPanelId('compact', tab)} role="tabpanel" aria-labelledby={`compact-tab-${tab}`} className="bg-panel">
-        {tab === 'inputs' && (
-          <>
-            <PatientHeader />
-            <ClinicalForm />
-          </>
-        )}
-        {tab === 'risk' && (
-          <div id="risk-summary" tabIndex={-1} className="flex flex-col gap-4 px-4 py-4 outline-none">
-            <CADHeroCard />
-            <VesselList />
-            <GroundTruthReveal />
-          </div>
-        )}
-        {tab === 'why' && (
-          <div className="px-4 py-4">
-            <ExplainPanel idBase="why-compact" />
-          </div>
-        )}
-      </div>
-    </div>
   );
 }
 
@@ -184,8 +229,8 @@ function LegacyWorkstation({ wide }: { wide: boolean }) {
 }
 
 /**
- * Workstation route. Desktop (≥ 1100): the V2 stage. Below 1100: the stacked compact layout (canvas on
- * top, tabs below) until the V2 compact layout lands. `?layout=legacy` shows the phase-1 3-column grid.
+ * Workstation route: the V2 stage at every desktop width (≥ 1100), the V2 compact layout below 1100.
+ * `?layout=legacy` still shows the phase-1 3-column grid until its parts are deleted.
  */
 export default function WorkstationPage() {
   const mode = useLayoutMode();
@@ -195,15 +240,7 @@ export default function WorkstationPage() {
   useWorkstationUrlState();
   useWorkstationChrome();
 
-  if (mode === 'compact') {
-    return (
-      <div className="flex flex-col">
-        <PageTitle />
-        <LegacyCanvasStage className="h-[55vh] min-h-[320px]" />
-        <CompactTabs />
-      </div>
-    );
-  }
+  if (mode === 'compact') return <CompactWorkstation />;
   if (params.get('layout') === 'legacy') return <LegacyWorkstation wide={mode === 'wide'} />;
   return <StageWorkstation />;
 }

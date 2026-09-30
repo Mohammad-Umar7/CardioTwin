@@ -3,7 +3,7 @@ import { act, fireEvent, render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { useState } from 'react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { Drawer } from './Drawer';
+import { Drawer, DrawerPresentation } from './Drawer';
 import { Kbd, Shortcut } from './Kbd';
 import { Menu, MenuItem, MenuSeparator } from './Menu';
 import { Probability } from './risk/RiskMarks';
@@ -222,5 +222,37 @@ describe('Drawer', () => {
     const dialog = await screen.findByRole('dialog', { name: 'Explain' });
     await vi.waitFor(() => expect(dialog).toHaveFocus());
     expect(screen.getByRole('button', { name: 'Close · Esc' })).not.toHaveFocus();
+  });
+});
+
+describe('Drawer presentations (compact, V2 §4.7)', () => {
+  it('inline: always shown in the page flow, no dialog semantics and no Esc layer', () => {
+    const onClose = vi.fn();
+    render(
+      <DrawerPresentation mode="inline">
+        <Drawer open={false} side="right" onClose={onClose} label="Explain" region="explain-drawer">
+          <p>evidence</p>
+        </Drawer>
+      </DrawerPresentation>,
+    );
+    const region = screen.getByRole('region', { name: 'Explain' });
+    expect(region).toHaveAttribute('data-drawer-inline');
+    expect(region).toHaveTextContent('evidence');
+    expect(screen.queryByRole('dialog')).toBeNull();
+    fireEvent.keyDown(window, { key: 'Escape' });
+    expect(onClose).not.toHaveBeenCalled();
+  });
+
+  it('sheet: a full-width fixed sheet between the top bar and the status line', () => {
+    render(
+      <DrawerPresentation mode="sheet">
+        <Drawer open side="left" onClose={() => {}} label="Edit inputs">
+          <p>inputs</p>
+        </Drawer>
+      </DrawerPresentation>,
+    );
+    const dialog = screen.getByRole('dialog', { name: 'Edit inputs' });
+    expect(dialog).toHaveClass('fixed', 'top-[var(--topbar-h)]', 'bottom-[var(--status-h)]');
+    expect(dialog.style.width).toBe('100%');
   });
 });

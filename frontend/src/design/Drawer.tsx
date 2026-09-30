@@ -1,5 +1,5 @@
 import { AnimatePresence, motion } from 'framer-motion';
-import { useEffect, useRef, type ReactNode } from 'react';
+import { createContext, useContext, useEffect, useRef, type ReactNode } from 'react';
 import { useIsReducedMotion } from '@/hooks/useMediaQuery';
 import { cn } from '@/lib/cn';
 import { EASE, MOTION } from '@/theme/tokens';
@@ -31,6 +31,21 @@ export interface DrawerProps {
 const FIELD = 'input:not([disabled]):not([type="hidden"]), select:not([disabled]), textarea:not([disabled])';
 
 /**
+ * How drawers present (WORKSTATION_V2 §4.7):
+ *   docked — the desktop stage: docked to the stage edge, full stage height (default);
+ *   sheet  — below 1100 px: a full-screen sheet between the top bar and the status line;
+ *   inline — below 1100 px, inside a tab: always shown, in the page flow, no dialog semantics, no Esc,
+ *            no focus moves (the Explain drawer's content in the compact "Why" tab).
+ */
+export type DrawerPresentationMode = 'docked' | 'sheet' | 'inline';
+const DrawerPresentationContext = createContext<DrawerPresentationMode>('docked');
+
+/** Sets how every `Drawer` below presents (the compact workstation uses `sheet` and `inline`). */
+export function DrawerPresentation({ mode, children }: { mode: DrawerPresentationMode; children: ReactNode }) {
+  return <DrawerPresentationContext.Provider value={mode}>{children}</DrawerPresentationContext.Provider>;
+}
+
+/**
  * Docked drawer (WORKSTATION_V2 §5.4): full stage height on one edge, bg/panel, e-3 depth, 1 px
  * border/default on the inner edge, `role="dialog"` + `aria-modal="false"` (the stage stays live).
  * Focus moves to the first field on open and returns to the opener on close; Esc closes.
@@ -54,17 +69,20 @@ export function Drawer({
   className,
 }: DrawerProps) {
   const reduced = useIsReducedMotion();
+  const presentation = useContext(DrawerPresentationContext);
+  const inline = presentation === 'inline';
+  const sheet = presentation === 'sheet';
   const panel = useRef<HTMLDivElement>(null);
   const opener = useRef<HTMLElement | null>(null);
   /** Focus is inside the drawer (tracked, because the panel may already be detached when it closes). */
   const focusWithin = useRef(false);
 
-  useEscapeLayer(open && closeOnEscape, onClose, ESCAPE_PRIORITY.drawer);
+  useEscapeLayer(open && closeOnEscape && !inline, onClose, ESCAPE_PRIORITY.drawer);
 
   // Remember the opener, move focus in, and give focus back on close (if nothing else took it). A passive
   // effect, so the restore runs after React's post-commit selection restore instead of being undone by it.
   useEffect(() => {
-    if (!open) return;
+    if (!open || inline) return;
     const active = document.activeElement;
     opener.current = active instanceof HTMLElement && active !== document.body ? active : null;
     const t = window.setTimeout(() => {
@@ -84,7 +102,22 @@ export function Drawer({
       if (back?.isConnected && (focusWithin.current || focusLost)) back.focus({ preventScroll: true });
       focusWithin.current = false;
     };
-  }, [open, initialFocus]);
+  }, [open, initialFocus, inline]);
+
+  if (inline) {
+    return (
+      <div
+        role="region"
+        aria-label={labelledBy ? undefined : label}
+        aria-labelledby={labelledBy}
+        data-region={region}
+        data-drawer-inline=""
+        className={cn('relative flex flex-col text-primary', className)}
+      >
+        {children}
+      </div>
+    );
+  }
 
   const offscreen = side === 'left' ? '-100%' : '100%';
   const enter = reduced
@@ -115,11 +148,13 @@ export function Drawer({
           }}
           {...enter}
           transition={{ duration: reduced ? 0.12 : MOTION.flyout / 1000, ease: EASE.out }}
-          style={{ width: width ?? (side === 'left' ? 'var(--drawer-inputs-w)' : 'var(--drawer-explain-w)') }}
+          style={{ width: sheet ? '100%' : (width ?? (side === 'left' ? 'var(--drawer-inputs-w)' : 'var(--drawer-explain-w)')) }}
           className={cn(
-            'pointer-events-auto absolute inset-y-0 z-flyout flex max-w-full flex-col overflow-clip bg-panel text-primary outline-none',
+            'pointer-events-auto z-flyout flex max-w-full flex-col overflow-clip bg-panel text-primary outline-none',
             'shadow-[0_16px_48px_rgba(0,0,0,0.6)]',
-            side === 'left' ? 'left-0 border-r border-line' : 'right-0 border-l border-line',
+            sheet
+              ? 'fixed inset-x-0 bottom-[var(--status-h)] top-[var(--topbar-h)]'
+              : cn('absolute inset-y-0', side === 'left' ? 'left-0 border-r border-line' : 'right-0 border-l border-line'),
             className,
           )}
         >

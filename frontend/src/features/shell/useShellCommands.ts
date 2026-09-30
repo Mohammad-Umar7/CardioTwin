@@ -88,7 +88,8 @@ export function useShellCommands(): void {
       keywords: ['fullscreen', 'zen', 'hide ui'],
       shortcut: SHORTCUT.focusMode,
       icon: Maximize2,
-      when: () => onWorkstation,
+      // The stacked layout below 1100 px has no floating chrome to hide.
+      when: () => onWorkstation && !window.matchMedia?.('(max-width: 1099.98px)').matches,
       run: () => ui().toggleFocusMode(),
     },
     {
