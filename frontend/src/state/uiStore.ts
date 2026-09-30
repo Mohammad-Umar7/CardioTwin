@@ -39,6 +39,8 @@ export interface UiState {
   shortcutsOpen: boolean;
   panels: PanelsState;
   toasts: Toast[];
+  /** Feature linked across the form, the narrative and the SHAP rows while hovered (never anatomy). */
+  highlightedFeature: string | null;
 
   openTour(step?: number): void;
   closeTour(completed?: boolean): void;
@@ -50,6 +52,7 @@ export interface UiState {
   toggleGroup(groupId: string, exclusive?: boolean): void;
   pushToast(toast: Omit<Toast, 'id'>): number;
   dismissToast(id: number): void;
+  highlightFeature(key: string | null): void;
 }
 
 let toastId = 0;
@@ -71,6 +74,7 @@ export const useUiStore = create<UiState>()(
         openGroups: ['demographics', 'symptoms'],
       },
       toasts: [],
+      highlightedFeature: null,
 
       openTour: (step = 0) => set({ tourOpen: true, tourStep: step }),
       closeTour: (completed = false) =>
@@ -97,6 +101,7 @@ export const useUiStore = create<UiState>()(
         return id;
       },
       dismissToast: (id) => set((s) => ({ toasts: s.toasts.filter((t) => t.id !== id) })),
+      highlightFeature: (highlightedFeature) => set({ highlightedFeature }),
     }),
     {
       name: 'cardiotwin.ui',
