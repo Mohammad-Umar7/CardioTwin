@@ -66,11 +66,11 @@ function FindingChip({ spec, rowId, target, counterfactuals }: ChipProps) {
   );
 
   return (
-    <li className="max-w-full">
+    <div className="max-w-full">
       <Tooltip content={tip} delay={300}>
         {chip}
       </Tooltip>
-    </li>
+    </div>
   );
 }
 
@@ -95,16 +95,16 @@ export function FindingChips({ specs, label, idPrefix, lead, className }: Findin
   const counterfactuals = useFlipCounterfactuals(specs.map((s) => s.key));
   if (specs.length === 0) return null;
   return (
-    <ul role="group" aria-label={label} className={cn('m-0 flex list-none flex-wrap items-center gap-1.5 px-1 py-1', className)}>
+    <div role="group" aria-label={label} className={cn('flex flex-wrap items-center gap-1.5 px-1 py-1', className)}>
       {/* The lead flows inline so the chips wrap under it and use the full width (the group label names it). */}
       {lead && (
-        <li aria-hidden className="pr-0.5 text-label font-normal text-tertiary">
+        <span aria-hidden className="pr-0.5 text-label font-normal text-tertiary">
           {lead}
-        </li>
+        </span>
       )}
       {specs.map((spec) => (
         <FindingChip key={spec.key} spec={spec} rowId={`${idPrefix}:${spec.key}`} target={target} counterfactuals={counterfactuals} />
       ))}
-    </ul>
+    </div>
   );
 }

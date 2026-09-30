@@ -368,3 +368,36 @@ describe('profile workflow', () => {
     expect(toast.message).toMatch(/Target columns were ignored/);
   });
 });
+
+describe('accessibility and naming', () => {
+  async function axeSerious(root: HTMLElement): Promise<string[]> {
+    const { default: axe } = await import('axe-core');
+    const res = await axe.run(root, { rules: { 'color-contrast': { enabled: false } }, resultTypes: ['violations'] });
+    return res.violations
+      .filter((v) => v.impact === 'serious' || v.impact === 'critical')
+      .map((v) => `${v.id}: ${v.nodes.map((n) => n.target.join(' ')).join(', ')}`);
+  }
+  /** Raw dataset keys that differ from their label must never reach the screen (V2 §1.6). */
+  const rawKeys = schema.features
+    .filter((f) => f.key.length > 3 && !f.label.toLowerCase().includes(f.key.toLowerCase()))
+    .map((f) => f.key);
+
+  it('has no serious axe violations and no raw keys in the card, the drawer, the pill and the switcher', async () => {
+    act(() => usePatientStore.getState().setFeature('Typical Chest Pain', 0));
+    const { container } = renderIn(
+      <>
+        <PatientCard />
+        <WhatIfPill />
+        <InputsDrawer />
+        <div role="dialog" aria-label="Switch patient">
+          <PatientSwitcher onClose={() => {}} />
+        </div>
+      </>,
+    );
+    act(() => useUiStore.getState().openDrawer('inputs'));
+    await screen.findByRole('dialog', { name: /Edit inputs/ });
+    expect(await axeSerious(container)).toEqual([]);
+    const text = container.textContent ?? '';
+    for (const key of rawKeys) expect(text, key).not.toContain(key);
+  });
+});

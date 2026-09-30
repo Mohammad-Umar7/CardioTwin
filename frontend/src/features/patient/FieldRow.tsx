@@ -56,7 +56,10 @@ function EditFlash({ value }: { value: FeatureValue | undefined }) {
 }
 
 function rangeCopy(spec: FeatureSpec): string {
-  const ref = formatNormalRange(spec.normal, spec.step);
+  const low = spec.normal?.low ?? null;
+  const high = spec.normal?.high ?? null;
+  // A single normal value reads "ref 0 regions", never "ref 0–0".
+  const ref = low !== null && low === high ? `ref ${formatNumber(low, spec.step)}` : formatNormalRange(spec.normal, spec.step);
   if (!ref) return '';
   const unit = displayParts(spec, spec.normal?.low ?? spec.normal?.high ?? 0).unit;
   return unit ? `${ref}${unit === '%' ? ' %' : ` ${unit}`}` : ref;
