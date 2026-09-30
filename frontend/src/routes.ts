@@ -6,6 +6,11 @@ export const ROUTES = {
   methodology: '/methodology',
 } as const;
 
+/** Routes whose page shows the 3D anatomy (the landing hero and the workstation stage). */
+export function routeShowsAnatomy(pathname: string): boolean {
+  return pathname === ROUTES.landing || pathname.startsWith(ROUTES.workstation);
+}
+
 export const loadLanding = () => import('@/features/landing/LandingPage');
 export const loadWorkstation = () => import('@/features/workstation/WorkstationPage');
 export const loadPerformance = () => import('@/features/performance/PerformancePage');

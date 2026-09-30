@@ -1,6 +1,6 @@
 import { Info } from 'lucide-react';
 import { useLocation } from 'react-router-dom';
-import { ROUTES } from '@/routes';
+import { routeShowsAnatomy } from '@/routes';
 import { useUiStore } from '@/state/uiStore';
 
 export const DISCLAIMER_TEXT =
@@ -8,11 +8,6 @@ export const DISCLAIMER_TEXT =
 
 /** Anatomy credit (BodyParts3D licence), shown on every route that shows anatomy (V2 §5.17). */
 export const ANATOMY_CREDIT = 'BodyParts3D © DBCLS · CC BY-SA 2.1 JP';
-
-/** Routes whose page shows the 3D anatomy (the landing hero and the workstation stage). */
-export function routeShowsAnatomy(pathname: string): boolean {
-  return pathname === ROUTES.landing || pathname.startsWith(ROUTES.workstation);
-}
 
 /**
  * Status line v2 (WORKSTATION_V2 §5.17, DESIGN_SYSTEM §9): permanent on every route, never dismissible,
