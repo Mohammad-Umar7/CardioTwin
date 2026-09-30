@@ -24,6 +24,35 @@ import { waitForStage } from './waitFor';
 
 const DURATIONS = BEATS.map((b) => b.durationMs);
 const CARD_W = 360;
+/**
+ * The chapter rail floats this far above the status line: clear of the stage's bottom row, where the
+ * "Illustrative flow" caption must stay visible whenever flow particles are shown (clinical-safety copy).
+ */
+const RAIL_BOTTOM = 48;
+/** Keep-out for the caption card: the rail (40 px) plus its offset and a 12 px gap. */
+const RAIL_CLEARANCE = RAIL_BOTTOM + 40 + 12;
+/** Stage cards and probability numerals the caption card never covers (the spotlit ones are beside it). */
+const KEEP_CLEAR =
+  '[data-region="risk-card"], [data-region="patient-card"], [data-region="patient-rail"], [data-region="inspector"], [data-prob]';
+
+/** Visible rectangles of the elements the caption card must stay clear of. */
+function keepClearRects(extra: readonly Rect[]): Rect[] {
+  const out: Rect[] = [...extra];
+  document.querySelectorAll<HTMLElement>(KEEP_CLEAR).forEach((el) => {
+    if (el.closest('[inert],[aria-hidden="true"]')) return;
+    const r = el.getBoundingClientRect();
+    if (r.width < 1 || r.height < 1 || r.bottom < 0 || r.top > window.innerHeight) return;
+    out.push({ left: r.left - 8, top: r.top - 8, width: r.width + 16, height: r.height + 16 });
+  });
+  return out;
+}
+
+/** "1/2" within a chapter, so the two beats of one chapter never read the same. */
+function beatInChapter(index: number): { n: number; of: number } {
+  const chapter = BEATS[index]!.chapter;
+  const start = CHAPTER_START[chapter]!;
+  return { n: index - start + 1, of: BEATS.filter((b) => b.chapter === chapter).length };
+}
 
 const routeOf = (loc: { pathname: string; search: string }) => `${loc.pathname}${loc.search}`;
 
@@ -99,7 +128,7 @@ function ChapterRail({
     <nav
       aria-label="Guided demo chapters"
       className="fixed left-1/2 z-coachmark flex h-10 -translate-x-1/2 items-center gap-1 rounded-full bg-panel px-1.5 shadow-e2"
-      style={{ bottom: 'calc(var(--status-h) + 12px)' }}
+      style={{ bottom: `calc(var(--status-h) + ${RAIL_BOTTOM}px)` }}
     >
       {CHAPTERS.map((c, i) => (
         <button
@@ -337,9 +366,14 @@ function TourView() {
   const anchorRect = beat.anchor !== undefined ? (rects[beat.anchor] ?? null) : union(found);
   // The card never covers the chapter rail (bottom centre) or the stage's context slot (selection chip,
   // what-if pill: 12 px inset + 32 px).
-  const cardBounds = { ...bounds, top: bounds.top + 44, bottom: bounds.bottom - 64 };
-  const pos = bounds.right > 0 ? placeCard(anchorRect, { width: CARD_W, height: cardH }, cardBounds) : null;
+  const cardBounds = { ...bounds, top: bounds.top + 44, bottom: bounds.bottom - RAIL_CLEARANCE };
+  // Never over a stage card or a probability numeral (e.g. the CAD numeral at 1280), nor over the other
+  // spotlit regions; the stage spotlight is the exception, the card sits inside it by design.
+  const spotlitElements = rects.filter((r, i): r is Rect => r !== null && !('stage' in beat.spotlight[i]!));
+  const avoid = bounds.right > 0 ? keepClearRects(spotlitElements) : [];
+  const pos = bounds.right > 0 ? placeCard(anchorRect, { width: CARD_W, height: cardH }, cardBounds, 16, avoid) : null;
   const chapter = CHAPTERS[beat.chapter]!;
+  const inChapter = beatInChapter(index);
 
   return (
     <div ref={layerRef} data-region="tour">
@@ -358,6 +392,11 @@ function TourView() {
           <p className="eyebrow min-w-0 flex-1 truncate text-tertiary">
             {beat.chapter + 1} of {CHAPTERS.length} · {chapter.title}
           </p>
+          {inChapter.of > 1 && (
+            <span className="mono text-mono-s text-tertiary" aria-label={`Step ${inChapter.n} of ${inChapter.of} in this chapter`}>
+              {inChapter.n}/{inChapter.of}
+            </span>
+          )}
           <IconButton
             label={playing ? 'Pause the demo' : 'Play the demo'}
             tooltip={false}

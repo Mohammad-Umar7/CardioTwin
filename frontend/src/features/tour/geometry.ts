@@ -100,31 +100,77 @@ export interface Placement {
  * Where the caption card goes: beside the spotlit area (right, then left, then below, then above), aligned
  * to its top or centre and kept inside `bounds`. When the target fills the screen (the 3D stage), the card
  * sits inside it at the bottom-left, over the space the canvas toolbar leaves in tour chrome.
+ *
+ * `avoid` lists rectangles the card must not cover (the stage cards, the probability numerals, the other
+ * spotlit regions): the first candidate that is clear of all of them wins; below and above may then slide
+ * inside the bounds as long as they stay off the target. With nothing clear, the first candidate that fits
+ * is used, as without `avoid`.
  */
-export function placeCard(target: Rect | null, card: { width: number; height: number }, bounds: Bounds, gap = 16): Placement {
+export function placeCard(
+  target: Rect | null,
+  card: { width: number; height: number },
+  bounds: Bounds,
+  gap = 16,
+  avoid: readonly Rect[] = [],
+): Placement {
   const clampX = (x: number) => Math.min(Math.max(x, bounds.left + 12), bounds.right - card.width - 12);
   const clampY = (y: number) => Math.min(Math.max(y, bounds.top + 12), bounds.bottom - card.height - 12);
+  const box = (p: Placement): Rect => ({ left: p.left, top: p.top, width: card.width, height: card.height });
+  const clear = (p: Placement) => !avoid.some((a) => overlaps(box(p), a));
   if (!target) {
-    return {
+    const centred: Placement = {
       left: clampX((bounds.left + bounds.right - card.width) / 2),
       top: clampY(bounds.bottom - card.height - 48),
       side: 'inside',
     };
+    if (clear(centred)) return centred;
+    const corners: Placement[] = [
+      { left: clampX(bounds.left), top: centred.top, side: 'inside' },
+      { left: clampX(bounds.right), top: centred.top, side: 'inside' },
+    ];
+    return corners.find(clear) ?? centred;
   }
   const fitsX = (x: number) => x >= bounds.left + 8 && x + card.width <= bounds.right - 8;
   const fitsY = (y: number) => y >= bounds.top + 8 && y + card.height <= bounds.bottom - 8;
+  const centreX = clampX(target.left + target.width / 2 - card.width / 2);
 
+  // Strict candidates, in the historical order (they never cover the target).
+  const strict: Placement[] = [];
   const right = rectRight(target) + gap;
-  if (fitsX(right)) return { left: right, top: clampY(target.top), side: 'right' };
+  if (fitsX(right)) strict.push({ left: right, top: clampY(target.top), side: 'right' });
   const left = target.left - gap - card.width;
-  if (fitsX(left)) return { left, top: clampY(target.top), side: 'left' };
+  if (fitsX(left)) strict.push({ left, top: clampY(target.top), side: 'left' });
   const below = rectBottom(target) + gap;
-  if (fitsY(below)) return { left: clampX(target.left + target.width / 2 - card.width / 2), top: below, side: 'below' };
+  if (fitsY(below)) strict.push({ left: centreX, top: below, side: 'below' });
   const above = target.top - gap - card.height;
-  if (fitsY(above)) return { left: clampX(target.left + target.width / 2 - card.width / 2), top: above, side: 'above' };
-  return {
+  if (fitsY(above)) strict.push({ left: centreX, top: above, side: 'above' });
+  const inside: Placement = {
     left: clampX(target.left + 24),
     top: clampY(rectBottom(target) - card.height - 24),
     side: 'inside',
   };
+  if (avoid.length === 0) return strict[0] ?? inside;
+
+  // Relaxed candidates: slid inside the bounds, still off the target (a small target near an edge, such as
+  // the patient chip in the top bar, cannot fit a card strictly below it).
+  const offTarget = (p: Placement) => !overlaps(box(p), target);
+  const relaxed = (
+    [
+      { left: centreX, top: clampY(below), side: 'below' },
+      { left: clampX(right), top: clampY(target.top), side: 'right' },
+      { left: clampX(left), top: clampY(target.top), side: 'left' },
+      { left: centreX, top: clampY(above), side: 'above' },
+    ] satisfies Placement[]
+  ).filter(offTarget);
+  const base = [...strict, ...relaxed];
+  // Still blocked: slide each candidate sideways just past the rectangle in its way (same row).
+  const slid = base.flatMap((p) =>
+    avoid
+      .filter((a) => overlaps(box(p), a))
+      .flatMap((a) => [a.left - 8 - card.width, rectRight(a) + 8])
+      .filter(fitsX)
+      .map((x): Placement => ({ ...p, left: x }))
+      .filter(offTarget),
+  );
+  return [...base, ...slid].find(clear) ?? (clear(inside) ? inside : (strict[0] ?? inside));
 }

@@ -184,6 +184,28 @@ describe('geometry', () => {
     expect(stage.top + card.height).toBeLessThanOrEqual(bounds.bottom);
     expect(placeCard(null, card, bounds).side).toBe('inside');
   });
+
+  it('keeps the card off the stage cards and numerals it is told to avoid (patient chip beat at 1280)', () => {
+    const b = { left: 0, top: 84, right: 1280, bottom: 592 };
+    const card = { width: 360, height: 196 };
+    const chip = { left: 560, top: 8, width: 120, height: 32 };
+    const riskCard = { left: 940, top: 44, width: 336, height: 540 };
+    const patientCard = { left: 4, top: 44, width: 272, height: 320 };
+    const overlapsRect = (a: { left: number; top: number; width: number; height: number }) =>
+      a.left < riskCard.left + riskCard.width && riskCard.left < a.left + card.width && a.top < riskCard.top + riskCard.height && riskCard.top < a.top + card.height;
+    // Without keep-outs the card goes right of the chip, over the CAD numeral.
+    expect(overlapsRect(placeCard(chip, card, b))).toBe(true);
+    const p = placeCard(chip, card, b, 16, [riskCard, patientCard]);
+    expect(overlapsRect(p)).toBe(false);
+    expect(p.left).toBeGreaterThanOrEqual(patientCard.left + patientCard.width);
+    expect(p.left + card.width).toBeLessThanOrEqual(riskCard.left);
+    expect(p.top).toBeGreaterThanOrEqual(b.top);
+    // The live chip sits at the right of the top bar, above the risk card: the card slides left of it.
+    const rightChip = { left: 987, top: 8, width: 141, height: 32 };
+    const q = placeCard(rightChip, card, b, 16, [riskCard, patientCard]);
+    expect(overlapsRect(q)).toBe(false);
+    expect(q.left).toBeGreaterThanOrEqual(patientCard.left + patientCard.width);
+  });
 });
 
 describe('clock', () => {
