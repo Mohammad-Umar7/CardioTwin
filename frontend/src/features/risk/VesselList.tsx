@@ -41,6 +41,7 @@ export function VesselRow({ spec }: { spec: TargetSpec }) {
   const select = useViewerStore((s) => s.select);
   const hover = useViewerStore((s) => s.hover);
   const stale = useDelayedFlag(status === 'loading', 150);
+  const unavailable = usePatientStore((s) => !s.prediction && (s.status === 'error' || s.engineStatus === 'unavailable'));
   const p = prediction?.predictions[spec.id];
   const band = p ? bandStyle(p.risk_band) : null;
 
@@ -64,10 +65,16 @@ export function VesselRow({ spec }: { spec: TargetSpec }) {
           <Tooltip content={`${spec.label}${spec.territory ? ` · supplies ${spec.territory.toLowerCase()} (approx.)` : ''}`}>
             <span className="w-9 shrink-0 text-body-s font-semibold text-primary">{spec.short ?? spec.id}</span>
           </Tooltip>
-          {p ? <Probability p={p.probability} size="l" stale={stale} className="w-14 text-right" /> : <Skeleton className="h-5 w-12" />}
+          {p ? (
+            <Probability p={p.probability} size="l" stale={stale} className="w-14 text-right" />
+          ) : unavailable ? (
+            <span className="w-14 text-right text-body-s text-tertiary">–</span>
+          ) : (
+            <Skeleton className="h-5 w-12" />
+          )}
           <RiskTrack p={p?.probability} threshold={p?.threshold} ghost={baseline?.predictions[spec.id]?.probability ?? null} pending={stale || !p} compact className="flex-1" />
         </button>
-        <BandChip band={band?.id ?? null} pending={!p || stale} size="sm" showMeter={false} className="w-[74px] justify-start" />
+        <BandChip band={band?.id ?? null} pending={stale || (!p && !unavailable)} size="sm" showMeter={false} className="w-[74px] justify-start" />
         <button
           type="button"
           tabIndex={-1}

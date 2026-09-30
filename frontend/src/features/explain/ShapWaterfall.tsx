@@ -96,11 +96,15 @@ function ShapRow({
 export function ShapWaterfall({ target, limit = 8, compact = false }: { target: string; limit?: number; compact?: boolean }) {
   const index = useSchemaIndex();
   const prediction = usePatientStore((s) => s.prediction);
+  const status = usePatientStore((s) => s.status);
   const model = usePortableModel();
   const [expanded, setExpanded] = useState(false);
   const explanation = prediction?.explanations[target];
   const p = prediction?.predictions[target];
 
+  if (!prediction && status === 'error') {
+    return <p className="text-body-s text-tertiary">Explanations appear together with the estimate.</p>;
+  }
   if (!prediction || !explanation || !p) {
     return (
       <div className="flex flex-col gap-1.5">
