@@ -1,0 +1,110 @@
+# Static demo on GitHub Pages: the SPA with the in-browser (edge) engine evaluating model.json, no server.
+# Manual only - the repository owner decides when (and whether) to publish. Before the first run, enable
+# Pages with "Source: GitHub Actions" (Settings -> Pages); otherwise the configure step fails with a clear message.
+name: Pages
+
+on:
+  workflow_dispatch:
+    inputs:
+      base_path:
+        description: "Site base path (empty = /<repository name>/, e.g. /CardioTwin/)"
+        required: false
+        default: ""
+
+permissions:
+  contents: read
+
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+env:
+  NODE_VERSION: "22"
+
+jobs:
+  build:
+    name: Build the static site
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    defaults:
+      run:
+        working-directory: frontend
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Resolve the base path
+        id: base
+        env:
+          INPUT_BASE: ${{ inputs.base_path }}
+          REPO_NAME: ${{ github.event.repository.name }}
+        run: |
+          base="${INPUT_BASE:-/${REPO_NAME}/}"
+          case "$base" in /*) ;; *) base="/$base" ;; esac
+          case "$base" in */) ;; *) base="$base/" ;; esac
+          echo "path=$base" >> "$GITHUB_OUTPUT"
+          echo "Base path: $base"
+
+      - run: npm ci --no-audit --no-fund
+
+      # The static site has no API, so every estimate comes from the edge engine: gate on its parity tests.
+      - name: Unit and engine-parity tests
+        run: npm test
+
+      - name: Build (base ${{ steps.base.outputs.path }})
+        run: npm run build -- --base "${{ steps.base.outputs.path }}"
+
+      - name: Prune server-only files
+        # The browser evaluates model.json; the pickled scikit-learn/XGBoost bundle is for the Python API only.
+        run: rm -f dist/model/*.joblib
+
+      - name: Verify the bundle
+        env:
+          BASE_PATH: ${{ steps.base.outputs.path }}
+        run: |
+          test -f dist/index.html
+          grep -q "${BASE_PATH}assets/" dist/index.html || { echo "index.html does not reference ${BASE_PATH}assets/"; exit 1; }
+          for f in model/schema.json model/model.json model/cohort.json model/metrics.json \
+                   anatomy/cardiotwin_anatomy.glb anatomy/manifest.json anatomy/vessels.json; do
+            test -s "dist/$f" || { echo "missing dist/$f"; exit 1; }
+          done
+          echo "Static site: $(du -sh dist | cut -f1)"
+
+      - name: Smoke test under the base path
+        env:
+          BASE_PATH: ${{ steps.base.outputs.path }}
+        run: |
+          npx vite preview --base "$BASE_PATH" --host 127.0.0.1 --port 4173 --strictPort > preview.log 2>&1 &
+          preview=$!
+          trap 'kill $preview 2>/dev/null || true' EXIT
+          for _ in $(seq 60); do curl -fsS "http://127.0.0.1:4173${BASE_PATH}" -o /dev/null && break; sleep 1; done
+          curl -fsS "http://127.0.0.1:4173${BASE_PATH}" | grep -q '<div id="root"'
+          curl -fsS "http://127.0.0.1:4173${BASE_PATH}model/model.json" | head -c 200 | grep -q '"format"'
+          curl -fsS -o /dev/null "http://127.0.0.1:4173${BASE_PATH}anatomy/cardiotwin_anatomy.glb"
+          echo "preview OK"
+
+      - uses: actions/configure-pages@v6
+
+      - uses: actions/upload-pages-artifact@v5
+        with:
+          path: frontend/dist
+
+  deploy:
+    name: Deploy to GitHub Pages
+    needs: build
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v5
