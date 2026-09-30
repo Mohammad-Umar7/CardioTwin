@@ -98,7 +98,7 @@ export function SegmentedControl<const V extends string | number>({
             onFocus={() => onPreview?.(opt.value)}
             onBlur={() => onPreview?.(null)}
             className={cn(
-              'num relative min-w-7 flex-1 whitespace-nowrap rounded-[3px] px-2 text-label transition-colors duration-fast ease-out',
+              'num relative min-w-max flex-1 whitespace-nowrap rounded-[3px] px-2 text-label transition-colors duration-fast ease-out',
               selected
                 ? 'bg-surface-3 text-primary shadow-[inset_0_0_0_1px_rgb(var(--c-border-strong))]'
                 : 'text-secondary hover:bg-surface-2 hover:text-primary',

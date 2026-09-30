@@ -220,6 +220,7 @@ export default function PerformancePage() {
           />
           <SegmentedControl
             label="Evaluation split"
+            className="shrink-0"
             value={split}
             onChange={(v) => setView({ split: v as Split })}
             options={[

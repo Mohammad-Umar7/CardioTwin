@@ -158,7 +158,7 @@ export function DriversModule({ target, m, byKey, height, provenance }: ModelMod
                 <div
                   tabIndex={0}
                   aria-label={`${name}, mean absolute SHAP ${f2(g.mean_abs_shap)} log-odds`}
-                  className="group grid grid-cols-[minmax(0,40%)_minmax(0,1fr)] items-center gap-3 rounded-sm px-1 py-0.5 outline-none hover:bg-surface-1 focus-visible:shadow-focus"
+                  className="group grid grid-cols-[minmax(0,46%)_minmax(0,1fr)] items-center gap-3 rounded-sm px-1 py-0.5 outline-none hover:bg-surface-1 focus-visible:shadow-focus"
                 >
                   <span className="truncate text-label font-normal text-secondary group-hover:text-primary">
                     {name}
