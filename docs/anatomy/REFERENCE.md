@@ -583,6 +583,22 @@ designed on the heart, see [`SYNTHESIS.md`](SYNTHESIS.md)):
 | Cardiac veins | CS 9.3 mm (ostium 10 mm) 2.1 mm from the tricuspid hinge, MCV joins 9.6 mm from the ostium; LMV and SCV present; GCV 4.6 mm; tips 0.45 mm | VEN-01/05/08/11 pass |
 | Coronary sinus course | 70 % atrial to the mitral hinge, 48 % parallel; CS + GCV 197 mm | VEN-04, VEN-09 fail |
 
+**Update after realism round 3** (60 PASS / 8 MINOR / 10 FAIL of 78; 58 / 7 / 8 on the 73 round-2 checks; the valve
+apparatus is synthesised and the heart wall has three local corrections, see [`SYNTHESIS.md`](SYNTHESIS.md)):
+
+| Finding | Value now | Check |
+| --- | --- | --- |
+| Mitral isthmus | Left pulmonary-vein contact ≥ 22.7 mm (median 29.9 mm) from the mitral hinge; LCX 15.5 mm and GCV 8 mm from the nearest pulmonary vein | VEN-14 pass |
+| SVC | Joins the lowered right-atrial roof at the right 3rd costal cartilage; 46 mm long (60–80 mm) | GV-10 pass, GV-11 fail |
+| Tricuspid offset | Septal hinge 7 mm apical of the anterior mitral hinge (hinge lines); the check's basal-quartile fit reads −6.7 mm | VLV-04 minor |
+| LM | 16 mm, Ø 4.15 mm; LM–LAD 64°, LAD–LCX 117°; the pulmonary trunk does not overlie it in the frontal view | COR-03 pass, COR-04/05 minor |
+| Septal perforators | Three from the LAD (from 38 mm) and three from the PDA, take-off 44–56°, 71–89 % intramyocardial | COR-09 pass |
+| Conus branch | Crosses the anterior infundibulum 11 mm below the pulmonary valve, leftwards | COR-27 pass |
+| Vessels on the wall | No coronary or vein sample inside the myocardium; 164 of 1848 samples float 0.6–3 mm (crease crossings, RV dips) | COR-21, VEN-10 pass; VAS-01 fail |
+| Lungs / diaphragm | Cardiac impression carved; no heart structure inside a lung or the diaphragm (> 0.5 mm) | POS-09, POS-10 pass |
+| RV free wall | 88 % RCA-dominant; 11 % LAD-dominant beyond 15 mm of the LAD (band 10 %) | COR-25 minor |
+| Coronary sinus course | Ostium 23 mm from the crux; 58 % atrial to the mitral hinge, 38 % parallel; CS + GCV 156 mm | COR-26, VEN-04 fail, VEN-09 minor |
+
 ---
 
 ## 11. Sources

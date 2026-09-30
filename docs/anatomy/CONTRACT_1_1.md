@@ -42,3 +42,30 @@ Unchanged schema. An attached segment's first point now lies exactly on a point 
 * Keep the total wet look ≤ ~0.3 clearcoat (the GLB already carries 0.22–0.35).
 * Upload textures in `textures.priority` order; use `realistic_color` as the tint of an untextured fallback.
 * `docs/CONTRACTS.md` §7 should reference this addendum (that file is outside the anatomy pipeline's scope).
+
+## Round-3 additions (still contract 1.1: additive only)
+
+| Item | Before | Now |
+| --- | --- | --- |
+| Size / triangles | 9.4 MB / 396,916 (budget 400k) | 7.7 MB / 407,737 (budget 430k: the lobulated epicardial fat, 40k, and the synthesised valve apparatus, leaflets + chordae + papillary muscles, 16k) |
+| Textures | 123 MiB on the GPU, 4.4 MB WebP | 46 MiB on the GPU (build budget 48 MiB), 2.5 MB WebP, sized to their content (heart walls 1024 albedo + 1024 normal with the muscle relief; ghosted layers 256; flat maps 128), normal maps near-lossless; atlas samplers `CLAMP_TO_EDGE`; UV islands packed with concave shapes |
+| Clearcoat | 0.22–0.35 | 0.08 (myocardium) – 0.16 (vessels); the lungs / airway keep 0.25–0.3 |
+| New attribute | — | `_RADIUS` (float, scene units) on every `Coronary_*` node and `CardiacVeins`: the lumen radius of the nearest labelled centreline point (inflate vessels in proportion, fade sub-pixel tips) |
+| `_VEIN` codes | 1–8 | + 9 RMV (right marginal vein, FMA4716) |
+| `manifest.facts` | — | the numbers quoted in the definitions (`LM_MM`, `CS_MM`, `GCV_MM`, `AIV_MM`, `MCV_JOIN_MM`, `SCV_MM`, `RMV_MM`, `N_ACV`, `SVC_MM`, `TV_OFFSET_MM`, `ISTHMUS_*`), measured on the build |
+| `veins[]` | AIV reused the GCV's FMA4707 | AIV = FMA66403; RMV = FMA4716 |
+
+Geometry that changed meaning without changing name: `Valve_Mitral`, `Valve_Tricuspid` and `Papillary_Muscles` are now
+synthesised on the BodyParts3D annulus and papillary muscles (thin half-open leaflets, branching chordae, smooth
+papillary cones); `GreatVessel_PulmonaryVeins` and `GreatVessel_SVC` are derived (left veins moved with the stretched
+atrium, SVC lengthened 10 mm); the heart wall has three local corrections and carved channels (see
+[`SYNTHESIS.md`](SYNTHESIS.md)).
+
+Hand-offs for the viewer (outside the anatomy pipeline):
+
+* Realistic look: aorta atlas red, pulmonary artery and cardiac veins blue (use `structures[].realistic_color`), veins
+  on by default (COL-01/02/03 grade the viewer's colours).
+* Risk colouring on the arteries: the ramp's low end is blue like the atlas veins and its high end apricot like the fat;
+  step the veins and fat back (darker, desaturated) while it is on, as `web_preview.jpg` does.
+* Use `_RADIUS` instead of a fixed `VESSEL_INFLATE`; pre-compile materials with `compileAsync` behind the poster.
+* `docs/CONTRACTS.md` §6.2 should list the additive nodes and §7 should link this addendum.
