@@ -60,7 +60,7 @@ if (uReveal < 0.999) {
   ctN = clamp((ctN - 0.5) * 2.6 + 0.5, 0.0, 1.0);
   float ctFront = uReveal * 1.12 - 0.06;
   if (ctN > ctFront) discard;
-  ctEdge = 1.0 - smoothstep(0.0, 0.07, ctFront - ctN);
+  ctEdge = 1.0 - smoothstep(0.0, 0.12, ctFront - ctN);
 }
 `;
 
@@ -304,7 +304,7 @@ roughnessFactor = clamp(roughnessFactor + uRoughVar * ctDetail.x, 0.04, 1.0);`,
   fs = fs.replace(
     '#include <emissivemap_fragment>',
     `#include <emissivemap_fragment>
-totalEmissiveRadiance += vec3(1.0, 0.62, 0.45) * (0.9 * ctEdge * uCtEdgeGain);`,
+totalEmissiveRadiance += vec3(1.0, 0.55, 0.38) * (0.4 * ctEdge * ctEdge * uCtEdgeGain);`,
   );
 
   if (f.rim) {

@@ -347,7 +347,8 @@ export function LabelProjector() {
       const behind = !isSelected && r.facing < 0;
       // Covered by the closed chest or hidden (isolate, ghosting): the label fades with its vessel.
       const seen = Math.min(cover, r.solid);
-      const opacity = (!revealed ? 0 : isSelected ? 1 : dimmed ? 0.4 : behind ? 0.55 : 1) * seen;
+      // "(behind)" labels stay legible (≥ 75 %): the chip text keeps its contrast on the dark stage.
+      const opacity = (!revealed ? 0 : isSelected ? 1 : dimmed ? 0.4 : behind ? 0.78 : 1) * seen;
 
       setStyle(label, 'transform', `translate3d(${at.left.toFixed(1)}px, ${at.top.toFixed(1)}px, 0)`);
       setStyle(label, 'opacity', fmt(opacity));

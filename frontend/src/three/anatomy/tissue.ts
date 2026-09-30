@@ -232,16 +232,17 @@ const REALISTIC: Partial<Record<TissueKind, Look>> = {
     baked: { tint: '#FFFFFF', saturation: 0.94 },
   },
   valve: {
-    // Thin pale leaflets: a toned-down bake so the valves read as tissue, not bright tan combs.
+    // Thin fibrous leaflets and chordae: a dim pink-ivory with strong back-scatter (light shows through the
+    // thin tissue), so the apparatus reads as tissue inside the opened chambers, not as flat cream combs.
     color: REAL.valve,
-    roughness: 0.55,
-    env: 0.45,
-    clearcoat: 0.25,
-    clearcoatRoughness: 0.4,
-    detail: { freq: 22, bump: 0.003, colorVar: 0.12, roughVar: 0.1, deep: '#A88E72' },
-    sss: { wrap: 0.5, tint: '#FFD2B0', color: '#C07A58', strength: 0.3 },
-    interior: '#8E7866',
-    baked: { tint: '#BFB0A4', saturation: 0.8 },
+    roughness: 0.6,
+    env: 0.35,
+    clearcoat: 0.2,
+    clearcoatRoughness: 0.45,
+    detail: { freq: 30, bump: 0.004, colorVar: 0.16, roughVar: 0.1, deep: '#8E6A5A' },
+    sss: { wrap: 0.6, tint: '#FFC8B0', color: '#B0584A', strength: 0.4 },
+    interior: '#7E6456',
+    baked: { tint: '#A89088', saturation: 0.7 },
   },
   coronary: {
     // Glossy but not mirror-like: at low risk the thin tube must still read as its ramp blue, not as a

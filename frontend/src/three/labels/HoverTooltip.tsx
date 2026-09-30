@@ -66,13 +66,19 @@ export function HoverTooltip() {
       if (el && parent && p) {
         const w = el.offsetWidth;
         const h = el.offsetHeight;
-        const pw = parent.clientWidth;
-        const ph = parent.clientHeight;
+        // Stay inside the FREE area (never over the patient or risk card, the toolbar or the context slot).
+        const insets = useUiStore.getState().stageInsets;
+        const minX = insets.left + EDGE;
+        const maxX = parent.clientWidth - insets.right - EDGE;
+        const minY = insets.top + EDGE;
+        const maxY = parent.clientHeight - insets.bottom - EDGE;
         let x = p[0] + OFFSET.x;
         let y = p[1] + OFFSET.y;
-        if (x + w > pw - EDGE) x = p[0] - OFFSET.x - w;
-        if (y + h > ph - EDGE) y = p[1] - OFFSET.y - h;
-        el.style.transform = `translate3d(${Math.max(EDGE, x).toFixed(0)}px, ${Math.max(EDGE, y).toFixed(0)}px, 0)`;
+        if (x + w > maxX) x = p[0] - OFFSET.x - w;
+        if (y + h > maxY) y = p[1] - OFFSET.y - h;
+        x = Math.min(Math.max(minX, x), Math.max(minX, maxX - w));
+        y = Math.min(Math.max(minY, y), Math.max(minY, maxY - h));
+        el.style.transform = `translate3d(${x.toFixed(0)}px, ${y.toFixed(0)}px, 0)`;
       }
       raf = requestAnimationFrame(place);
     };

@@ -107,7 +107,7 @@ function Label({ target }: { target: string }) {
         {f.value}
         {f.value !== '–' && <span className="pct-sign">%</span>}
       </span>
-      <span className="ml-1.5 hidden text-label font-normal text-tertiary group-data-[behind=true]:inline">(behind)</span>
+      <span className="ml-1.5 hidden text-label font-normal text-secondary group-data-[behind=true]:inline">(behind)</span>
     </button>
   );
 }
