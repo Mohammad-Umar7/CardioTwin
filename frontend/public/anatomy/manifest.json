@@ -996,7 +996,8 @@
           0.3781
         ]
       },
-      "triangles": 3000
+      "triangles": 3000,
+      "rides": "Heart_Wall_Anterior"
     },
     {
       "id": "papillary_muscles",
@@ -1265,7 +1266,8 @@
           0.5478
         ]
       },
-      "triangles": 14000
+      "triangles": 14000,
+      "rides": "Heart_Wall_Posterior"
     },
     {
       "id": "lm",
@@ -1306,7 +1308,8 @@
       "feeds": [
         "LAD",
         "LCX"
-      ]
+      ],
+      "rides": "Heart_Wall_Anterior"
     },
     {
       "id": "lad",
@@ -1343,7 +1346,23 @@
           0.5094
         ]
       },
-      "triangles": 9220
+      "triangles": 9220,
+      "rides": "Heart_Wall_Anterior",
+      "labelAnchor": [
+        0.2896,
+        0.1436,
+        0.2504
+      ],
+      "labelNormal": [
+        0.7082,
+        0.3512,
+        0.6125
+      ],
+      "bestView": {
+        "azimuth": -30.0,
+        "elevation": 25.0,
+        "distance": 3.251
+      }
     },
     {
       "id": "lad_septal",
@@ -1380,7 +1399,8 @@
           0.4489
         ]
       },
-      "triangles": 1214
+      "triangles": 1214,
+      "rides": "Heart_Wall_Anterior"
     },
     {
       "id": "lcx",
@@ -1417,7 +1437,23 @@
           0.2105
         ]
       },
-      "triangles": 3542
+      "triangles": 3542,
+      "rides": "Heart_Wall_Posterior",
+      "labelAnchor": [
+        0.2621,
+        0.0569,
+        -0.3163
+      ],
+      "labelNormal": [
+        0.6321,
+        0.1372,
+        -0.7627
+      ],
+      "bestView": {
+        "azimuth": -30.0,
+        "elevation": -25.0,
+        "distance": 3.251
+      }
     },
     {
       "id": "rca",
@@ -1454,7 +1490,23 @@
           0.4066
         ]
       },
-      "triangles": 5154
+      "triangles": 5154,
+      "rides": "Heart_Wall_Anterior",
+      "labelAnchor": [
+        -0.2129,
+        0.1683,
+        0.3881
+      ],
+      "labelNormal": [
+        -0.4495,
+        0.3554,
+        0.8196
+      ],
+      "bestView": {
+        "azimuth": 40.0,
+        "elevation": 0.0,
+        "distance": 3.251
+      }
     },
     {
       "id": "rca_marginal",
@@ -1491,7 +1543,8 @@
           0.5468
         ]
       },
-      "triangles": 4908
+      "triangles": 4908,
+      "rides": "Heart_Wall_Anterior"
     },
     {
       "id": "rca_pda",
@@ -1528,7 +1581,8 @@
           0.3402
         ]
       },
-      "triangles": 3086
+      "triangles": 3086,
+      "rides": "Heart_Wall_Posterior"
     },
     {
       "id": "rca_pl",
@@ -1565,7 +1619,8 @@
           0.1728
         ]
       },
-      "triangles": 2246
+      "triangles": 2246,
+      "rides": "Heart_Wall_Posterior"
     },
     {
       "id": "rca_septal",
@@ -1602,7 +1657,8 @@
           0.0998
         ]
       },
-      "triangles": 754
+      "triangles": 754,
+      "rides": "Heart_Wall_Posterior"
     }
   ],
   "camera": {
