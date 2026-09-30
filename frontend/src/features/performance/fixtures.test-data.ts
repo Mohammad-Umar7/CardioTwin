@@ -1,0 +1,162 @@
+/**
+ * Contract-shaped metrics for the Performance tests, shaped like the real v1.1 CAD target (so the
+ * sentences under test read like the shipped page) plus the §7.2 analysis blocks. Test-only.
+ */
+import type { MetricsReport, TargetMetrics } from '@/types/contracts';
+
+export const cadMetrics = {
+  selected_model: 'LR (lr_elasticnet) + XGBoost margin ensemble (Platt-calibrated)',
+  components: {
+    logistic: { name: 'lr_elasticnet', weight: 0.4 },
+    xgboost: { n_trees: 108, weight: 0.6 },
+    platt: { a: 1.28, b: -0.21 },
+  },
+  cv: {
+    roc_auc: { mean: 0.936672, std: 0.0344737 },
+    recall: { mean: 0.8599, std: 0.0721 },
+    specificity: { mean: 0.8814, std: 0.0953 },
+    brier: { mean: 0.0913, std: 0.0285 },
+    f1: { mean: 0.9, std: 0.0465 },
+    pr_auc: { mean: 0.9724, std: 0.0177 },
+  },
+  test: {
+    roc_auc: { value: 0.858289, ci: [0.743282, 0.954545] },
+    recall: { value: 0.840909, ci: [0.727273, 0.931818] },
+    specificity: { value: 0.764706, ci: [0.588235, 0.941176] },
+    brier: { value: 0.123363, ci: [0.068, 0.1816] },
+    f1: { value: 0.870588, ci: [0.790683, 0.939759] },
+    pr_auc: { value: 0.937205, ci: [0.883591, 0.98314] },
+    mcc: { value: 0.578, ci: [0.37, 0.79] },
+  },
+  threshold: 0.747431,
+  confusion_matrix: { tn: 13, fp: 4, fn: 7, tp: 37 },
+  calibration_summary: { ece: 0.079, calibration_in_the_large: -0.016, calibration_slope: 0.62 },
+  baseline: {
+    model: 'lr_core',
+    features: ['Age', 'Sex', 'Typical Chest Pain', 'DM', 'HTN'],
+    cv: { roc_auc: { mean: 0.924, std: 0.0386 } },
+    test: { roc_auc: { value: 0.8215, ci: [0.688, 0.943] } },
+  },
+  curves: {
+    roc: {
+      fpr: [0, 0, 0, 1 / 17, 1 / 17, 2 / 17, 2 / 17, 3 / 17, 3 / 17, 4 / 17, 4 / 17, 5 / 17, 5 / 17, 1],
+      tpr: [0, 1 / 44, 16 / 44, 16 / 44, 20 / 44, 20 / 44, 27 / 44, 27 / 44, 32 / 44, 32 / 44, 39 / 44, 39 / 44, 41 / 44, 1],
+      thresholds: [1, 0.999, 0.991, 0.99, 0.979, 0.976, 0.948, 0.941, 0.869, 0.857, 0.649, 0.631, 0.557, 0.022],
+    },
+    pr: { recall: [0, 0.5, 1], precision: [1, 0.95, 0.72] },
+    calibration: { mean_predicted: [0.14, 0.54, 0.86], fraction_positive: [0.27, 0.5, 0.9], count: [11, 10, 10] },
+    dca: {
+      thresholds: [0.1, 0.2, 0.5, 0.8, 0.9],
+      model: [0.69, 0.66, 0.55, 0.35, 0.2],
+      treat_all: [0.69, 0.65, 0.44, -0.39, -1.5],
+      treat_none: [0, 0, 0, 0, 0],
+    },
+  },
+  leaderboard: [
+    { model: 'random_forest', label: 'Random forest', roc_auc_mean: 0.937096, roc_auc_std: 0.0368, log_loss_mean: 0.3585, brier_mean: 0.1075, tuned: false },
+    { model: 'ensemble', label: 'LR (lr_elasticnet) + XGBoost', roc_auc_mean: 0.936672, roc_auc_std: 0.0345, log_loss_mean: 0.3114, brier_mean: 0.0913, tuned: true },
+    { model: 'xgboost', label: 'XGBoost', roc_auc_mean: 0.929277, roc_auc_std: 0.0364, log_loss_mean: 0.318, tuned: true },
+    { model: 'lr_elasticnet', label: 'Logistic regression (elastic net)', roc_auc_mean: 0.928541, roc_auc_std: 0.0372, tuned: true },
+    { model: 'dummy_prior', label: 'Dummy (prior)', roc_auc_mean: 0.5, roc_auc_std: 0, tuned: false },
+  ],
+  global_importance: [
+    { feature: 'Typical Chest Pain', mean_abs_shap: 1.18 },
+    { feature: 'Age', mean_abs_shap: 0.59 },
+    { feature: 'Region RWMA', mean_abs_shap: 0.43 },
+    { feature: 'EF-TTE', mean_abs_shap: 0.37 },
+  ],
+  beeswarm: [],
+} as unknown as TargetMetrics;
+
+const distribution = (mean: number, fixed: number, pct: number) => ({
+  n: 200,
+  mean,
+  sd: 0.04,
+  p05: mean - 0.07,
+  p25: mean - 0.03,
+  p50: mean,
+  p75: mean + 0.03,
+  p95: mean + 0.05,
+  min: mean - 0.12,
+  max: mean + 0.07,
+  fixed_split: fixed,
+  fixed_split_percentile: pct,
+});
+
+const block = (n: number, auc: number, extra: Record<string, unknown> = {}) => ({
+  n,
+  n_pos: Math.round(n * 0.7),
+  prevalence: 0.7,
+  roc_auc: { value: auc, ci: [auc - 0.1, Math.min(1, auc + 0.08)] },
+  sensitivity: { value: 0.84, ci: [0.7, 0.93] },
+  specificity: { value: 0.76, ci: [0.55, 0.94] },
+  small_n: n < 30,
+  ...extra,
+});
+
+export const sampleReport = {
+  version: '1.0.0',
+  model_version: '1.1.0',
+  generated_at: '2026-09-30T05:48:46+00:00',
+  dataset: {
+    name: 'Extension of Z-Alizadeh Sani',
+    n: 303,
+    n_dev: 242,
+    n_test: 61,
+    prevalence: { CAD: 0.713, LAD: 0.584, LCX: 0.393, RCA: 0.376 },
+  },
+  protocol: { seed: 42, cv_splits: 5, cv_repeats: 10, n_bootstrap: 2000 },
+  targets: { CAD: cadMetrics },
+  robustness: {
+    CAD: {
+      n_splits: 200,
+      roc_auc: distribution(0.91, 0.858, 12.5),
+      f1: distribution(0.88, 0.87, 45),
+      brier: distribution(0.1, 0.123, 80),
+      fixed_split_percentile: 12.5,
+      baseline_roc_auc: distribution(0.89, 0.82, 20),
+      delta_roc_auc_vs_baseline: { ...distribution(0.02, 0.037, 70), share_positive: 0.81 },
+      cv_estimate: { roc_auc: 0.9367, percentile: 71 },
+      samples: { roc_auc: Array.from({ length: 200 }, (_, i) => 0.8 + (i % 40) * 0.004) },
+    },
+  },
+  modality_ablation: {
+    CAD: {
+      full: { n_columns: 55, roc_auc: { mean: 0.94, sd: 0.03, se: 0.01, ci: [0.92, 0.96], n_folds: 50 } },
+      cumulative: [
+        { id: 'cumulative:demographics', group: 'demographics', label: 'Demographics', groups: ['demographics'], n_columns: 6, roc_auc: { mean: 0.7, ci: [0.66, 0.74] }, step: 1, delta_vs_previous: null },
+        { id: 'cumulative:symptoms', group: 'symptoms', label: 'Symptoms', groups: ['demographics', 'symptoms'], n_columns: 12, roc_auc: { mean: 0.88, ci: [0.85, 0.91] }, step: 2, delta_vs_previous: { mean: 0.18, se: 0.02, ci: [0.14, 0.22], p_value: 0.0001, p_holm: 0.0002, share_folds_improved: 1 } },
+        { id: 'cumulative:echo', group: 'echo', label: 'Echocardiography', groups: ['demographics', 'symptoms', 'echo'], n_columns: 15, roc_auc: { mean: 0.94, ci: [0.92, 0.96] }, step: 3, delta_vs_previous: { mean: 0.06, se: 0.01, ci: [0.04, 0.08], p_value: 0.001, p_holm: 0.002, share_folds_improved: 0.9 } },
+      ],
+      leave_one_out: [
+        { id: 'leave_one_out:symptoms', group: 'symptoms', label: 'Symptoms', groups: ['demographics', 'echo'], n_columns: 9, roc_auc: { mean: 0.85, ci: [0.8, 0.9] }, delta_vs_full: { mean: -0.09, se: 0.02, ci: [-0.13, -0.05], p_value: 0.001, p_holm: 0.003, share_folds_improved: 0.02 } },
+        { id: 'leave_one_out:echo', group: 'echo', label: 'Echocardiography', groups: ['demographics', 'symptoms'], n_columns: 12, roc_auc: { mean: 0.93, ci: [0.9, 0.96] }, delta_vs_full: { mean: -0.01, se: 0.01, ci: [-0.03, 0.01], p_value: 0.3, p_holm: 0.6, share_folds_improved: 0.3 } },
+      ],
+      single: [],
+      instrumental: {
+        description: 'full vs bedside',
+        bedside_groups: ['demographics', 'risk_factors', 'symptoms', 'exam'],
+        added_groups: ['ecg', 'labs', 'echo'],
+        bedside_roc_auc: { mean: 0.9, ci: [0.87, 0.93] },
+        full_roc_auc: { mean: 0.94, ci: [0.92, 0.96] },
+        delta: { mean: 0.04, se: 0.01, ci: [0.02, 0.06], p_value: 0.001, share_folds_improved: 0.86 },
+      },
+    },
+  },
+  subgroups: {
+    CAD: {
+      overall: { oof: block(242, 0.93), test: block(61, 0.86) },
+      factors: {
+        sex: {
+          label: 'Sex',
+          reference: 'male',
+          levels: [
+            { id: 'female', label: 'Female', oof: block(100, 0.92, { delta_roc_auc_vs_reference: { value: -0.02, ci: [-0.08, 0.04] } }), test: block(25, 0.8, { delta_roc_auc_vs_reference: { value: -0.1, ci: [-0.3, 0.1] } }) },
+            { id: 'male', label: 'Male', oof: block(142, 0.94), test: block(36, 0.9) },
+          ],
+        },
+      },
+    },
+  },
+  analysis: { robustness: { method: 'Monte-Carlo repeated hold-out' } },
+} as unknown as MetricsReport;
