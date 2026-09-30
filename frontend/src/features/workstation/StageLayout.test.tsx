@@ -2,7 +2,7 @@
 import { act, render, screen } from '@testing-library/react';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import { ZERO_INSETS, useUiStore } from '@/state/uiStore';
-import { StageLayout } from './StageLayout';
+import { ChromeGate, StageLayout } from './StageLayout';
 import { computeStageInsets, type InsetInput } from './stageInsets';
 
 const BOXES: Record<string, { width: number; height: number }> = {
@@ -152,5 +152,52 @@ describe('StageLayout', () => {
       (el) => [...el.classList].some((c) => /^overflow(-[xy])?-hidden$/.test(c)) && el.querySelector('button, input'),
     );
     expect(traps).toEqual([]);
+  });
+
+  it('keeps the canvas layer byte-identical across every chrome preset and drawer (no resize, no remount)', () => {
+    const { container } = stage();
+    const layer = screen.getByTestId('canvas').parentElement!;
+    const root = container.querySelector<HTMLElement>('[data-region="stage"]')!;
+    const signature = () => [layer.className, layer.getAttribute('style'), root.className, root.getAttribute('style')].join('|');
+    const initial = signature();
+    const ui = useUiStore.getState();
+    const steps: (() => void)[] = [
+      () => ui.setChrome('focus'),
+      () => ui.setChrome('tour'),
+      () => ui.setChrome('landing'),
+      () => ui.setChrome('workstation'),
+      () => ui.openDrawer('inputs'),
+      () => ui.openDrawer('explain'),
+      () => ui.closeDrawer(),
+      () => ui.setPatientCardOpen(false),
+      () => ui.setPatientCardOpen(true),
+    ];
+    for (const step of steps) {
+      act(step);
+      expect(signature()).toBe(initial);
+      expect(screen.getByTestId('canvas').parentElement).toBe(layer);
+    }
+  });
+});
+
+describe('ChromeGate', () => {
+  beforeEach(() => useUiStore.setState({ chrome: 'workstation' }));
+
+  it('hides its card in the listed presets: collapsed, inert and out of the accessibility tree', () => {
+    const { container } = render(
+      <ChromeGate hideIn={['focus']}>
+        <button type="button">Risk card</button>
+      </ChromeGate>,
+    );
+    const gate = container.firstElementChild as HTMLElement;
+    expect(gate).toHaveAttribute('data-gate', 'shown');
+    expect(gate.inert).toBe(false);
+    act(() => useUiStore.getState().setChrome('focus'));
+    expect(gate).toHaveAttribute('data-gate', 'hidden');
+    expect(gate).toHaveAttribute('aria-hidden', 'true');
+    expect(gate.inert).toBe(true);
+    expect(gate).toHaveClass('grid-rows-[0fr]', 'opacity-0');
+    act(() => useUiStore.getState().setChrome('workstation'));
+    expect(gate).toHaveClass('grid-rows-[1fr]', 'opacity-100');
   });
 });

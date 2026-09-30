@@ -108,10 +108,12 @@ export interface UiState {
   dismissToast(id: number): void;
   highlightFeature(key: string | null): void;
 
+  /** Entering `focus` closes any open drawer (focus mode shows the stage and the answer pill only). */
   setChrome(chrome: Chrome): void;
   /** `\`: focus ⇄ workstation. No-op on the other presets (tour, landing). */
   toggleFocusMode(): void;
-  /** Opens `d` (closing any other drawer) and applies the options. */
+  /** Opens `d` (closing any other drawer) and applies the options. A drawer is working chrome, so
+   *  opening one leaves focus mode. */
   openDrawer(d: DrawerId, opts?: OpenDrawerOptions): void;
   closeDrawer(): void;
   /** I / E keys: closes `d` if it is open, otherwise opens it. */
@@ -136,6 +138,8 @@ const sameInsets = (a: StageInsets, b: StageInsets) =>
  */
 export const selectPatientCardExpanded = (s: Pick<UiState, 'patientCardOpen' | 'drawer'>): boolean =>
   s.patientCardOpen && s.drawer !== 'explain';
+
+const CLOSED_DRAWER = { drawer: null, focusField: null, inputsSection: null } as const;
 
 let toastId = 0;
 
@@ -195,10 +199,14 @@ export const useUiStore = create<UiState>()(
       dismissToast: (id) => set((s) => ({ toasts: s.toasts.filter((t) => t.id !== id) })),
       highlightFeature: (highlightedFeature) => set({ highlightedFeature }),
 
-      setChrome: (chrome) => set({ chrome }),
+      setChrome: (chrome) => set(chrome === 'focus' ? { chrome, ...CLOSED_DRAWER } : { chrome }),
       toggleFocusMode: () =>
         set((s) =>
-          s.chrome === 'focus' ? { chrome: 'workstation' } : s.chrome === 'workstation' ? { chrome: 'focus' } : {},
+          s.chrome === 'focus'
+            ? { chrome: 'workstation' }
+            : s.chrome === 'workstation'
+              ? { chrome: 'focus', ...CLOSED_DRAWER }
+              : {},
         ),
       openDrawer: (drawer, opts = {}) =>
         set((s) => ({
@@ -206,8 +214,9 @@ export const useUiStore = create<UiState>()(
           explainTab: opts.tab ?? s.explainTab,
           focusField: drawer === 'inputs' ? (opts.field ?? null) : null,
           inputsSection: drawer === 'inputs' ? (opts.section ?? null) : null,
+          ...(s.chrome === 'focus' ? { chrome: 'workstation' as const } : null),
         })),
-      closeDrawer: () => set({ drawer: null, focusField: null, inputsSection: null }),
+      closeDrawer: () => set(CLOSED_DRAWER),
       toggleDrawer: (drawer, opts) => {
         if (get().drawer === drawer) get().closeDrawer();
         else get().openDrawer(drawer, opts);

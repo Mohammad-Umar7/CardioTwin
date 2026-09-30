@@ -4,6 +4,7 @@ import { AnimatePresence, motion } from 'framer-motion';
 import { X } from 'lucide-react';
 import { cn } from '@/lib/cn';
 import { EASE, MOTION } from '@/theme/tokens';
+import { ESCAPE_PRIORITY, useEscapeLayer } from './escapeStack';
 import { trapFocus } from './focus';
 import { IconButton } from './IconButton';
 
@@ -29,6 +30,9 @@ export function Modal({ open, onClose, title, description, children, footer, wid
   const panelRef = useRef<HTMLDivElement>(null);
   const opener = useRef<Element | null>(null);
 
+  // Esc is one layer of the app-wide chain (palette → modal → menu → drawer → … → focus mode).
+  useEscapeLayer(open, onClose, ESCAPE_PRIORITY.modal);
+
   useEffect(() => {
     if (!open) return;
     opener.current = document.activeElement;
@@ -37,10 +41,7 @@ export function Modal({ open, onClose, title, description, children, footer, wid
       first?.focus();
     }, 0);
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') {
-        e.stopPropagation();
-        onClose();
-      } else trapFocus(panelRef.current)(e);
+      if (e.key !== 'Escape') trapFocus(panelRef.current)(e);
     };
     document.addEventListener('keydown', onKey);
     return () => {

@@ -47,7 +47,9 @@ function PalettePanel({ reduced }: { reduced: boolean }) {
   const [preview, setPreview] = useState<{ id: string; text: string } | null>(null);
 
   const close = () => useUiStore.getState().setPaletteOpen(false);
-  useEscapeLayer(true, () => (level ? back() : close()), ESCAPE_PRIORITY.palette);
+  // Only while open: during its 110 ms exit the panel must not swallow the next Esc (the layer below's).
+  const open = useUiStore((s) => s.paletteOpen);
+  useEscapeLayer(open, () => (level ? back() : close()), ESCAPE_PRIORITY.palette);
 
   // Remember what had focus; give it back when the palette closes (unless a command moved focus on).
   useEffect(() => {

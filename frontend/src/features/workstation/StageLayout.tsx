@@ -88,6 +88,47 @@ function Slot({
 }
 
 /**
+ * Hides its card in the given chrome presets while its slot stays shown (WORKSTATION_V2 §4.8, §8.1): the
+ * Risk card leaves the right column in focus mode while the inspector stays. Exit: toward `edge` by
+ * 12 px + fade over 170 ms while the height collapses (no reflow jump below it); enter: the reverse over
+ * `base`. Hidden content is inert and out of the accessibility tree.
+ */
+export function ChromeGate({
+  hideIn,
+  edge = 'right',
+  children,
+}: {
+  hideIn: readonly Chrome[];
+  edge?: 'left' | 'right';
+  children: ReactNode;
+}) {
+  const chrome = useUiStore((s) => s.chrome);
+  const hidden = hideIn.includes(chrome);
+  const ref = useRef<HTMLDivElement | null>(null);
+  useEffect(() => {
+    if (ref.current) ref.current.inert = hidden;
+  }, [hidden]);
+  return (
+    <div
+      ref={ref}
+      data-gate={hidden ? 'hidden' : 'shown'}
+      aria-hidden={hidden || undefined}
+      className={cn(
+        'grid transition-[grid-template-rows,opacity,transform,margin]',
+        hidden
+          ? cn(
+              'pointer-events-none -mb-[var(--card-gap)] grid-rows-[0fr] opacity-0 duration-[170ms] ease-exit motion-reduce:translate-x-0',
+              edge === 'right' ? 'translate-x-3' : '-translate-x-3',
+            )
+          : 'grid-rows-[1fr] opacity-100 duration-base ease-out',
+      )}
+    >
+      <div className={cn('min-h-0', hidden && 'overflow-clip')}>{children}</div>
+    </div>
+  );
+}
+
+/**
  * The V2 workstation stage (WORKSTATION_V2 §4): a full-bleed canvas that never resizes, with opaque stage
  * cards floating at a 12 px inset in named slots. It
  *   - sets `data-region` on every slot (`slot-left`, `slot-right`, `slot-top`, `slot-bottom`,
@@ -117,6 +158,13 @@ export function StageLayout({
   const insets = useUiStore((s) => s.stageInsets);
   const chrome = chromeOverride ?? storeChrome;
   const show = CHROME_SLOTS[chrome];
+  // Leaving focus mode is the exact reverse of entering it: the answer pill exits first (170 ms), then
+  // the cards enter with the first-paint stagger (V2 §8.1).
+  const prevChrome = useRef(chrome);
+  const enterAfter = prevChrome.current === 'focus' && chrome !== 'focus' ? 120 : 0;
+  useEffect(() => {
+    prevChrome.current = chrome;
+  }, [chrome]);
 
   const stageRef = useRef<HTMLDivElement | null>(null);
   const leftRef = useRef<HTMLDivElement | null>(null);
@@ -195,7 +243,7 @@ export function StageLayout({
         name="left"
         visible={show.left && drawer !== 'inputs'}
         hideTo="left"
-        delay={show.left ? 60 : 0}
+        delay={show.left ? enterAfter + 60 : 0}
         slotRef={(el) => (leftRef.current = el)}
         className="left-[var(--stage-inset)] top-[var(--stage-inset)] flex max-h-[calc(100%-2*var(--stage-inset)-var(--toolbar-h)-var(--card-gap))] flex-col items-start"
       >
@@ -206,7 +254,7 @@ export function StageLayout({
         name="right"
         visible={show.right && drawer !== 'explain'}
         hideTo="right"
-        delay={show.right ? 0 : 30}
+        delay={show.right ? enterAfter : 30}
         slotRef={(el) => (rightRef.current = el)}
         style={{
           top: chrome === 'focus' ? FOCUS_RIGHT_TOP : 'var(--stage-inset)',
@@ -235,7 +283,7 @@ export function StageLayout({
         name="bottom"
         visible={show.bottom}
         hideTo="bottom"
-        delay={show.bottom ? 120 : 60}
+        delay={show.bottom ? enterAfter + 120 : 60}
         slotRef={(el) => (bottomRef.current = el)}
         style={centred}
         className={cn('bottom-[var(--stage-inset)] flex -translate-x-1/2 items-end', glide)}
@@ -247,7 +295,7 @@ export function StageLayout({
         name="bottom-left"
         visible={show.bottomLeft}
         hideTo="bottom"
-        delay={show.bottomLeft ? 180 : 90}
+        delay={show.bottomLeft ? enterAfter + 180 : 90}
         className="bottom-[var(--stage-inset)] left-[var(--stage-inset)]"
       >
         {bottomLeft}

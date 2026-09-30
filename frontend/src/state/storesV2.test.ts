@@ -55,6 +55,20 @@ describe('uiStore · chrome and drawers', () => {
     expect(useUiStore.getState().chrome).toBe('tour');
   });
 
+  it('closes drawers on entering focus mode and leaves focus mode when a drawer opens', () => {
+    const ui = useUiStore.getState();
+    ui.openDrawer('explain', { tab: 'why' });
+    ui.toggleFocusMode();
+    expect(useUiStore.getState()).toMatchObject({ chrome: 'focus', drawer: null });
+    ui.openDrawer('inputs', { field: 'Age' });
+    expect(useUiStore.getState()).toMatchObject({ chrome: 'workstation', drawer: 'inputs', focusField: 'Age' });
+    ui.setChrome('focus');
+    expect(useUiStore.getState()).toMatchObject({ chrome: 'focus', drawer: null, focusField: null });
+    ui.setChrome('tour');
+    ui.openDrawer('explain');
+    expect(useUiStore.getState().chrome).toBe('tour');
+  });
+
   it('keeps one drawer open at a time and carries its options', () => {
     useUiStore.getState().openDrawer('inputs', { field: 'EF-TTE', section: 'abnormal' });
     expect(useUiStore.getState()).toMatchObject({ drawer: 'inputs', focusField: 'EF-TTE', inputsSection: 'abnormal' });

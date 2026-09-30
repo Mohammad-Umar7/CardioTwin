@@ -26,7 +26,7 @@ import { FirstRunHint } from './hud/FirstRunHint';
 import { LegendChip } from './hud/LegendChip';
 import { SelectionChip } from './hud/SelectionChip';
 import { LeftPanel, PatientHeader, RightPanel, TabbedRightPanel } from './panels';
-import { StageLayout } from './StageLayout';
+import { ChromeGate, StageLayout } from './StageLayout';
 import { useWorkstationCommands } from './useWorkstationCommands';
 
 /** Deep link: #/workstation/P-017 opens that cohort patient. */
@@ -40,11 +40,17 @@ function usePatientFromRoute() {
   }, [patientId, cohort.data]);
 }
 
-/** The workstation always opens with workstation chrome (the landing page sets `landing`). */
+/**
+ * The workstation always opens with workstation chrome (the landing page sets `landing`), and focus mode
+ * never outlives the page: leaving the route restores the workstation preset.
+ */
 function useWorkstationChrome() {
   useEffect(() => {
     const ui = useUiStore.getState();
     if (ui.chrome === 'landing') ui.setChrome('workstation');
+    return () => {
+      if (useUiStore.getState().chrome === 'focus') useUiStore.getState().setChrome('workstation');
+    };
   }, []);
 }
 
@@ -54,6 +60,8 @@ function PageTitle() {
   const who = mode === 'custom' ? 'custom patient' : mode === 'blank' ? 'blank patient' : (id ?? 'no patient selected');
   return <h1 className="sr-only">Workstation · {who}</h1>;
 }
+
+const FOCUS_ONLY = ['focus'] as const;
 
 /**
  * V2 workstation (WORKSTATION_V2 §4): the full-bleed stage with floating cards. The slot contents are the
@@ -69,7 +77,9 @@ function StageWorkstation() {
         left={<PatientCard />}
         right={
           <>
-            <RiskSummaryCard />
+            <ChromeGate hideIn={FOCUS_ONLY}>
+              <RiskSummaryCard />
+            </ChromeGate>
             <VesselInspector />
           </>
         }
