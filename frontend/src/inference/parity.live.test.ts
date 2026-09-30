@@ -22,6 +22,7 @@ import type { FeatureSchema, FeatureVector, PredictResponse, TargetId } from '@/
 import schemaRaw from '../../public/model/schema.json?raw';
 import { EdgeModel } from './model';
 import { sigmoid } from './numeric';
+import { compareResponses } from './parity';
 import { loadCohort, loadModelSpec } from './testing/artifacts';
 import { SplitProbeBuilder, collectSplitSites, type ProbeKind } from './testing/splitProbes';
 import type { EdgeContribution, EdgeExplanation, EdgeFeatureInput, EdgePredictResponse } from './types';
@@ -43,6 +44,7 @@ interface Worst {
   additivityEdge: number;
   compared: number;
   orderDifferences: number;
+  boundaryTies: number;
 }
 
 const worst: Worst = {
@@ -57,6 +59,7 @@ const worst: Worst = {
   additivityEdge: 0,
   compared: 0,
   orderDifferences: 0,
+  boundaryTies: 0,
 };
 
 type ServerExplanation = EdgeExplanation;
@@ -68,12 +71,18 @@ function calibratedAdditivity(ex: ServerExplanation, p: number): number {
   return Math.abs(sigmoid(total) - p);
 }
 
+const TIGHT = { probability: 1e-12, logit: 1e-12, base_value: 1e-12, shap: 1e-12 };
+
 /**
  * Strict comparison: everything the UI renders must be identical (labels, bands, imputed list, values,
- * highest vessel) and every float within `tol` (absolute). Returns the list of differences.
+ * highest vessel) — except explained boundary ties (`parity.compareResponses`) — and every float within
+ * `tol` (absolute). Returns the list of differences.
  */
 function diff(edge: EdgePredictResponse, server: PredictResponse, tol = 1e-12): string[] {
   const out: string[] = [];
+  const ties = compareResponses(edge, server, TIGHT).boundaryTies;
+  worst.boundaryTies += ties.length;
+  const tied = (prefix: string) => ties.some((m) => m.startsWith(prefix));
   const num = (field: string, a: number, e: number, bucket: keyof Worst) => {
     const d = Math.abs(a - e);
     if (!(d <= tol)) out.push(`${field}: edge ${a} server ${e} (|Δ| ${d.toExponential(2)})`);
@@ -94,8 +103,8 @@ function diff(edge: EdgePredictResponse, server: PredictResponse, tol = 1e-12): 
     num(`${t}.probability`, pe.probability, ps.probability, 'probability');
     num(`${t}.logit`, pe.logit, ps.logit, 'logit');
     if (pe.threshold !== ps.threshold) out.push(`${t}.threshold ${pe.threshold} ≠ ${ps.threshold}`);
-    if (pe.label !== ps.label) out.push(`${t}.label ${pe.label} ≠ ${ps.label} (p = ${ps.probability})`);
-    if (pe.risk_band !== ps.risk_band) out.push(`${t}.risk_band ${pe.risk_band} ≠ ${ps.risk_band}`);
+    if (pe.label !== ps.label && !tied(`${t}.label`)) out.push(`${t}.label ${pe.label} ≠ ${ps.label} (p = ${ps.probability})`);
+    if (pe.risk_band !== ps.risk_band && !tied(`${t}.risk_band`)) out.push(`${t}.risk_band ${pe.risk_band} ≠ ${ps.risk_band}`);
     const ee = edge.explanations[t];
     const es = server.explanations[t] as ServerExplanation;
     num(`${t}.base_value`, ee.base_value, es.base_value, 'base');
@@ -122,7 +131,7 @@ function diff(edge: EdgePredictResponse, server: PredictResponse, tol = 1e-12): 
     });
   }
   num('summary.expected_diseased_vessels', edge.summary.expected_diseased_vessels, server.summary.expected_diseased_vessels, 'expected');
-  if (edge.summary.highest_risk_vessel !== server.summary.highest_risk_vessel) {
+  if (edge.summary.highest_risk_vessel !== server.summary.highest_risk_vessel && !tied('summary.highest_risk_vessel')) {
     out.push(`summary.highest_risk_vessel ${edge.summary.highest_risk_vessel} ≠ ${server.summary.highest_risk_vessel}`);
   }
   worst.compared += 1;
@@ -217,7 +226,7 @@ describe.skipIf(!live)(`edge engine vs live server (${API || 'set CARDIOTWIN_LIV
         `|Δbase| ${e(worst.base)} · |Δcalibrated| ${e(worst.calibrated)} · |Δshap| ${e(worst.shap)} · ` +
         `|Δshap_cal| ${e(worst.shapCalibrated)} · |Δexpected| ${e(worst.expected)} · ` +
         `σ-additivity server ${e(worst.additivityServer)} edge ${e(worst.additivityEdge)} · ` +
-        `contribution rows ranked differently: ${worst.orderDifferences}`,
+        `contribution rows ranked differently: ${worst.orderDifferences} · explained boundary ties: ${worst.boundaryTies}`,
     );
   });
 
@@ -382,6 +391,41 @@ describe.skipIf(!live)(`edge engine vs live server (${API || 'set CARDIOTWIN_LIV
     expect(failures).toEqual([]);
     expect(new Set(gaps)).toEqual(KNOWN_ACCEPTANCE_GAPS);
   }, 120_000);
+
+  it('turns label flips at the decision threshold into explained boundary ties, never disagreements', async () => {
+    // Bisect each smooth threshold crossing (logistic part only, trees constant) to adjacent doubles on the
+    // edge, then ask the server just around it. Edge and server differ by an ulp or two in p, so their
+    // labels can differ there (e.g. CAD, P-014, Age = 47.27671142066387); compareResponses must explain it.
+    const f64 = new Float64Array(1);
+    const u64 = new BigUint64Array(f64.buffer);
+    const ulps = (x: number, n: number) => ((f64[0] = x), (u64[0] = u64[0]! + BigInt(n)), f64[0]!);
+    const ranges = Object.fromEntries(schema.features.filter((f) => f.type === 'numeric').map((f) => [f.key, [f.min!, f.max!] as const]));
+    const rows: FeatureVector[] = [];
+    let crossings = 0;
+    for (const target of model.targets) {
+      for (const patient of cohort.slice(0, 20)) {
+        for (const key of ['Age', 'BP', 'TG', 'FBS']) {
+          const at = (v: number) => model.score({ ...patient.features, [key]: v }).predictions[target]!;
+          let [lo, hi] = ranges[key]!;
+          const start = at(lo).label;
+          if (at(hi).label === start) continue;
+          for (let i = 0; i < 200; i++) {
+            const mid = (lo + hi) / 2;
+            if (mid === lo || mid === hi) break;
+            if (at(mid).label === start) lo = mid;
+            else hi = mid;
+          }
+          if (Math.abs(at(hi).probability - at(lo).probability) > 1e-12) continue; // a tree step, not a tie
+          crossings += 1;
+          for (let d = -48; d <= 48; d += 8) rows.push({ ...patient.features, [key]: ulps(lo, d) });
+        }
+      }
+    }
+    const tiesBefore = worst.boundaryTies;
+    expect(await compareAll(rows, (i) => `crossing row ${i}`)).toEqual([]);
+    console.info(`[live parity] ${crossings} smooth threshold crossings, ${rows.length} rows, ${worst.boundaryTies - tiesBefore} explained label ties`);
+    expect(crossings).toBeGreaterThan(10);
+  }, 300_000);
 
   it('matches every cohort patient field by field at full precision', async () => {
     const rows = cohort.map((p) => p.features);
