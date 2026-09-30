@@ -534,6 +534,8 @@ def make_material(name: str, category: str) -> bpy.types.Material:
     bsdf.inputs["Alpha"].default_value = a
     if a < 1.0:
         mat.surface_render_method = "BLENDED"
+    # Every mesh is a closed solid except the skin shell, so only the skin needs double-sided shading.
+    mat.use_backface_culling = category != "Skin"
     mat.diffuse_color = (r, g, b, a)
     mat["ct_category"] = category
     return mat
