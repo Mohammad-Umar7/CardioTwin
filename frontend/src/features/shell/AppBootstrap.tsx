@@ -5,6 +5,7 @@ import { useReducedMotion } from '@/hooks/useMediaQuery';
 import { usePredictionSync } from '@/hooks/usePrediction';
 import { pickDefaultPatient, schemaDefaults } from '@/lib/patients';
 import { usePatientStore } from '@/state/patientStore';
+import { useDocumentTitle } from './useDocumentTitle';
 import { useShellCommands } from './useShellCommands';
 
 /**
@@ -13,7 +14,8 @@ import { useShellCommands } from './useShellCommands';
  *   - opens the default held-out TEST patient as soon as the cohort arrives (Custom from schema defaults
  *     if no cohort is available), so the landing hero and the workstation show real numbers at once;
  *   - binds every registered command's shortcut (one dispatcher, WORKSTATION_V2 §4.10) and registers the
- *     app-level commands (palette, shortcut sheet, calm mode, focus mode, drawers, pages).
+ *     app-level commands (palette, shortcut sheet, calm mode, focus mode, drawers, pages);
+ *   - keeps the tab title on the patient and the CAD estimate (V2 §7).
  */
 export function AppBootstrap() {
   usePredictionSync();
@@ -34,6 +36,7 @@ export function AppBootstrap() {
 
   useCommandHotkeys();
   useShellCommands();
+  useDocumentTitle();
 
   return null;
 }
