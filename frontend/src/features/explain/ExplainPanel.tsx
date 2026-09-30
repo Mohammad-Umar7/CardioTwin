@@ -6,6 +6,9 @@ import { TargetTabs } from './TargetTabs';
 import { useExplainTarget } from './useExplainTarget';
 
 /**
+ * @deprecated Pre-V2 right-panel WHY section, kept only for `features/workstation/panels.tsx` and the < 1100 px
+ * stack until the integration pass deletes them; the V2 home of this content is the Explain drawer.
+ *
  * WHY section (DESIGN_SYSTEM §4.2 right panel): target tabs synced with the 3D selection, the narrative
  * sentence first, then the SHAP waterfall with the "typical → this patient" footer.
  */
@@ -25,7 +28,10 @@ export function ExplainPanel({ idBase = 'why' }: { idBase?: string }) {
   );
 }
 
-/** Risk-tab teaser (1280 layout): top 4 drivers so the answer and its explanation are one click apart. */
+/**
+ * @deprecated Removed by WORKSTATION_V2 §9.3 C; kept only for the legacy `panels.tsx` until it is deleted.
+ * Risk-tab teaser (1280 layout): top 4 drivers so the answer and its explanation are one click apart.
+ */
 export function TopDrivers({ onMore }: { onMore?: () => void }) {
   const target = useExplainTarget();
   return (

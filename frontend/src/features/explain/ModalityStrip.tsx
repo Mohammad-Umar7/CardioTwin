@@ -18,7 +18,7 @@ const SHORT: Record<string, string> = {
 };
 
 /** Half-height of a column's bar area (px). */
-const HALF = 18;
+const HALF = 22;
 
 export interface ModalityStripProps {
   rows: ModalityRow[];
@@ -94,7 +94,7 @@ export function ModalityStrip({ rows, target, unit, scale, labelOf, onPick, acti
                   <span aria-hidden className="relative block w-full" style={{ height: HALF * 2 }}>
                     <span className="absolute inset-x-1 top-1/2 h-px bg-line-strong" />
                     <span
-                      className="absolute left-1/2 w-3 -translate-x-1/2 rounded-xs transition-[height,top] duration-base ease-out"
+                      className="absolute left-1/2 w-4 -translate-x-1/2 rounded-xs transition-[height,top] duration-base ease-out"
                       style={{
                         height: h,
                         top: up ? HALF - h : HALF,
