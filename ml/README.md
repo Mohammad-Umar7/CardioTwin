@@ -6,7 +6,9 @@ browser evaluates bit-for-bit. Headline results live in [`reports/results.md`](r
 [model card](../docs/MODEL_CARD.md).
 
 ```
-data/raw/*.xlsx ─► preprocess ─► locked split ─► ablations ─► nested-CV leaderboard ─► OOF ensemble/Platt/threshold
+data/raw/*.xlsx ─► preprocess ─► locked split ─► ablations ─► nested-CV leaderboard + cross-fitted ensemble estimate
+                                                                                           │
+                         final tuning on dev ─► OOF CV with final hyper-parameters ─► w / Platt / threshold
                                                                                            │
             docs/figures ◄─ report ◄─ metrics.json ◄─ single test evaluation ◄─ refit on dev ┘
                                          │
@@ -16,19 +18,20 @@ data/raw/*.xlsx ─► preprocess ─► locked split ─► ablations ─► ne
 ## Headline results
 
 Locked test set (61 unseen patients; 95 % stratified-bootstrap CIs) and development CV (repeated stratified
-5-fold × 10, nested tuning). Full tables: [`reports/results.md`](reports/results.md).
+5-fold × 10, nested tuning, ensemble choices cross-fitted). Full tables: [`reports/results.md`](reports/results.md).
 
-| Target | Test ROC-AUC | Test F1 | Test sensitivity / specificity | Dev-CV ROC-AUC |
-| --- | --- | --- | --- | --- |
-| CAD | 0.858 (0.741–0.955) | 0.874 (0.800–0.933) | 0.864 / 0.706 | 0.942 ± 0.034 |
-| LAD | 0.742 (0.611–0.858) | 0.712 (0.600–0.811) | 0.722 / 0.560 | 0.872 ± 0.055 |
-| LCX | 0.808 (0.683–0.909) | 0.702 (0.586–0.807) | 0.800 / 0.667 | 0.743 ± 0.052 |
-| RCA | 0.735 (0.593–0.851) | 0.618 (0.537–0.689) | 0.913 / 0.368 | 0.738 ± 0.064 |
+| Target | Test ROC-AUC | Test F1 | Test sensitivity / specificity | Test Brier | Dev-CV ROC-AUC |
+| --- | --- | --- | --- | --- | --- |
+| CAD | 0.858 (0.743–0.955) | 0.871 (0.791–0.940) | 0.841 / 0.765 | 0.123 | 0.937 ± 0.034 |
+| LAD | 0.742 (0.612–0.858) | 0.694 (0.580–0.800) | 0.694 / 0.560 | 0.217 | 0.867 ± 0.057 |
+| LCX | 0.814 (0.701–0.907) | 0.712 (0.600–0.808) | 0.840 / 0.639 | 0.177 | 0.738 ± 0.053 |
+| RCA | 0.759 (0.627–0.866) | 0.610 (0.491–0.714) | 0.783 / 0.526 | 0.183 | 0.727 ± 0.071 |
 
-The deployed ensemble ranks first on the development leaderboard for all four targets. On the test set it does
-not significantly beat a 5-feature clinical baseline (age, sex, typical angina, DM, HTN; paired ΔAUC CIs include 0)
-— reported honestly in the [model card](../docs/MODEL_CARD.md), together with the CV-to-test gap that the baseline
-shows as well.
+On the development leaderboard the ensemble ranks first for LAD and LCX and second for CAD and RCA (differences far
+below the fold-to-fold sd). On the test set it does not significantly beat a 5-feature clinical baseline (age, sex,
+typical angina, DM, HTN; paired ΔAUC CIs include 0) — reported honestly in the [model card](../docs/MODEL_CARD.md),
+together with the CV-to-test gap that the baseline shows as well. v1.1.0 fixed a calibration defect found in review
+(model card §11); the test set has been scored once per release.
 
 ![Test ROC-AUC vs baseline](../docs/figures/test_auc_forest.png)
 
@@ -42,7 +45,7 @@ python -m venv .venv
 ./.venv/Scripts/python -m pip install -e ml                        # editable install of cardiotwin_ml
 
 ./.venv/Scripts/python -m cardiotwin_ml.train                      # full deterministic run -> artifacts, figures, report
-                                                                   # (~7 min with 8 CPU workers, ~4 min with 28)
+                                                                   # (~4 min with 12 CPU workers)
 ./.venv/Scripts/python -m pytest ml/tests -q                       # test-suite (uses the built artifacts)
 ```
 
@@ -87,20 +90,27 @@ figures and the frontend mirror), `--jobs N`. Regenerate figures without retrain
 ## Validation protocol (summary)
 
 1. **Locked test set** — 20 % (61 patients), seed 42, stratified on the joint CAD/LAD/LCX/RCA pattern (the single
-   `0100` patient is merged into `0000`). Scored **once**, after every decision is frozen; only the deployed
-   ensemble and the pre-specified clinical baseline are evaluated on it.
+   `0100` patient is merged into `0000`). Scored once per release, after every decision is frozen; only the deployed
+   ensemble and the pre-specified clinical baseline are evaluated on it. Every release that re-scored it is listed,
+   with the reason, in `training.yaml → holdout.history` and `metrics.json → protocol.test_set_history`.
 2. **Development CV** — repeated stratified 5-fold × 10 per target; the same folds for every model (paired).
    Imputation/scaling live inside pipelines, so they are fitted in-fold.
-3. **Nested tuning** — LR (L2, L1, elastic net), SVM, kNN and XGBoost are tuned by `RandomizedSearchCV` on an inner
-   stratified 5-fold split inside each outer training fold.
+3. **Nested tuning** — LR (L2, L1, elastic net, clinical core), SVM, kNN and XGBoost are tuned by
+   `RandomizedSearchCV` on **log-loss** over an inner stratified 5-fold split inside each outer training fold
+   (ROC-AUC is nearly flat in the regularisation strength and drove `C` to the edge of its range).
 4. **Ablations** — derived features, in-fold selection and a leakage-free classifier chain are compared with the raw
    feature set on identical folds; adopted only if the mean ROC-AUC gain ≥ 0.005.
-5. **Deployed model** — `m = w·m_LR + (1−w)·m_XGB`; `w` minimises pooled OOF log-loss after Platt calibration;
-   `p = σ(a·m + b)` fitted on OOF margins; threshold = Youden's J on OOF probabilities (F1-optimal reported too).
-   Components refitted on the full dev set; **the test set never influences the deployed model**.
-6. **Test metrics** — accuracy, precision, recall, specificity, F1, ROC-AUC, PR-AUC, Brier, log-loss, MCC, balanced
-   accuracy with 2000× stratified bootstrap 95 % CIs; confusion matrix; ROC (with bootstrap band), PR, reliability
-   and decision curves; paired-bootstrap ΔAUC against the clinical baseline.
+5. **Honest ensemble estimate** — the ensemble's CV row is *cross-fitted*: for every outer fold the logistic variant,
+   `w`, Platt parameters and threshold are re-chosen on the other folds of that repeat only
+   (`ensemble.cross_fit_ensemble`), so no reported CV number was used to make a choice it is scored on.
+6. **Deployed model** — logistic variant = best nested-CV ROC-AUC; component hyper-parameters searched on the full dev
+   set; then a 10 × 5 CV **with those final hyper-parameters** produces OOF margins on which `w` (pooled log-loss after
+   Platt), `p = σ(a·m + b)` and the Youden threshold (F1-optimal reported too) are fitted — so the calibration map
+   matches the scale of the deployed margins. Components are refitted on the full dev set; **the test set never
+   influences the deployed model**.
+7. **Test metrics** — accuracy, precision, recall, specificity, F1, ROC-AUC, PR-AUC, Brier, log-loss, MCC, balanced
+   accuracy with 2000× stratified bootstrap 95 % CIs; confusion matrix; calibration slope/intercept and ECE; ROC (with
+   bootstrap band), PR, reliability and decision curves; paired-bootstrap ΔAUC against the clinical baseline.
 
 ## Explainability
 
@@ -112,7 +122,10 @@ SHAP values are exact and live in the ensemble's **log-odds space**:
   additivity contract by up to ~1e-5. Agreement with `pred_contribs` and with the `shap` library is checked on every
   run (`metrics.json → explainability_checks`: ≤ 5e-7 on the deployed models, i.e. float32 precision);
 * ensemble — `φ = w·φ_LR + (1−w)·φ_XGB`, `base = w·base_LR + (1−w)·base_XGB`, so `base + Σφ = margin` (asserted
-  to 1e-6, observed ≈ 1e-15). One-hot columns (`BBB`) are summed back into their raw feature.
+  to 1e-6, observed ≈ 1e-15). One-hot columns (`BBB`) are summed back into their raw feature;
+* calibrated scale — the displayed probability is `σ(a·margin + b)`, so each response also carries
+  `shap_calibrated = a·φ`, `calibrated_base_value = a·base + b` and `calibrated_output_value = a·margin + b`
+  (`σ(calibrated_output_value)` is the probability). Use these when a chart must add up to the probability shown.
 
 ## Portable model format
 
@@ -198,8 +211,9 @@ m_XGB   = log(base_score / (1 − base_score)) + Σ_trees leaf      // float64, 
 ### Response assembly
 
 For each target: `margin = Σ w_k m_k`, `p = σ(a·margin + b)`, `label`, `risk_band`, `logit = margin`,
-`explanations.base_value = Σ w_k base_value_k`, `output_value = margin`, and `contributions` = one row per
-`attribution` entry (`{feature, value, shap}` + `derived_from` for derived rows) sorted by `|shap|` descending (ties by
+`explanations.base_value = Σ w_k base_value_k`, `output_value = margin`,
+`calibrated_base_value = a·base_value + b`, `calibrated_output_value = a·margin + b`, and `contributions` = one row per
+`attribution` entry (`{feature, value, shap, shap_calibrated = a·shap}` + `derived_from` for derived rows) sorted by `|shap|` descending (ties by
 name). Numeric `value`s are emitted as integers when integral. `summary.expected_diseased_vessels = Σ_vessels p`,
 `summary.highest_risk_vessel = argmax_vessels p`.
 
