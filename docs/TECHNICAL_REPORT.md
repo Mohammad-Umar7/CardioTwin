@@ -194,7 +194,7 @@ measures the published GLB against them.
 | Snapshot | PASS | MINOR | FAIL |
 | --- | --- | --- | --- |
 | Baseline, before the realism work (`anatomy/checks/gap_report.md`) | 35 | 12 | 23 |
-| Published asset at commit `17fbb3f` (re-run for this report) | **44** | 7 | 19 |
+| Current asset: the 41-structure realism rebuild (re-run for this report, 30 Sep 2026) | **44** | 7 | 19 |
 
 Passes include:
 
