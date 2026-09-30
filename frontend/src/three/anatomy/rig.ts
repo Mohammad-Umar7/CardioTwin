@@ -136,15 +136,20 @@ const SECTION_OFF = 3;
  * entering the left atrium; the intrapulmonary branches fade into the dark stage before the hila. The
  * centre sits between the pulmonary valve and the venous inflow (manifest frame: origin = heart centre).
  */
-export const PULMONARY_CLIP = { centre: [0, 0.28, -0.15] as const, radius: 0.58, feather: 0.2 } as const;
+export const PULMONARY_CLIP = { centre: [0, 0.22, -0.15] as const, radius: 0.56, feather: 0.2 } as const;
 /**
  * Systemic great vessels (V2 §5.15 "clean silhouette"): a sphere a little above the heart centre keeps the
- * aortic root, the arch and the SVC; the head-and-neck branches, the brachiocephalic veins, the descending
- * aorta and the IVC fade out with real alpha inside the frame instead of running off the stage edges.
+ * aortic root, the ascending aorta and the SVC, like an anatomical specimen; the arch, its branches, the
+ * brachiocephalic veins, the descending aorta and the IVC fade out with real alpha inside the frame, so the
+ * heart can fill 62 % of the free area without the stage edge cutting a vessel.
  */
-export const GREAT_VESSEL_CLIP = { centre: [0, 0.22, -0.05] as const, radius: 1.08, feather: 0.36 } as const;
-/** Outer ghosts in the workstation stay faint (V2 §5.15: α ≤ 0.12). */
-const WORKSTATION_GHOST = 0.4;
+export const GREAT_VESSEL_CLIP = { centre: [0, 0.05, -0.05] as const, radius: 0.8, feather: 0.24 } as const;
+/**
+ * Outer ghosts in the workstation stay faint (V2 §5.15: α ≤ 0.12, "clean silhouette"): bone and cartilage
+ * sit right behind and around the heart, so they are the faintest (≤ 2 % over the stage); skin, muscle and
+ * the diaphragm keep a trace of the thorax at the frame's edges.
+ */
+const workstationGhost = (kind: TissueKind) => (kind === 'bone' || kind === 'cartilage' ? 0.15 : 0.3);
 
 const damp = (from: number, to: number, lambda: number, dt: number) => to + (from - to) * Math.exp(-lambda * dt);
 
@@ -312,8 +317,51 @@ export class AnatomyRig {
       entry.mesh.material = this.solidFor(entry);
       entry.solidAmt = 0;
     }
+    this.publishFraming(rootInverse);
     sceneRuntime.anatomyReady = true;
     sceneRuntime.sectionPlanes = this.sectionPlanes;
+  }
+
+  /**
+   * Surface samples for the camera (sceneRuntime.framing): the heart walls at rest, the great-vessel parts
+   * the clip spheres leave visible, and the heart walls with everything riding them at full explode (the
+   * camera fits the opened heart into the free area).
+   */
+  private publishFraming(rootInverse: Matrix4): void {
+    const heart: Vector3[] = [];
+    const keep: Vector3[] = [];
+    const open: Vector3[] = [];
+    const restWorld = new Matrix4();
+    const openDelta = new Matrix4();
+    const v = new Vector3();
+    const sample = (entry: RigEntry, budget: number, each: (p: Vector3) => void) => {
+      const pos = (entry.mesh.geometry as BufferGeometry).getAttribute('position');
+      if (!pos) return;
+      restWorld.copy(rootInverse).multiply(entry.mesh.matrixWorld);
+      const step = Math.max(1, Math.floor(pos.count / budget));
+      for (let i = 0; i < pos.count; i += step) each(v.fromBufferAttribute(pos, i).applyMatrix4(restWorld));
+    };
+    const visibleIn = (clip: { centre: readonly number[]; radius: number; feather: number }, p: Vector3) =>
+      Math.hypot(p.x - clip.centre[0]!, p.y - clip.centre[1]!, p.z - clip.centre[2]!) < clip.radius - clip.feather * 0.5;
+    for (const entry of this.entries) {
+      const k = entry.kind;
+      if (k === 'myocardium') sample(entry, 500, (p) => heart.push(p.clone()));
+      else if (k === 'aorta' || k === 'systemicVein') sample(entry, 300, (p) => visibleIn(GREAT_VESSEL_CLIP, p) && keep.push(p.clone()));
+      else if (k === 'pulmonaryArtery' || k === 'pulmonaryVeins') sample(entry, 300, (p) => visibleIn(PULMONARY_CLIP, p) && keep.push(p.clone()));
+      if (k === 'myocardium' || k === 'fat' || k === 'coronary' || k === 'leftMain') {
+        const spec = entry.spec;
+        const wall = entry.wall;
+        if (spec && wall) riderDelta(spec, wall, 1, 1, openDelta);
+        else if (spec) explodeDelta(spec, 1, openDelta);
+        else openDelta.identity();
+        sample(entry, k === 'myocardium' ? 500 : 120, (p) => open.push(p.clone().applyMatrix4(openDelta)));
+      }
+    }
+    const f = sceneRuntime.framing;
+    f.heart = heart;
+    f.keep = keep;
+    f.open = open;
+    f.version += 1;
   }
 
   private solidFor(entry: RigEntry): TissueMaterial {
@@ -531,10 +579,10 @@ export class AnatomyRig {
         ghostT = 1;
       } else if (entry.kind === 'skin') {
         solidT = 0;
-        ghostT = inp.ghostLayers || kPeel < 0.5 ? (1 - 0.85 * kPeel) * (inp.stage === 'workstation' ? WORKSTATION_GHOST : 1) : 0;
+        ghostT = inp.ghostLayers || kPeel < 0.5 ? (1 - 0.85 * kPeel) * (inp.stage === 'workstation' ? workstationGhost(entry.kind) : 1) : 0;
       } else if (peeled || (entry.kind === 'lung' && inp.look === 'clinical')) {
         solidT = 0;
-        ghostT = peeled && !inp.ghostLayers ? 0 : inp.stage === 'workstation' ? WORKSTATION_GHOST : 1;
+        ghostT = peeled && !inp.ghostLayers ? 0 : inp.stage === 'workstation' ? workstationGhost(entry.kind) : 1;
       } else if (inp.ghostOthers && sel && !selectedVessel && !outer) {
         solidT = 0;
         ghostT = isVessel ? 0.7 : entry.kind === 'myocardium' ? 1 : 0.6;

@@ -12,8 +12,12 @@
  *   sceneRuntime.nodes     per GLB node: how visible its solid (0..1, includes the assembly dissolve) and
  *                          its ghost are this frame — overlays that follow a node (flow, pulse) should
  *                          multiply by `solid` so they vanish with isolate / ghost / assembly.
+ *   sceneRuntime.framing   surface samples for the camera's framing (world = rest frame): the heart walls
+ *                          at rest (`heart`), the visible parts of the great vessels (`keep`, never cut by
+ *                          the stage edge) and the whole opened heart at full explode (`open`). `version`
+ *                          bumps when a new anatomy publishes them.
  */
-import type { Plane } from 'three';
+import type { Plane, Vector3 } from 'three';
 import { ASSEMBLY_DURATION, ASSEMBLY_IGNITE_AT } from '../anatomy/assembly';
 
 export const sceneRuntime = {
@@ -23,6 +27,7 @@ export const sceneRuntime = {
   beat: { phase: 0, v: 0, a: 0, bpm: 72 },
   nodes: {} as Record<string, { solid: number; ghost: number }>,
   sectionPlanes: [] as Plane[],
+  framing: { heart: [] as Vector3[], keep: [] as Vector3[], open: [] as Vector3[], version: 0 },
 };
 
 export type SceneRuntime = typeof sceneRuntime;

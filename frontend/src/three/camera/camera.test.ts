@@ -11,6 +11,7 @@ import {
   freeArea,
   glide,
   heartBox,
+  projectedExtent,
   projectedSize,
   viewOffsetFor,
 } from './framing';
@@ -105,6 +106,36 @@ describe('heart framing (V2 §4.1: 62 % of the free-area height)', () => {
       expect(size.height / free.height).toBeLessThanOrEqual(0.621);
       expect(size.height / free.height).toBeGreaterThan(0.45);
     }
+  });
+
+  it('frames the real silhouette (surface samples) instead of the box corners when given', () => {
+    const free = freeArea(1440, 824, INSETS_1440);
+    // A sphere of radius 0.5: its box corners project wider and taller than the sphere itself.
+    const points = Array.from({ length: 400 }, (_, i) => {
+      const t = Math.acos(1 - (2 * (i + 0.5)) / 400);
+      const p = Math.PI * (1 + Math.sqrt(5)) * i;
+      return new Vector3(Math.sin(t) * Math.cos(p), Math.cos(t), Math.sin(t) * Math.sin(p)).multiplyScalar(0.5);
+    });
+    const sphereBox = new Box3(new Vector3(-0.5, -0.5, -0.5), new Vector3(0.5, 0.5, 0.5));
+    const base = { box: sphereBox, target, direction, fov: 30, width: 1440, height: 824, freeWidth: free.width, freeHeight: free.height, share: 0.62 };
+    const withPoints = { ...base, points };
+    const d = framingDistance(withPoints);
+    expect(projectedSize(withPoints, d).height / free.height).toBeCloseTo(0.62, 2);
+    // The silhouette fills the share at a closer distance than the box would allow.
+    expect(d).toBeLessThan(framingDistance(base));
+  });
+
+  it('dollies out until every `keep` point sits inside the free area with its margin', () => {
+    const free = freeArea(1440, 824, INSETS_1440);
+    const input = { box, target, direction, fov: 30, width: 1440, height: 824, freeWidth: free.width, freeHeight: free.height, share: 0.62 };
+    const high = [new Vector3(0, 1.4, 0)];
+    const d0 = framingDistance(input);
+    const d = framingDistance({ ...input, keep: high, keepMargin: 12 });
+    expect(d).toBeGreaterThan(d0);
+    const e = projectedExtent(input, high, d);
+    expect(e.up).toBeLessThanOrEqual(free.height / 2 - 12 + 0.5);
+    // Points already inside change nothing.
+    expect(framingDistance({ ...input, keep: [new Vector3(0, 0.2, 0)] })).toBeCloseTo(d0, 6);
   });
 
   it('shrinks the heart to fit a narrow free area (never wider than 86 %)', () => {

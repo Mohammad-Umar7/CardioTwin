@@ -12,6 +12,7 @@ import { buildTracks } from '../labels/anchorTracks';
 import { visibleBestView } from './bestView';
 import { collectOccluders, isOccluded } from './occlusion';
 import { angleLabel, useCameraState, type ViewKind } from './cameraState';
+import { sceneRuntime } from '../stage/sceneRuntime';
 import { cameraRigApi } from './controlsApi';
 import {
   HERO_HEART_SHARE,
@@ -21,6 +22,7 @@ import {
   freeArea,
   glide,
   heartBox,
+  projectedExtent,
   sameOffset,
   viewOffsetFor,
   type Insets,
@@ -45,6 +47,8 @@ const PEEL_IN_ABOVE = 0.55;
 const THORAX_DISTANCE = 7;
 /** Share of the trunk a best view must show (proximal 5–80 %). */
 const VIEW_WINDOW: readonly [number, number] = [0.05, 0.8];
+/** Margin (px) between the free-area edge and the visible great vessels (≥ 24 px from the canvas top). */
+const KEEP_MARGIN = 12;
 /** A vessel's best view sits a touch closer than home so the selection reads as "going to it". */
 const FOCUS_ZOOM = 0.9;
 
@@ -120,6 +124,8 @@ export function CameraRig() {
     t0: 0,
     applied: '',
   });
+  /** Screen shift (px) that centres the heart's silhouette instead of the orbit target (set per flight). */
+  const silhouetteBias = useRef<Offset>(ZERO_OFFSET);
   const sizeRef = useRef(size);
   sizeRef.current = size;
   const stageRef = useRef(stage);
@@ -157,8 +163,13 @@ export function CameraRig() {
     const free = freeArea(width, height, insetsFor(forStage));
     const share =
       forStage === 'hero' ? Math.min(0.8, (HERO_HEART_SHARE * height) / Math.max(1, free.height)) : WORKSTATION_HEART_SHARE;
+    const { heart, keep } = sceneRuntime.framing;
     const d = framingDistance({
       box: geo.box,
+      // The real walls' silhouette (not their box) fills the share; the visible great vessels stay inside.
+      points: heart,
+      keep,
+      keepMargin: KEEP_MARGIN,
       target: geo.target,
       direction,
       fov: CAMERA_FOV,
@@ -176,6 +187,14 @@ export function CameraRig() {
   const flyTo = (direction: Vector3, distance: number, animate: boolean) => {
     const controls = ref.current;
     if (!controls) return;
+    // Centre the heart's real silhouette (not the orbit target) in the free area: the walls are not
+    // symmetric about the target, so the view offset takes the small remainder (a few px).
+    const points = sceneRuntime.framing.heart;
+    const { width, height } = sizeRef.current;
+    if (points.length > 0 && width > 0 && height > 0) {
+      const e = projectedExtent({ target: geo.target, direction, fov: CAMERA_FOV, width, height }, points, distance);
+      silhouetteBias.current = { x: -(e.right - e.left) / 2, y: -(e.down - e.up) / 2 };
+    } else silhouetteBias.current = ZERO_OFFSET;
     const pos = geo.target.clone().addScaledVector(direction, distance);
     void controls.setLookAt(pos.x, pos.y, pos.z, geo.target.x, geo.target.y, geo.target.z, animate);
     lastInteraction.current = performance.now();
@@ -399,15 +418,28 @@ export function CameraRig() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [request?.nonce]);
 
+  // The anatomy publishes its surface samples once its rig is built (after the stage pose was first
+  // solved on the manifest box): re-frame on them while the camera still sits at the untouched home pose.
+  const framingVersion = useRef(sceneRuntime.framing.version);
+
   useFrame((_, delta) => {
     const controls = ref.current;
     if (!controls) return;
     const now = performance.now();
 
+    if (framingVersion.current !== sceneRuntime.framing.version) {
+      framingVersion.current = sceneRuntime.framing.version;
+      const st = stageRef.current;
+      const atHome = st === 'hero' || (st === 'workstation' && useCameraState.getState().viewKind === 'home');
+      if (st !== 'hidden' && atHome && lastInteraction.current <= stageEnteredAt.current + 50 && !peelOut.current) flyHome(!reduced);
+    }
+
     // View offset: the orbit target sits at the centre of the free area; glides over `flyout`.
     const { width, height } = size;
     const off = offset.current;
-    const goal = viewOffsetFor(width, height, insetsFor(stage));
+    const base = viewOffsetFor(width, height, insetsFor(stage));
+    const bias = stage === 'hidden' ? ZERO_OFFSET : silhouetteBias.current;
+    const goal = { x: base.x + bias.x, y: base.y + bias.y };
     if (!sameOffset(goal, off.to)) {
       off.from = off.current;
       off.to = goal;

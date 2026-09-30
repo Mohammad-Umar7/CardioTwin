@@ -89,6 +89,17 @@ export function heartBox(manifest: AnatomyManifest | null | undefined): Box3 {
 
 export interface FramingInput {
   box: Box3;
+  /**
+   * Samples of the heart walls' surface (rest frame). When given they replace the box corners: the
+   * silhouette of the real mesh fills the share, not its bounding box (whose corners project ~15 % larger).
+   */
+  points?: readonly Vector3[] | null;
+  /**
+   * Points that must stay inside the free area, `keepMargin` px from its edges (the visible great vessels:
+   * the aortic arch is never cut by the top bar). The solver dollies out if they do not fit.
+   */
+  keep?: readonly Vector3[] | null;
+  keepMargin?: number;
   /** Orbit target (the heart centre). */
   target: Vector3;
   /** Unit vector from the target toward the camera. */
@@ -108,9 +119,19 @@ export interface FramingInput {
 const UP = new Vector3(0, 1, 0);
 const corners = Array.from({ length: 8 }, () => new Vector3());
 
-/** Projected size (CSS px) of `box` seen from `target + direction · distance`. */
-export function projectedSize(input: Omit<FramingInput, 'freeWidth' | 'freeHeight' | 'share'>, distance: number): { width: number; height: number } {
-  const { box, target, direction, fov, width, height } = input;
+/** Screen extent (CSS px) of a point set around the projected target: how far it reaches each way. */
+export interface Extent {
+  left: number;
+  right: number;
+  up: number;
+  down: number;
+}
+
+type ProjectInput = Pick<FramingInput, 'target' | 'direction' | 'fov' | 'width' | 'height'>;
+
+/** Extent of `points` seen from `target + direction · distance`, relative to the target's projection. */
+export function projectedExtent(input: ProjectInput, points: readonly Vector3[], distance: number): Extent {
+  const { target, direction, fov, width, height } = input;
   const forward = direction.clone().negate().normalize();
   const right = new Vector3().crossVectors(forward, UP);
   if (right.lengthSq() < 1e-8) right.set(1, 0, 0);
@@ -119,15 +140,12 @@ export function projectedSize(input: Omit<FramingInput, 'freeWidth' | 'freeHeigh
   const eye = target.clone().addScaledVector(direction, distance);
   const f = 1 / Math.tan((fov * Math.PI) / 360);
   const aspect = width / height;
-  const { min, max } = box;
-  let i = 0;
-  for (const x of [min.x, max.x]) for (const y of [min.y, max.y]) for (const z of [min.z, max.z]) corners[i++]!.set(x, y, z);
   let minX = Infinity;
   let maxX = -Infinity;
   let minY = Infinity;
   let maxY = -Infinity;
   const rel = new Vector3();
-  for (const c of corners) {
+  for (const c of points) {
     rel.copy(c).sub(eye);
     const depth = Math.max(1e-4, rel.dot(forward));
     const ndcX = (rel.dot(right) * f) / (depth * aspect);
@@ -137,20 +155,44 @@ export function projectedSize(input: Omit<FramingInput, 'freeWidth' | 'freeHeigh
     minY = Math.min(minY, ndcY);
     maxY = Math.max(maxY, ndcY);
   }
-  return { width: ((maxX - minX) / 2) * width, height: ((maxY - minY) / 2) * height };
+  if (!Number.isFinite(minX)) return { left: 0, right: 0, up: 0, down: 0 };
+  return { left: (-minX / 2) * width, right: (maxX / 2) * width, up: (maxY / 2) * height, down: (-minY / 2) * height };
+}
+
+function boxCorners(box: Box3): Vector3[] {
+  const { min, max } = box;
+  let i = 0;
+  for (const x of [min.x, max.x]) for (const y of [min.y, max.y]) for (const z of [min.z, max.z]) corners[i++]!.set(x, y, z);
+  return corners;
+}
+
+/** Projected size (CSS px) of the heart (its surface samples, else its box) seen from `target + direction · distance`. */
+export function projectedSize(input: Omit<FramingInput, 'freeWidth' | 'freeHeight' | 'share'>, distance: number): { width: number; height: number } {
+  const points = input.points && input.points.length > 0 ? input.points : boxCorners(input.box);
+  const e = projectedExtent(input, points, distance);
+  return { width: e.left + e.right, height: e.up + e.down };
 }
 
 /**
- * Camera distance at which the heart's box fills `share` of the free-area height (and never more than
- * MAX_WIDTH_SHARE of its width). Solved by bisection on the exact projection; clamped to [min, max].
+ * Camera distance at which the heart fills `share` of the free-area height (and never more than
+ * MAX_WIDTH_SHARE of its width), with every `keep` point inside the free area. The orbit target sits at the
+ * free-area centre (view offset), so "inside" means within half the free size of the target, less the
+ * margin. Solved by bisection on the exact projection; clamped to [min, max].
  */
 export function framingDistance(input: FramingInput, min = 1.2, max = 14): number {
   const wantH = input.share * Math.max(1, input.freeHeight);
   const wantW = MAX_WIDTH_SHARE * Math.max(1, input.freeWidth);
-  // Projected size shrinks monotonically with distance: find the smallest distance that satisfies both.
+  const margin = input.keepMargin ?? 12;
+  const halfW = Math.max(1, input.freeWidth / 2 - margin);
+  const halfH = Math.max(1, input.freeHeight / 2 - margin);
+  const keep = input.keep && input.keep.length > 0 ? input.keep : null;
+  // Projected size shrinks monotonically with distance: find the smallest distance that satisfies all.
   const fits = (d: number) => {
     const s = projectedSize(input, d);
-    return s.height <= wantH && s.width <= wantW;
+    if (s.height > wantH || s.width > wantW) return false;
+    if (!keep) return true;
+    const e = projectedExtent(input, keep, d);
+    return e.left <= halfW && e.right <= halfW && e.up <= halfH && e.down <= halfH;
   };
   if (fits(min)) return min;
   if (!fits(max)) return max;
