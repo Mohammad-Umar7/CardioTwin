@@ -1,4 +1,4 @@
-import { motion } from 'framer-motion';
+import { motion, useIsPresent } from 'framer-motion';
 import { X } from 'lucide-react';
 import { useId, type ReactNode } from 'react';
 import { Drawer, IconButton, Probability, SegmentedControl, Tabs } from '@/design';
@@ -34,6 +34,9 @@ function DrawerTitle({ id, tab, target }: { id: string; tab: ExplainTab; target:
   const d = useExplainData(target);
   const view = useRiskView();
   const features = usePatientStore((s) => s.features);
+  // While the drawer slides out (AnimatePresence exit), the Risk card is P(target)'s home again: one
+  // data-prob per target. Inline (the compact Why tab) there is no exit, so it stays present.
+  const present = useIsPresent();
   let body: ReactNode;
   if (tab === 'why') {
     const takeaway = d.index && d.explanation ? explainTakeaway(d.explanation, (k) => d.index!.byKey.get(k)) : null;
@@ -42,7 +45,7 @@ function DrawerTitle({ id, tab, target }: { id: string; tab: ExplainTab; target:
         {target}{' '}
         <Probability
           p={d.p.probability}
-          target={target}
+          target={present ? target : undefined}
           size="label"
           stale={d.stale}
           className="text-title-2 [&_.pct-sign]:text-[1em] [&_.pct-sign]:font-semibold [&_.pct-sign]:text-primary"
