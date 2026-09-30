@@ -1,0 +1,505 @@
+# CardioTwin feature registry - the single source of truth for every model input.
+#
+# Adding a feature = adding an entry here (the column must exist in the dataset); preprocessing,
+# encoding, schema.json, the portable model and the UI tooltips are all generated from this file.
+#
+# Field reference
+#   key          exact dataset column name (also the API / schema key)
+#   label        short human-readable name
+#   group        demographics | risk_factors | symptoms | exam | ecg | labs | echo
+#   type         numeric | binary | categorical
+#   unit         measurement unit (null for binary / categorical)
+#   step         UI slider step for numeric features
+#   normal       clinical reference range {low, high} in `unit`; null bound = not applicable
+#   raw          how the raw spreadsheet encodes the value:
+#                  int01   -> already 0/1 integers
+#                  yn      -> "Y"/"N" strings (normalised to 1/0)
+#                  number  -> numeric value
+#                  string  -> categorical label (optionally remapped by `raw_map`)
+#   options      categorical only: allowed API values + display labels
+#   encoding     categorical only: {kind: onehot} or {kind: ordinal, map: {value: code}}
+#   description  plain-English explanation shown to patients / clinicians in tooltips
+#
+# Sources for units and meanings: UCI dataset 411/412 pages; Alizadehsani R. et al., "A data mining
+# approach for diagnosis of coronary artery disease", Comput Methods Programs Biomed 2013;111:52-61
+# (feature table reproduced in Abdar M. et al., Front Cardiovasc Med 2021;8:760178, Table 1).
+# Reference ranges are conventional adult values (ADA, AHA/ACC, ASE, WHO and standard laboratory
+# references); exact laboratory ranges vary by site.
+
+groups:
+  - { id: demographics, label: Demographics, order: 1, icon: user }
+  - { id: risk_factors, label: Risk factors & history, order: 2, icon: clipboard }
+  - { id: symptoms, label: Symptoms, order: 3, icon: activity }
+  - { id: exam, label: Physical examination, order: 4, icon: stethoscope }
+  - { id: ecg, label: ECG, order: 5, icon: heart-pulse }
+  - { id: labs, label: Laboratory, order: 6, icon: flask }
+  - { id: echo, label: Echocardiography, order: 7, icon: waves }
+
+features:
+  # ---------------------------------------------------------------- demographics
+  - key: Age
+    label: Age
+    group: demographics
+    type: numeric
+    raw: number
+    unit: years
+    step: 1
+    normal: { low: null, high: null }
+    description: Age in years. Coronary risk rises steadily with age.
+  - key: Weight
+    label: Weight
+    group: demographics
+    type: numeric
+    raw: number
+    unit: kg
+    step: 1
+    normal: { low: null, high: null }
+    description: Body weight in kilograms.
+  - key: Length
+    label: Height
+    group: demographics
+    type: numeric
+    raw: number
+    unit: cm
+    step: 1
+    normal: { low: null, high: null }
+    description: Body height in centimetres (the dataset calls this column "Length").
+  - key: Sex
+    label: Sex
+    group: demographics
+    type: categorical
+    raw: string
+    raw_map: { Fmale: Female }
+    unit: null
+    normal: { low: null, high: null }
+    options:
+      - { value: Male, label: Male }
+      - { value: Female, label: Female }
+    encoding: { kind: ordinal, map: { Female: 0, Male: 1 } }
+    description: Biological sex recorded in the chart. Men develop coronary disease earlier on average.
+  - key: BMI
+    label: Body-mass index
+    group: demographics
+    type: numeric
+    raw: number
+    unit: kg/m²
+    step: 0.1
+    normal: { low: 18.5, high: 24.9 }
+    description: Weight divided by height squared (kg/m²). 18.5-24.9 is the healthy range; 25-29.9 is overweight and 30 or more is obese.
+
+  # ---------------------------------------------------------------- risk factors & history
+  - key: DM
+    label: Diabetes
+    group: risk_factors
+    type: binary
+    raw: int01
+    description: Diagnosed diabetes mellitus (high blood sugar). Diabetes damages artery walls and roughly doubles coronary risk.
+  - key: HTN
+    label: Hypertension
+    group: risk_factors
+    type: binary
+    raw: int01
+    description: Diagnosed high blood pressure (hypertension), a major driver of artery damage.
+  - key: Current Smoker
+    label: Current smoker
+    group: risk_factors
+    type: binary
+    raw: int01
+    description: Currently smokes tobacco. Smoking injures the artery lining and promotes clotting.
+  - key: EX-Smoker
+    label: Former smoker
+    group: risk_factors
+    type: binary
+    raw: int01
+    description: Used to smoke but has stopped.
+  - key: FH
+    label: Family history
+    group: risk_factors
+    type: binary
+    raw: int01
+    description: Family history of heart disease. The dataset does not state the exact criterion; clinically this usually means coronary disease in a parent or sibling at a young age.
+  - key: Obesity
+    label: Obesity (BMI > 25)
+    group: risk_factors
+    type: binary
+    raw: yn
+    description: Flag recorded by the dataset authors as "Yes if BMI > 25", so it also covers people who are overweight (it matches BMI > 25 for 302 of 303 patients).
+  - key: CRF
+    label: Chronic renal failure
+    group: risk_factors
+    type: binary
+    raw: yn
+    description: Long-standing kidney failure. Kidney disease strongly accelerates artery disease.
+  - key: CVA
+    label: Previous stroke
+    group: risk_factors
+    type: binary
+    raw: yn
+    description: History of cerebrovascular accident (stroke), a sign of artery disease elsewhere in the body.
+  - key: Airway disease
+    label: Airway disease
+    group: risk_factors
+    type: binary
+    raw: yn
+    description: Chronic lung airway disease such as asthma or COPD (the dataset does not specify which).
+  - key: Thyroid Disease
+    label: Thyroid disease
+    group: risk_factors
+    type: binary
+    raw: yn
+    description: Any recorded thyroid disorder (over- or under-active thyroid; type not specified).
+  - key: CHF
+    label: Heart failure
+    group: risk_factors
+    type: binary
+    raw: yn
+    description: Congestive heart failure - the heart does not pump well enough to meet the body's needs.
+  - key: DLP
+    label: Dyslipidaemia
+    group: risk_factors
+    type: binary
+    raw: yn
+    description: Diagnosed abnormal blood fats (high cholesterol and/or triglycerides, or low HDL).
+
+  # ---------------------------------------------------------------- symptoms
+  - key: Typical Chest Pain
+    label: Typical angina
+    group: symptoms
+    type: binary
+    raw: int01
+    description: Classic angina - chest pressure brought on by exertion or stress and relieved by rest or nitroglycerin. The single strongest symptom of coronary narrowing.
+  - key: Atypical
+    label: Atypical angina
+    group: symptoms
+    type: binary
+    raw: yn
+    description: Chest pain with only some of the features of typical angina.
+  - key: Nonanginal
+    label: Non-anginal chest pain
+    group: symptoms
+    type: binary
+    raw: yn
+    description: Chest pain that does not look like angina (for example sharp, positional or pressing pain).
+  - key: Exertional CP
+    label: Exertional chest pain
+    group: symptoms
+    type: binary
+    raw: yn
+    description: Chest pain during physical effort. Recorded as "No" for every patient in this dataset, so it carries no information and is dropped automatically.
+  - key: LowTH Ang
+    label: Low-threshold angina
+    group: symptoms
+    type: binary
+    raw: yn
+    description: Angina triggered by very little effort, a marker of severe narrowing.
+  - key: Dyspnea
+    label: Shortness of breath
+    group: symptoms
+    type: binary
+    raw: yn
+    description: Breathlessness (dyspnoea) reported by the patient.
+  - key: Function Class
+    label: Functional class
+    group: symptoms
+    type: numeric
+    raw: number
+    unit: class
+    step: 1
+    normal: { low: null, high: 1 }
+    description: How much symptoms limit daily activity on a 1-4 scale (higher = symptoms with less effort). The source does not say whether the NYHA or CCS scale was used; 0 in this dataset appears to mean no limitation was recorded.
+
+  # ---------------------------------------------------------------- physical examination
+  - key: BP
+    label: Blood pressure
+    group: exam
+    type: numeric
+    raw: number
+    unit: mmHg
+    step: 5
+    normal: { low: 90, high: 120 }
+    description: Blood pressure in mmHg recorded as a single number (most likely the systolic, i.e. upper, value - the dataset does not say). Below 120 is normal.
+  - key: PR
+    label: Pulse rate
+    group: exam
+    type: numeric
+    raw: number
+    unit: beats/min
+    step: 1
+    normal: { low: 60, high: 100 }
+    description: Resting heart rate in beats per minute; 60-100 is the normal adult range.
+  - key: Edema
+    label: Leg swelling
+    group: exam
+    type: binary
+    raw: int01
+    description: Swelling (oedema), usually of the ankles or legs, found on examination - can accompany heart failure.
+  - key: Weak Peripheral Pulse
+    label: Weak peripheral pulse
+    group: exam
+    type: binary
+    raw: yn
+    description: Weak pulses in the arms or legs on examination, suggesting narrowed arteries outside the heart.
+  - key: Lung rales
+    label: Lung crackles
+    group: exam
+    type: binary
+    raw: yn
+    description: Crackling sounds (rales) heard over the lungs, often from fluid congestion.
+  - key: Systolic Murmur
+    label: Systolic murmur
+    group: exam
+    type: binary
+    raw: yn
+    description: A whooshing heart sound while the heart contracts, usually from a leaking or narrowed valve.
+  - key: Diastolic Murmur
+    label: Diastolic murmur
+    group: exam
+    type: binary
+    raw: yn
+    description: A heart murmur heard while the heart relaxes; almost always indicates a valve problem.
+
+  # ---------------------------------------------------------------- ECG
+  - key: Q Wave
+    label: Q waves
+    group: ecg
+    type: binary
+    raw: int01
+    description: Pathological Q waves on the resting ECG - usually the scar of a previous heart attack.
+  - key: St Elevation
+    label: ST elevation
+    group: ecg
+    type: binary
+    raw: int01
+    description: ST-segment elevation on the resting ECG, which can reflect acute or old injury of the heart muscle.
+  - key: St Depression
+    label: ST depression
+    group: ecg
+    type: binary
+    raw: int01
+    description: ST-segment depression on the resting ECG, a sign that heart muscle may be short of oxygen (ischaemia).
+  - key: Tinversion
+    label: T-wave inversion
+    group: ecg
+    type: binary
+    raw: int01
+    description: Inverted T waves on the resting ECG, which can indicate ischaemia or strain.
+  - key: LVH
+    label: Left ventricular hypertrophy
+    group: ecg
+    type: binary
+    raw: yn
+    description: ECG signs of a thickened left heart chamber, often caused by long-standing high blood pressure.
+  - key: Poor R Progression
+    label: Poor R-wave progression
+    group: ecg
+    type: binary
+    raw: yn
+    description: R waves that fail to grow across the chest leads, which may point to an old anterior heart attack.
+  - key: BBB
+    label: Bundle branch block
+    group: ecg
+    type: categorical
+    raw: string
+    unit: null
+    normal: { low: null, high: null }
+    options:
+      - { value: N, label: None }
+      - { value: LBBB, label: Left bundle branch block }
+      - { value: RBBB, label: Right bundle branch block }
+    encoding: { kind: onehot }
+    description: A delay in the heart's electrical wiring on the left (LBBB) or right (RBBB) side. LBBB in particular is associated with underlying heart disease.
+
+  # ---------------------------------------------------------------- laboratory
+  - key: FBS
+    label: Fasting blood sugar
+    group: labs
+    type: numeric
+    raw: number
+    unit: mg/dL
+    step: 1
+    normal: { low: 70, high: 99 }
+    description: Blood glucose after an overnight fast. 70-99 mg/dL is normal; 100-125 is pre-diabetes and 126 or more suggests diabetes.
+  - key: CR
+    label: Creatinine
+    group: labs
+    type: numeric
+    raw: number
+    unit: mg/dL
+    step: 0.1
+    normal: { low: 0.6, high: 1.3 }
+    description: Blood creatinine, a waste product cleared by the kidneys; higher values mean weaker kidney function. Normal is roughly 0.6-1.3 mg/dL (lower in women).
+  - key: TG
+    label: Triglycerides
+    group: labs
+    type: numeric
+    raw: number
+    unit: mg/dL
+    step: 1
+    normal: { low: null, high: 150 }
+    description: Fasting blood triglycerides (a type of fat). Below 150 mg/dL is normal.
+  - key: LDL
+    label: LDL cholesterol
+    group: labs
+    type: numeric
+    raw: number
+    unit: mg/dL
+    step: 1
+    normal: { low: null, high: 100 }
+    description: '"Bad" cholesterol that builds plaque in artery walls. Below 100 mg/dL is optimal.'
+  - key: HDL
+    label: HDL cholesterol
+    group: labs
+    type: numeric
+    raw: number
+    unit: mg/dL
+    step: 1
+    normal: { low: 40, high: null }
+    description: '"Good" cholesterol that helps clear fat from arteries. Below 40 mg/dL (men) or 50 mg/dL (women) increases risk.'
+  - key: BUN
+    label: Blood urea nitrogen
+    group: labs
+    type: numeric
+    raw: number
+    unit: mg/dL
+    step: 1
+    normal: { low: 7, high: 20 }
+    description: Blood urea nitrogen, another kidney-function marker; normal is about 7-20 mg/dL.
+  - key: ESR
+    label: ESR
+    group: labs
+    type: numeric
+    raw: number
+    unit: mm/h
+    step: 1
+    normal: { low: 0, high: 20 }
+    description: Erythrocyte sedimentation rate, a general marker of inflammation. Normal upper limit is about 15-20 mm/h and rises with age.
+  - key: HB
+    label: Haemoglobin
+    group: labs
+    type: numeric
+    raw: number
+    unit: g/dL
+    step: 0.1
+    normal: { low: 12.0, high: 17.5 }
+    description: Oxygen-carrying protein in red blood cells. Normal is about 13.5-17.5 g/dL in men and 12.0-15.5 g/dL in women; low values mean anaemia.
+  - key: K
+    label: Potassium
+    group: labs
+    type: numeric
+    raw: number
+    unit: mEq/L
+    step: 0.1
+    normal: { low: 3.5, high: 5.0 }
+    description: Blood potassium, important for the heart's electrical rhythm; normal is 3.5-5.0 mEq/L.
+  - key: Na
+    label: Sodium
+    group: labs
+    type: numeric
+    raw: number
+    unit: mEq/L
+    step: 1
+    normal: { low: 135, high: 145 }
+    description: Blood sodium; normal is 135-145 mEq/L.
+  - key: WBC
+    label: White blood cells
+    group: labs
+    type: numeric
+    raw: number
+    unit: cells/µL
+    step: 100
+    normal: { low: 4000, high: 11000 }
+    description: White blood cell count per microlitre, a marker of infection or inflammation; normal is about 4,000-11,000. (The source paper writes the unit as "cells/ml"; the values match cells per microlitre.)
+  - key: Lymph
+    label: Lymphocytes
+    group: labs
+    type: numeric
+    raw: number
+    unit: '%'
+    step: 1
+    normal: { low: 20, high: 40 }
+    description: Lymphocytes as a percentage of white blood cells; normal is about 20-40 %.
+  - key: Neut
+    label: Neutrophils
+    group: labs
+    type: numeric
+    raw: number
+    unit: '%'
+    step: 1
+    normal: { low: 40, high: 70 }
+    description: Neutrophils as a percentage of white blood cells; normal is about 40-70 %.
+  - key: PLT
+    label: Platelets
+    group: labs
+    type: numeric
+    raw: number
+    unit: ×10³/µL
+    step: 1
+    normal: { low: 150, high: 450 }
+    description: Platelet count in thousands per microlitre (clotting cells); normal is about 150-450.
+
+  # ---------------------------------------------------------------- echocardiography
+  - key: EF-TTE
+    label: Ejection fraction
+    group: echo
+    type: numeric
+    raw: number
+    unit: '%'
+    step: 5
+    normal: { low: 55, high: 70 }
+    description: Share of blood the left ventricle pumps out with each beat, measured by transthoracic echocardiography. 55 % or more is normal; 40 % or less means a weak heart muscle.
+  - key: Region RWMA
+    label: Regional wall-motion abnormality
+    group: echo
+    type: numeric
+    raw: number
+    unit: regions
+    step: 1
+    normal: { low: 0, high: 0 }
+    description: Echo finding of heart-wall segments that move abnormally, coded 0-4 in the dataset (0 = none; higher = more extensive, exact coding not documented by the authors). It describes wall motion, not the location of a blockage.
+  - key: VHD
+    label: Valvular heart disease
+    group: echo
+    type: categorical
+    raw: string
+    unit: null
+    normal: { low: null, high: null }
+    options:
+      - { value: N, label: None }
+      - { value: mild, label: Mild }
+      - { value: Moderate, label: Moderate }
+      - { value: Severe, label: Severe }
+    encoding: { kind: ordinal, map: { N: 0, mild: 1, Moderate: 2, Severe: 3 } }
+    description: Severity of any heart-valve disease seen on echocardiography.
+
+# Clinically motivated derived features. They are adopted into the deployed model ONLY if they improve
+# development-set cross-validation (see metrics.json -> ablations). Each is fully specified here so
+# the portable model can recompute it and explanations stay attributable to the raw inputs.
+#   op: ratio            value = inputs[0] / inputs[1]
+#   op: sum              value = sum(inputs)            (binary inputs count as 0/1)
+#   op: ckd_epi_2021     eGFR (mL/min/1.73 m²) from creatinine (mg/dL), age (years), sex - race-free
+#                        CKD-EPI 2021 equation (Inker et al., NEJM 2021;385:1737-49)
+derived:
+  - key: NLR
+    label: Neutrophil/lymphocyte ratio
+    op: ratio
+    inputs: [Neut, Lymph]
+    unit: ratio
+    description: Neutrophil percentage divided by lymphocyte percentage - a simple marker of systemic inflammation linked to coronary disease.
+  - key: TG/HDL
+    label: Triglyceride/HDL ratio
+    op: ratio
+    inputs: [TG, HDL]
+    unit: ratio
+    description: Triglycerides divided by HDL cholesterol - a marker of insulin resistance and small dense LDL particles.
+  - key: Risk factor count
+    label: Classic risk-factor count
+    op: sum
+    inputs: [DM, HTN, Current Smoker, DLP, FH]
+    unit: count
+    description: Number of classic coronary risk factors present (diabetes, hypertension, smoking, dyslipidaemia, family history).
+  - key: eGFR
+    label: Estimated GFR
+    op: ckd_epi_2021
+    inputs: [CR, Age, Sex]
+    unit: mL/min/1.73m²
+    description: Estimated kidney filtration rate (CKD-EPI 2021) from creatinine, age and sex; below 60 indicates chronic kidney disease.
