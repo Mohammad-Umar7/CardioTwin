@@ -20,6 +20,11 @@ import { useSceneControls } from './stage/sceneControls';
 import { probeWebGL } from './webgl';
 
 const DPR: Record<RenderTier, number | [number, number]> = { A: [1, 1.5], B: [1, 1.25], C: 1, D: 1 };
+/**
+ * On an integrated GPU the full-bleed Realistic stage keeps tier B at DPR 1.0 (V2 §9.3 D accept: "cap the
+ * workstation's DPR at 1.0 and let PerformanceMonitor drop to C") — 35 % fewer pixels than 1.25.
+ */
+const dprFor = (tier: RenderTier, integrated: boolean) => (integrated && tier === 'B' ? 1 : DPR[tier]);
 
 /** Tier C renders without the composer, so the renderer applies Khronos PBR Neutral itself (§7.1). */
 function ToneMappingByTier({ tier }: { tier: RenderTier }) {
@@ -88,7 +93,7 @@ export default function SceneCanvas({ active }: { active: boolean }) {
     <div className="absolute inset-0">
       <Canvas
         frameloop={frameloop}
-        dpr={DPR[tier]}
+        dpr={dprFor(tier, probeWebGL().integrated)}
         flat
         performance={{ min: 0.5 }}
         gl={{ antialias: false, alpha: false, stencil: false, powerPreference: 'high-performance' }}
