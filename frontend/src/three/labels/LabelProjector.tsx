@@ -18,8 +18,10 @@ import { dotEls, labelEls, labelSizes, laneFor, layoutLanes, lineEls, type LaneI
 const DEFAULT_TARGETS = ['LAD', 'LCX', 'RCA'];
 /** Labels fade in LAD → LCX → RCA, 60 ms apart, once the coronaries ignite (V2 §5.14). */
 const REVEAL_STAGGER_MS = 60;
-/** Room kept free for the context slot (selection chip / what-if pill) above the lanes. */
+/** Room kept free above the lanes: the context slot (selection chip / what-if pill, 12 + 32) or, in focus
+ * mode, the answer pill at the top right (12 + 40 + 8). */
 const CONTEXT_SLOT_ROOM = 44;
+const ANSWER_PILL_ROOM = 60;
 /** Share of the heart box's projected width that the organ's silhouette actually covers. */
 const SILHOUETTE = 0.95;
 /** Anchor glide when the chosen candidate changes (per-second rate of an exponential approach). */
@@ -189,7 +191,8 @@ export function LabelProjector() {
     // 2. Free area (stage insets) and the heart's silhouette on screen.
     const insets = viewer.stage === 'hidden' ? { left: 0, right: 0, top: 0, bottom: 0 } : ui.stageInsets;
     const free = freeArea(width, height, insets);
-    const topRoom = ui.chrome === 'workstation' || ui.chrome === 'tour' ? CONTEXT_SLOT_ROOM : 0;
+    const topRoom =
+      ui.chrome === 'workstation' || ui.chrome === 'tour' ? CONTEXT_SLOT_ROOM : ui.chrome === 'focus' ? ANSWER_PILL_ROOM : 0;
     const bounds = { left: free.x, right: free.x + free.width, top: free.y + topRoom, bottom: free.y + free.height };
     let minX = Infinity;
     let maxX = -Infinity;

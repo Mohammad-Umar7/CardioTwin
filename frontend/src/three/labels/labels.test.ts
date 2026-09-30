@@ -2,7 +2,7 @@ import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { Matrix4, Object3D, Vector3 } from 'three';
 import { describe, expect, it } from 'vitest';
-import type { AnatomyManifest, VesselsFile } from '@/types/contracts';
+import type { AnatomyManifest, PredictResponse, VesselsFile } from '@/types/contracts';
 import { VISIBLE_FACING, trunkVisibility, visibleBestView } from '../camera/bestView';
 import { bestViewFor, toControlsAngles } from '../camera/presets';
 import { buildTracks, heartAxisFrame, restToDisplayed } from './anchorTracks';
@@ -212,7 +212,7 @@ describe('scene summary (DESIGN_SYSTEM §10.4, V2 §3.2)', () => {
       LAD: { probability: 0.65, label: 1, threshold: 0.55, risk_band: 'high', logit: 0 },
       LCX: { probability: 0.2, label: 0, threshold: 0.33, risk_band: 'low', logit: 0 },
     },
-  } as unknown as import('@/types/contracts').PredictResponse;
+  } as unknown as PredictResponse;
   const base = { vessels: ['LAD', 'LCX', 'RCA'], prediction, status: 'ready' as const, selected: null, peel: null, spoken: (p: number) => `${Math.round(p * 100)} percent`, band: (b: string) => b };
 
   it('speaks the probability, band and verdict per vessel against its own threshold', () => {
