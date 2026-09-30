@@ -49,5 +49,24 @@ Engine integration (server/edge resolution, `?engine=edge|server`, server→edge
 Regenerate the server expectations against a running backend:
 `node frontend/src/inference/testing/generate-server-expectations.mjs --api http://127.0.0.1:8000`.
 
-The edge engine accepts values outside the schema range (like `portable.py`; trees extrapolate flat), whereas
-the server rejects them with 422 by default — the UI's controls never produce such values.
+## Adversarial verification
+
+| Attack (test file) | Result |
+| --- | --- |
+| Every distinct XGBoost split threshold (444 / 444), on an input solved to *reach* a split on it, probed at the float32 threshold, its float32 neighbours, the float32 rounding tie and its float64 neighbours, and the decimal a user types (CR 0.8 is 0.800000011920929 in float32) — 4 130 probes, 428 ties; the expected branch comes from a bit-level oracle, not `Math.fround` (`splitRouting.test.ts`) | every probe routed as the oracle says; a float64 compare, `<=` or float32 truncation would each misroute > 100 of them |
+| Live server, full float64 precision, every field (`parity.live.test.ts`, opt-in): the split probes above (2 686 rows), imputation (none sent, each key dropped, random subsets, `null`), 400 random what-ifs on and off the input grid, 56 spellings, all 81 cohort patients | 3 800+ responses: max \|Δp\| 2.2e-16, \|Δlogit\| 1.8e-15, \|Δshap\| and \|Δshap_calibrated\| **exactly 0**, identical contribution order; σ(calibrated base + Σ shap_calibrated) = p to 4.4e-16 on both engines |
+| Label flips at the decision threshold: 39 smooth crossings bisected to adjacent doubles, server probed around each | 12 inputs where the edge is 1 ulp below the threshold and the server exactly on it (e.g. CAD, P-014, Age = 47.27671142066387): `compareResponses` reports them as *boundary ties*, not disagreements (`parity.test.ts`) |
+| Input acceptance | identical accept/reject and encoding for aliases (`Fmale`), case, `Y`/`no`/`true`, numeric strings (`' 63 '`, `6.3e1`, `6_3`); out-of-range values → the same 422 message from both engines (EdgeEngine enforces the schema range like the server's default policy). Known gap: the server also accepts option *labels* (`BBB = "None"`) |
+| Worker faults (`client.lifecycle.test.ts`, `client.lazy.test.ts`): crash mid-batch, `messageerror`, uncloneable input, abort racing a crash, abort while `model.json` is still loading, stale responses, evaluator chunk failing to load | every request settles once, correctly or with a clear error; nothing stays pending |
+| Failover over real sockets (`failover.network.test.ts`): API on a dead port, server crash → restart, HTTP 500, 422, a server that never answers | edge takes over with identical numbers (Δp = 0) and hands back to the server; 422s are surfaced; a hung server fails over after 6 s (`FAILOVER_TIMEOUT_MS`) |
+
+Run the live suite against a running backend (≈ 3 min, ~4 000 uncached predictions):
+`CARDIOTWIN_LIVE_API=http://127.0.0.1:8000 npx vitest run src/inference/parity.live`.
+
+**Bundle.** The worker chunk is 15.2 kB (6.0 kB gzip); the main-thread fallback evaluator is a separate
+15.1 kB chunk loaded only if the worker cannot run, so the entry chunk carries none of the model code.
+`model.json` is 493 kB (99 kB gzip), fetched once by the worker.
+
+**Range policy.** `EdgeModel` accepts any finite value (like `portable.py`; trees extrapolate flat).
+`EdgeEngine` — what the app uses — rejects numeric values outside the schema `min`/`max` with the
+server's 422 wording, so both engines refuse to extrapolate beyond the training cohort.
