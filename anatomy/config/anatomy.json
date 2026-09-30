@@ -939,6 +939,16 @@
       4.5,
       6.5
     ],
+    "pulmonary_trunk_gate_mm": [
+      6.0,
+      14.0
+    ],
+    "pulmonary_trunk": {
+      "_comment": "Pulmonary-trunk points (artery vertices within radius_mm of the pulmonary valve centroid). Wall closer than pulmonary_trunk_gate_mm to them is not ventricular: this keeps the solid left atrial appendage, which wraps around the trunk, out of the LAD territory.",
+      "artery_part": "FMA66326",
+      "valve_part": "FMA7246",
+      "radius_mm": 50.0
+    },
     "smooth_iterations": 6
   }
 }

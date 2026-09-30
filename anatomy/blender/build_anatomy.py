@@ -575,6 +575,7 @@ def territory_colors(
     scale: float,
     inflow_outflow_V: np.ndarray,
     ventricular_V: np.ndarray,
+    pulmonary_trunk_V: np.ndarray | None = None,
 ) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
     """Per-vertex (LAD, LCX, RCA) weights, the ventricular mask and a QA array.
 
@@ -588,6 +589,10 @@ def territory_colors(
       marginal branches, apex) than to the inflow / outflow landmarks (venae cavae, pulmonary veins,
       aortic and pulmonary roots) — this catches the thin right-ventricular free wall.
     Atria and great-vessel roots fade to zero. See :func:`meshops.territory_weights`.
+
+    Finally, wall within ``pulmonary_trunk_gate_mm`` of the pulmonary trunk is never ventricular: the
+    left atrial appendage wraps around the trunk and, being solid in BodyParts3D, passes the thickness
+    rule — without the gate it glowed in the LAD's colour (it is supplied by atrial LCX branches).
     """
     lm = cfg["atrial_landmarks"]
     dist = np.column_stack([nearest_distance(heart_V, groups[gid]) for gid in order])
@@ -596,7 +601,11 @@ def territory_colors(
     by_landmark = mo.smoothstep(-lm["width_mm"] * scale, lm["width_mm"] * scale, d_in - d_vent + lm["bias_mm"] * scale)
     t0, t1 = cfg["ventricular_thickness_mm"]
     by_thickness = mo.smoothstep(t0 * scale, t1 * scale, np.where(np.isfinite(thickness), thickness, 0.0))
-    ventricular = mo.smooth_vertex_values(np.maximum(by_landmark, by_thickness), heart_F, iterations=cfg["smooth_iterations"])
+    ventricular = np.maximum(by_landmark, by_thickness)
+    if pulmonary_trunk_V is not None and len(pulmonary_trunk_V):
+        g0, g1 = cfg["pulmonary_trunk_gate_mm"]
+        ventricular = ventricular * mo.smoothstep(g0 * scale, g1 * scale, nearest_distance(heart_V, pulmonary_trunk_V))
+    ventricular = mo.smooth_vertex_values(ventricular, heart_F, iterations=cfg["smooth_iterations"])
     qa = np.column_stack([by_landmark, by_thickness, ventricular])
     weights = mo.territory_weights(
         dist,
@@ -775,6 +784,13 @@ def build(args: argparse.Namespace) -> None:
     vent_V = vent_V[~near_groove]
     if lm_cfg.get("include_apex"):
         vent_V = np.concatenate([vent_V, apex[None]])
+    trunk_cfg = terr_cfg.get("pulmonary_trunk")
+    trunk_V = None
+    if trunk_cfg:
+        pa_V = to_scene(cache.get(trunk_cfg["artery_part"])[0])
+        valve_c = to_scene(cache.get(trunk_cfg["valve_part"])[0]).mean(axis=0)
+        trunk_V = pa_V[np.linalg.norm(pa_V - valve_c, axis=1) < trunk_cfg["radius_mm"] * scale]
+        log(f"  pulmonary trunk gate: {len(trunk_V)} points within {trunk_cfg['radius_mm']} mm of the pulmonary valve")
     for spec in heart_specs:
         ob = objects[spec.node]
         hV, hF = mesh_arrays(ob.data)
@@ -785,6 +801,7 @@ def build(args: argparse.Namespace) -> None:
             scale=scale,
             inflow_outflow_V=inflow_V,
             ventricular_V=vent_V,
+            pulmonary_trunk_V=trunk_V,
         )
         set_color_attribute(ob, terr_cfg["attribute"], rgb)
         # QA-only attribute (not exported): R = landmark rule, G = thickness rule, B = final mask.

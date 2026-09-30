@@ -150,16 +150,19 @@ Opening the halves along the cut normal reveals the chambers, valves and papilla
    *thick* (≥ 4.5–6.5 mm; wall thickness = shortest of 7 inward rays through the solid wall, so vessel rims do not
    read as thick) **or** closer to ventricular landmarks (papillary muscles, septal perforators, PDA, marginal /
    posterolateral branches, apex — ignoring points within 12 mm of the AV-groove vessels) than to the inflow /
-   outflow landmarks (venae cavae, pulmonary veins, aortic and pulmonary roots). Atria, auricles and great-vessel
-   roots therefore stay neutral.
+   outflow landmarks (venae cavae, pulmonary veins, aortic and pulmonary roots). Wall within 6–14 mm of the
+   pulmonary trunk (artery within 50 mm of the pulmonary valve) is never ventricular: BodyParts3D's left atrial
+   appendage is solid, passes the thickness rule and wraps around the trunk, and without this gate it glowed in the
+   LAD's colour in the default anterior view. Atria, auricles and great-vessel roots therefore stay neutral.
 3. Laplacian smoothing (6 iterations) removes decimation-scale seams. Cap vertices get transmural weights.
 
 This approximates the standard coronary territories of the **AHA 17-segment model** on a **right-dominant** heart:
 LAD → anterior wall, anterior septum and apex; LCX → lateral wall; RCA → RV, inferior wall and inferior septum.
 **Limitations**: it is a nearest-artery supply map, not perfusion imaging and **not a lesion map** (the ML model
 predicts vessel-level stenosis, never a location within a vessel); dominance and collaterals vary between
-patients; the auricles next to the AV groove may carry the adjacent artery's tint (they are in fact supplied by
-atrial branches of the RCA / LCX); the left main has no territory of its own (it feeds LAD + LCX).
+patients; the posterior lobe of the left atrial appendage keeps a faint LCX tint (it is in fact supplied by atrial
+branches of the LCX, so the colour is not misleading); the left main has no territory of its own (it feeds
+LAD + LCX).
 
 ## Web optimisation
 
