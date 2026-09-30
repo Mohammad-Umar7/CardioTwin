@@ -30,14 +30,18 @@ export function paletteSuggestions(selected: TargetId | null): string[] {
 
 const WORD_START = /[\s\-_/·(.,:]/;
 
+/** Matches scoring below this share of the best match are dropped while typing. */
+export const RELEVANCE_FLOOR = 0.5;
+
 function tokenScore(token: string, text: string): number | null {
   if (!token) return 0;
   if (text === token) return 1000;
   if (text.startsWith(token)) return 900 - Math.min(100, text.length - token.length);
   const word = text.search(new RegExp(`(^|[\\s\\-_/·(.,:])${token.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}`));
   if (word >= 0) return 700 - Math.min(100, word);
+  // Inside a word ("ef" in "left") ranks well below a word start: it is usually incidental.
   const idx = text.indexOf(token);
-  if (idx >= 0) return 600 - Math.min(100, idx);
+  if (idx >= 0) return 450 - Math.min(40, idx);
   // Subsequence: reward word starts and runs, penalise gaps.
   let score = 0;
   let ti = 0;
@@ -52,7 +56,7 @@ function tokenScore(token: string, text: string): number | null {
     prev = found;
     ti = found + 1;
   }
-  return Math.min(499, Math.max(1, score));
+  return Math.min(399, Math.max(1, score));
 }
 
 /**
@@ -86,9 +90,10 @@ export function commandScore(command: Command, query: string): number | null {
       const s = fuzzyScore(query, command.subtitle);
       return s === null ? null : s * 0.6;
     })(),
-    // "Typical angina · Symptoms"
+    // "angina symptoms": a multi-word query may span the title and the subtitle.
     (() => {
-      const s = fuzzyScore(query, command.subtitle ? `${command.title} ${command.subtitle}` : undefined);
+      if (!/\s/.test(query.trim()) || !command.subtitle) return null;
+      const s = fuzzyScore(query, `${command.title} ${command.subtitle}`);
       return s === null ? null : s * 0.8;
     })(),
   ].filter((s): s is number => s !== null);
@@ -161,9 +166,14 @@ export function searchCommands(commands: Command[], query: string, options: Sear
     return sections;
   }
 
-  const scored = enabled
+  const matched = enabled
     .map((command, i) => ({ command, i, score: commandScore(command, q) }))
     .filter((x): x is { command: Command; i: number; score: number } => x.score !== null);
+  // Groups keep their fixed order, so incidental matches ("ef" inside "Left anterior descending") would
+  // push the real answer ("Ejection fraction", alias EF) below the fold: keep only matches at least half as
+  // good as the best one.
+  const best = matched.reduce((m, x) => Math.max(m, x.score), 0);
+  const scored = matched.filter((x) => x.score >= best * RELEVANCE_FLOOR);
   const limit = options.queryLimit ?? 8;
   for (const group of COMMAND_GROUPS) {
     const items = scored

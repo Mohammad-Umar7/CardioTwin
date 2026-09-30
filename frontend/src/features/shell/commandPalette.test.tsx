@@ -89,6 +89,17 @@ describe('caps and promoted suggestions', () => {
   });
 });
 
+describe('relevance floor', () => {
+  it('drops incidental matches when a strong one exists ("ef" → Ejection fraction, not "Left anterior")', () => {
+    const ef = cmd('input.edit.EF-TTE', 'inputs', 'Ejection fraction', { subtitle: 'Echocardiography', keywords: ['EF-TTE', 'EF'] });
+    const lad = cmd('vessel.select.LAD', 'vessels', 'Focus LAD', { subtitle: 'Left anterior descending artery' });
+    const sections = searchCommands([lad, ef], 'ef');
+    expect(sections.map((s) => s.group)).toEqual(['inputs']);
+    // With nothing strong, weak matches still show.
+    expect(searchCommands([lad], 'ef')[0]!.items[0]!.id).toBe('vessel.select.LAD');
+  });
+});
+
 describe('search aliases', () => {
   it('derives initialisms and raw-key aliases, never repeating the label', () => {
     expect(initialism('Ejection fraction')).toBe('EF');
