@@ -25,7 +25,7 @@ import { copyShareLink, exportProfile, importProfileFile, pickProfileFile, reset
  *
  *   header   EDIT INPUTS · 53 · ⋯ (share link, JSON export / import) · ✕
  *   search   label, aliases and raw key; while typing, the sections flatten into one ranked list
- *   sections Changed · Outside normal range · Most influential for {target} · All inputs (7 groups)
+ *   sections Abnormal findings · Most influential for {target} · All inputs (7 groups) · Changed tray
  *   footer   "2 changes · applied instantly" + Done (the only filled button on screen)
  *
  * Stability: the lower sections are laid out once per opening (and when the target or patient changes),
@@ -550,8 +550,11 @@ function DrawerContent({ titleId, onClose }: { titleId: string; onClose(): void 
         ) : (
           <>
             {snapshot.abnormal.length > 0 && (
-              <section aria-label="Outside normal range" data-section="abnormal">
-                <SectionHeader title="Outside normal range" count={snapshot.abnormal.length} />
+              // "Abnormal findings", the patient card's noun for the same set (values outside the normal range,
+              // present findings and abnormal categories): the Physiology tab's "outside the normal range" counts
+              // measured values only.
+              <section aria-label="Abnormal findings" data-section="abnormal">
+                <SectionHeader title="Abnormal findings" count={snapshot.abnormal.length} />
                 <InputList specs={specs(snapshot.abnormal)} section="abnormal" expanded={expanded} chipsLabel="Present findings" chipsLead="Present" />
               </section>
             )}

@@ -1,7 +1,7 @@
 /**
  * Inputs drawer sections (WORKSTATION_V2 §5.6). Every input appears at most once above "All inputs":
  *   1. Changed · n                     — differs from the recorded value;
- *   2. Outside normal range · n        — numerics outside `schema.normal`, present findings, non-normal
+ *   2. Abnormal findings · n           — numerics outside `schema.normal`, present findings, non-normal
  *                                        categorical findings (BBB, VHD);
  *   3. Most influential for {t} · n    — the top 8 by |SHAP| not already listed;
  *   4. All inputs · 53                 — the schema groups (rendered as accordions by the drawer).

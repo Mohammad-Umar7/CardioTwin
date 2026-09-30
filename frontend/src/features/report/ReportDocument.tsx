@@ -554,7 +554,7 @@ function PageTwo({ model, perf }: { model: ReportModel; perf: PerformanceSummary
   const t = model.totals;
   const totals = [
     `${t.total} inputs`,
-    `${t.abnormal} outside the reference range`,
+    `${t.abnormal} outside the normal range`,
     `${t.findings} findings present`,
     t.imputed > 0 ? `${t.imputed} imputed` : null,
     t.edited > 0 ? `${t.edited} changed` : null,

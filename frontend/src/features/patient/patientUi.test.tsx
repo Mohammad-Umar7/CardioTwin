@@ -148,13 +148,14 @@ describe('InputsDrawer', () => {
   const openDrawer = (opts?: Parameters<ReturnType<typeof useUiStore.getState>['openDrawer']>[1]) =>
     act(() => useUiStore.getState().openDrawer('inputs', opts));
 
-  it('lays out Outside normal range, Most influential and All inputs, with a single filled button', async () => {
+  it('lays out Abnormal findings, Most influential and All inputs, with a single filled button', async () => {
     renderIn(<InputsDrawer />);
     openDrawer();
     const drawer = await screen.findByRole('dialog', { name: /Edit inputs/ });
-    expect(within(drawer).getByRole('region', { name: 'Outside normal range' })).toBeInTheDocument();
+    expect(within(drawer).getByRole('region', { name: 'Abnormal findings' })).toBeInTheDocument();
     expect(within(drawer).getByRole('region', { name: 'Most influential for CAD' })).toBeInTheDocument();
-    expect(within(drawer).queryByRole('region', { name: 'Changed inputs' })).not.toBeInTheDocument();
+    // The Changed tray is reserved from the start (fixed height, empty state), so the first edit never moves the list.
+    expect(within(drawer).getByRole('region', { name: 'Changed inputs' })).toHaveTextContent(/Edits appear here/);
     for (const g of schema.groups) expect(within(drawer).getByRole('button', { name: new RegExp(g.label) })).toBeInTheDocument();
     expect(within(drawer).getByText('Changes apply instantly')).toBeInTheDocument();
     expect(within(drawer).getByRole('group', { name: 'Present findings' })).toBeInTheDocument();

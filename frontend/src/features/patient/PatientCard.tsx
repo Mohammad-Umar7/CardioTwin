@@ -29,7 +29,7 @@ import { useKeyInputs } from './useKeyInputs';
  *   rows      top 5 inputs by |SHAP| for the target (Age, Sex excluded): label · value (+ ▲/▼) · direction
  *             mark (SHAP raise / lower colour, 3 lengths). Hover links the SHAP row and the narrative;
  *             click opens the Inputs drawer on that field. Re-ranks with FLIP on a committed prediction.
- *   link      "+ n abnormal findings ›" → Inputs drawer, "Outside normal range"
+ *   link      "+ n abnormal findings ›" → Inputs drawer, "Abnormal findings"
  *   footer    [✎ Edit inputs  I]
  *
  * Collapsed (the user's choice, or automatically while the Explain drawer is open): a 40 × 116 rail with
