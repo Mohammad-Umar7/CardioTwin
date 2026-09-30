@@ -192,6 +192,11 @@ class FakePredictor:
 
     def predict(self, features: Mapping[str, Any]) -> dict[str, Any]:
         self.calls += 1
+        return self._compute(features)
+
+    # -- internals ------------------------------------------------------------------------
+
+    def _compute(self, features: Mapping[str, Any]) -> dict[str, Any]:
         unknown = sorted(set(features) - set(self._specs))
         if unknown:
             raise KeyError(f"Unknown feature(s): {unknown}")
@@ -244,8 +249,6 @@ class FakePredictor:
             },
         }
 
-    # -- internals ------------------------------------------------------------------------
-
     def _term(self, target: str, key: str, value: Any) -> float:
         weight = _WEIGHTS[target].get(key)
         if weight is None:
@@ -268,7 +271,7 @@ class FakePredictor:
         patients = []
         for pid, split, feats in _COHORT_FEATURES:
             full = {k: feats.get(k, spec["default"]) for k, spec in self._specs.items()}
-            result = self.predict(full)
+            result = self._compute(full)
             labels = {t: result["predictions"][t]["label"] for t in ("CAD", "LAD", "LCX", "RCA")}
             bits = [f"{full['Age']} y", str(full["Sex"])]
             bits.append("typical angina" if full["Typical Chest Pain"] else "atypical/no chest pain")
@@ -276,7 +279,6 @@ class FakePredictor:
                 bits.append("DM")
             patients.append({"id": pid, "split": split, "summary": " · ".join(bits), "features": full,
                              "labels": labels})
-        self.calls = 0
         return {"patients": patients}
 
     def _build_metrics(self) -> dict[str, Any]:
