@@ -8,6 +8,7 @@ import { selectDisplayedPrediction, usePatientStore } from '@/state/patientStore
 import { useUiStore } from '@/state/uiStore';
 import { useViewerStore } from '@/state/viewerStore';
 import { RISK_PENDING } from '@/theme/risk';
+import { HoverTooltip } from './HoverTooltip';
 import { dotEls, labelEls, labelShowsProbability, labelSizes, lineEls } from './labelRegistry';
 
 const DEFAULT_VESSELS = ['LAD', 'LCX', 'RCA'];
@@ -193,6 +194,7 @@ export function VesselLabelsOverlay() {
       {targets.map((t) => (
         <Label key={t} target={t} />
       ))}
+      <HoverTooltip />
     </div>
   );
 }

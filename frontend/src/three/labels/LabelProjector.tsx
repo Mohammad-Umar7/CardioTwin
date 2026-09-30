@@ -21,7 +21,7 @@ const REVEAL_STAGGER_MS = 60;
 /** Room kept free for the context slot (selection chip / what-if pill) above the lanes. */
 const CONTEXT_SLOT_ROOM = 44;
 /** Share of the heart box's projected width that the organ's silhouette actually covers. */
-const SILHOUETTE = 0.85;
+const SILHOUETTE = 0.95;
 /** Anchor glide when the chosen candidate changes (per-second rate of an exponential approach). */
 const ANCHOR_GLIDE = 14;
 
@@ -199,7 +199,7 @@ export function LabelProjector() {
       minX = Math.min(minX, x);
       maxX = Math.max(maxX, x);
     }
-    // The box corners sit outside the organ's silhouette; 85 % of the projected box hugs it.
+    // The box corners sit a little outside the organ's silhouette; 95 % of the projected box hugs it.
     const cx = (minX + maxX) / 2;
     const half = ((maxX - minX) / 2) * SILHOUETTE;
     const heart = Number.isFinite(minX) && maxX > minX ? { minX: cx - half, maxX: cx + half } : null;

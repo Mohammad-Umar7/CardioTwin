@@ -6,6 +6,7 @@ import type { AnatomyManifest, VesselsFile } from '@/types/contracts';
 import { VISIBLE_FACING, trunkVisibility, visibleBestView } from '../camera/bestView';
 import { bestViewFor, toControlsAngles } from '../camera/presets';
 import { buildTracks, heartAxisFrame, restToDisplayed } from './anchorTracks';
+import { hoverContent } from './hoverContent';
 import { ANCHOR_PERIOD_MS, AnchorChooser, bestCandidate, buildCandidates, facing, mainTrunk } from './dynamicAnchor';
 import { LABEL_MIN_GAP, labelShowsProbability, laneFor, layoutLanes, stackLane, type LaneItem } from './labelRegistry';
 
@@ -166,5 +167,32 @@ describe('label lanes (V2 §5.14)', () => {
     expect(labelShowsProbability('tour')).toBe(false);
     expect(labelShowsProbability('focus')).toBe(true);
     expect(labelShowsProbability('landing')).toBe(true);
+  });
+});
+
+describe('hover tooltip content (V2 §9.3 D, CONTRACTS §7.1)', () => {
+  const base = { structureId: 'lad', node: 'Coronary_LAD', label: 'LAD', target: 'LAD' as const, kind: 'coronary', segment: null, territory: null, point: [0, 0, 0] as [number, number, number] };
+
+  it('names the SCCT segment and keeps risk vessel-level', () => {
+    const c = hoverContent(
+      { ...base, segment: { scct: 7, code: 'mLAD', name: 'Mid LAD', vessel: 'LAD', target: 'LAD', definition: 'From D1 to D2' } },
+      manifest,
+    );
+    expect(c.title).toBe('Left anterior descending (LAD)');
+    expect(c.segment).toBe('Segment 7 · Mid LAD (mLAD)');
+    expect(c.definition).toBe('From D1 to D2');
+    expect(c.note).toMatch(/risk is estimated for the whole LAD/);
+    expect(`${c.title} ${c.segment} ${c.definition} ${c.note}`).not.toMatch(/lesion|stenosis at|diagnos/i);
+  });
+
+  it('falls back to the structure description, and explains territories', () => {
+    const plain = hoverContent(base, manifest);
+    expect(plain.definition && plain.definition.length).toBeGreaterThan(10);
+    expect(plain.definition!.length).toBeLessThanOrEqual(221);
+    const wall = hoverContent({ ...base, structureId: 'heart_wall_anterior', node: 'Heart_Wall_Anterior', kind: 'myocardium', target: null, territory: 'RCA' }, manifest);
+    expect(wall.definition).toBe('Supplied mostly by the right coronary artery (RCA).');
+    expect(wall.note).toMatch(/not a perfusion scan/);
+    const lm = hoverContent({ ...base, structureId: 'lm', node: 'Coronary_LM', kind: 'leftMain', target: null }, manifest);
+    expect(lm.note).toMatch(/not predicted/);
   });
 });
