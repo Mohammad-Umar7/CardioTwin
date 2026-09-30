@@ -3,7 +3,7 @@ import { resolve } from 'node:path';
 import { Matrix4, Object3D, Vector3 } from 'three';
 import { describe, expect, it } from 'vitest';
 import type { AnatomyManifest, PredictResponse, VesselsFile } from '@/types/contracts';
-import { SURFACE_MIN_COVERAGE, VISIBLE_FACING, surfaceBestView, surfaceViewScore, trunkVisibility, visibleBestView } from '../camera/bestView';
+import { SURFACE_MIN_COVERAGE, SURFACE_PREFERRED, VISIBLE_FACING, surfaceBestView, surfaceViewScore, trunkVisibility, visibleBestView } from '../camera/bestView';
 import { bestViewFor, toControlsAngles } from '../camera/presets';
 import { buildTracks, heartAxisFrame, restToDisplayed } from './anchorTracks';
 import { anatomicalTitle, anatomyOnly, clip, hoverContent } from './hoverContent';
@@ -73,7 +73,7 @@ describe('dynamic label anchors (V2 §5.14, P0-2)', () => {
     it(`picks a surface view that shows ${target}'s proximal trunk face-on`, () => {
       const track = buildTracks(manifest, vessels, [target], [0.05, 0.8], 14)[0]!;
       const conventional = bestViewFor(target, manifest.structures.find((s) => s.target === target && s.bestView)?.bestView);
-      const best = surfaceBestView(conventional, track.candidates);
+      const best = surfaceBestView(conventional, track.candidates, { preferred: SURFACE_PREFERRED[target] });
       expect(best.coverage).toBeGreaterThanOrEqual(SURFACE_MIN_COVERAGE);
       expect(best.spread).toBeGreaterThan(0.5);
       expect(best.coverage + best.spread).toBeGreaterThanOrEqual(

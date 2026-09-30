@@ -9,7 +9,7 @@ import { useUiStore } from '@/state/uiStore';
 import { useViewerStore, type Stage } from '@/state/viewerStore';
 import type { CameraPose, TargetId } from '@/types/contracts';
 import { buildTracks } from '../labels/anchorTracks';
-import { surfaceBestView, type SurfaceViewScore } from './bestView';
+import { SURFACE_PREFERRED, surfaceBestView, type SurfaceViewScore } from './bestView';
 import { collectOccluders, isOccluded } from './occlusion';
 import { angleLabel, useCameraState, type ViewKind } from './cameraState';
 import { sceneRuntime } from '../stage/sceneRuntime';
@@ -419,6 +419,7 @@ export function CameraRig() {
         target: geo.target,
         visible: occluders.length > 0 ? (eye, p) => !isOccluded(eye, p, occluders) : undefined,
         step: 15,
+        preferred: SURFACE_PREFERRED[target] ?? null,
       });
       if (closed && candidates.length > 0) bestViews.current.set(key, found);
     }

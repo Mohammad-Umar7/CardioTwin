@@ -112,6 +112,16 @@ const SURFACE_FACING = 0.2;
 const SURFACE_ELEVATIONS = [-30, -15, 0, 15, 30, 40] as const;
 /** A grazing or hidden trunk never wins: views below this coverage lose to any view above it. */
 export const SURFACE_MIN_COVERAGE = 0.6;
+/**
+ * Where a SURFACE view of each vessel naturally sits (the search's anchor; the angiographic views are for
+ * projections): the LAD's anterior interventricular groove face-on from a shallow LAO-cranial, the LCX's left
+ * AV groove from the left lateral, a little caudal, the RCA's right AV groove from a shallow RAO-caudal.
+ */
+export const SURFACE_PREFERRED: Readonly<Record<string, { azimuth: number; elevation: number }>> = {
+  LAD: { azimuth: 30, elevation: 15 },
+  LCX: { azimuth: 90, elevation: -10 },
+  RCA: { azimuth: -15, elevation: -10 },
+};
 
 /** How much of the proximal trunk a view shows, and how spread out on the screen. */
 export function surfaceViewScore(
@@ -144,8 +154,13 @@ export function surfaceViewScore(
  * its length lies flat in the image (spread: the groove seen face-on, not end-on); views that show less than
  * 60 % of the trunk lose to any that show more.
  */
-export function surfaceBestView(conventional: BestView, candidates: readonly AnchorCandidate[], options: SearchOptions = {}): SurfaceViewScore {
-  const { target = new Vector3(), visible = clear, step = 15 } = options;
+export function surfaceBestView(
+  conventional: BestView,
+  candidates: readonly AnchorCandidate[],
+  options: SearchOptions & { preferred?: { azimuth: number; elevation: number } | null } = {},
+): SurfaceViewScore {
+  const { target = new Vector3(), visible = clear, step = 15, preferred = null } = options;
+  const anchor = preferred ? { ...preferred, distance: conventional.distance } : conventional;
   const conv = surfaceViewScore(candidates, conventional, target, visible);
   let best: SurfaceViewScore = { view: conventional, ...conv, score: -Infinity };
   if (candidates.length === 0) return { ...best, score: 0 };
@@ -154,7 +169,7 @@ export function surfaceBestView(conventional: BestView, candidates: readonly Anc
       const view = { azimuth: az, elevation: el, distance: conventional.distance };
       const s = surfaceViewScore(candidates, view, target, visible);
       const clearView = s.coverage >= SURFACE_MIN_COVERAGE;
-      const score = (clearView ? 1 : 0) + s.coverage + 0.9 * s.spread - (0.35 * angleBetween(view, conventional)) / 180 - 0.002 * Math.abs(el);
+      const score = (clearView ? 1 : 0) + s.coverage + 0.9 * s.spread - (0.6 * angleBetween(view, anchor)) / 180 - 0.002 * Math.abs(el);
       if (score > best.score) best = { view, ...s, score };
     }
   }

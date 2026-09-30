@@ -214,10 +214,10 @@ const REALISTIC: Partial<Record<TissueKind, Look>> = {
     // Lobules: a coarser, deeper bump than the bake's fine grain.
     detail: { freq: 24, bump: 0.02, colorVar: 0.2, roughVar: 0.12, deep: REAL.fatDeep },
     sss: { wrap: 0.5, tint: '#F0E8D0', color: '#625A38', strength: 0.16 },
-    // The bake is a bright saturated ochre: keep its hue (≈ 40°) at under half its chroma and ~45 % of its
-    // luminance, so on screen the fat is darker AND less chromatic than the coronaries (measured with
-    // `__ct.stats`: fat luminance 0.41 / chroma 0.30 against the coronaries' 0.57 / 0.33 at P-011).
-    baked: { tint: '#ACA88A', saturation: 0.42 },
+    // The bake (anatomy 1.1.0) is a pale butter yellow: keep its hue at under half its chroma and take its
+    // luminance down, so on screen the fat is darker AND less chromatic than the coronaries (measured with
+    // `__ct.stats` at P-011, home: fat luminance 0.53 / chroma 0.30 against the coronaries' 0.57 / 0.33).
+    baked: { tint: '#C2B696', saturation: 0.45 },
     polygonOffset: true,
     deflate: FAT_DEFLATE,
   },
