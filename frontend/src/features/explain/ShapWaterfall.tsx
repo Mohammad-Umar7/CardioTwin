@@ -1,5 +1,6 @@
 import { motion } from 'framer-motion';
 import { DirectionMark, Skeleton, Tooltip } from '@/design';
+import { cardLabel } from '@/features/patient/lib/values';
 import { useIsReducedMotion } from '@/hooks/useMediaQuery';
 import { ASSOCIATION_MARK, ASSOCIATION_NOTE, isAssociationOnly } from '@/lib/associations';
 import { cn } from '@/lib/cn';
@@ -47,6 +48,8 @@ export function ContributionRow({ c, spec, target, max, unit, scale, changed, in
   const share = Math.max(0.02, Math.min(1, Math.abs(c.shap) / max));
   const value = spec ? formatFeatureValue(spec, c.value as never) : String(c.value ?? '–');
   const label = spec?.label ?? c.feature;
+  // The short card label ("Wall-motion abn.") in the row; the full one in the tooltip and aria-label.
+  const shortLabel = spec ? cardLabel(spec) : c.feature;
   const f = formatContribution(c.shap, unit, scale);
   const logodds = formatContribution(c.shap, 'logodds', null).text;
   const pts = formatContribution(c.shap, 'points', scale);
@@ -81,7 +84,7 @@ export function ContributionRow({ c, spec, target, max, unit, scale, changed, in
           onBlur={() => highlight(null)}
           aria-label={`${label}, ${value}, ${negligible ? 'negligible effect on' : up ? 'raises' : 'lowers'} ${target} risk, ${f.spoken}.${association ? ' Association only, not a known cause.' : ''} Edit this input.`}
           className={cn(
-            'relative grid h-7 w-full items-center gap-x-2 rounded-sm pr-1 text-left outline-none transition-colors duration-instant',
+            'relative grid min-h-7 w-full items-center gap-x-2 rounded-sm py-0.5 pr-1 text-left outline-none transition-colors duration-instant',
             ROW_GRID,
             inset ? 'pl-3' : 'pl-1',
             'focus-visible:shadow-focus',
@@ -97,8 +100,8 @@ export function ContributionRow({ c, spec, target, max, unit, scale, changed, in
             )}
           />
           <DirectionMark direction={negligible ? null : up ? 'raises' : 'lowers'} />
-          <span className="truncate text-body-s text-secondary">
-            {label}
+          <span className="text-body-s leading-4 text-secondary [overflow-wrap:break-word]">
+            {shortLabel}
             {association && <span className="ml-0.5 text-tertiary">{ASSOCIATION_MARK}</span>}
           </span>
           <span className="num whitespace-nowrap text-right text-label font-normal text-tertiary">{value}</span>

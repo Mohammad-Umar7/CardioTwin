@@ -1,6 +1,7 @@
 import { useMemo } from 'react';
 import { DirectionMark, Skeleton, Toggle, Tooltip } from '@/design';
 import { abnormality, cardLabel } from '@/features/patient/lib/values';
+import { ASSOCIATION_LEGEND, ASSOCIATION_MARK, ASSOCIATION_NOTE, isAssociationOnly } from '@/lib/associations';
 import { cn } from '@/lib/cn';
 import { NEGLIGIBLE_SHAP } from '@/lib/explain';
 import { formatFeatureValue, formatNormalRange, rangeStatus, type RangeStatus } from '@/lib/format';
@@ -99,10 +100,11 @@ export function PhysiologyTable({ target }: { target: string }) {
           <caption className="sr-only">
             Measured inputs with their reference ranges and their contribution to {target} ({unitLabel(d.unit)})
           </caption>
+          {/* Below 1440 the value and range columns narrow, so the label keeps room for its words. */}
           <colgroup>
             <col />
-            <col className="w-[92px]" />
-            <col className="w-[72px]" />
+            <col className="w-[92px] max-[1439.98px]:w-[84px]" />
+            <col className="w-[72px] max-[1439.98px]:w-[60px]" />
             <col className="w-[60px]" />
             <col className="w-[40px]" />
           </colgroup>
@@ -141,12 +143,18 @@ export function PhysiologyTable({ target }: { target: string }) {
                     lit === spec.key ? 'bg-surface-2' : 'hover:bg-surface-1',
                   )}
                 >
-                  <th scope="row" className="truncate pl-1 text-left font-normal">
-                    {/* The card's short label where the full one cannot fit the 440 px drawer ("Wall-motion abn."). */}
+                  <th scope="row" className="py-1 pl-1 text-left align-middle font-normal">
+                    {/* The card's short label ("Wall-motion abn."); a long one wraps to a second line, never clipped. */}
                     <Tooltip
                       content={
-                        [cardLabel(spec) !== spec.label ? spec.label : null, spec.description, range].filter(Boolean).join(' · ') ||
-                        spec.label
+                        [
+                          cardLabel(spec) !== spec.label ? spec.label : null,
+                          spec.description,
+                          range,
+                          isAssociationOnly(spec.key) ? ASSOCIATION_NOTE : null,
+                        ]
+                          .filter(Boolean)
+                          .join(' · ') || spec.label
                       }
                     >
                       <button
@@ -157,10 +165,11 @@ export function PhysiologyTable({ target }: { target: string }) {
                         }}
                         onFocus={() => highlight(spec.key)}
                         onBlur={() => highlight(null)}
-                        aria-label={`${spec.label}, ${valueText(spec, value)}${status && status !== 'within' ? `, ${status} normal` : ''}${range ? `, ${range}` : ''}${f ? `, ${f.spoken} for ${target}` : ''}. Edit this input.`}
-                        className="max-w-full truncate rounded-xs text-left text-body-s text-secondary outline-none focus-visible:shadow-focus"
+                        aria-label={`${spec.label}, ${valueText(spec, value)}${status && status !== 'within' ? `, ${status} normal` : ''}${range ? `, ${range}` : ''}${f ? `, ${f.spoken} for ${target}` : ''}.${isAssociationOnly(spec.key) ? ' Association only, not a known cause.' : ''} Edit this input.`}
+                        className="rounded-xs text-left text-body-s leading-4 text-secondary outline-none [overflow-wrap:break-word] focus-visible:shadow-focus"
                       >
                         {cardLabel(spec)}
+                        {isAssociationOnly(spec.key) && <span className="ml-0.5 text-tertiary">{ASSOCIATION_MARK}</span>}
                       </button>
                     </Tooltip>
                   </th>
@@ -181,6 +190,9 @@ export function PhysiologyTable({ target }: { target: string }) {
         </table>
         {rows.length === 0 && (
           <p className="px-1 pt-3 text-body-s text-tertiary">Every measured value is within its reference range.</p>
+        )}
+        {rows.some((r) => isAssociationOnly(r.spec.key)) && (
+          <p className="m-0 px-1 pt-2 text-label font-normal text-tertiary">{ASSOCIATION_LEGEND}.</p>
         )}
       </section>
 
@@ -205,7 +217,7 @@ export function PhysiologyTable({ target }: { target: string }) {
                     onClick={() => open(s.key)}
                     onMouseEnter={() => highlight(s.key)}
                     onMouseLeave={() => highlight(null)}
-                    aria-label={`${findingLabel(s)}: present, ${Math.abs(shap) < NEGLIGIBLE_SHAP ? 'negligible effect' : `${up ? 'raises' : 'lowers'} ${target}, ${f.spoken}`}. Edit this input.`}
+                    aria-label={`${findingLabel(s)}: present, ${Math.abs(shap) < NEGLIGIBLE_SHAP ? 'negligible effect' : `${up ? 'raises' : 'lowers'} ${target}, ${f.spoken}`}.${isAssociationOnly(s.key) ? ' Association only, not a known cause.' : ''} Edit this input.`}
                     className={cn(
                       'inline-flex h-7 items-center gap-1.5 rounded-sm border border-line bg-surface-1 px-2 text-label text-primary outline-none transition-colors duration-instant',
                       'hover:bg-surface-2 focus-visible:shadow-focus',
@@ -216,12 +228,20 @@ export function PhysiologyTable({ target }: { target: string }) {
                       <DirectionMark direction={up ? 'raises' : 'lowers'} />
                     )}
                     {findingLabel(s)}
+                    {isAssociationOnly(s.key) && (
+                      <span className="-ml-1 text-tertiary" title={ASSOCIATION_NOTE}>
+                        {ASSOCIATION_MARK}
+                      </span>
+                    )}
                     <span className="num font-normal text-tertiary">{Math.abs(shap) >= NEGLIGIBLE_SHAP ? f.text : ''}</span>
                   </button>
                 </li>
               );
             })}
           </ul>
+        )}
+        {present.some((f) => isAssociationOnly(f.key)) && !rows.some((r) => isAssociationOnly(r.spec.key)) && (
+          <p className="m-0 px-1 pt-2 text-label font-normal text-tertiary">{ASSOCIATION_LEGEND}.</p>
         )}
       </section>
       <p className="text-label font-normal text-tertiary">
