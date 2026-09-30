@@ -56,11 +56,14 @@ jobs:
         run: python -m ruff check .
       - name: Test suite (leakage guard, encoding, calibration, TreeSHAP, portable parity, artifacts)
         run: |
-          deselect=()
+          # Node ids are relative to pytest's rootdir (ml/), so the reference tests are deselected by name.
+          select=()
           if [ "${{ matrix.reference }}" != "true" ]; then
-            for test in $ML_REFERENCE_TESTS; do deselect+=(--deselect "$test"); done
+            names=()
+            for test in $ML_REFERENCE_TESTS; do names+=("${test##*::}"); done
+            select=(-k "not ($(printf '%s or ' "${names[@]}" | sed 's/ or $//'))")
           fi
-          python -m pytest ml/tests -q -ra --durations=10 "${deselect[@]}"
+          python -m pytest ml/tests -q -ra --durations=10 "${select[@]}"
       - name: Bit-exact reproduction of the published artifacts (report only off the reference platform)
         if: ${{ !matrix.reference }}
         continue-on-error: true
