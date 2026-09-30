@@ -1,0 +1,232 @@
+"""Stage 6 — write ``frontend/public/anatomy/manifest.json`` (CONTRACTS §6.3).
+
+Combines the declarative config (labels, clinical descriptions, territories, layer explode vectors)
+with measured geometry from ``anatomy/build/build_report.json`` (bounding boxes, heart cut plane) to
+produce layer / structure metadata, explode vectors and camera presets in scene units (1 = 10 cm,
+glTF frame: +Y superior, +Z anterior, +X patient-left).
+
+Explode semantics (documented in the manifest itself): a node's displayed position is
+``rest + t * (layer.explode + structure.explode)`` with ``t`` in [0, 1], applied in its parent's
+(layer's) space. Heart halves separate along the true cut-plane normal; every coronary branch and the
+cardiac veins travel with the heart half they lie on and additionally peel radially away from the
+heart centre, so the opened heart stays coherent.
+
+Usage::
+
+    ./.venv/Scripts/python anatomy/scripts/make_manifest.py
+"""
+from __future__ import annotations
+
+import math
+import sys
+from pathlib import Path
+
+import numpy as np
+
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+from common import (  # noqa: E402
+    BUILD_REPORT,
+    GLB_NAME,
+    PUBLIC_DIR,
+    TARGETS,
+    layer_by_id,
+    load_config,
+    read_json,
+    write_json,
+)
+
+MANIFEST = PUBLIC_DIR / "manifest.json"
+VESSELS = "vessels.json"
+FOV_DEG = 35.0
+#: Radial peel (scene units) of vessels travelling with an opened heart half.
+CORONARY_PEEL = 0.38
+VEIN_PEEL = 0.22
+
+
+def _unit(v: np.ndarray) -> np.ndarray:
+    n = float(np.linalg.norm(v))
+    return v / n if n > 1e-9 else v
+
+
+def _r(v, nd: int = 4) -> list[float]:
+    return [round(float(x), nd) + 0.0 for x in v]
+
+
+def fit_distance(radius: float, fov_deg: float = FOV_DEG, margin: float = 1.15) -> float:
+    """Camera distance at which a sphere of ``radius`` fills the vertical field of view."""
+    return margin * radius / math.sin(math.radians(fov_deg) / 2.0)
+
+
+def focus_preset(center: np.ndarray, radius: float, direction: np.ndarray, *, min_distance: float) -> dict:
+    d = max(fit_distance(radius), min_distance)
+    return {"position": _r(center + _unit(direction) * d), "target": _r(center), "fov": FOV_DEG}
+
+
+def build_manifest(cfg: dict, report: dict) -> dict:
+    layers_cfg = layer_by_id(cfg)
+    nodes = {n["node"]: n for n in report["nodes"]}
+    cut_normal = _unit(np.array(report["heart"]["cut_plane"]["normal"], dtype=float))  # glTF, anterior-facing
+    cut_point = np.array(report["heart"]["cut_plane"]["point"], dtype=float)
+    heart_center = np.zeros(3)  # scene origin = heart-wall bbox centre
+
+    all_min = np.min([n["bbox_min"] for n in report["nodes"]], axis=0)
+    all_max = np.max([n["bbox_max"] for n in report["nodes"]], axis=0)
+    torso_center = (all_min + all_max) / 2.0
+
+    half_explode = {}
+    for spec in cfg["nodes"]:
+        if spec.get("split"):
+            mag = float(np.linalg.norm(spec["explode"]))
+            sign = 1.0 if spec["split"]["side"] == "anterior" else -1.0
+            half_explode[spec["split"]["side"]] = sign * mag * cut_normal
+
+    structures = []
+    focus = {}
+    for spec in cfg["nodes"]:
+        info = nodes[spec["node"]]
+        lo, hi = np.array(info["bbox_min"]), np.array(info["bbox_max"])
+        center = (lo + hi) / 2.0
+        radius = float(np.linalg.norm(hi - lo) / 2.0)
+
+        explode = np.array(spec["explode"], dtype=float)
+        if spec.get("split"):
+            explode = half_explode[spec["split"]["side"]]
+        elif spec["layer"] == "coronary" or spec["node"] == "CardiacVeins":
+            side = "anterior" if float((center - cut_point) @ cut_normal) >= 0 else "posterior"
+            peel = CORONARY_PEEL if spec["layer"] == "coronary" else VEIN_PEEL
+            explode = half_explode[side] + peel * _unit(center - heart_center)
+
+        entry = {
+            "id": spec["id"],
+            "node": spec["node"],
+            "label": spec["label"],
+            "layer": spec["layer"],
+            "target": spec.get("target"),
+            "explode": _r(explode),
+            "description": spec["description"],
+            "territory": spec.get("territory"),
+            "category": spec["material"],
+            "material": info["material"],
+            "fma": spec["parts"],
+            "center": _r(center),
+            "bbox": {"min": _r(lo), "max": _r(hi)},
+            "triangles": info["triangles"],
+        }
+        if "feeds" in spec:
+            entry["feeds"] = spec["feeds"]
+        if spec.get("split"):
+            entry["territory_weights"] = {
+                "attribute": "COLOR_0",
+                "channels": {"r": "LAD", "g": "LCX", "b": "RCA"},
+                "neutral": "1 - (r + g + b)",
+            }
+        structures.append(entry)
+
+        # Focus preset (look-from direction):
+        # * coronary branches — radially away from the heart centre, so each vessel faces the camera
+        #   (LAD from the front, LCX from the left, PDA from below);
+        # * heart halves — along the cut normal, looking into the opened cavity;
+        # * other heart structures (valves, great vessels, veins) — a classic left-anterior-oblique view,
+        #   from behind for posterior structures such as the pulmonary veins;
+        # * everything else — radially away from the torso axis (spine from behind, ribs from the side).
+        if spec.get("split"):
+            outward = cut_normal * (1.0 if spec["split"]["side"] == "anterior" else -1.0)
+        elif spec["layer"] == "coronary":
+            outward = center - heart_center
+        elif spec["layer"] == "heart":
+            outward = np.array([0.35, 0.0, 1.0 if center[2] > -0.25 else -1.0])
+        else:
+            outward = center - np.array([torso_center[0], center[1], torso_center[2]])
+        if np.linalg.norm(outward) < 0.15:
+            outward = np.array([0.0, 0.0, 1.0])
+        direction = _unit(_unit(outward) + np.array([0.0, 0.3, 0.0]))
+        min_d = 1.9 if spec["layer"] == "coronary" else 1.4
+        focus[spec["id"]] = focus_preset(center, radius, direction, min_distance=min_d)
+
+    # Home: whole torso in frame, looking from the front and slightly above at a point between
+    # the torso centre and the heart so the heart stays prominent.
+    home_target = (torso_center + heart_center) / 2.0
+    half_height = (all_max[1] - all_min[1]) / 2.0
+    home_d = 1.1 * half_height / math.tan(math.radians(FOV_DEG) / 2.0) + all_max[2]
+    home_dir = _unit(np.array([0.0, 0.12, 1.0]))
+    home = {"position": _r(home_target + home_dir * home_d), "target": _r(home_target), "fov": FOV_DEG}
+    heart_view = focus_preset(heart_center, 0.85, _unit(np.array([0.25, 0.2, 1.0])), min_distance=2.5)
+
+    targets = {t: [] for t in TARGETS}
+    for s in structures:
+        if s["target"] in targets:
+            targets[s["target"]].append(s["node"])
+
+    layers = []
+    for layer in cfg["layers"]:
+        members = [s["node"] for s in structures if s["layer"] == layer["id"]]
+        layers.append({
+            "id": layer["id"],
+            "node": layer["node"],
+            "label": layer["label"],
+            "explode": _r(layer["explode"]),
+            "order": layer["order"],
+            "description": layer["description"],
+            "nodes": members,
+        })
+
+    return {
+        "version": cfg["version"],
+        "glb": GLB_NAME,
+        "vessels": VESSELS,
+        "credits": cfg["source"]["credits"],
+        "license": {
+            "anatomy": f"{cfg['source']['license']} (derived meshes, share-alike) — {cfg['source']['license_url']}",
+            "code": "MIT",
+        },
+        "units": "scene units; 1 unit = 10 cm",
+        "frame": {
+            "origin": "centre of the heart-wall bounding box",
+            "axes": {"+X": "patient left", "+Y": "superior (head)", "+Z": "anterior (towards default camera)"},
+            "source_origin_mm": report["frame"]["origin_mm_bodyparts3d"],
+        },
+        "explode_semantics": (
+            "displayed position = rest position + t * (layer.explode + structure.explode), t in [0, 1], "
+            "in the parent layer's space (scene units). Heart halves separate along the cut-plane normal; "
+            "coronary branches and cardiac veins follow their heart half and peel radially outward."
+        ),
+        "heart": {
+            "cut_plane": report["heart"]["cut_plane"],
+            "long_axis": report["heart"]["long_axis"],
+            "apex": report["heart"]["apex"],
+            "base_center": report["heart"]["base_center"],
+        },
+        "territories": {
+            "nodes": [s["node"] for s in structures if "territory_weights" in s],
+            "attribute": "COLOR_0",
+            "channels": {"r": "LAD", "g": "LCX", "b": "RCA"},
+            "method": (
+                "Soft nearest-artery assignment: softmax(-d/sigma) over the distances from each heart-wall vertex to "
+                "the LAD (+septal), LCX and RCA (+marginal, PDA, posterolateral, septal) groups, sigma = "
+                f"{cfg['territories']['sigma_mm']} mm, faded to zero on atria and great-vessel roots (thin wall and "
+                "closer to inflow/outflow vessels than to ventricular landmarks) and far from every artery."
+            ),
+            "interpretation": (
+                "Approximates the standard coronary perfusion territories of the AHA 17-segment model on this "
+                "right-dominant BodyParts3D heart. It is a vessel-level supply map, NOT a lesion map: model "
+                "outputs are per-vessel probabilities and never localise a stenosis within a vessel."
+            ),
+        },
+        "targets": targets,
+        "layers": layers,
+        "structures": structures,
+        "camera": {"fov": FOV_DEG, "home": home, "heart": heart_view, "focus": focus},
+    }
+
+
+def main() -> int:
+    cfg = load_config()
+    report = read_json(BUILD_REPORT)
+    manifest = build_manifest(cfg, report)
+    write_json(MANIFEST, manifest)
+    print(f"[manifest] wrote {MANIFEST} ({len(manifest['structures'])} structures, {len(manifest['layers'])} layers)")
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())
