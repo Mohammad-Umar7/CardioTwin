@@ -1,0 +1,5 @@
+# CardioTwin API - runtime dependencies.
+# The model itself comes from the ML package, installed separately:  python -m pip install -e ml
+fastapi>=0.115,<1
+uvicorn[standard]>=0.30,<1
+pydantic>=2.7,<3

@@ -1,0 +1,5 @@
+# CardioTwin API - test and benchmark dependencies.
+-r requirements.txt
+pytest>=8
+httpx>=0.27
+numpy>=2.0
