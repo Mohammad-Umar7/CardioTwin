@@ -179,7 +179,8 @@ export function CameraRig() {
       // The real walls' silhouette (not their box) fills the share; the visible great vessels stay inside.
       points: heart,
       keep,
-      keepMargin: KEEP_MARGIN,
+      // The hero is full-bleed under the top bar: its fading vessels may reach the free area's edge.
+      keepMargin: forStage === 'hero' ? 0 : KEEP_MARGIN,
       target: geo.target,
       direction,
       fov: CAMERA_FOV,
