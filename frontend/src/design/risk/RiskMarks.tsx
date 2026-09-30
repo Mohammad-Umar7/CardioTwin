@@ -9,6 +9,7 @@ import type { CSSProperties } from 'react';
 import { cn } from '@/lib/cn';
 import { formatPercent, formatProbability } from '@/lib/format';
 import { RISK_BAND_STYLES, RISK_PENDING, riskGradientCss, riskHex, type RiskBandId } from '@/theme/risk';
+import type { TargetId } from '@/types/contracts';
 
 // ------------------------------------------------------------------------------------ RiskPip
 
@@ -84,6 +85,17 @@ export function BandChip({ band, pending, size = 'md', showMeter = true, classNa
 
 export interface ProbabilityProps {
   p: number | null | undefined;
+  /**
+   * The target this probability belongs to. Renders `data-prob="<target>"` (the one-home-per-number
+   * contract, WORKSTATION_V2 §1.4 / §10.3 probe 2): at most one visible element per target may carry it.
+   * Every V2 caller passes it.
+   */
+  target?: TargetId;
+  /**
+   * A different quantity from the current estimate (the recorded baseline in "was 98 %"): renders
+   * `data-baseline="<target>"` instead of `data-prob`, so the duplicate probe does not count it.
+   */
+  baseline?: boolean;
   /** Visual size token. */
   size?: 'xl' | 'l' | 'label' | 'm';
   stale?: boolean;
@@ -98,12 +110,14 @@ const SIZE_CLASS = {
 } as const;
 
 /** "72 %": integer + thin space + % at 0.6 em in text/secondary. Exact p in the title tooltip. */
-export function Probability({ p, size = 'l', stale, className }: ProbabilityProps) {
+export function Probability({ p, target, baseline = false, size = 'l', stale, className }: ProbabilityProps) {
   const f = formatProbability(p);
   return (
     <span
       className={cn('whitespace-nowrap text-primary transition-opacity duration-fast', SIZE_CLASS[size], stale && 'opacity-50', className)}
       title={f.exact}
+      data-prob={target !== undefined && !baseline ? target : undefined}
+      data-baseline={target !== undefined && baseline ? target : undefined}
     >
       <span className="sr-only">{f.spoken}</span>
       <span aria-hidden>

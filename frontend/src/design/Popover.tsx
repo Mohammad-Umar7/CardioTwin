@@ -9,6 +9,7 @@ import {
 } from 'react';
 import { createPortal } from 'react-dom';
 import { cn } from '@/lib/cn';
+import { ESCAPE_PRIORITY, useEscapeLayer } from './escapeStack';
 import { computePosition, type Placement } from './position';
 
 export interface PopoverProps {
@@ -55,9 +56,11 @@ export function Popover({ trigger, children, placement = 'bottom', label, classN
     panel.current.focus();
   }, [open, placement]);
 
+  // Esc closes only the popover (it sits above drawers in the Esc chain, V2 §4.10).
+  useEscapeLayer(open, close, ESCAPE_PRIORITY.popover);
+
   useEffect(() => {
     if (!open) return;
-    const onKey = (e: KeyboardEvent) => e.key === 'Escape' && close();
     const onDown = (e: PointerEvent) => {
       const t = e.target as Node;
       if (!panel.current?.contains(t) && !anchor.current?.contains(t)) {
@@ -65,12 +68,8 @@ export function Popover({ trigger, children, placement = 'bottom', label, classN
         setPos(null);
       }
     };
-    document.addEventListener('keydown', onKey);
     document.addEventListener('pointerdown', onDown);
-    return () => {
-      document.removeEventListener('keydown', onKey);
-      document.removeEventListener('pointerdown', onDown);
-    };
+    return () => document.removeEventListener('pointerdown', onDown);
   }, [open, close]);
 
   return (
@@ -95,7 +94,7 @@ export function Popover({ trigger, children, placement = 'bottom', label, classN
             style={{ top: pos?.top ?? -9999, left: pos?.left ?? -9999, width }}
             className={cn(
               'fixed z-popover rounded-lg bg-surface-3 p-4 text-body-s text-secondary shadow-e3 outline-none',
-              pos ? 'animate-rise-in' : 'opacity-0',
+              pos ? 'menu-enter' : 'opacity-0',
               className,
             )}
           >

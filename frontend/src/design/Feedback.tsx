@@ -14,19 +14,6 @@ export function Skeleton({ className, style, label }: { className?: string; styl
   );
 }
 
-/** Keyboard key chip used in hints and the shortcut sheet. */
-export function Kbd({ children, className }: { children: ReactNode; className?: string }) {
-  return (
-    <kbd
-      className={cn(
-        'mono inline-flex h-5 min-w-5 items-center justify-center rounded-xs border border-line-strong bg-surface-2 px-1 text-[0.6875rem] text-secondary',
-        className,
-      )}
-    >
-      {children}
-    </kbd>
-  );
-}
 
 export interface ProgressRingProps {
   /** 0–1; undefined renders an indeterminate quarter arc. */

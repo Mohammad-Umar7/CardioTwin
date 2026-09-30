@@ -28,6 +28,16 @@ export function useLayoutMode(): LayoutMode {
   return wide ? 'wide' : standard ? 'standard' : 'compact';
 }
 
+/**
+ * OS `prefers-reduced-motion` OR the in-app Calm mode, without side effects: use this in components.
+ * (`useReducedMotion` below is the app-level controller that also mirrors Calm onto <html>.)
+ */
+export function useIsReducedMotion(): boolean {
+  const os = useMediaQuery('(prefers-reduced-motion: reduce)');
+  const calm = useViewerStore((s) => s.calm);
+  return os || calm;
+}
+
 /** OS `prefers-reduced-motion` OR the in-app Calm mode (key C). Mirrors the result onto <html data-calm>. */
 export function useReducedMotion(): boolean {
   const os = useMediaQuery('(prefers-reduced-motion: reduce)');

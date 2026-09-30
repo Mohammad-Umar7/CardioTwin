@@ -28,6 +28,8 @@ export interface TooltipProps {
 type ChildProps = {
   onMouseEnter?: (e: React.MouseEvent) => void;
   onMouseLeave?: (e: React.MouseEvent) => void;
+  onPointerDown?: (e: React.PointerEvent) => void;
+  onClick?: (e: React.MouseEvent) => void;
   onFocus?: (e: React.FocusEvent) => void;
   onBlur?: (e: React.FocusEvent) => void;
   'aria-describedby'?: string;
@@ -37,6 +39,10 @@ type ChildProps = {
 /**
  * Tooltip (DESIGN_SYSTEM §5): surface/3, e-2, r-md, 8×10 padding, max-width 280, 12/16. Opens after
  * 120 ms of hover or immediately on focus; Esc dismisses. Never the only copy of information.
+ *
+ * Close-on-press (WORKSTATION_V2 §5.4, P1-11): pressing the trigger closes the tooltip, and it does not
+ * reopen (not even from the focus that the press gives the trigger) until the pointer leaves and
+ * re-enters. Keyboard focus still opens it immediately.
  */
 export function Tooltip({ content, children, placement = 'top', delay = 120, disabled, className }: TooltipProps) {
   const id = useId();
@@ -45,10 +51,12 @@ export function Tooltip({ content, children, placement = 'top', delay = 120, dis
   const timer = useRef<ReturnType<typeof setTimeout>>();
   const [open, setOpen] = useState(false);
   const [pos, setPos] = useState<{ top: number; left: number } | null>(null);
+  /** Set by a press on the trigger; cleared when the pointer leaves it. */
+  const suppressed = useRef(false);
 
   const show = useCallback(
     (immediate: boolean) => {
-      if (disabled || content === null || content === undefined || content === '') return;
+      if (suppressed.current || disabled || content === null || content === undefined || content === '') return;
       clearTimeout(timer.current);
       if (immediate) setOpen(true);
       else timer.current = setTimeout(() => setOpen(true), delay);
@@ -99,6 +107,16 @@ export function Tooltip({ content, children, placement = 'top', delay = 120, dis
     },
     onMouseLeave: (e: React.MouseEvent) => {
       child.props.onMouseLeave?.(e);
+      suppressed.current = false;
+      hide();
+    },
+    onPointerDown: (e: React.PointerEvent) => {
+      child.props.onPointerDown?.(e);
+      suppressed.current = true;
+      hide();
+    },
+    onClick: (e: React.MouseEvent) => {
+      child.props.onClick?.(e);
       hide();
     },
     onFocus: (e: React.FocusEvent) => {

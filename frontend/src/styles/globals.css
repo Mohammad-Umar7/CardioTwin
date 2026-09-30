@@ -160,6 +160,36 @@
   }
 }
 
+/* V2 stage cards enter with y 8 → 0 + fade over `base` (WORKSTATION_V2 §5.4, §8.1). */
+@keyframes stage-card-in {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+.stage-card-enter {
+  animation: stage-card-in var(--dur-base) var(--ease-out) both;
+}
+
+/* Menus and popovers: fade + y 4 over `fast` (V2 §8.1). */
+@keyframes menu-in {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+.menu-enter {
+  animation: menu-in var(--dur-fast) var(--ease-out) both;
+}
+
 @media (prefers-reduced-motion: no-preference) {
   .skeleton {
     animation: shimmer 1.8s linear infinite;
