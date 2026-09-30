@@ -336,7 +336,7 @@ def validate(mesh: trimesh.Trimesh, segments: list[Segment], parent_mesh: trimes
 LCX_GROOVE_MM = 15.0
 VEIN_NAMES = {"CS": "Coronary sinus", "GCV": "Great cardiac vein", "AIV": "Anterior interventricular vein",
               "MCV": "Middle cardiac vein", "PVLV": "Posterior vein of the left ventricle", "ACV": "Anterior cardiac vein",
-              "LMV": "Left marginal vein", "SCV": "Small cardiac vein"}
+              "LMV": "Left marginal vein", "SCV": "Small cardiac vein", "RMV": "Right marginal vein"}
 CORONARY_DESIGN = SYNTH_DIR / "coronary_centerlines.json"
 
 
