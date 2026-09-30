@@ -1,12 +1,13 @@
-import { BoxGeometry, BufferAttribute, Group, Mesh, MeshStandardMaterial, Vector3 } from 'three';
+import { BoxGeometry, BufferAttribute, DataTexture, Group, Mesh, MeshStandardMaterial, Vector3 } from 'three';
 import { describe, expect, it } from 'vitest';
 import type { AnatomyManifest, TargetId } from '@/types/contracts';
+import { Picker } from './picking';
 import { AnatomyRig, type RigInputs } from './rig';
 
 const ANTERIOR: [number, number, number] = [-0.8074, 0.1839, 0.6917];
 
 /** A miniature GLB-shaped scene: layer groups with centred child meshes, as the real asset has. */
-function buildScene() {
+function buildScene(options: { segments?: boolean; baked?: boolean } = {}) {
   const root = new Group();
   const layer = (name: string) => {
     const g = new Group();
@@ -16,7 +17,11 @@ function buildScene() {
   };
   const mesh = (parent: Group, name: string, at: [number, number, number], colour = false) => {
     const geometry = new BoxGeometry(0.2, 0.2, 0.2);
-    if (colour) geometry.setAttribute('color', new BufferAttribute(new Float32Array(geometry.getAttribute('position').count * 3).fill(0.3), 3));
+    if (colour) {
+      // LAD-dominant territory weights (R = LAD, G = LCX, B = RCA).
+      const weights = new Float32Array(geometry.getAttribute('position').count * 3).map((_, i) => (i % 3 === 0 ? 0.7 : 0.1));
+      geometry.setAttribute('color', new BufferAttribute(weights, 3));
+    }
     const m = new Mesh(geometry, new MeshStandardMaterial());
     m.name = name;
     m.position.set(...at);
@@ -29,7 +34,13 @@ function buildScene() {
   mesh(heart, 'Heart_Wall_Anterior', [0, 0, 0.13], true);
   mesh(heart, 'Heart_Wall_Posterior', [0, -0.04, -0.09], true);
   mesh(heart, 'GreatVessel_Aorta', [-0.1, 0.4, -0.2]);
-  mesh(coronary, 'Coronary_LAD', [0.33, -0.08, 0.24]);
+  const lad = mesh(coronary, 'Coronary_LAD', [0.33, -0.08, 0.24]);
+  if (options.segments) {
+    // SCCT 6 (pLAD) on the first half of the vertices, 7 (mLAD) on the rest.
+    const count = lad.geometry.getAttribute('position').count;
+    lad.geometry.setAttribute('_segment', new BufferAttribute(new Float32Array(count).map((_, i) => (i < count / 2 ? 6 : 7)), 1));
+  }
+  if (options.baked) (lad.material as MeshStandardMaterial).map = new DataTexture(new Uint8Array(4), 1, 1);
   mesh(coronary, 'Coronary_LCX', [0.34, -0.05, -0.07]);
   mesh(lungs, 'Lung_L', [0.44, 0.07, -0.15]);
   root.updateMatrixWorld(true);
@@ -85,8 +96,8 @@ const inputs = (over: Partial<RigInputs> = {}): RigInputs => ({
   ...over,
 });
 
-function makeRig(assemble = false, explode = 0.6) {
-  const root = buildScene();
+function makeRig(assemble = false, explode = 0.6, scene: Parameters<typeof buildScene>[0] = {}) {
+  const root = buildScene(scene);
   const rig = new AnatomyRig(root, { manifest: MANIFEST, nodeTargets: TARGETS, look: 'realistic', tier: 'B', assemble }, explode);
   return { root, rig, node: (n: string) => rig.byNode.get(n)! };
 }
@@ -199,5 +210,38 @@ describe('anatomy rig: cold-load assembly', () => {
     expect(node('Heart_Wall_Anterior').mesh.geometry).toBe(geometry);
     expect((node('Heart_Wall_Anterior').mesh.material as MeshStandardMaterial).type).toBe('MeshStandardMaterial');
     rig.dispose();
+  });
+});
+
+describe('anatomy rig: baked textures and picking', () => {
+  it('queues baked GLB maps for a lazy upload and rebuilds the realistic material with them', () => {
+    const { rig, node } = makeRig(false, 0.6, { baked: true });
+    const pending = rig.pendingTextures();
+    expect(pending.map((p) => p.entry.node)).toEqual(['Coronary_LAD']);
+    expect((node('Coronary_LAD').mesh.material as MeshStandardMaterial).map).toBeNull();
+    rig.markMapsReady(pending[0]!.entry);
+    expect((node('Coronary_LAD').mesh.material as MeshStandardMaterial).map).toBe(pending[0]!.textures[0]);
+    expect(rig.pendingTextures()).toHaveLength(0);
+  });
+
+  it('resolves structure, target, SCCT segment and territory under the pointer', () => {
+    const { rig, node } = makeRig(false, 0.6, { segments: true });
+    rig.update(inputs());
+    const picker = new Picker(rig.entries, [{ scct: 6, code: 'pLAD', name: 'Proximal LAD', vessel: 'LAD', target: 'LAD' }], null);
+    const lad = node('Coronary_LAD').mesh;
+    const hit = picker.resolve(lad, new Vector3(0.33, -0.08, 0.34), 0);
+    expect(hit).toMatchObject({ structureId: 'lad', target: 'LAD', kind: 'coronary', segment: { scct: 6, code: 'pLAD' } });
+    const wall = picker.resolve(node('Heart_Wall_Anterior').mesh, new Vector3(0, 0, 0.23), 0);
+    expect(wall).toMatchObject({ node: 'Heart_Wall_Anterior', target: null, territory: 'LAD', segment: null });
+    expect(picker.resolve(new Mesh(), new Vector3(), 0)).toBeNull();
+    picker.dispose();
+  });
+
+  it('only lets visible, solid structures answer the pointer', () => {
+    const { rig, node } = makeRig();
+    rig.update(inputs({ selected: 'LAD', isolate: true }));
+    expect(node('Coronary_LCX').pickable).toBe(false);
+    expect(node('Coronary_LAD').pickable).toBe(true);
+    expect(node('Lung_L').pickable).toBe(false);
   });
 });
