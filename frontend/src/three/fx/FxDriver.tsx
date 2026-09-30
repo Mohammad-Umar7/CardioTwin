@@ -155,15 +155,16 @@ export function FxDriver() {
       animating ||= env.active;
     }
 
-    // --- per-beat pulse wave (only once the tree is lit)
-    const front = pulsatile && f.ignite >= IGNITE_DONE ? pulseFront(cardiacClock.phase) : null;
-    f.pulseFront = front ?? -1;
-    f.pulseAmp = front === null ? 0 : 1 - MathUtils.smoothstep(front, PULSE_OVERSHOOT * 0.8, PULSE_OVERSHOOT);
-
     // --- global flow visibility
     const flowGoal = viewer.bloodFlow && !reduced && viewer.tier !== 'D' ? 1 : 0;
     f.flowOpacity = reduced ? flowGoal : MathUtils.damp(f.flowOpacity, flowGoal, LAMBDA_FLOW, dt);
     if (Math.abs(f.flowOpacity - flowGoal) < 1e-3) f.flowOpacity = flowGoal;
+
+    // --- per-beat pulse wave: part of the flow picture (follows the Flow toggle), only once the tree is lit
+    const front = pulsatile && f.ignite >= IGNITE_DONE ? pulseFront(cardiacClock.phase) : null;
+    f.pulseFront = front ?? -1;
+    f.pulseAmp =
+      front === null ? 0 : (1 - MathUtils.smoothstep(front, PULSE_OVERSHOOT * 0.8, PULSE_OVERSHOOT)) * f.flowOpacity;
 
     // On-demand canvases (Beat off) still need frames while anything moves.
     if (f.flowOpacity > 0 || animating || f.pulseAmp > 0) state.invalidate();

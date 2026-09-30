@@ -1,7 +1,7 @@
-import { useFrame } from '@react-three/fiber';
+import { useFrame, useThree } from '@react-three/fiber';
 import { Bloom, EffectComposer, SMAA, ToneMapping, Vignette } from '@react-three/postprocessing';
 import { EffectPass, SMAAPreset, ToneMappingMode, type EffectComposer as EffectComposerImpl } from 'postprocessing';
-import { useRef } from 'react';
+import { useEffect, useRef } from 'react';
 import { HalfFloatType } from 'three';
 import type { RenderTier } from '@/state/viewerStore';
 
@@ -33,7 +33,18 @@ export const BLOOM = {
  */
 export function FXComposer({ tier }: { tier: RenderTier }) {
   const composer = useRef<EffectComposerImpl>(null);
+  const gl = useThree((s) => s.gl);
   const levels = tier === 'A' ? BLOOM.levels.A : BLOOM.levels.B;
+
+  // postprocessing's EffectComposer switches the renderer's autoClear OFF (it clears its own buffers) and
+  // never switches it back. Dropping to tier C at runtime would then render R3F frames without clearing
+  // colour/depth — stale depth rejects most of the anatomy and the heart goes black. Restore it on unmount.
+  useEffect(
+    () => () => {
+      gl.autoClear = true;
+    },
+    [gl],
+  );
 
   // Passes are (re)built by the composer's layout effect whenever children change; flag dithering on the
   // screen-facing pass as soon as it exists (a loop over ≤ 3 passes per frame, no allocation).
