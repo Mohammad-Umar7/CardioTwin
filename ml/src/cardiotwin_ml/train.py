@@ -35,6 +35,8 @@ from .ensemble import (
     XGBComponent,
     choose_thresholds,
     choose_weight,
+    cross_fit_ensemble,
+    cross_fitted_threshold_metrics,
     sigmoid,
 )
 from .evaluate import CVJob, fit_estimator, make_folds, run_cv_jobs
@@ -222,23 +224,26 @@ def run(
 
     log.info("stage done: nested-CV leaderboard (%.1f s elapsed)", time.perf_counter() - t_start)
 
-    # ---------------------------------------------------------------- ensemble on OOF margins (dev only)
+    # ---------------------------------------------------------------- honest CV estimate of the ensemble (dev only)
+    # The deployed recipe makes four data-driven choices (logistic variant, weight w, Platt a/b, threshold).
+    # Scoring it on the same OOF predictions that made those choices is optimistic, so the reported CV
+    # estimate re-makes every choice without the scored fold (cross-fitting, see ensemble.cross_fit_ensemble).
     ens_cfg = cfg["ensemble"]
     tree_name = ens_cfg["tree_component"]
+    step = ens_cfg["weight_grid_step"]
+    cands = ens_cfg["logistic_candidates"]
     per_target: dict[str, dict[str, Any]] = {}
     for t in target_ids:
         y = y_dev[t]
-        cands = ens_cfg["logistic_candidates"]
         cand_auc = {c: cv[f"{c}|{t}"].summary()["roc_auc"]["mean"] for c in cands}
         lr_name = max(cands, key=lambda c: (cand_auc[c], -cands.index(c)))
-        m_lr, m_xgb = cv[f"{lr_name}|{t}"].margin, cv[f"{tree_name}|{t}"].margin
-        assert m_lr is not None and m_xgb is not None
-        fit = choose_weight(m_lr, m_xgb, y, ens_cfg["weight_grid_step"])
-        oof_margin = fit.weight * m_lr + (1 - fit.weight) * m_xgb
-        oof_p = np.asarray(sigmoid(fit.platt_a * oof_margin + fit.platt_b))
-        thr = choose_thresholds(y, oof_p)
-        fold_at_thr = [binary_metrics(y[f.test], oof_p[f.repeat, f.test], thr.youden) for f in folds[t]]
-        fold_at_half = [binary_metrics(y[f.test], oof_p[f.repeat, f.test], 0.5) for f in folds[t]]
+        m_xgb = cv[f"{tree_name}|{t}"].margin
+        assert m_xgb is not None
+        xf = cross_fit_ensemble({c: cv[f"{c}|{t}"].margin for c in cands}, m_xgb, y, folds[t], step)
+        fold_at_thr = [
+            binary_metrics(y[f.test], xf.proba[f.repeat, f.test], xf.thresholds[k]) for k, f in enumerate(folds[t])
+        ]
+        fold_at_half = [binary_metrics(y[f.test], xf.proba[f.repeat, f.test], 0.5) for f in folds[t]]
         leaderboard = [
             _leaderboard_row(m, specs[m].label, specs[m].tuned, cv[f"{m}|{t}"].summary()) for m in specs
         ]
@@ -248,40 +253,26 @@ def run(
             )
         )
         leaderboard.sort(key=lambda r: (-r["roc_auc_mean"], r["model"]))
+        yy = np.tile(y, xf.proba.shape[0])
         per_target[t] = {
             "lr_name": lr_name,
             "candidate_auc": cand_auc,
-            "fit": fit,
-            "thresholds": thr,
-            "oof_p": oof_p,
             "cv": _metric_block(fold_at_thr),
+            "cv_oof": {
+                "roc_auc_pooled": float(np.mean([fast_roc_auc(y, xf.proba[r]) for r in range(xf.proba.shape[0])])),
+                "log_loss_pooled": binary_metrics(yy, xf.proba.ravel(), 0.5)["log_loss"],
+                "logistic_chosen_in_folds": {
+                    c: sum(ch["logistic"] == c for ch in xf.choices) for c in cands if any(ch["logistic"] == c for ch in xf.choices)
+                },
+                "weight_lr_median_in_folds": float(np.median([ch["weight_lr"] for ch in xf.choices])),
+            },
             "leaderboard": leaderboard,
         }
-        log.info(
-            "%s: logistic=%s w=%.2f platt=(%.3f, %.3f) youden=%.3f OOF AUC=%.3f",
-            t, lr_name, fit.weight, fit.platt_a, fit.platt_b, thr.youden, fit.oof_auc,
-        )
+        log.info("%s: logistic=%s cross-fitted CV AUC=%.3f", t, lr_name, per_target[t]["cv"]["roc_auc"]["mean"])
 
-    if dev_only:
-        summary = {
-            "fast_mode": fast,
-            "ablations": ablations,
-            "targets": {
-                t: {
-                    "logistic": per_target[t]["lr_name"],
-                    "weight_lr": per_target[t]["fit"].weight,
-                    "oof_auc_pooled": per_target[t]["fit"].oof_auc,
-                    "cv": per_target[t]["cv"],
-                    "leaderboard": per_target[t]["leaderboard"],
-                    "baseline_cv_auc": cv[f"{bl_name}|{t}"].summary()["roc_auc"],
-                }
-                for t in target_ids
-            },
-        }
-        export.write_json(artifacts_dir / "dev_summary.json", summary)
-        log.info("dev-only run: test set untouched; summary written to %s", artifacts_dir / "dev_summary.json")
-        return summary
-    # ---------------------------------------------------------------- final refit on the full dev set
+    log.info("stage done: cross-fitted ensemble estimate (%.1f s elapsed)", time.perf_counter() - t_start)
+
+    # ---------------------------------------------------------------- final tuning on the full dev set
     final_tuning = {"inner_splits": cfg["final_tuning"]["inner_splits"], "scoring": cfg["tuning"]["scoring"]}
     inner_repeats = int(cfg["final_tuning"]["inner_repeats"])
     fit_keys = []
@@ -294,6 +285,53 @@ def run(
             )
     fitted = dict(zip(fit_keys, Parallel(n_jobs=n_jobs, backend="loky", batch_size=1)(tasks), strict=True))
 
+    # ---------------------------------------------------------------- calibration CV with the deployed hyper-parameters
+    # w, Platt (a, b) and the thresholds must be fitted on OOF margins whose scale matches the deployed
+    # components, i.e. components with the FINAL hyper-parameters (same outer folds, no re-tuning).
+    cal_jobs = [
+        CVJob(f"{comp}|{t}", specs[comp], t, X_dev, y_dev[t], folds[t], nested=False, overrides=fitted[(t, comp)][1], columns=columns)
+        for (t, comp) in fit_keys
+    ]
+    cal = run_cv_jobs(cal_jobs, seed, cfg["tuning"], n_jobs)
+    for t in target_ids:
+        y = y_dev[t]
+        info = per_target[t]
+        m_lr, m_xgb = cal[f"{info['lr_name']}|{t}"].margin, cal[f"{tree_name}|{t}"].margin
+        assert m_lr is not None and m_xgb is not None
+        fit = choose_weight(m_lr, m_xgb, y, step)
+        oof_p = np.asarray(sigmoid(fit.platt_a * (fit.weight * m_lr + (1 - fit.weight) * m_xgb) + fit.platt_b))
+        info["fit"] = fit
+        info["thresholds"] = choose_thresholds(y, oof_p)
+        bl_cal = cal[f"{bl_name}|{t}"]
+        info["baseline_threshold"] = youden_threshold(np.tile(y, bl_cal.n_repeats), bl_cal.proba.ravel())
+        log.info(
+            "%s: deployed w=%.2f platt=(%.3f, %.3f) youden=%.3f (calibration OOF AUC=%.3f)",
+            t, fit.weight, fit.platt_a, fit.platt_b, info["thresholds"].youden, fit.oof_auc,
+        )
+
+    if dev_only:
+        summary = {
+            "fast_mode": fast,
+            "ablations": ablations,
+            "targets": {
+                t: {
+                    "logistic": per_target[t]["lr_name"],
+                    "weight_lr": per_target[t]["fit"].weight,
+                    "platt": [per_target[t]["fit"].platt_a, per_target[t]["fit"].platt_b],
+                    "threshold": per_target[t]["thresholds"].youden,
+                    "cv": per_target[t]["cv"],
+                    "cv_oof": per_target[t]["cv_oof"],
+                    "leaderboard": per_target[t]["leaderboard"],
+                    "baseline_cv_auc": cv[f"{bl_name}|{t}"].summary()["roc_auc"],
+                }
+                for t in target_ids
+            },
+        }
+        export.write_json(artifacts_dir / "dev_summary.json", summary)
+        log.info("dev-only run: test set untouched; summary written to %s", artifacts_dir / "dev_summary.json")
+        return summary
+
+    # ---------------------------------------------------------------- deployed models (refit on the full dev set)
     models: dict[str, TargetModel] = {}
     for t in target_ids:
         info = per_target[t]
@@ -329,9 +367,8 @@ def run(
         p_test = tm.predict_proba(X_test)
         bl_pipe, bl_params = fitted[(t, bl_name)]
         p_bl_test = bl_pipe.predict_proba(X_test)[:, 1]
-        bl_cv = cv[f"{bl_name}|{t}"]
-        bl_thr = youden_threshold(np.tile(y_dev[t], bl_cv.n_repeats), bl_cv.proba.ravel())
-        bl_fold = [binary_metrics(y_dev[t][f.test], bl_cv.proba[f.repeat, f.test], bl_thr) for f in folds[t]]
+        bl_thr = info["baseline_threshold"]
+        bl_fold = cross_fitted_threshold_metrics(y_dev[t], cv[f"{bl_name}|{t}"].proba, folds[t])
         s = seed + 101 * (k + 1)
         target_reports[t] = {
             "selected_model": f"LR ({info['lr_name']}) + XGBoost margin ensemble (Platt-calibrated)",
@@ -341,15 +378,21 @@ def run(
                 "platt": {"a": round_float(tm.platt_a), "b": round_float(tm.platt_b)},
                 "logistic_candidates_cv_auc": {c: round_float(v) for c, v in info["candidate_auc"].items()},
                 "weight_grid": info["fit"].grid,
+                "calibration_source": (
+                    "out-of-fold margins of the deployed hyper-parameters (repeated stratified CV on the development "
+                    "set, same outer folds as the leaderboard)"
+                ),
+                "calibration_oof": {
+                    "roc_auc_pooled": round_float(info["fit"].oof_auc),
+                    "log_loss_pooled": round_float(info["fit"].oof_log_loss),
+                    "note": "apparent: hyper-parameters were tuned on the full development set; not a performance estimate",
+                },
             },
             "cv": info["cv"],
-            "cv_oof": {
-                "roc_auc_pooled": round_float(info["fit"].oof_auc),
-                "log_loss_pooled": round_float(info["fit"].oof_log_loss),
-            },
+            "cv_oof": {k: (round_float(v) if isinstance(v, float) else v) for k, v in info["cv_oof"].items()},
             "test": bootstrap_metrics(yt, p_test, tm.threshold, boot["n_resamples"], s, boot["confidence"]),
             "threshold": round_float(tm.threshold),
-            "threshold_rule": "youden_j_on_oof",
+            "threshold_rule": "youden_j_on_oof_deployed_hyperparameters",
             "threshold_f1": round_float(tm.threshold_f1),
             "test_at_threshold_f1": bootstrap_metrics(yt, p_test, tm.threshold_f1, boot["n_resamples"], s, boot["confidence"]),
             "confusion_matrix": confusion(yt, p_test, tm.threshold),
@@ -501,6 +544,7 @@ def _protocol(cfg: dict[str, Any], fast: bool) -> dict[str, Any]:
             "modelling decision (features, models, hyper-parameters, weights, calibration, thresholds) was frozen on "
             "the development set. Only the deployed ensemble and the pre-specified clinical baseline are scored on it."
         ),
+        "test_set_history": [dict(h) for h in cfg["holdout"].get("history", [])],
         "cv": (
             f"Development set: repeated stratified {cv['n_splits']}-fold x {cv['n_repeats']} cross-validation per target "
             f"({cv['n_splits'] * cv['n_repeats']} outer folds), identical folds for all models (paired comparisons). "
@@ -513,16 +557,26 @@ def _protocol(cfg: dict[str, Any], fast: bool) -> dict[str, Any]:
             f"x {fin['inner_repeats']}; untuned models use literature defaults from training.yaml."
         ),
         "ensemble": (
-            "m = w*m_LR + (1-w)*m_XGB in log-odds space; the logistic variant (L2/L1/elastic net) with the best nested-CV "
-            f"ROC-AUC is used; w chosen on a {cfg['ensemble']['weight_grid_step']} grid by pooled out-of-fold log-loss "
-            "after Platt calibration."
+            "m = w*m_LR + (1-w)*m_XGB in log-odds space; the logistic variant (L2/L1/elastic net/clinical core) with the "
+            f"best nested-CV ROC-AUC is used; w chosen on a {cfg['ensemble']['weight_grid_step']} grid by pooled "
+            "out-of-fold log-loss after Platt calibration, using out-of-fold margins of components with the deployed "
+            "(final) hyper-parameters. The reported CV metrics of the ensemble are cross-fitted: for every outer fold the "
+            "logistic variant, w, Platt parameters and threshold are re-chosen on the other folds of that repeat only."
         ),
-        "calibration": "Platt scaling p = sigmoid(a*m + b) fitted by maximum likelihood on pooled out-of-fold ensemble margins.",
+        "calibration": (
+            "Platt scaling p = sigmoid(a*m + b) fitted by maximum likelihood on pooled out-of-fold ensemble margins of "
+            "components with the deployed hyper-parameters (same outer folds), so the map matches the deployed margin scale."
+        ),
         "threshold": (
-            "Decision threshold = Youden's J maximiser on pooled out-of-fold calibrated probabilities "
-            "(F1-optimal threshold also reported). Leaderboard F1/accuracy use a fixed 0.5 threshold for comparability."
+            "Decision threshold = Youden's J maximiser on the same pooled out-of-fold calibrated probabilities "
+            "(F1-optimal threshold also reported); CV threshold metrics use a threshold chosen without the scored fold. "
+            "Leaderboard F1/accuracy use a fixed 0.5 threshold for comparability."
         ),
-        "final_model": "Components refitted on the full development set; the deployed models never saw the test set.",
+        "final_model": (
+            f"Component hyper-parameters searched on the whole development set (repeated stratified "
+            f"{fin['inner_splits']}-fold x {fin['inner_repeats']}), components refitted on the full development set; "
+            "the deployed models never saw the test set."
+        ),
         "bootstrap": (
             f"Test-set 95% CIs: {boot['n_resamples']} stratified bootstrap resamples (percentile method), "
             "threshold held fixed at its development-set value."
@@ -530,7 +584,8 @@ def _protocol(cfg: dict[str, Any], fast: bool) -> dict[str, Any]:
         "baseline": (
             f"Pre-specified clinical baseline: {cfg['baseline']['model']} on "
             f"{', '.join(cfg['models'][cfg['baseline']['model']]['features'])} "
-            "(nested-CV tuned, Youden threshold on OOF), to quantify what the full clinical/ECG/lab/echo panel adds."
+            "(nested-CV tuned; test threshold = Youden's J on out-of-fold probabilities with its final hyper-parameters), "
+            "to quantify what the full clinical/ECG/lab/echo panel adds."
         ),
         "explainability": (
             "Exact SHAP in the ensemble's log-odds space: linear SHAP (w.r.t. the dev mean) for the logistic component, "

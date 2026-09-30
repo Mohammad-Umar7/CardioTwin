@@ -4,10 +4,15 @@
     p(x) = 1 / (1 + exp(-(a * m(x) + b)))              (Platt calibration)
     label = p(x) >= threshold
 
-``w``, ``a``, ``b`` and ``threshold`` are all fitted on *out-of-fold* development-set margins produced by
-nested cross-validation, so none of them sees a patient that the margin was trained on. Because the
-ensemble is linear in margin space, its SHAP values are the same convex combination of the component
-SHAP values (see ``explain.py``).
+``w``, ``a``, ``b`` and ``threshold`` are fitted on *out-of-fold* development-set margins of components that
+use the **deployed hyper-parameters** (a 10 x 5-fold CV run after the final tuning), so the calibration map
+matches the scale of the margins it is applied to and none of them sees a patient that its margin was trained
+on. (Fitting them on nested-CV margins instead - whose per-fold hyper-parameters differ from the final ones -
+mis-scales the map: e.g. a final ``C`` 150x smaller than the fold median compresses every probability.)
+
+:func:`cross_fit_ensemble` gives the honest development-set estimate of the whole recipe (variant, weight,
+Platt and threshold re-chosen without the scored fold). Because the ensemble is linear in margin space, its
+SHAP values are the same convex combination of the component SHAP values (see ``explain.py``).
 """
 
 from __future__ import annotations
@@ -21,7 +26,7 @@ from sklearn.pipeline import Pipeline
 from xgboost import XGBClassifier
 
 from . import xgb_trees
-from .metrics import f1_threshold, fast_roc_auc, youden_threshold
+from .metrics import binary_metrics, f1_threshold, fast_roc_auc, youden_threshold
 from .models import STEP, SUBSET
 
 
@@ -102,6 +107,72 @@ def choose_thresholds(y: np.ndarray, p_oof: np.ndarray) -> Thresholds:
     yy = np.tile(np.asarray(y, dtype=int), n_repeats)
     pp = p_oof.ravel()
     return Thresholds(youden=youden_threshold(yy, pp), f1=f1_threshold(yy, pp))
+
+
+@dataclass
+class CrossFit:
+    """Honest out-of-fold estimate of the complete ensemble-building procedure.
+
+    ``proba[r, i]`` is patient ``i``'s calibrated probability in repeat ``r``; ``thresholds[k]`` the Youden
+    threshold used for outer fold ``k``; ``choices[k]`` what was selected for that fold.
+    """
+
+    proba: np.ndarray
+    thresholds: np.ndarray
+    choices: list[dict[str, Any]]
+
+
+def cross_fit_ensemble(
+    lr_margins: dict[str, np.ndarray],
+    xgb_margin: np.ndarray,
+    y: np.ndarray,
+    folds: list[Any],
+    step: float,
+) -> CrossFit:
+    """Re-run every data-driven ensemble choice without the fold that is being scored.
+
+    The deployed recipe selects the logistic variant (best mean fold ROC-AUC), the weight ``w`` and the Platt
+    parameters (pooled OOF log-loss) and the Youden threshold from out-of-fold predictions. Scoring the
+    resulting ensemble on the *same* OOF predictions is optimistic. Here, for every outer fold ``k`` of repeat
+    ``r``, all four choices are made on the other folds of repeat ``r`` only (``fold.train``), then applied to
+    fold ``k``. ``lr_margins`` maps candidate name -> ``(n_repeats, n)`` nested-CV OOF margins (dict order =
+    tie-break order); ``folds`` are the outer folds that produced them.
+    """
+    y = np.asarray(y, dtype=int)
+    n_repeats = xgb_margin.shape[0]
+    proba = np.full((n_repeats, len(y)), np.nan)
+    thresholds = np.empty(len(folds))
+    choices: list[dict[str, Any]] = []
+    names = list(lr_margins)
+    for k, fold in enumerate(folds):
+        r, train, test = fold.repeat, fold.train, fold.test
+        siblings = [g for g in folds if g.repeat == r and g.fold_id != fold.fold_id]
+        cand_auc = {
+            c: float(np.mean([fast_roc_auc(y[g.test], lr_margins[c][r, g.test]) for g in siblings])) for c in names
+        }
+        lr_name = max(names, key=lambda c: (cand_auc[c], -names.index(c)))
+        m_lr = lr_margins[lr_name][r]
+        m_xgb = xgb_margin[r]
+        fit = choose_weight(m_lr[None, train], m_xgb[None, train], y[train], step)
+        margin = fit.weight * m_lr + (1 - fit.weight) * m_xgb
+        p = np.asarray(sigmoid(fit.platt_a * margin + fit.platt_b), dtype=np.float64)
+        thresholds[k] = youden_threshold(y[train], p[train])
+        proba[r, test] = p[test]
+        choices.append(
+            {"fold": fold.fold_id, "logistic": lr_name, "weight_lr": fit.weight, "platt_a": fit.platt_a, "platt_b": fit.platt_b}
+        )
+    assert not np.isnan(proba).any(), "every dev patient must be scored once per repeat"
+    return CrossFit(proba, thresholds, choices)
+
+
+def cross_fitted_threshold_metrics(y: np.ndarray, proba: np.ndarray, folds: list[Any]) -> list[dict[str, float]]:
+    """Per-fold metrics of OOF probabilities at a Youden threshold chosen on the other folds of the repeat."""
+    y = np.asarray(y, dtype=int)
+    out = []
+    for f in folds:
+        thr = youden_threshold(y[f.train], proba[f.repeat, f.train])
+        out.append(binary_metrics(y[f.test], proba[f.repeat, f.test], thr))
+    return out
 
 
 @dataclass
