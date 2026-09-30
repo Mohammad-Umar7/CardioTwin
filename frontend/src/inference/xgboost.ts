@@ -26,6 +26,8 @@ export interface CompiledXGBoost {
   readonly nTrees: number;
   /** Slot of each tree's root. */
   readonly roots: Int32Array;
+  /** XGBoost `nodeid` of each slot (diagnostics: which dump node a slot came from). */
+  readonly nodeId: Int32Array;
   /** Split column per slot; −1 marks a leaf. */
   readonly feature: Int32Array;
   /** `fround(split_condition)` per slot. */
@@ -59,6 +61,7 @@ export function compileXGBoost(spec: XGBoostComponentSpec, nColumns: number): Co
   const perTree = spec.trees.map((tree, t) => flattenTree(tree, `xgboost '${spec.name}' tree ${t}`));
   const total = perTree.reduce((n, nodes) => n + nodes.size, 0);
   const roots = new Int32Array(spec.trees.length);
+  const nodeId = new Int32Array(total);
   const feature = new Int32Array(total);
   const threshold = new Float64Array(total);
   const yes = new Int32Array(total);
@@ -84,6 +87,7 @@ export function compileXGBoost(spec: XGBoostComponentSpec, nColumns: number): Co
     for (const id of ids) {
       const node = nodes.get(id)!;
       const s = slotOf.get(id)!;
+      nodeId[s] = id;
       if (typeof node.cover !== 'number') throw new ModelFormatError(`${where}: node ${id} has no cover`);
       cover[s] = node.cover;
       if (node.leaf !== undefined) {
@@ -123,6 +127,7 @@ export function compileXGBoost(spec: XGBoostComponentSpec, nColumns: number): Co
     baseMargin: logit(spec.base_score),
     nTrees: spec.trees.length,
     roots,
+    nodeId,
     feature,
     threshold,
     yes,
@@ -146,6 +151,13 @@ export function toFloat32Row(x: Float64Array): Float64Array {
   const out = new Float64Array(x.length);
   for (let j = 0; j < x.length; j++) out[j] = fround(x[j]);
   return out;
+}
+
+/** Slot of the leaf tree `t` routes `x32` to — the walk `xgboostMargin` performs, for diagnostics and tests. */
+export function leafSlot(c: CompiledXGBoost, t: number, x32: Float64Array): number {
+  let s = c.roots[t];
+  while (c.feature[s] !== -1) s = goesYes(c, s, x32) ? c.yes[s] : c.no[s];
+  return s;
 }
 
 export function xgboostMargin(c: CompiledXGBoost, x32: Float64Array): number {
