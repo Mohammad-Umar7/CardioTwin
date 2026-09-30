@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from typing import Any, Literal
+
 from fastapi import APIRouter, Request
 from starlette.responses import Response
 
@@ -12,7 +14,7 @@ from app.models import CacheStats, ErrorResponse, FeatureSchema, HealthResponse,
 
 router = APIRouter(tags=["meta"])
 
-_NOT_READY = {503: {"model": ErrorResponse, "description": "Model not loaded"}}
+_NOT_READY: dict[int | str, dict[str, Any]] = {503: {"model": ErrorResponse, "description": "Model not loaded"}}
 
 
 @router.get(
@@ -23,7 +25,9 @@ _NOT_READY = {503: {"model": ErrorResponse, "description": "Model not loaded"}}
 )
 def health(request: Request, runtime: RuntimeDep, settings: SettingsDep) -> HealthResponse:
     warmer = getattr(request.app.state, "warmup_thread", None)
-    warmup = "disabled" if warmer is None else ("running" if warmer.is_alive() else "done")
+    warmup: Literal["disabled", "running", "done"] = (
+        "disabled" if warmer is None else ("running" if warmer.is_alive() else "done")
+    )
     return HealthResponse(
         status="ok",
         model_version=runtime.model_version,

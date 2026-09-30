@@ -289,7 +289,7 @@ class FakePredictor:
             importance = sorted(
                 ({"feature": k, "mean_abs_shap": abs(w) if isinstance(w, (int, float)) else max(map(abs, w.values()))}
                  for k, w in _WEIGHTS[target].items()),
-                key=lambda d: -d["mean_abs_shap"],
+                key=lambda d: -float(d["mean_abs_shap"]),
             )
             targets[target] = {
                 "selected_model": "FakePredictor (deterministic additive stub - not a trained model)",

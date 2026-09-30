@@ -122,7 +122,9 @@ class PredictionService:
         except ValueError as exc:
             # The ML package validates inputs too; a value it rejects is still a client error, not a 500.
             log.warning("model rejected validated input", extra={"error": str(exc)})
-            raise FeatureValidationError([Issue("model_rejected_input", loc, f"The model rejected the input: {exc}")])
+            raise FeatureValidationError(
+                [Issue("model_rejected_input", loc, f"The model rejected the input: {exc}")]
+            ) from exc
         result = self._conform(raw, warnings or [])
         self.cache.put(key, result)
         log.debug("model inference", extra={"inference_ms": round((time.perf_counter() - started) * 1000, 3)})

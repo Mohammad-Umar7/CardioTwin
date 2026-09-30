@@ -8,8 +8,8 @@ from typing import Any
 import pytest
 from fastapi.testclient import TestClient
 
-from app.predictors.fake import FakePredictor
 from app.models import TARGET_ORDER as TARGETS
+from app.predictors.fake import FakePredictor
 
 PATIENT = {"Age": 67, "Sex": "Male", "DM": 1, "HTN": 1, "Typical Chest Pain": 1, "EF-TTE": 35, "Region RWMA": 3}
 

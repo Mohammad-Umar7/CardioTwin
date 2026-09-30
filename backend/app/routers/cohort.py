@@ -16,7 +16,7 @@ from app.validation import FeatureValidationError
 router = APIRouter(tags=["cohort"])
 log = get_logger("cohort")
 
-_NOT_FOUND = {404: {"model": ErrorResponse, "description": "Unknown patient id"}}
+_NOT_FOUND: dict[int | str, dict[str, Any]] = {404: {"model": ErrorResponse, "description": "Unknown patient id"}}
 
 
 def _patient_or_404(runtime: Runtime, patient_id: str) -> CohortPatient:

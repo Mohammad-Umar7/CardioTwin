@@ -177,9 +177,13 @@ class PredictResponse(_Open):
                     "engine": "server",
                     "imputed": ["ESR"],
                     "predictions": {
-                        "CAD": {"probability": 0.87, "label": 1, "threshold": 0.46, "risk_band": "critical", "logit": 1.93},
+                        "CAD": {
+                            "probability": 0.87, "label": 1, "threshold": 0.46, "risk_band": "critical", "logit": 1.93
+                        },
                         "LAD": {"probability": 0.71, "label": 1, "threshold": 0.5, "risk_band": "high", "logit": 0.9},
-                        "LCX": {"probability": 0.38, "label": 0, "threshold": 0.45, "risk_band": "moderate", "logit": -0.5},
+                        "LCX": {
+                            "probability": 0.38, "label": 0, "threshold": 0.45, "risk_band": "moderate", "logit": -0.5
+                        },
                         "RCA": {"probability": 0.63, "label": 1, "threshold": 0.44, "risk_band": "high", "logit": 0.53},
                     },
                     "explanations": {

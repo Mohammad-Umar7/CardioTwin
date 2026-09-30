@@ -6,7 +6,7 @@ import sys
 import types
 from collections.abc import Iterator
 from pathlib import Path
-from typing import Any
+from typing import Any, ClassVar
 
 import pytest
 from fastapi.testclient import TestClient
@@ -90,7 +90,7 @@ def test_load_exceptions_are_wrapped(tmp_path: Path, stub_ml_package: types.Modu
 def test_predictor_missing_contract_members_is_rejected(tmp_path: Path, stub_ml_package: types.ModuleType,
                                                         monkeypatch: pytest.MonkeyPatch) -> None:
     class Incomplete:
-        schema: dict[str, Any] = {}
+        schema: ClassVar[dict[str, Any]] = {}
         version = "x"
 
     monkeypatch.setattr(stub_ml_package.CardioTwinPredictor, "load", classmethod(lambda cls, d: Incomplete()))
@@ -126,9 +126,11 @@ def test_ml_src_checkout_is_added_to_sys_path(tmp_path: Path, monkeypatch: pytes
 
 def test_startup_fails_with_a_clear_message(settings: Settings, tmp_path: Path) -> None:
     app = create_app(settings.with_overrides(predictor="real", artifacts_dir=tmp_path / "missing"))
-    with pytest.raises(StartupError, match="CardioTwin API cannot start: ML artifacts directory not found"):
-        with TestClient(app):
-            pass
+    with (
+        pytest.raises(StartupError, match="CardioTwin API cannot start: ML artifacts directory not found"),
+        TestClient(app),
+    ):
+        pass
     assert "not found" in app.state.load_error
 
 

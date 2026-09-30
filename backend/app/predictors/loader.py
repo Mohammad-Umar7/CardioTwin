@@ -6,6 +6,7 @@ import importlib
 import sys
 from pathlib import Path
 from types import ModuleType
+from typing import cast
 
 from app.config import REPO_ROOT, Settings
 from app.predictors.base import Predictor, PredictorLoadError, missing_members
@@ -63,7 +64,7 @@ def load_real_predictor(artifacts_dir: Path) -> Predictor:
         raise PredictorLoadError(
             f"CardioTwinPredictor is missing contract members: {', '.join(gaps)} (docs/CONTRACTS.md section 1)."
         )
-    return predictor
+    return cast(Predictor, predictor)  # structurally verified by missing_members() above
 
 
 def import_inference_module() -> ModuleType:
