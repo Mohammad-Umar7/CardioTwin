@@ -18,6 +18,10 @@ The models were trained on the public UCI *Extension of Z-Alizadeh Sani* cohort 
 nested cross-validation and 200 random re-splits. Every metric below is reported with its uncertainty. The same
 model runs on a FastAPI server and, bit for bit, inside the browser, so the demo works with no backend at all.
 
+| CAD ROC-AUC, locked test set (n = 61) | CAD ROC-AUC, median of 200 re-splits | LAD gain from ECG + labs + echo (dev CV) | Server ⇄ browser max \|Δp\| |
+| :-: | :-: | :-: | :-: |
+| **0.858** (95 % CI 0.743–0.955) | **0.934** (5th–95th pct 0.864–0.975) | **+0.069** ROC-AUC (95 % CI +0.024 to +0.115) | **2.2e-16**, identical SHAP |
+
 > **Clinical safety.** CardioTwin is a research and educational decision-support prototype. Its outputs are **not a
 > diagnosis** and are **not a substitute** for coronary angiography, CT coronary angiography or any formal diagnostic
 > imaging. Risk is estimated **per vessel**. The model never localises a lesion within a vessel.
@@ -69,7 +73,7 @@ Cycles renders of the published asset. A 7-second turntable is at
   clinician's own reading of the case. CardioTwin shows every input's signed contribution, in percentage points
   that add up exactly from a typical patient's risk to this patient's.
 * **Referred patients are not all diseased.** In the source cohort, all 303 patients were already referred for
-  invasive angiography, yet 87 (29 %) had no ≥ 50 % stenosis ([`data/README.md`](data/README.md)).
+  invasive angiography, yet 87 (29 %) were labelled free of CAD ([`data/README.md`](data/README.md)).
 
 ## What it does
 
@@ -115,14 +119,15 @@ stratified 5-fold × 10, with nested tuning and cross-fitted ensemble choices (m
 weight / Platt / threshold, refit) was re-run on **200 random stratified 80/20 splits**. The median held-out ROC-AUC
 was **CAD 0.934** (5th–95th percentile 0.864–0.975), **LAD 0.844** (0.771–0.909), LCX 0.762 (0.672–0.833) and
 RCA 0.751 (0.660–0.828). The locked split ranks at the **3rd percentile for CAD** and the 2nd for LAD, while the
-cross-fitted CV means sit mid-distribution. The CV-to-test gap therefore reflects split difficulty, not
-overfitting: the clinical baseline drops on that split too. The harness reproduces the deployed model on the locked
-split exactly (max |Δp| = 0).
+cross-fitted CV means fall inside the distribution (30th–78th percentile). The CV-to-test gap therefore reflects split
+difficulty rather than overfitting: the clinical baseline also drops on that split (4th and 14.5th percentile). The
+harness reproduces the deployed model on the locked split exactly (max |Δp| = 0).
 
 **Multimodality pays off where it should.** Adding ECG, labs and echo to bedside information raised development-CV
 ROC-AUC by **+0.069 (95 % CI +0.024 to +0.115) for LAD** and +0.028 (+0.002 to +0.054) for CAD. For LCX and RCA the
-gains (+0.028 and +0.021) have CIs that include 0. Echocardiography carries the unique information, and symptoms
-(typical angina) remain the strongest single modality.
+gains (+0.028 and +0.021) have CIs that include 0. Echocardiography is the instrumental modality the full model cannot
+replace (removing it costs −0.047 for LAD), and symptoms (typical angina) are the costliest to lose (−0.077 for CAD,
+−0.054 for LAD).
 
 **Honest limits.** On the locked test set the full model does **not** significantly beat a 5-feature clinical
 baseline for any target (every paired ΔAUC CI includes 0). Across the 200 splits it wins in 84 % (CAD) and 92 % (LAD)
