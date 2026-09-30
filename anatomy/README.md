@@ -5,19 +5,24 @@ CardioTwin's 3D viewer:
 
 | Output | What it is |
 | --- | --- |
-| `frontend/public/anatomy/cardiotwin_anatomy.glb` | 35 named anatomical nodes under 7 `Layer_*` groups (CONTRACTS §6.2), 393k triangles, **3.7 MB** (meshopt) |
-| `frontend/public/anatomy/manifest.json` | Layers, structures, clinical descriptions, model-target mapping, explode vectors, camera presets (§6.3) |
-| `frontend/public/anatomy/vessels.json` | Coronary centrelines, proximal → distal, with lumen radius, for blood-flow particles (§6.4) |
-| `docs/media/renders/*.jpg`, `heart_turntable.mp4` | Cycles portfolio renders |
+| `frontend/public/anatomy/cardiotwin_anatomy.glb` | 41 named anatomical nodes under 7 `Layer_*` groups (CONTRACTS §6.2 + v1.1 additive nodes), 399,683 triangles, baked PBR textures (WebP), **8.4 MB** (meshopt) |
+| `frontend/public/anatomy/manifest.json` | Layers, structures (with FMA id, definition, clinical relevance, provenance), SCCT segment table, vein table, attribute docs, model-target mapping, explode vectors, camera presets (§6.3, §7.1) |
+| `frontend/public/anatomy/vessels.json` | Coronary centrelines, proximal → distal, with lumen radius and SCCT labels; labelled cardiac-vein centrelines (§6.4, §7.1) |
+| `docs/media/renders/*.jpg`, `heart_turntable.mp4` | Cycles portfolio renders and an EEVEE preview of the published GLB (`web_preview.jpg`) |
+
+What is BodyParts3D, what is derived and what is synthesised (aortic root and valve, epicardial fat, in-vivo cardiac
+veins) is listed in [`docs/anatomy/SYNTHESIS.md`](../docs/anatomy/SYNTHESIS.md); the anatomical reference and its checks
+are [`docs/anatomy/REFERENCE.md`](../docs/anatomy/REFERENCE.md) and [`checks/`](checks/) (`gap_report.md`).
 
 ![hero](../docs/media/renders/hero_heart.jpg)
 
 ## Quick start
 
 ```bash
-./.venv/Scripts/python anatomy/build.py             # fetch → blender → centrelines → optimise → verify → manifest → explode check (~1.5 min)
+./.venv/Scripts/python anatomy/build.py             # fetch → synth → blender → centrelines → bake → optimise → verify → manifest → explode (~5 min)
 ./.venv/Scripts/python anatomy/build.py --renders   # … plus the Cycles renders (GPU recommended)
-./.venv/Scripts/python -m pytest anatomy            # 37 tests: geometry utilities, centreline graphs, asset contracts, mesh QA
+./.venv/Scripts/python -m pytest anatomy            # geometry utilities, centreline graphs, asset contracts, mesh QA
+./.venv/Scripts/python anatomy/checks/measure_model.py --markdown gap.md --json gap.json   # 70 reference checks (~4 min)
 ```
 
 Prerequisites
@@ -26,25 +31,30 @@ Prerequisites
   (all in the project requirements).
 * **Blender 5.1** (headless). Default path `C:/Program Files/Blender Foundation/Blender 5.1/blender.exe`; override with
   `--blender PATH` or `CARDIOTWIN_BLENDER`.
-* **Node 18+**. `build.py` runs `npm ci` in `anatomy/` on first use (`@gltf-transform/*`, `meshoptimizer`).
+* **Node 18+**. `build.py` runs `npm ci` in `anatomy/` on first use (`@gltf-transform/*`, `meshoptimizer`, `sharp` for WebP).
 * Internet access for the first fetch (~190 MB of STL, cached in `anatomy/raw/`, git-ignored).
 
-Everything is driven by one declarative file, **`anatomy/config/anatomy.json`** (parts, layers, budgets, crops,
-clinical text, territory parameters). A full rebuild is **byte-for-byte reproducible**: re-running the pipeline leaves
-the committed GLB, manifest and centrelines unchanged; `anatomy/SOURCES.md` pins every input STL by SHA-256.
+Everything is driven by two declarative files, **`anatomy/config/anatomy.json`** (parts, layers, budgets, crops,
+collision rules, territory parameters) and **`anatomy/config/definitions.json`** (FMA ids, precise definitions,
+clinical relevance, vein table). Geometry, centrelines and the manifest rebuild deterministically; the baked textures
+are Cycles bakes with a fixed seed (GPU noise can change individual texels, not the look). `anatomy/SOURCES.md` pins
+every input STL by SHA-256 and lists the derived / synthesised parts.
 
 ## Stages
 
 | # | Stage | Command (from repo root) | Output |
 | --- | --- | --- | --- |
 | 1 | Fetch | `./.venv/Scripts/python anatomy/scripts/fetch_bodyparts3d.py` | `anatomy/raw/*.stl`, `anatomy/SOURCES.md` |
+| 1b | Synthesis | `./.venv/Scripts/python anatomy/scripts/synthesize.py` | `anatomy/build/synth/SYN_*.ply`, `vein_centerlines.json`, `synth_report.json` |
 | 2–4 | Blender build | `blender --background --factory-startup --python anatomy/blender/build_anatomy.py` | `anatomy/build/cardiotwin_anatomy.raw.glb`, `build_report.json`, `vessels/*.ply`, `cardiotwin_build.blend` |
-| 4b | Web optimisation (after stage 5: needs `vessels.json` for `_ARCLEN`) | `node anatomy/scripts/optimize_glb.mjs` | `frontend/public/anatomy/cardiotwin_anatomy.glb` |
+| 4a | Texture bake | `blender --background --factory-startup --python anatomy/blender/bake_textures.py` | `anatomy/build/bake/<node>_{base,normal,orm}.png`, `bake_manifest.json` |
+| 4b | Web optimisation (after stage 5: needs `vessels.json` for `_ARCLEN` / `_SEGMENT` / `_VEIN`) | `node anatomy/scripts/optimize_glb.mjs` | `frontend/public/anatomy/cardiotwin_anatomy.glb` |
 | 4c | Contract check | `./.venv/Scripts/python anatomy/scripts/verify_glb.py` | pass/fail + per-node report |
 | 5 | Centrelines | `./.venv/Scripts/python anatomy/scripts/extract_centerlines.py` | `vessels.json`, `anatomy/build/centerline_report.json` |
 | 6 | Manifest | `./.venv/Scripts/python anatomy/scripts/make_manifest.py` | `manifest.json` |
 | 6b | Explode check | `blender --background --factory-startup --python anatomy/blender/check_explode.py` | pass/fail + `anatomy/build/explode_report.json` |
 | 7 | Renders | `blender --background --factory-startup --python anatomy/blender/render_heroes.py -- [--shots …] [--save-scene]` | `docs/media/renders/` |
+| 7b | Web preview | `blender --background --factory-startup --python anatomy/blender/render_web_preview.py` | `docs/media/renders/web_preview.jpg` |
 | QA | Decode for QA | `node anatomy/scripts/decode_glb.mjs [glb] OUT_DIR` | plain per-node arrays (used by `tests/test_mesh_quality.py`) |
 | QA | Previews | `blender --background --factory-startup --python anatomy/blender/preview.py -- --views torso,heart,open,territory,qa` | `anatomy/build/preview/*.png` |
 
@@ -52,9 +62,11 @@ the committed GLB, manifest and centrelines unchanged; `anatomy/SOURCES.md` pins
 
 ## Sources and licence
 
-All meshes come from **BodyParts3D** (Database Center for Life Science, Japan) via the GitHub mirror
+All source meshes come from **BodyParts3D** (Database Center for Life Science, Japan) via the GitHub mirror
 `Kevin-Mattheus-Moerman/BodyParts3D`; every part name was checked against `parts_list_e.txt`
-(see [`SOURCES.md`](SOURCES.md) for ID, name, node, triangle count, bytes and SHA-256 of all 100 parts).
+(see [`SOURCES.md`](SOURCES.md) for ID, name, node, triangle count, bytes and SHA-256 of all 112 parts). The aortic root
+and valve and the epicardial fat are synthesised, the cardiac veins and the ascending aorta derived from BodyParts3D
+(see [`docs/anatomy/SYNTHESIS.md`](../docs/anatomy/SYNTHESIS.md)).
 
 > BodyParts3D, © The Database Center for Life Science, licensed under CC BY-SA 2.1 Japan.
 
@@ -103,28 +115,45 @@ origin — the viewer can offset or scale any node safely.
   the source detail).
 * **Costal cartilages** — the individual cartilages of ribs 1–7 (FMA) plus the fused ribs 8–10 costal-margin sets
   (`BP24`/`BP28`); the two sets do not overlap (only the rib-7 joint touches).
+* **Synthesised and derived parts** — `SYN_*` parts from `scripts/synthesize.py` (cardiac-vein tree, rounded ascending
+  aorta, aortic root with sinuses, aortic valve) are read from `build/synth/` like source parts; the cardiac veins are
+  voxel-remeshed at 0.25 mm into one lumen.
+* **Epicardial fat** — built on the decimated heart wall before it is opened: a shell whose thickness follows the AV and
+  interventricular grooves with a channel for every coronary artery and vein, lobulated, voxel-remeshed, then split
+  with the same plane as the wall (`EpicardialFat_Anterior` / `_Posterior`).
+* **Collisions** — display-only neighbours yield to the structures they intersect (`collisions` in the config): a
+  two-sided test (neighbour vertices inside a master, and master vertices inside a coarse neighbour) moves the
+  neighbour along the surface normal and spreads the dent smoothly; the diaphragm is lowered 4 mm as a whole.
+* **Pulmonary distances** — `_DIST_HEART` (geodesic distance from the pulmonary valve / left-atrial ostia) and
+  `_DIST_HILUM` (signed geodesic distance from the lung entry, > 0 inside the lungs) on both pulmonary trees.
+* **UVs** — Smart UV projection (66°) on every non-coronary node for the baked textures.
 
-### Triangle budget (total 392,547 ≤ 400,000)
+### Triangle budget (total 399,683 ≤ 400,000)
 
 | Node | Layer | Source parts | Source tris | Final tris |
 | --- | --- | --- | ---: | ---: |
-| `Skin_Torso` | skin | FMA7163 (outer shell, cropped) | 23,002 | 22,000 |
-| `Pectoralis_L` / `_R` | muscle | sternocostal + clavicular parts | 41,986 / 41,758 | 7,000 / 7,000 |
-| `Ribs_L` / `Ribs_R` | skeleton | 12 ribs each | 381,430 / 374,274 | 22,000 / 22,000 |
-| `CostalCartilage` | skeleton | 14 FMA cartilages + BP24/BP28 | 100,898 | 14,000 |
+| `Skin_Torso` | skin | FMA7163 (outer shell, cropped) | 23,002 | 18,500 |
+| `Pectoralis_L` / `_R` | muscle | sternocostal + clavicular parts | 41,986 / 41,758 | 6,000 / 6,000 |
+| `Ribs_L` / `Ribs_R` | skeleton | 12 ribs each | 381,430 / 374,274 | 19,000 / 19,000 |
+| `CostalCartilage` | skeleton | 14 FMA cartilages + BP24/BP28 | 100,898 | 12,000 |
 | `Sternum` | skeleton | manubrium, body, xiphoid | 35,884 | 5,000 |
 | `Clavicle_L` / `_R` | skeleton | FMA13323 / FMA13322 | 5,140 / 5,112 | 2,998 / 3,000 |
-| `Spine_Thoracic` | skeleton | T1–T12 | 97,394 | 26,000 |
-| `Lung_L` / `Lung_R` | lungs | 2 / 3 lobes | 84,920 / 119,366 | 18,000 / 20,000 |
+| `Spine_Thoracic` | skeleton | T1–T12 | 97,394 | 21,000 |
+| `Lung_L` / `Lung_R` | lungs | 2 / 3 lobes | 84,920 / 119,366 | 16,000 / 18,000 |
 | `Trachea_Bronchi` | lungs | trachea + bronchial tree | 125,240 | 8,000 |
-| `Diaphragm` | diaphragm | FMA13295 | 210,666 | 9,000 |
+| `Oesophagus` | lungs | FMA7131 (thoracic part) | 2,492 | 2,492 |
+| `Diaphragm` | diaphragm | FMA13295 (lowered 4 mm) | 210,666 | 8,000 |
 | `Heart_Wall_Anterior` / `_Posterior` | heart | FMA7274 (opened) | 306,230 | 54,837 / 55,804 ¹ |
 | `Valve_Mitral` / `_Tricuspid` / `_Pulmonary` | heart | FMA7235 / 7234 / 7246 | 19,102 / 47,260 / 18,200 | 5,000 / 5,000 / 3,000 |
+| `Valve_Aortic` | heart | synthesised (3 cusps) | 3,744 | 3,000 |
 | `Papillary_Muscles` | heart | 5 parts | 16,404 | 6,000 |
-| `GreatVessel_Aorta` | heart | ascending, arch, descending | 25,626 | 12,000 |
-| `GreatVessel_PulmonaryArtery` / `Veins` | heart | FMA66326 / FMA66643 | 116,948 / 72,548 | 8,000 / 8,000 |
+| `GreatVessel_Aorta` | heart | synthesised root, rounded ascending, arch, descending | 32,538 | 12,000 |
+| `GreatVessel_Aorta_ArchBranches` | heart | brachiocephalic trunk, R CCA, R subclavian, L CCA, L subclavian | 11,826 | 5,000 |
+| `GreatVessel_PulmonaryArtery` / `Veins` | heart | FMA66326 / FMA66643 | 116,948 / 72,548 | 7,000 / 7,000 |
 | `GreatVessel_SVC` / `IVC` | heart | FMA4720 / FMA10951 | 1,532 / 5,322 | 1,532 / 3,000 |
-| `CardiacVeins` | heart | CS, great, middle, anterior, posterior LV veins | 23,754 | 14,000 |
+| `GreatVessel_SVC_BrachiocephalicVeins` | heart | R / L brachiocephalic, internal jugular and subclavian stumps | 6,412 | 5,000 |
+| `CardiacVeins` | heart | re-swept CS, GCV/AIV, MCV, PVLV, ACV (one lumen) | 52,244 | 16,000 |
+| `EpicardialFat_Anterior` / `_Posterior` | heart | synthesised groove fat (opened) | 375,768 | 7,720 / 7,424 |
 | `Coronary_LM` | coronary | FMA4685 | 252 | 252 |
 | `Coronary_LAD` / `_LAD_Septal` | coronary | FMA3862nsn / FMA71670 | 9,220 / 1,214 | 9,220 / 1,214 |
 | `Coronary_LCX` | coronary | FMA3895 | 3,542 | 3,542 |
@@ -158,6 +187,11 @@ Opening the halves along the cut normal reveals the chambers, valves and papilla
    LAD's colour in the default anterior view. Atria, auricles and great-vessel roots therefore stay neutral.
 3. Laplacian smoothing (6 iterations) removes decimation-scale seams. Cap vertices get transmural weights.
 
+4. **AHA-17 blend** — on LV myocardium the weights are blended 85 % towards the standard AHA-17 territories (the septal
+   segments split by whether the LAD or the RCA/PDA septal perforators are nearer), then the three weights are
+   re-balanced (iterative proportional fitting, gains capped to 0.8–1.25) towards the population shares of LV mass
+   (LAD 42.5 %, LCX 28.8 %, RCA 26.4 %) on the same LV region `anatomy/checks` uses.
+
 This approximates the standard coronary territories of the **AHA 17-segment model** on a **right-dominant** heart:
 LAD → anterior wall, anterior septum and apex; LCX → lateral wall; RCA → RV, inferior wall and inferior septum.
 **Limitations**: it is a nearest-artery supply map, not perfusion imaging and **not a lesion map** (the ML model
@@ -168,9 +202,11 @@ LAD + LCX).
 
 ## Web optimisation
 
-`optimize_glb.mjs` (glTF-Transform 4 + meshoptimizer) reorders vertex caches, quantises `NORMAL` (10-bit) and
-`COLOR_0` (8-bit RGB; Blender's constant alpha is dropped so three.js does not enable vertex alpha) and compresses
-every buffer with `EXT_meshopt_compression`. It deliberately **does not** quantise `POSITION` (KHR_mesh_quantization
+`optimize_glb.mjs` (glTF-Transform 4 + meshoptimizer + sharp) attaches the baked maps (WebP, `EXT_texture_webp`:
+baseColor, normal, and one ORM map used as occlusion R + metallicRoughness G/B; 2048² on the heart walls, 1024² or
+512² elsewhere, 2.3 MB in total) to each node's own material, writes `_SEGMENT` / `_VEIN`, reorders vertex caches,
+quantises `NORMAL` (10-bit), `TEXCOORD_0` (14-bit) and `COLOR_0` (8-bit RGB; Blender's constant alpha is dropped so
+three.js does not enable vertex alpha) and compresses every buffer with `EXT_meshopt_compression`. It deliberately **does not** quantise `POSITION` (KHR_mesh_quantization
 would fold dequantisation into node matrices, breaking `node.scale` and explode offsets), join, flatten, instance or
 deduplicate materials. It fails if any node name, transform or hierarchy changes, and re-reads its output to check
 territory weights and positions. It also writes the coronary `_ARCLEN` attribute (see *Notes for the viewer*), which is why the
@@ -230,6 +266,20 @@ staggered peel windows hide most of that.
   `ct_id`, `ct_layer`, `ct_label`, `ct_target` (`"LAD"`, … or `""`), `ct_category` (`Coronary`, `Myocardium`, …).
 * Closed meshes are single-sided; only `Skin_Torso` (an open shell) is double-sided.
 * `vessels.json` points are in the scene / rest frame — add a vessel node's explode offset when it is displaced.
+* **SCCT segments**: coronary meshes carry `_SEGMENT` (three.js: `geometry.attributes._segment`) = SCCT 2014 segment
+  of the nearest labelled centreline point (0 = named but unnumbered branch: septal, acute marginal, RV branch, D3);
+  `manifest.segments` holds codes, names and definitions, `vessels.json` `segments[].labels` the point ranges.
+* **Veins**: `CardiacVeins` carries `_VEIN` (`manifest.veins`: 1 CS, 2 GCV, 3 AIV, 4 MCV, 5 PVLV, 6 ACV);
+  `vessels.json` `veins` holds the labelled centrelines (ordered from the drainage end outward).
+* **Pulmonary trees**: `_DIST_HEART` / `_DIST_HILUM` (three.js: `_dist_heart` / `_dist_hilum`) let the viewer keep the trunk, main
+  branches and venous ostia (`_DIST_HILUM < ~0.02`) and fade the intrapulmonary tree.
+* **Baked maps**: every non-coronary material has baseColor / normal / occlusion-roughness WebP maps and neutral
+  factors; `COLOR_0` on the heart walls is territory DATA — a spec-compliant viewer would multiply it into the albedo,
+  so the Realistic look must not (the web preview doesn't).
+* **Additive nodes** (not in CONTRACTS §6.2 v1.0): `Valve_Aortic`, `GreatVessel_Aorta_ArchBranches`,
+  `GreatVessel_SVC_BrachiocephalicVeins` (their names already classify as valve / aorta / systemic vein),
+  `EpicardialFat_Anterior` / `_Posterior` (ride on their heart half; need a `fat` tissue kind) and `Oesophagus`
+  (Layer_Lungs; needs its own kind).
 * Coronary meshes carry `_ARCLEN` (float, 0 → 1 along each tree from its ostium: left tree from the left-main
   ostium, right tree from the RCA ostium), taken from the nearest `vessels.json` point. **three.js lower-cases
   custom attribute names**, so read `geometry.attributes._arclen` in a shader.
@@ -241,8 +291,12 @@ staggered peel windows hide most of that.
 
 ## Renders
 
-`render_heroes.py` (Cycles, OptiX + OpenImageDenoise, AgX) writes `hero_heart.jpg`, `exploded_torso.jpg`,
-`territories.jpg`, `xray.jpg` (1920×1080) and `heart_turntable.mp4` (1280×720, 7 s). The example risk profile is
+`render_heroes.py` (Cycles, OptiX + OpenImageDenoise, AgX) writes `hero_heart.jpg`, `heart_posterior.jpg`,
+`coronary_detail.jpg`, `open_heart.jpg`, `exploded_torso.jpg`, `territories.jpg`, `xray.jpg` (1920×1080) and
+`heart_turntable.mp4` (1280×720, 7 s), all with the procedural tissue looks of `blender/looks.py` (the same materials
+the bake stage turns into the web textures). `render_web_preview.py` imports the **published** GLB (decoded losslessly
+by `scripts/decode_for_blender.mjs`) into an empty scene and renders it with EEVEE from the hero camera using only its
+baked textures (`web_preview.jpg`), so the web fidelity can be judged against `hero_heart.jpg`. The example risk profile is
 LAD critical `#ef4444`, LCX moderate `#f59e0b`, RCA low `#2dd4bf`. Close-ups stage the heart on its own (the
 intrapulmonary vein tree and IVC hidden, the pulmonary artery clipped at its bifurcation, the descending aorta cut
 behind the atria) using render-only copies — the published asset is never modified. The hero is a left-anterior-oblique

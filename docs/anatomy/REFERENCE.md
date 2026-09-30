@@ -554,6 +554,20 @@ while other agents were rebuilding. Re-run `reference_checks.yaml` after each re
 | Valve centroids | Mitral 2 mm lower than tricuspid | MV at or above TV (±0.05 u) | VLV-04 |
 | Diaphragm domes | Right −0.28 u, left −0.46 u | Right higher | POS-10 |
 
+**Update after realism round 1** (full results: [`anatomy/checks/gap_report.md`](../../anatomy/checks/gap_report.md); what
+is synthesised: [`SYNTHESIS.md`](SYNTHESIS.md)):
+
+| Finding | Value now | Check |
+| --- | --- | --- |
+| LCX trunk | 62 mm in the left AV groove (pCx); the apical run is OM1; LAD : LCX 2.0 | COR-11 pass |
+| Aortic root | Synthesised: annulus 23 mm, sinuses 34 mm, STJ 26 mm, ascending 27 mm; `Valve_Aortic` added | GV-02 pass |
+| Coronary ostia above the annulus | LM 13 mm, RCA 16 mm | COR-02 pass |
+| PA : ascending aorta | 0.83 | GV-08 pass |
+| Cardiac veins | One labelled lumen; CS 8.9 mm (ostium 9.6 mm), GCV 4.2 mm; CS 76 % on the atrial side of the mitral hinge; ostium in front of the IVC | VEN-05/06/08 |
+| LV territory shares | LAD 42.9 %, LCX 24.8 %, RCA 32.2 %; AHA-17 majority map correct in all segments | COR-24 minor |
+| SCCT labels | `_SEGMENT`, `vessels.json` labels and `manifest.segments` present | COR-22 pass |
+| Diaphragm domes | Lowered 4 mm (dome order unchanged); heart-diaphragm overlap 1.9 mm | POS-10 |
+
 ---
 
 ## 11. Sources
