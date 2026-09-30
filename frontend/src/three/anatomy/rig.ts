@@ -159,7 +159,7 @@ export const GREAT_VESSEL_CLIP = { centre: [0, 0.05, -0.05] as const, radius: 0.
  */
 const workstationGhost = (kind: TissueKind) => (kind === 'bone' || kind === 'cartilage' ? 0.15 : 0.3);
 /** Landing hero lung ghost strength: a trace of context, never a smear behind the copy or the cards. */
-const HERO_LUNG_GHOST = 0.55;
+const HERO_LUNG_GHOST = 0.4;
 /** Peel value from which the chest counts as set aside (the camera's thorax framing ends just below it). */
 const PEEL_CHEST_AWAY = 0.58;
 
