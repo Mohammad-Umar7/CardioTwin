@@ -1,5 +1,4 @@
 /** Wording and placement of the illustrative-flow caption (pure; tested in caption.test.ts). */
-import type { StageInsets } from '@/state/uiStore';
 
 export const FLOW_CAPTION = 'Illustrative flow — not a haemodynamic simulation';
 export const FLOW_CAPTION_DETAIL =
@@ -8,16 +7,25 @@ export const FLOW_CAPTION_DETAIL =
   'marks that surge once per beat. Density, speed and warmth echo each vessel’s predicted stenosis ' +
   'probability. Nothing here is measured or simulated flow, pressure or FFR.';
 
-/** Gap between the caption and the chrome it sits against (px). */
-const GAP = 12;
-
 /**
- * Where the caption goes. With a published free area (WORKSTATION_V2 `stageInsets`: cards and toolbar
- * overlay a full-bleed canvas) it sits in the free area's bottom-right corner, just above the toolbar row;
- * without one (legacy HUD: the canvas is the centre column) it sits top-right under the HUD watermark.
+ * Where the caption goes: ONE fixed spot on the stage — horizontally centred on the canvas, just above the
+ * toolbar row — whatever the chrome does (rest, focus mode, a drawer open), so it never jumps. The canvas
+ * never resizes (V2 §4.1) and the toolbar row is reserved at the stage bottom, so this spot is always free.
  */
-export function captionPlacement(insets: StageInsets): Partial<Record<'left' | 'right' | 'top' | 'bottom', string>> {
-  const none = insets.left === 0 && insets.right === 0 && insets.top === 0 && insets.bottom === 0;
-  if (none) return { right: `${GAP}px`, top: '62px', left: '', bottom: '' };
-  return { right: `${insets.right + GAP}px`, bottom: `${insets.bottom + 8}px`, left: '', top: '' };
+export function captionPlacement(): Partial<Record<'left' | 'right' | 'top' | 'bottom' | 'transform', string>> {
+  return {
+    left: '50%',
+    right: '',
+    top: '',
+    bottom: 'calc(var(--stage-inset, 12px) + var(--toolbar-h, 40px) + 10px)',
+    transform: 'translateX(-50%)',
+  };
 }
+
+/** The caption shows only while flow is really on screen (lit coronaries, heart uncovered, flow faded in). */
+export function captionVisible(o: { flowOpacity: number; ignited: boolean; coronarySolid: number; peel: number }): boolean {
+  return o.flowOpacity > 0.05 && o.ignited && o.coronarySolid > 0.3 && o.peel >= CAPTION_MIN_PEEL;
+}
+
+/** Below "Ribs open" the thorax still covers the heart: no visible flow, so no caption. */
+export const CAPTION_MIN_PEEL = 0.45;

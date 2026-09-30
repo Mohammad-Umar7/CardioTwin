@@ -190,7 +190,7 @@ const vertexShader = /* glsl */ `
     float surge = clamp(speed / max(uMeanSpeed, 1e-4), 0.0, 2.6);
     // HDR on purpose: the particles must read as light running OVER an already glowing vessel, so their
     // core sits well above the bloom threshold (they glint) while the tint keeps the vessel's hue family.
-    vColor = tint * (1.05 + 0.55 * surge + 1.2 * pulse + 0.3 * uHover[slot]);
+    vColor = tint * (1.05 + 0.55 * surge + 0.5 * pulse + 0.3 * uHover[slot]);
     vAlpha = alpha;
     // the lighter the vessel (high p → light apricot), the more the halo must darken around the streak
     vHalo = 0.22 + 0.5 * smoothstep(0.45, 1.0, uP[slot]) * uTintMix[slot] / 0.6;

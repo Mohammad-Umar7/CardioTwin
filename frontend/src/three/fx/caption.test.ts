@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { FLOW_CAPTION, FLOW_CAPTION_DETAIL, captionPlacement } from './caption';
+import { FLOW_CAPTION, FLOW_CAPTION_DETAIL, captionPlacement, captionVisible } from './caption';
 
 describe('illustrative-flow caption', () => {
   it('says the flow is illustrative and not a haemodynamic simulation', () => {
@@ -9,16 +9,21 @@ describe('illustrative-flow caption', () => {
     expect(FLOW_CAPTION_DETAIL).toMatch(/not|Nothing here is measured/i);
   });
 
-  it('sits in the free area just above the toolbar when chrome overlays the canvas', () => {
-    expect(captionPlacement({ left: 304, right: 376, top: 12, bottom: 64 })).toEqual({
-      right: '388px',
-      bottom: '72px',
-      left: '',
-      top: '',
-    });
+  it('sits in one fixed spot (canvas centre, above the toolbar row) whatever the chrome does', () => {
+    const p = captionPlacement();
+    expect(p.left).toBe('50%');
+    expect(p.transform).toBe('translateX(-50%)');
+    expect(p.bottom).toContain('var(--toolbar-h');
+    expect(p.right).toBe('');
+    expect(p.top).toBe('');
   });
 
-  it('falls back to the top-right corner under the legacy HUD watermark', () => {
-    expect(captionPlacement({ left: 0, right: 0, top: 0, bottom: 0 })).toEqual({ right: '12px', top: '62px', left: '', bottom: '' });
+  it('shows only while flow is visible on uncovered, lit coronaries', () => {
+    const on = { flowOpacity: 1, ignited: true, coronarySolid: 1, peel: 0.6 };
+    expect(captionVisible(on)).toBe(true);
+    expect(captionVisible({ ...on, flowOpacity: 0 })).toBe(false);
+    expect(captionVisible({ ...on, ignited: false })).toBe(false);
+    expect(captionVisible({ ...on, coronarySolid: 0 })).toBe(false);
+    expect(captionVisible({ ...on, peel: 0.2 })).toBe(false);
   });
 });

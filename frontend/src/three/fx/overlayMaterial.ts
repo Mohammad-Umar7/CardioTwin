@@ -135,15 +135,15 @@ export function createOverlayMaterial(shared: OverlayShared, arclenAttribute: st
         vec3 hue = mix(uTrace, ramp, uAvail); // no estimate → neutral light, never an invented colour
         vec3 col = vec3(0.0);
 
-        // Pulse: sharp leading edge, exponential wake, fading distally.
+        // Pulse: a travelling swell IN THE VESSEL'S OWN HUE (never white: a white spot on an artery reads
+        // like a focal finding, and risk is vessel-level), a soft crest at the front plus a wake behind it,
+        // fading distally.
         if (uPulseAmp > 0.0) {
           float x = uPulseFront - vArc;
-          // a bright crest AT the front (it must survive Neutral tone mapping on an already lit vessel and
-          // reach the bloom threshold) plus a softer wake behind it
-          float crest = exp(-(x * x) / (0.035 * 0.035));
+          float crest = exp(-(x * x) / (0.045 * 0.045));
           float wake = x > 0.0 ? exp(-x / 0.14) : 0.0;
-          float band = 1.3 * crest + 0.4 * wake;
-          col += mix(hue, vec3(1.0), 0.4) * (uPulseAmp * band * (1.0 - 0.4 * clamp(vArc, 0.0, 1.0)));
+          float band = 0.8 * crest + 0.35 * wake;
+          col += hue * (uPulseAmp * band * (1.0 - 0.4 * clamp(vArc, 0.0, 1.0)));
         }
 
         // Ignition: bright trace band at the front plus a short afterglow behind it.

@@ -23,8 +23,8 @@ VesselOverlay.tsx    finds meshes with `_ARCLEN`, draws an additive twin sharing
 Atmosphere.tsx       backlight glow behind the heart + dust motes
 FXComposer.tsx       SelectiveBloom (coronary tree only) → Neutral tone mapping → Vignette → SMAA, tiers A/B
 bloomSelection.ts    which meshes may bloom (every mesh under a `Coronary_*` node), mask tolerance
-FlowCaption.tsx      "Illustrative flow — not a haemodynamic simulation" note, placed in the free area
-caption.ts           caption wording + placement from `uiStore.stageInsets`
+FlowCaption.tsx      "Illustrative flow — not a haemodynamic simulation" note on a scrim, shown while flow is visible
+caption.ts           caption wording, its one fixed spot (canvas centre, above the toolbar row), visibility rule
 ```
 
 ## For the 3D layer (`anatomy/`)
@@ -55,7 +55,7 @@ caption.ts           caption wording + placement from `uiStore.stageInsets`
 | --- | --- | --- |
 | Flow particles | Direction of flow (ostium → distal), diastolic surge / systolic near-stall, streak length ∝ instantaneous speed | `cardiacCycle.coronaryFlowSpeed` (mean 1, ≈ 91 % of flow in diastole; RCA phasicity 0.6), `BASE_FLOW_SPEED` 0.3 u/s |
 | Risk coding of the flow | Higher P(stenosis) → sparser (≥ 50 %), slower (≥ 55 %), warmer (tint toward the Ember LUT colour of p) | `riskFlowParams`; off while no estimate is shown (pending/error/LM) |
-| Pulse wave | A crest + wake running root → tip once per beat, launched with the diastolic surge | `pulseFront(phase)`: 42 % of the cycle, ease-out, arc length 0 → 1.25 |
+| Pulse wave | A crest + wake in the vessel's own hue (never white) running root → tip once per beat, launched with the diastolic surge | `pulseFront(phase)`: 42 % of the cycle, ease-out, arc length 0 → 1.25 |
 | Ignition | Trace-colour sweep ostia → tips, then afterglow settles; flow is gated behind the front | fires when a prediction lands for a NEW case (patient or custom), or after 1.5 s without any estimate; `replayIgnition()` |
 | Atmosphere | Cool backlight behind the heart (+≈ 6 sRGB levels), 200–320 dust motes at 3–12 % | never risk-coloured |
 
