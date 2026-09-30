@@ -141,7 +141,7 @@ def main() -> None:
                 tex = next((nd for nd in mat.node_tree.nodes if nd.type == "TEX_IMAGE" and nd.image and "_base" in nd.image.name), None)
                 if bsdf is not None and tex is not None:
                     mat.node_tree.links.new(tex.outputs["Color"], bsdf.inputs["Base Color"])
-    # coronary arteries: risk colours, as the viewer's Realistic look (no textures on these nodes)
+    # coronary arteries: the viewer's risk ramp (risk.ts, OKLab) for the example profile, as its Realistic look (untextured nodes)
     for name, o in obs.items():
         if not name.startswith("Coronary_"):
             continue
@@ -176,7 +176,7 @@ def main() -> None:
         pass
     scene.render.image_settings.file_format = "JPEG"
     scene.render.image_settings.quality = 90
-    rh.setup_world(scene, top=(0.010, 0.012, 0.018), bottom=(0.0008, 0.0008, 0.0012))
+    rh.setup_world(scene, **rh.STUDIO_WORLD)
     t = Vector(rh.HERO_TARGET)
     az, el, dist = rh.HERO_VIEW
     rh.camera("CamHero", rh.orbit(t, az, el, dist), t, lens=70)

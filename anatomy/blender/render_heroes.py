@@ -3,22 +3,27 @@
 Run after the build (needs ``anatomy/build/cardiotwin_build.blend`` and the published manifest / vessels)::
 
     blender --background --factory-startup --python anatomy/blender/render_heroes.py -- \
-        [--shots hero_heart,heart_posterior,coronary_detail,open_heart,exploded_torso,xray,territories,turntable]
+        [--shots hero_heart,heart_posterior,coronary_detail,open_heart,four_chamber,exploded_torso,xray,territories,turntable]
         [--samples 160] [--scale 1.0] [--save-scene]
 
 Shots (1920x1080 JPEG in ``docs/media/renders``), all with the photoreal tissue looks of ``looks.py`` (the same
-procedural materials that are baked into the web textures) and the coronary arteries coloured by an example
-risk profile (LAD critical, LCX moderate, RCA low), as the viewer does:
+procedural materials that are baked into the web textures). The anatomical shots paint the coronary arteries atlas
+red (arteries red, veins blue, fat yellow); the data shots (``xray``, ``territories``) colour them with the viewer's
+risk ramp (``frontend/src/theme/risk.ts``, OKLab) for an example profile (LAD high, LCX moderate, RCA low):
 
 * ``hero_heart``       anterior three-quarter (left-anterior-oblique) view of the heart, epicardial fat, great
                        vessels and arch branches.
 * ``heart_posterior``  posterior-inferior view: crux, PDA, middle cardiac vein, coronary sinus.
 * ``coronary_detail``  close-up of the anterior interventricular groove: LAD, diagonal, AIV in the fat.
-* ``open_heart``       the two halves opened like a book: chambers, valves, papillary muscles.
+* ``open_heart``       the two halves of the long-axis cut opened like a book (the anterior half turned about the
+                       in-plane vertical), both cut faces towards the camera: chambers, valves, papillary muscles.
+* ``four_chamber``     four-chamber section (plane through the apex and the mitral and tricuspid valve centres),
+                       seen from the front: both atria and ventricles, the septa, the offset AV valves.
 * ``exploded_torso``   head-on view of the manifest's exploded layout (t = 1); the intrapulmonary vessel trees
-                       are trimmed at the hilum with the GLB's ``_DIST_HILUM`` attribute, as the viewer can.
+                       are trimmed at the hilum with the GLB's ``_DIST_HILUM`` attribute, as the viewer can, and
+                       the costal cartilages are split at the sternal midline so each half travels with its ribs.
 * ``xray``             fresnel "hologram" torso with the glowing coronary tree and flow particles.
-* ``territories``      heart walls tinted by their COLOR_0 perfusion territories x the risk colours.
+* ``territories``      heart walls tinted by their COLOR_0 perfusion territories x the risk-ramp colours.
 * ``turntable``        7 s 720p MP4 of the heart (``heart_turntable.mp4``).
 
 The web-fidelity preview (EEVEE, baked textures only) is ``render_web_preview.py``.
@@ -28,6 +33,7 @@ from __future__ import annotations
 import argparse
 import json
 import math
+import re
 import sys
 import time
 from pathlib import Path
@@ -35,7 +41,7 @@ from pathlib import Path
 import bmesh
 import bpy
 import numpy as np
-from mathutils import Matrix, Vector
+from mathutils import Matrix, Quaternion, Vector
 
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE))
@@ -47,8 +53,13 @@ SCENE_BLEND = HERE / "cardiotwin_scene.blend"
 MAX_SCENE_MB = 40.0
 T0 = time.perf_counter()
 
-#: Example risk profile used across the portfolio renders (CONTRACTS risk bands).
-RISK_HEX = {"LAD": "#ef4444", "LCX": "#f59e0b", "RCA": "#2dd4bf"}
+#: The viewer's risk ramp ("Ember v2", frontend/src/theme/risk.ts): anchors at p = 0, .25, .5, .75, 1, interpolated
+#: in OKLab. Read from the frontend when it is there, so the renders follow the app.
+RISK_ANCHORS = ("#386695", "#7374BD", "#BF7DB0", "#FB9167", "#FFCB77")
+#: Example risk profile of the data shots (xray, territories, web preview): LAD high, LCX moderate, RCA low.
+EXAMPLE_RISK = {"LAD": 0.84, "LCX": 0.5, "RCA": 0.16}
+#: Atlas colours of the anatomical shots: arteries red (the veins, fat and myocardium keep their tissue looks).
+ATLAS_ARTERY = "#9f2a22"
 GROUP_OF = {
     "Coronary_LAD": "LAD", "Coronary_LAD_Septal": "LAD", "Coronary_LCX": "LCX",
     "Coronary_RCA": "RCA", "Coronary_RCA_Marginal": "RCA", "Coronary_RCA_PDA": "RCA",
@@ -63,8 +74,50 @@ def log(msg: str) -> None:
     print(f"[render {time.perf_counter() - T0:7.1f}s] {msg}", flush=True)
 
 
-RISK = {k: looks.srgb(v) for k, v in RISK_HEX.items()}
-LM_COLOR = looks.srgb("#b8352c")
+def _risk_anchors() -> tuple[str, ...]:
+    path = HERE.parents[1] / "frontend" / "src" / "theme" / "risk.ts"
+    try:
+        m = re.search(r"RISK_ANCHORS\s*=\s*\[([^\]]+)\]", path.read_text(encoding="utf-8"))
+        found = tuple(re.findall(r"#[0-9A-Fa-f]{6}", m.group(1))) if m else ()
+    except OSError:
+        found = ()
+    return found if len(found) >= 2 else RISK_ANCHORS
+
+
+def _oklab(c):
+    r, g, b = c
+    lms = (0.4122214708 * r + 0.5363325363 * g + 0.0514459929 * b,
+           0.2119034982 * r + 0.6806995451 * g + 0.1073969566 * b,
+           0.0883024619 * r + 0.2817188376 * g + 0.6299787005 * b)
+    l_, m_, s_ = (math.copysign(abs(x) ** (1.0 / 3.0), x) for x in lms)
+    return (0.2104542553 * l_ + 0.7936177850 * m_ - 0.0040720468 * s_,
+            1.9779984951 * l_ - 2.4285922050 * m_ + 0.4505937099 * s_,
+            0.0259040371 * l_ + 0.7827717662 * m_ - 0.8086757660 * s_)
+
+
+def _linear_from_oklab(L, a, b):
+    l_, m_, s_ = L + 0.3963377774 * a + 0.2158037573 * b, L - 0.1055613458 * a - 0.0638541728 * b, L - 0.0894841775 * a - 1.2914855480 * b
+    l, m, s = l_ ** 3, m_ ** 3, s_ ** 3
+    rgb = (4.0767416621 * l - 3.3077115913 * m + 0.2309699292 * s,
+           -1.2684380046 * l + 2.6097574011 * m - 0.3413193965 * s,
+           -0.0041960863 * l - 0.7034186147 * m + 1.7076147010 * s)
+    return tuple(min(1.0, max(0.0, v)) for v in rgb)
+
+
+def risk_linear(p: float) -> tuple[float, float, float]:
+    """Linear-sRGB colour of probability ``p`` on the viewer's ramp (piecewise-linear OKLab, like culori)."""
+    lab = [_oklab(looks.srgb(h)) for h in _risk_anchors()]
+    x = min(1.0, max(0.0, p)) * (len(lab) - 1)
+    i = min(int(x), len(lab) - 2)
+    f = x - i
+    return _linear_from_oklab(*(a + f * (b - a) for a, b in zip(lab[i], lab[i + 1])))
+
+
+RISK = {k: risk_linear(p) for k, p in EXAMPLE_RISK.items()}
+LM_COLOR = risk_linear(max(EXAMPLE_RISK["LAD"], EXAMPLE_RISK["LCX"]))
+ATLAS_RED = looks.srgb(ATLAS_ARTERY)
+#: Neutral studio backdrop of the anatomical shots: a soft grey-blue dome that also fills the shadows.
+STUDIO_WORLD = {"top": (0.10, 0.108, 0.125), "bottom": (0.006, 0.006, 0.0075)}
 
 
 def gltf_to_blender(v) -> Vector:
@@ -231,12 +284,13 @@ def compositor_glow(scene, strength: float = 0.6, threshold: float = 0.8, size: 
 
 def studio_rig(target, key_dir=(-35.0, 40.0), rim_dir=(150.0, 25.0), fill_dir=(70.0, -5.0), dist=5.0, scale=1.0,
                warm=(1.0, 0.93, 0.86), cool=(0.62, 0.78, 1.0)) -> None:
-    """Soft key, cool rim and weak fill around ``target`` (azimuth / elevation in degrees)."""
+    """Large soft key, cool rim, broad fill and a warm floor bounce around ``target`` (azimuth / elevation in
+    degrees): wrap-around light with open shadows, as in a medical-illustration studio."""
     t = Vector(target)
-    area_light("Key", orbit(t, key_dir[0], key_dir[1], dist), t, power=520 * scale, size=2.6 * scale ** 0.5, color=warm)
-    area_light("Rim", orbit(t, rim_dir[0], rim_dir[1], dist), t, power=900 * scale, size=1.6 * scale ** 0.5, color=cool)
-    area_light("Fill", orbit(t, fill_dir[0], fill_dir[1], dist * 1.1), t, power=120 * scale, size=3.5 * scale ** 0.5, color=(0.8, 0.85, 1.0))
-    area_light("Under", orbit(t, 20.0, -55.0, dist), t, power=90 * scale, size=3.0 * scale ** 0.5, color=(1.0, 0.7, 0.62))
+    area_light("Key", orbit(t, key_dir[0], key_dir[1], dist), t, power=560 * scale, size=4.2 * scale ** 0.5, color=warm)
+    area_light("Rim", orbit(t, rim_dir[0], rim_dir[1], dist), t, power=820 * scale, size=2.2 * scale ** 0.5, color=cool)
+    area_light("Fill", orbit(t, fill_dir[0], fill_dir[1], dist * 1.1), t, power=170 * scale, size=5.0 * scale ** 0.5, color=(0.84, 0.88, 1.0))
+    area_light("Bounce", orbit(t, 15.0, -60.0, dist), t, power=150 * scale, size=6.0 * scale ** 0.5, color=(1.0, 0.8, 0.7))
 
 
 # ============================================================================================
@@ -386,27 +440,32 @@ class Anatomy:
             self.looks[node] = looks.look_for(self.objects[node].get("ct_category", ""), node)
         return self.looks[node]
 
-    def style(self, *, glow: float = 0.0) -> None:
-        """Photoreal looks everywhere; coronary arteries in the example risk colours (as the viewer)."""
+    def style(self, *, glow: float = 0.0, arteries: str = "atlas") -> None:
+        """Photoreal looks everywhere. Coronary arteries: atlas red (``arteries="atlas"``, the anatomical plates) or
+        the viewer's risk ramp for the example profile (``"risk"``, the data shots; ``glow`` adds emission)."""
         for n, o in self.objects.items():
             if self.layer_of[n] == "Layer_Coronary":
                 group = GROUP_OF.get(n)
-                color = RISK[group] if group else LM_COLOR
-                key = f"R_Coronary_{group or 'LM'}"
+                if arteries == "risk":
+                    color, key, g = (RISK[group] if group else LM_COLOR), f"R_Coronary_{group or 'LM'}", glow
+                else:
+                    color, key, g = ATLAS_RED, "R_Coronary_Atlas", 0.0
                 if key not in self.looks:
-                    self.looks[key] = looks.coronary(key, color, glow=glow if group else 0.0)
+                    self.looks[key] = looks.coronary(key, color, glow=g)
                 assign(o, self.looks[key])
             else:
                 assign(o, self.look(n))
 
     def cropped_copy(self, name: str, *, radius: float | None = None, center=(0, 0, 0), z_min: float | None = None,
                      z_max: float | None = None, keep_largest: bool = False, max_hilum: float | None = None,
-                     max_heart: float | None = None) -> bpy.types.Object:
-        """Render-only copy of a node clipped to a sphere, a height band and/or the proximal part of a pulmonary
-        tree (``_DIST_HILUM`` <= ``max_hilum``). The published asset is never modified."""
+                     max_heart: float | None = None, planes=()) -> bpy.types.Object:
+        """Render-only copy of a node clipped to a sphere, a height band, extra half-spaces (``planes``: world
+        ``(point, normal)`` pairs; the side the normal points to is removed and the cut capped) and/or the proximal
+        part of a pulmonary tree (``_DIST_HILUM`` <= ``max_hilum``). The published asset is never modified."""
         src = self.objects[name]
         ob = src.copy()
         ob.data = src.data.copy()
+        ob.hide_render = False  # the source may already be hidden by an earlier crop of the same node
         ob["ct_extra"] = True
         bpy.context.scene.collection.objects.link(ob)
         ob.parent = None
@@ -431,14 +490,9 @@ class Anatomy:
         Mi = M.inverted()
         bm = bmesh.new()
         bm.from_mesh(ob.data)
-        planes = ([((0, 0, z_min), (0, 0, -1))] if z_min is not None else []) + ([((0, 0, z_max), (0, 0, 1))] if z_max is not None else [])
-        for co, no in planes:
-            res = bmesh.ops.bisect_plane(bm, geom=bm.verts[:] + bm.edges[:] + bm.faces[:], dist=1e-6,
-                                         plane_co=Mi @ Vector(co), plane_no=(Mi.to_3x3().transposed() @ Vector(no)).normalized(),
-                                         clear_outer=True)
-            edges = [e for e in res["geom_cut"] if isinstance(e, bmesh.types.BMEdge) and e.is_valid and e.is_boundary]
-            if edges:
-                bmesh.ops.holes_fill(bm, edges=edges, sides=0)
+        cuts = ([((0, 0, z_min), (0, 0, -1))] if z_min is not None else []) + ([((0, 0, z_max), (0, 0, 1))] if z_max is not None else [])
+        for co, no in cuts + list(planes):
+            bisect_capped(bm, Mi @ Vector(co), (Mi.to_3x3().transposed() @ Vector(no)).normalized())
         bm.to_mesh(ob.data)
         bm.free()
         if radius is not None:
@@ -468,6 +522,31 @@ class Anatomy:
             if n in self.objects:
                 ob = self.cropped_copy(n, z_max=top + 0.10, radius=0.62, center=(arch.x - 0.05, arch.y, top - 0.1), keep_largest=False)
                 keep_largest_island(ob.data, min_fraction=0.2)
+
+
+def bisect_capped(bm: bmesh.types.BMesh, co: Vector, no: Vector) -> list:
+    """Remove the part of ``bm`` on the side ``no`` points to and cap the cut (local frame). The cap is scan-filled
+    (a wall section with its cavities becomes a ring, not a disc); faces get ``ct_cap`` = 1 when the mesh has that
+    face attribute, so the myocardium look paints them as cut muscle."""
+    res = bmesh.ops.bisect_plane(bm, geom=bm.verts[:] + bm.edges[:] + bm.faces[:], dist=1e-6, plane_co=co, plane_no=no,
+                                 clear_outer=True)
+    edges = [e for e in res["geom_cut"] if isinstance(e, bmesh.types.BMEdge) and e.is_valid and e.is_boundary]
+    if not edges:
+        return []
+    faces = [f for f in bmesh.ops.triangle_fill(bm, use_beauty=True, use_dissolve=False, edges=edges, normal=no)["geom"]
+             if isinstance(f, bmesh.types.BMFace)]
+    left = [e for e in edges if e.is_valid and e.is_boundary]
+    if left:
+        faces += [f for f in bmesh.ops.holes_fill(bm, edges=left, sides=0)["faces"] if f.is_valid]
+    layer = bm.faces.layers.float.get("ct_cap")
+    for f in faces:
+        f.normal_update()
+        if f.normal.dot(no) < 0.0:
+            f.normal_flip()
+        if layer is not None:
+            f[layer] = 1.0
+        f.smooth = False
+    return faces
 
 
 def sphere_clip(ob: bpy.types.Object, center, radius: float) -> None:
@@ -567,14 +646,14 @@ def centreline_point(vessels: dict, vid: str, frac: float) -> Vector:
 # Shots
 # ============================================================================================
 HERO_TARGET = (0.06, -0.05, 0.36)
-HERO_VIEW = (28.0, 8.0, 7.9)  # azimuth, elevation (deg), distance
+HERO_VIEW = (28.0, 8.0, 7.3)  # azimuth, elevation (deg), distance
 
 
 def shot_hero_heart(scene, an: Anatomy, out: Path, vessels: dict) -> None:
     an.show_only(layers=("Layer_Heart", "Layer_Coronary"))
-    an.style(glow=0.25)
+    an.style()
     an.stage_heart()
-    setup_world(scene, top=(0.010, 0.012, 0.018), bottom=(0.0008, 0.0008, 0.0012))
+    setup_world(scene, **STUDIO_WORLD)
     t = Vector(HERO_TARGET)
     az, el, dist = HERO_VIEW
     focus = centreline_point(vessels, "LAD", 0.35)
@@ -589,12 +668,13 @@ def shot_heart_posterior(scene, an: Anatomy, out: Path, vessels: dict) -> None:
     an.show_only(layers=("Layer_Heart", "Layer_Coronary"),
                  hide=("GreatVessel_Aorta", "GreatVessel_Aorta_ArchBranches", "GreatVessel_SVC_BrachiocephalicVeins",
                        "GreatVessel_PulmonaryVeins", "GreatVessel_PulmonaryArtery", "GreatVessel_SVC"))
-    an.style(glow=0.25)
+    an.style()
     an.cropped_copy("GreatVessel_IVC", z_min=-0.30)
     crux = centreline_point(vessels, "RCA_PDA", 0.0)
-    t = Vector((0.06, 0.10, -0.12))
-    setup_world(scene, top=(0.010, 0.012, 0.018), bottom=(0.0008, 0.0008, 0.0012))
-    camera("CamPost", orbit(t, 168.0, -28.0, 4.7), t, lens=62, fstop=7.0, focus=crux)
+    t = Vector((0.08, 0.10, -0.14))
+    setup_world(scene, **STUDIO_WORLD)
+    # from behind and below (the heart's diaphragmatic surface), so the apex points to the lower left
+    camera("CamPost", orbit(t, 172.0, -34.0, 4.8), t, lens=62, fstop=7.0, focus=crux)
     studio_rig(t, key_dir=(130.0, 10.0), rim_dir=(-10.0, 40.0), fill_dir=(220.0, -40.0), dist=5.0)
     compositor_glow(scene, strength=0.25, threshold=1.0, size=0.5, vignette=0.4)
     render_to(scene, out / "heart_posterior.jpg")
@@ -603,52 +683,163 @@ def shot_heart_posterior(scene, an: Anatomy, out: Path, vessels: dict) -> None:
 def shot_coronary_detail(scene, an: Anatomy, out: Path, vessels: dict) -> None:
     """Close-up of the anterior interventricular groove: LAD, first diagonal, AIV, epicardial fat."""
     an.show_only(layers=("Layer_Heart", "Layer_Coronary"))
-    an.style(glow=0.15)
+    an.style()
     an.stage_heart()
     t = centreline_point(vessels, "LAD", 0.42)
     n = (t - Vector((0.05, 0.0, 0.0))).normalized()
     loc = t + Vector((n.x * 1.2 + 0.25, -2.2, n.z * 0.6 + 0.25))
     camera("CamDetail", loc, t, lens=100, fstop=4.0, focus=t)
-    setup_world(scene, top=(0.012, 0.014, 0.02), bottom=(0.001, 0.001, 0.0015))
+    setup_world(scene, **STUDIO_WORLD)
     studio_rig(t, key_dir=(-30.0, 45.0), rim_dir=(120.0, 20.0), fill_dir=(40.0, -20.0), dist=3.0, scale=0.45)
     compositor_glow(scene, strength=0.2, threshold=1.0, size=0.5, vignette=0.35)
     render_to(scene, out / "coronary_detail.jpg")
 
 
+def _extent(objs, right: Vector, up: Vector):
+    """(min, max) of the objects' world vertices along ``right`` and ``up``."""
+    lo, hi = [1e9, 1e9], [-1e9, -1e9]
+    for o in objs:
+        M = o.matrix_world
+        V = np.empty(len(o.data.vertices) * 3)
+        o.data.vertices.foreach_get("co", V)
+        W = V.reshape(-1, 3) @ np.array(M.to_3x3()).T + np.array(M.translation)
+        for k, axis in enumerate((right, up)):
+            proj = W @ np.array(axis)
+            lo[k], hi[k] = min(lo[k], float(proj.min())), max(hi[k], float(proj.max()))
+    return lo, hi
+
+
+def _frame(cam_dir: Vector, up: Vector, right: Vector, lo, hi, depth_pt: Vector, lens: float, margin: float = 1.12):
+    """Camera location and target framing the (``right``, ``up``) extents ``lo``..``hi`` at 16:9 with ``lens``; the
+    target lies at the depth of ``depth_pt``."""
+    w = right.cross(up).normalized()
+    target = right * (0.5 * (lo[0] + hi[0])) + up * (0.5 * (lo[1] + hi[1])) + w * w.dot(depth_pt)
+    half_w, half_h = 0.5 * (hi[0] - lo[0]) * margin, 0.5 * (hi[1] - lo[1]) * margin
+    tan_w = 18.0 / lens
+    dist = max(half_w / tan_w, half_h / (tan_w * 9.0 / 16.0))
+    return target + cam_dir * dist, target
+
+
 def shot_open_heart(scene, an: Anatomy, out: Path, report: dict) -> None:
-    """The heart opened along its long-axis cut: the posterior half (LV, RV, septum, mitral and tricuspid
-    valves, papillary muscles and chordae) faces the camera, and the anterior half is turned 180 degrees about
-    the vertical and set beside it, so both cut faces and cavities read side by side."""
+    """The heart opened along its long-axis cut like a book: the posterior half (LV, RV, septum, mitral and
+    tricuspid valves, papillary muscles and chordae) stays in place, and the anterior half is turned 180 degrees
+    about the vertical line of the cutting plane and laid beside it, so both cut faces are coplanar and face the
+    camera, which looks straight at them."""
     show = ("Heart_Wall_Anterior", "Heart_Wall_Posterior", "Valve_Mitral", "Valve_Tricuspid", "Valve_Pulmonary",
             "Valve_Aortic", "Papillary_Muscles", "EpicardialFat_Anterior", "EpicardialFat_Posterior")
     an.show_only(nodes=show)
     an.style()
-    cut_n = gltf_to_blender(report["heart"]["cut_plane"]["normal"]).normalized()
-    cut_p = gltf_to_blender(report["heart"]["cut_plane"]["point"])
-    anterior = ("Heart_Wall_Anterior", "EpicardialFat_Anterior", "Valve_Pulmonary")
-    centre = an.objects["Heart_Wall_Anterior"].matrix_world.translation.copy()
+    n = gltf_to_blender(report["heart"]["cut_plane"]["normal"]).normalized()  # anterior
+    p = gltf_to_blender(report["heart"]["cut_plane"]["point"])
+    up = (Vector((0.0, 0.0, 1.0)) - n * n.z).normalized()
+    right = (-n).cross(up).normalized()  # screen right for a camera looking along -n
+    anterior = [an.objects[k] for k in ("Heart_Wall_Anterior", "EpicardialFat_Anterior", "Valve_Pulmonary")]
+    posterior = [an.objects[k] for k in show if an.objects[k] not in anterior]
+    lo_p, _hi_p = _extent(posterior, right, up)
+    lo_a, _hi_a = _extent(anterior, right, up)
     pivot = bpy.data.objects.new("OpenPivot", None)
     pivot["ct_rig"] = True
     scene.collection.objects.link(pivot)
-    pivot.location = centre
+    pivot.location = p
     bpy.context.view_layer.update()
-    for n in anterior:
-        o = an.objects[n]
+    for o in anterior:
         mw = o.matrix_world.copy()
         o.parent = pivot
         o.matrix_world = mw
-    # face the posterior half's cut towards the camera: camera looks along -cut normal (from the anterior side)
-    side = Vector((-1.0, 0.0, 0.0))
-    pivot.rotation_euler = (0.0, 0.0, math.radians(180.0))
-    pivot.location = centre + side * 1.25 + cut_n * 0.2 + Vector((0.0, 0.0, -0.10))
+    pivot.rotation_mode = "QUATERNION"
+    pivot.rotation_quaternion = Quaternion(up, math.pi)
+    # after the turn the anterior half spans [2 p.r - hi_a, 2 p.r - lo_a] along ``right``: set it left of the posterior
+    pr = p.dot(right)
+    gap = 0.14
+    shift = (lo_p[0] - gap) - (2 * pr - lo_a[0])
+    pivot.location = p + right * shift
     bpy.context.view_layer.update()
-    t = cut_p + side * 0.62 + Vector((0.0, 0.0, -0.02))
-    cam_dir = (cut_n + Vector((0.0, 0.0, 0.35))).normalized()
-    camera("CamOpen", t + cam_dir * 7.0, t, lens=58, fstop=11.0, focus=cut_p)
-    setup_world(scene, top=(0.012, 0.014, 0.02), bottom=(0.001, 0.001, 0.0015))
-    studio_rig(t, key_dir=(-15.0, 50.0), rim_dir=(170.0, 30.0), fill_dir=(40.0, 10.0), dist=6.0, scale=1.6)
-    compositor_glow(scene, strength=0.2, threshold=1.0, size=0.5, vignette=0.35)
+    lo, hi = _extent(anterior + posterior, right, up)
+    lens = 55.0
+    cam_dir = (n + up * 0.12).normalized()
+    loc, target = _frame(cam_dir, up, right, lo, hi, p, lens, margin=1.14)
+    camera("CamOpen", loc, target, lens=lens, fstop=16.0, focus=p)
+    setup_world(scene, **STUDIO_WORLD)
+    dist = (loc - target).length
+    area_light("Key", target + (n * 0.8 + up * 0.9 - right * 0.5).normalized() * dist * 0.8, target, power=900, size=5.0, color=(1.0, 0.94, 0.87))
+    area_light("Fill", loc + up * 0.6, target, power=420, size=6.0, color=(0.86, 0.9, 1.0))
+    area_light("Rim", target + (-n * 0.6 + up * 0.7 + right * 0.6).normalized() * dist * 0.7, target, power=700, size=3.0, color=(0.62, 0.78, 1.0))
+    compositor_glow(scene, strength=0.15, threshold=1.2, size=0.5, vignette=0.3)
     render_to(scene, out / "open_heart.jpg")
+
+
+def _whole_wall(an: Anatomy) -> bpy.types.Object:
+    """Render-only copy of the complete heart wall: the two published halves without their cut caps (``ct_cap``),
+    joined and welded along the long-axis cut."""
+    bm = bmesh.new()
+    for name in ("Heart_Wall_Anterior", "Heart_Wall_Posterior"):
+        src = an.objects[name]
+        me = src.data.copy()
+        me.transform(src.matrix_world)
+        bm.from_mesh(me)
+        bpy.data.meshes.remove(me)
+    layer = bm.faces.layers.float.get("ct_cap")
+    if layer is not None:
+        bmesh.ops.delete(bm, geom=[f for f in bm.faces if f[layer] > 0.5], context="FACES")
+    bmesh.ops.remove_doubles(bm, verts=bm.verts[:], dist=2e-5)
+    me = bpy.data.meshes.new("FourChamber_Wall")
+    bm.to_mesh(me)
+    bm.free()
+    ob = bpy.data.objects.new("FourChamber_Wall", me)
+    ob["ct_extra"] = True
+    bpy.context.scene.collection.objects.link(ob)
+    for f in me.polygons:
+        f.use_smooth = True
+    assign(ob, an.look("Heart_Wall_Posterior"))
+    an.extra.append(ob)
+    return ob
+
+
+def _centroid(ob: bpy.types.Object) -> Vector:
+    V = np.empty(len(ob.data.vertices) * 3)
+    ob.data.vertices.foreach_get("co", V)
+    return ob.matrix_world @ Vector(V.reshape(-1, 3).mean(axis=0))
+
+
+def shot_four_chamber(scene, an: Anatomy, out: Path, report: dict) -> None:
+    """Four-chamber section, as in an atlas plate or an apical four-chamber echo: the heart cut in the plane through
+    the apex and the mitral and tricuspid valve centres; the posterior-inferior part is seen from the front, so both
+    atria and ventricles, the interatrial and interventricular septa, the AV valves with their chordae, the
+    moderator band region and the coronary vessels in the AV grooves (in cross-section) read at once."""
+    keep = ("Valve_Mitral", "Valve_Tricuspid", "Papillary_Muscles", "EpicardialFat_Anterior", "EpicardialFat_Posterior")
+    an.show_only(nodes=keep, layers=("Layer_Coronary",))
+    an.style()
+    apex = gltf_to_blender(report["heart"]["apex"])
+    mitral, tricuspid = _centroid(an.objects["Valve_Mitral"]), _centroid(an.objects["Valve_Tricuspid"])
+    ant = gltf_to_blender(report["heart"]["cut_plane"]["normal"]).normalized()
+    n = (mitral - apex).cross(tricuspid - apex).normalized()
+    if n.dot(ant) < 0:
+        n = -n
+    p = (apex + mitral + tricuspid) / 3.0
+    # everything more than 1 mm anterior-superior of the section is removed
+    cut = [(p + n * 0.01, n)]
+    wall = _whole_wall(an)
+    bm = bmesh.new()
+    bm.from_mesh(wall.data)
+    bisect_capped(bm, p + n * 0.01, n)
+    bm.to_mesh(wall.data)
+    bm.free()
+    for name in keep + tuple(k for k, lay in an.layer_of.items() if lay == "Layer_Coronary"):
+        an.cropped_copy(name, planes=cut)
+    up = (Vector((0.0, 0.0, 1.0)) - n * n.z).normalized()
+    right = (-n).cross(up).normalized()
+    lo, hi = _extent([wall], right, up)
+    lens = 60.0
+    cam_dir = (n + up * 0.08).normalized()
+    loc, target = _frame(cam_dir, up, right, lo, hi, p, lens, margin=1.16)
+    camera("CamFour", loc, target, lens=lens, fstop=18.0, focus=p)
+    setup_world(scene, **STUDIO_WORLD)
+    dist = (loc - target).length
+    area_light("Key", target + (n * 0.9 + up * 0.8 - right * 0.45).normalized() * dist * 0.75, target, power=780, size=4.5, color=(1.0, 0.94, 0.87))
+    area_light("Fill", loc + up * 0.5 + right * 0.4, target, power=380, size=6.0, color=(0.86, 0.9, 1.0))
+    area_light("Rim", target + (-n * 0.5 + up * 0.8 + right * 0.5).normalized() * dist * 0.7, target, power=600, size=3.0, color=(0.62, 0.78, 1.0))
+    compositor_glow(scene, strength=0.15, threshold=1.2, size=0.5, vignette=0.3)
+    render_to(scene, out / "four_chamber.jpg")
 
 
 EXPLODE_VIEW = (0.0, 6.0, 10.2)  # azimuth, elevation (deg), distance
@@ -665,6 +856,16 @@ def shot_exploded(scene, an: Anatomy, out: Path) -> None:
         base = ob.name.split(".")[0]
         if base in an.objects:
             ob.matrix_world = an.objects[base].matrix_world.copy()
+    # render-only: the costal cartilages are one node in the GLB; split at the sternal midline, each half travels with
+    # its own ribs (the rib cage opens as two hinged halves instead of leaving the cartilage bars over the heart)
+    if "CostalCartilage" in an.objects and "Sternum" in an.objects:
+        rest = an.rest["CostalCartilage"]
+        an.objects["CostalCartilage"].matrix_world = rest.copy()
+        x_mid = _centroid(an.objects["Sternum"]).x  # the sternum explodes vertically / forwards only
+        for side, normal in (("Ribs_R", (1.0, 0.0, 0.0)), ("Ribs_L", (-1.0, 0.0, 0.0))):
+            half = an.cropped_copy("CostalCartilage", planes=[((x_mid, 0.0, 0.0), normal)])
+            offset = an.objects[side].matrix_world.translation - an.rest[side].translation
+            half.matrix_world = Matrix.Translation(offset) @ rest
     manifest_cam = an.manifest["camera"]["exploded"]
     target = gltf_to_blender(manifest_cam["target"]) + Vector((0.0, 0.0, 0.05))
     az, el, dist = EXPLODE_VIEW
@@ -682,7 +883,7 @@ def shot_exploded(scene, an: Anatomy, out: Path) -> None:
 def shot_territories(scene, an: Anatomy, out: Path, samples: int) -> None:
     """Heart walls tinted by COLOR_0 territory weights x risk colours, anterior + posterior-inferior."""
     an.show_only(nodes=("Heart_Wall_Anterior", "Heart_Wall_Posterior"), layers=("Layer_Coronary",))
-    an.style(glow=0.4)
+    an.style(glow=0.4, arteries="risk")
     terr = mat_territory()
     for n in ("Heart_Wall_Anterior", "Heart_Wall_Posterior"):
         assign(an.objects[n], terr)
@@ -764,9 +965,9 @@ def shot_xray(scene, an: Anatomy, out: Path, vessels: dict) -> None:
 
 def shot_turntable(scene, an: Anatomy, out: Path, samples: int, frames: int | None = None) -> None:
     an.show_only(layers=("Layer_Heart", "Layer_Coronary"))
-    an.style(glow=0.25)
+    an.style()
     an.stage_heart()
-    setup_world(scene, top=(0.010, 0.013, 0.02), bottom=(0.0008, 0.0008, 0.0012))
+    setup_world(scene, **STUDIO_WORLD)
     pivot = bpy.data.objects.new("Turntable", None)
     pivot["ct_rig"] = True
     scene.collection.objects.link(pivot)
@@ -775,8 +976,9 @@ def shot_turntable(scene, an: Anatomy, out: Path, samples: int, frames: int | No
         mw = o.matrix_world.copy()
         o.parent = pivot
         o.matrix_world = mw
-    target = Vector((0.1, 0.0, 0.18))
-    camera("CamTurn", (0.1, -6.2, 1.1), target, lens=58)
+    # framed on the heart with the trimmed great vessels (apex ~ -0.6 u, vessel stumps ~ 1.3 u), nothing cropped
+    target = Vector((0.1, 0.0, 0.34))
+    camera("CamTurn", (0.1, -6.1, 1.25), target, lens=58)
     studio_rig(target, dist=5.0)
     fps, seconds = 24, 7
     scene.frame_start, scene.frame_end = 1, fps * seconds
@@ -827,7 +1029,7 @@ def _fcurves(ob):
 def main() -> None:
     argv = sys.argv[sys.argv.index("--") + 1:] if "--" in sys.argv else []
     ap = argparse.ArgumentParser(prog="render_heroes.py")
-    ap.add_argument("--shots", default="hero_heart,heart_posterior,coronary_detail,open_heart,exploded_torso,xray,territories")
+    ap.add_argument("--shots", default="hero_heart,heart_posterior,coronary_detail,open_heart,four_chamber,exploded_torso,xray,territories")
     ap.add_argument("--samples", type=int, default=160)
     ap.add_argument("--turntable-samples", type=int, default=48)
     ap.add_argument("--scale", type=float, default=1.0, help="resolution scale (0.5 for drafts)")
@@ -857,6 +1059,8 @@ def main() -> None:
             shot_coronary_detail(scene, an, out, vessels)
         elif shot == "open_heart":
             shot_open_heart(scene, an, out, report)
+        elif shot == "four_chamber":
+            shot_four_chamber(scene, an, out, report)
         elif shot == "exploded_torso":
             shot_exploded(scene, an, out)
         elif shot == "territories":
@@ -871,8 +1075,8 @@ def main() -> None:
     if args.save_scene:
         an.reset()
         an.show_only(layers=("Layer_Heart", "Layer_Coronary"))
-        an.style(glow=0.25)
-        setup_world(scene, top=(0.010, 0.012, 0.018), bottom=(0.0008, 0.0008, 0.0012))
+        an.style()
+        setup_world(scene, **STUDIO_WORLD)
         t = Vector(HERO_TARGET)
         camera("CamHero", orbit(t, *HERO_VIEW), t, lens=70)
         studio_rig(t)
