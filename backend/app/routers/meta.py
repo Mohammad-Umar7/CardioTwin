@@ -21,7 +21,9 @@ _NOT_READY = {503: {"model": ErrorResponse, "description": "Model not loaded"}}
     summary="Liveness and model status",
     responses=_NOT_READY,
 )
-def health(runtime: RuntimeDep, settings: SettingsDep) -> HealthResponse:
+def health(request: Request, runtime: RuntimeDep, settings: SettingsDep) -> HealthResponse:
+    warmer = getattr(request.app.state, "warmup_thread", None)
+    warmup = "disabled" if warmer is None else ("running" if warmer.is_alive() else "done")
     return HealthResponse(
         status="ok",
         model_version=runtime.model_version,
@@ -33,6 +35,7 @@ def health(runtime: RuntimeDep, settings: SettingsDep) -> HealthResponse:
         uptime_s=runtime.uptime_s,
         cache=CacheStats(**runtime.service.cache.stats()),
         frontend_served=settings.frontend_available,
+        cache_warmup=warmup,
         disclaimer=CLINICAL_DISCLAIMER,
     )
 

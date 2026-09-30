@@ -297,6 +297,9 @@ class HealthResponse(_Open):
     uptime_s: float
     cache: CacheStats
     frontend_served: bool
+    cache_warmup: Literal["disabled", "running", "done"] = Field(
+        description="Background precomputation of demo-cohort predictions."
+    )
     disclaimer: str
 
 

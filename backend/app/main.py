@@ -9,6 +9,8 @@ Run locally (from the repository root)::
 
 from __future__ import annotations
 
+import threading
+import time
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 from typing import Any
@@ -60,6 +62,24 @@ def _build_runtime(predictor: Predictor, kind: str, settings: Settings) -> Runti
         raise StartupError(f"The loaded model does not satisfy the API contract: {exc}") from exc
 
 
+def _start_cache_warmup(runtime: Runtime, settings: Settings, stop: threading.Event) -> threading.Thread | None:
+    """Warm the prediction cache with the demo cohort without delaying startup."""
+    if not settings.warm_cache or settings.cache_size == 0 or not runtime.cohort_index:
+        return None
+
+    def warm() -> None:
+        started = time.perf_counter()
+        warmed = runtime.warm_cohort(stop)
+        log.info(
+            "prediction cache warmed with the demo cohort",
+            extra={"patients": warmed, "duration_ms": round((time.perf_counter() - started) * 1000, 1)},
+        )
+
+    thread = threading.Thread(target=warm, name="cardiotwin-cache-warmup", daemon=True)
+    thread.start()
+    return thread
+
+
 def create_app(settings: Settings | None = None, predictor: Predictor | None = None) -> FastAPI:
     """Build the CardioTwin ASGI application.
 
@@ -95,7 +115,15 @@ def create_app(settings: Settings | None = None, predictor: Predictor | None = N
                 "frontend": str(settings.frontend_dist) if settings.frontend_available else None,
             },
         )
-        yield
+        stop = threading.Event()
+        warmer = _start_cache_warmup(runtime, settings, stop)
+        app.state.warmup_thread = warmer
+        try:
+            yield
+        finally:
+            stop.set()
+            if warmer is not None:
+                warmer.join(timeout=5)
 
     app = FastAPI(
         title="CardioTwin API",
@@ -108,6 +136,7 @@ def create_app(settings: Settings | None = None, predictor: Predictor | None = N
     app.state.settings = settings
     app.state.runtime = None
     app.state.load_error = None
+    app.state.warmup_thread = None
     if predictor is not None:
         kind = "fake" if isinstance(predictor, FakePredictor) else "real"
         app.state.runtime = _build_runtime(predictor, kind, settings)

@@ -50,6 +50,8 @@ class Settings:
         frontend_dist: Path of the Vite production build (``frontend/dist``).
         model_card_path: Markdown served by ``GET /api/model-card``.
         cache_size: Capacity of the LRU cache of identical predictions (0 disables it).
+        warm_cache: After startup, predict every demo-cohort patient in a background thread so cohort
+            selections are answered from the cache.
         batch_max_rows: Maximum rows accepted by ``POST /api/predict/batch`` (<= 256).
         out_of_range: Numeric values outside the schema ``min``/``max`` (the training-cohort range):
             ``"reject"`` answers 422 with the allowed range; ``"warn"`` predicts anyway and lists them
@@ -66,6 +68,7 @@ class Settings:
     frontend_dist: Path = REPO_ROOT / "frontend" / "dist"
     model_card_path: Path = REPO_ROOT / "docs" / "MODEL_CARD.md"
     cache_size: int = 2048
+    warm_cache: bool = True
     batch_max_rows: int = MAX_BATCH_ROWS_LIMIT
     out_of_range: RangePolicy = "reject"
     log_level: str = "INFO"
@@ -112,6 +115,7 @@ class Settings:
         ``CARDIOTWIN_FRONTEND_DIST``    path to the built SPA (default ``<repo>/frontend/dist``)
         ``CARDIOTWIN_MODEL_CARD``       markdown file for ``/api/model-card``
         ``CARDIOTWIN_CACHE_SIZE``       LRU capacity (default 2048, 0 disables)
+        ``CARDIOTWIN_WARM_CACHE``       ``1`` (default) / ``0``: precompute demo-cohort predictions
         ``CARDIOTWIN_BATCH_MAX_ROWS``   batch limit (default and maximum 256)
         ``CARDIOTWIN_OUT_OF_RANGE``     ``reject`` (default) or ``warn``
         ``CARDIOTWIN_LOG_LEVEL``        ``DEBUG``/``INFO``/... (default ``INFO``)
@@ -151,6 +155,11 @@ class Settings:
             kwargs["model_card_path"] = _path(value)
         if (value := get("CACHE_SIZE")) is not None:
             kwargs["cache_size"] = _int("CACHE_SIZE", value)
+        if (value := get("WARM_CACHE")) is not None:
+            flag = _bool_or_none(value)
+            if flag is None:
+                raise SettingsError(f"{ENV_PREFIX}WARM_CACHE must be a boolean (1/0, true/false), got {value!r}")
+            kwargs["warm_cache"] = flag
         if (value := get("BATCH_MAX_ROWS")) is not None:
             kwargs["batch_max_rows"] = _int("BATCH_MAX_ROWS", value)
         if (value := get("OUT_OF_RANGE")) is not None:

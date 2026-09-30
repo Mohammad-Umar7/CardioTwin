@@ -207,3 +207,20 @@ class Runtime:
     @property
     def uptime_s(self) -> float:
         return round(time.monotonic() - self.started_at, 3)
+
+    def warm_cohort(self, stop: threading.Event | None = None) -> int:
+        """Predict every demo-cohort patient once so selecting one in the UI is served from the cache.
+
+        Best effort: a patient that fails is logged and skipped. Returns the number of patients warmed.
+        """
+        warmed = 0
+        for patient in self.cohort_index.values():
+            if stop is not None and stop.is_set():
+                break
+            try:
+                validated = self.service.validator.validate(patient.features, ("cohort", patient.id, "features"))
+                self.service.predict_normalized(validated.values, warnings=validated.warnings)
+                warmed += 1
+            except Exception:
+                log.warning("cache warm-up skipped a cohort patient", extra={"patient": patient.id}, exc_info=True)
+        return warmed

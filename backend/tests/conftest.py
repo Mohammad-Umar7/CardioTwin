@@ -29,6 +29,7 @@ def settings(tmp_path: Path) -> Settings:
         serve_frontend=False,
         frontend_dist=tmp_path / "dist",
         model_card_path=tmp_path / "MODEL_CARD.md",
+        warm_cache=False,  # keeps predictor.calls deterministic; warm-up has its own tests
         log_level="WARNING",
         log_format="text",
     )
