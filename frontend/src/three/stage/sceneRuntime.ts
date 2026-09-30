@@ -7,10 +7,13 @@
  *                          `done` was already true at mount: no assembly this session).
  *   sceneRuntime.peel      displayed (spring-smoothed) peel scalar and how open the heart is (0..1).
  *   sceneRuntime.beat      cardiac phase and the ventricular / atrial activations actually applied.
+ *   sceneRuntime.sectionPlanes  the heart section plane(s) (a shared array; parked far away when off) —
+ *                          overlays drawn on heart structures should use them as `clippingPlanes`.
  *   sceneRuntime.nodes     per GLB node: how visible its solid (0..1, includes the assembly dissolve) and
  *                          its ghost are this frame — overlays that follow a node (flow, pulse) should
  *                          multiply by `solid` so they vanish with isolate / ghost / assembly.
  */
+import type { Plane } from 'three';
 import { ASSEMBLY_DURATION, ASSEMBLY_IGNITE_AT } from '../anatomy/assembly';
 
 export const sceneRuntime = {
@@ -19,6 +22,7 @@ export const sceneRuntime = {
   peel: { e: 0.6, heartOpen: 0 },
   beat: { phase: 0, v: 0, a: 0, bpm: 72 },
   nodes: {} as Record<string, { solid: number; ghost: number }>,
+  sectionPlanes: [] as Plane[],
 };
 
 export type SceneRuntime = typeof sceneRuntime;

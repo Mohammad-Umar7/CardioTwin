@@ -308,6 +308,7 @@ export class AnatomyRig {
       entry.solidAmt = 0;
     }
     sceneRuntime.anatomyReady = true;
+    sceneRuntime.sectionPlanes = this.sectionPlanes;
   }
 
   private solidFor(entry: RigEntry): TissueMaterial {
@@ -538,6 +539,9 @@ export class AnatomyRig {
       material.visible = solidVisible > 0.002;
       const ghostVisible = entry.ghostAmt * entry.assemblyReveal;
       entry.ghostMesh.visible = ghostVisible > 0.002;
+      // A node that shows nothing is hidden outright, so anything following it (fx overlays and flow,
+      // which test node visibility) disappears with it: isolate, hidden layers, the assembly's first frames.
+      entry.mesh.visible = solidVisible > 0.002 || ghostVisible > 0.002;
       entry.ghost.userData.ct.uniforms.uFade.value = ghostVisible;
       entry.pickable = PICKABLE_KINDS.has(entry.kind) && solidVisible > 0.5 && entry.mesh.visible;
       const pub = sceneRuntime.nodes[entry.node] ?? (sceneRuntime.nodes[entry.node] = { solid: 0, ghost: 0 });

@@ -102,7 +102,7 @@ export interface TissueOptions {
 }
 
 /** Absolute display inflation of coronary walls (≈ the spec's 1.3×, documented in §7.3). */
-export const VESSEL_INFLATE = 0.005;
+export { VESSEL_INFLATE } from './materials';
 
 interface Look {
   color: string;
