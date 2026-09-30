@@ -184,7 +184,7 @@ and internet once for the ~190 MB STL fetch. The Cycles portfolio renders are op
    (`_ARCLEN`, which drives the flow particles). Of 2,612 centreline points, 99.85 % lie inside their vessel
    (max 0.31 mm outside).
 6. **Web optimisation and contracts.** meshopt compression and WebP PBR textures (≤ 16 MB budget; the current GLB is
-   8.4 MB) bring the asset to 41 named structures in 7 layers and ≈ 400k triangles. Node names and transforms are
+   8.3 MB) bring the asset to 41 named structures in 7 layers and ≈ 400k triangles. Node names and transforms are
    verified. A triangle-level check guarantees that the exploded layout creates no new collisions, and the manifest
    maps each model target to its nodes.
 
