@@ -19,14 +19,14 @@ demo video at `<YouTube link>` · [six-page technical report](TECHNICAL_REPORT.p
 | **0.934** | Median CAD ROC-AUC over 200 random re-splits with the whole recipe re-run (LAD 0.844). The locked test split was among the hardest 3 % |
 | **+0.069** (95 % CI +0.024 to +0.115) | LAD ROC-AUC gained by adding ECG, labs and echo to bedside data |
 | **2.2e-16** | Largest probability difference between the Python server and the in-browser engine, with identical SHAP values. The browser answers in 1.2 ms (p50) |
-| **44 / 70** | Cited anatomical reference checks the 3D heart passes (up from 35 at baseline), across 41 structures and 18 SCCT coronary segments |
+| **45 / 70** | Cited anatomical reference checks the 3D heart passes (up from 35 at baseline; 8 minor, 17 still fail), across 41 structures and 18 SCCT coronary segments |
 
 ## Inspiration
 
 Patients sent for coronary angiography already come with a history, an ECG, blood tests and an echo. Yet the numbers
 clinicians get from them are whole-heart scores. The scores say nothing about *which* artery is likely narrowed, and
 nothing about *why*. In the public cohort I worked with, every one of the 303 patients was referred for an invasive
-angiogram, and 29 % of them turned out to have no significant stenosis.
+angiogram, and 29 % of them turned out not to have coronary artery disease.
 
 I wanted a tool that answers three questions at a glance: how likely is disease, in which vessel, and what in this
 patient's record drives it? It had to be honest about uncertainty, and it had to run on an ordinary laptop.
@@ -51,7 +51,7 @@ patient's record drives it? It had to be honest about uncertainty, and it had to
 ## How I built it
 
 - **ML (Python, scikit-learn, XGBoost).**
-  - A 20 % test split was locked before any modelling. Eleven model families were compared with repeated, nested
+  - A 20 % test split was locked before any modelling. Eleven candidate models were compared with repeated, nested
     cross-validation tuned on log-loss.
   - Each target uses a margin ensemble of logistic regression and XGBoost with Platt calibration and a Youden
     threshold, all fitted on out-of-fold predictions.
@@ -100,8 +100,8 @@ patient's record drives it? It had to be honest about uncertainty, and it had to
 
 ## Accomplishments that I'm proud of
 
-- Every number in the app, the README and the report comes from a generated artifact, and every test metric has a
-  95 % CI.
+- Every number in the app, the README and the report is traceable to a generated artifact or a reproducible check,
+  and every test metric has a 95 % CI.
 - The same model gives the same answer to 2.2e-16 on a server and in a browser, with explanations that add up exactly.
 - A 3D heart where the colour of the LAD can only ever show P(LAD). One registry drives the model, the API and the
   3D mapping, and the end-to-end check fails if they diverge.
