@@ -692,7 +692,19 @@ def aha_segments(P: np.ndarray, *, ma_c: np.ndarray, apex: np.ndarray, pap_V: np
     ap[(th >= 195) & (th < 285)] = 16
     seg[apical] = ap[apical]
     seg[cap & (t <= 1.05)] = 17
-    return seg, t
+    # LV sampling region (same rule as anatomy/checks/measure_model.py lv_mask): within 1.1 x the lateral-wall
+    # radius of the same axial bin, so the right-ventricular free wall is excluded
+    rho = np.linalg.norm(rP, axis=1)
+    lateral = (th >= 180) & (th < 300)
+    Rt = np.full(len(P), np.nan)
+    edges = np.linspace(0.0, 1.0, 11)
+    for lo_, hi_ in zip(edges[:-1], edges[1:]):
+        sel = lateral & (t >= lo_) & (t < hi_)
+        if sel.sum() > 20:
+            Rt[(t >= lo_) & (t < hi_)] = np.quantile(rho[sel], 0.95) * 1.1
+    Rt = np.where(np.isnan(Rt), np.nanmax(Rt) if np.isfinite(Rt).any() else np.inf, Rt)
+    lv_region = (t >= 0) & (t <= 1.0) & (rho <= Rt)
+    return seg, lv_region
 
 
 def standard_blend(weights: np.ndarray, seg: np.ndarray, ventricular: np.ndarray, *, alpha: float,
@@ -722,6 +734,36 @@ def standard_blend(weights: np.ndarray, seg: np.ndarray, ventricular: np.ndarray
     # vertices with a standard segment but little nearest-artery confidence still get part of it
     conf_out = np.where(has_std, np.maximum(conf, alpha * ventricular), conf)
     return mixed * conf_out[:, None]
+
+
+def vertex_areas(V: np.ndarray, F: np.ndarray) -> np.ndarray:
+    a = 0.5 * np.linalg.norm(np.cross(V[F[:, 1]] - V[F[:, 0]], V[F[:, 2]] - V[F[:, 0]]), axis=1)
+    out = np.zeros(len(V))
+    for k in range(3):
+        np.add.at(out, F[:, k], a / 3.0)
+    return out
+
+
+def calibrate_shares(per_half: dict, target: np.ndarray, iterations: int = 8) -> list[float]:
+    """Iterative proportional fitting of the LAD / LCX / RCA weights on the LV myocardium (AHA segment > 0 and
+    ventricular) of both heart halves, so their area-weighted shares approach the population values (CT
+    territory mass: LAD ~42.5 %, LCX ~28.8 %, RCA ~26.4 %; REFERENCE.md §5.10). Each vertex keeps its
+    territory confidence (row sum); only the mix between the three arteries changes."""
+    items = []
+    for hV, hF, rgb, _ventricular, _qa, lv_seg in per_half.values():
+        lv = lv_seg > 0
+        items.append((rgb, lv, vertex_areas(hV, hF)))
+    target = target / target.sum()
+    for _ in range(iterations):
+        tot = sum(((rgb[lv] * a[lv, None]).sum(axis=0) for rgb, lv, a in items), np.zeros(3))
+        share = tot / max(tot.sum(), 1e-12)
+        gain = np.clip((target / np.maximum(share, 1e-6)) ** 0.5, 0.8, 1.25)
+        for rgb, lv, _a in items:
+            conf = rgb[lv].sum(axis=1, keepdims=True)
+            w = rgb[lv] * gain
+            rgb[lv] = w / np.maximum(w.sum(axis=1, keepdims=True), 1e-9) * conf
+    tot = sum(((rgb[lv] * a[lv, None]).sum(axis=0) for rgb, lv, a in items), np.zeros(3))
+    return [round(float(x), 3) for x in tot / tot.sum()]
 
 
 # --------------------------------------------------------------------------------------------
@@ -1216,6 +1258,8 @@ def build(args: argparse.Namespace) -> None:
             # overlapping loops of touching parts (e.g. the two heads of pectoralis) do not.
             parts = [CROPS[crop["type"]](V, F, crops) for V, F in parts]
         V, F = mo.concat(parts)
+        if spec.raw.get("translate_mm"):  # documented rigid position fix (source frame, mm)
+            V = V + np.array(spec.raw["translate_mm"], dtype=float)
         ob = new_object(spec.node, new_mesh(spec.node, to_scene(V), F))
         closed = crop is None or crop["type"] != "skin_outer_shell"
         finish_topology(ob, merge_dist=merge_dist, recalc_normals=closed)
@@ -1314,6 +1358,7 @@ def build(args: argparse.Namespace) -> None:
         lad_sep_V = np.concatenate([world_vertices(objects["Coronary_LAD_Septal"]), lad_V])
         rca_sep_V = np.concatenate([world_vertices(objects["Coronary_RCA_Septal"]), pda_V])
         log(f"  AHA-17 blend: alpha {std_cfg['alpha']}, mitral hinge centre {np.round(ma_c, 3).tolist()}")
+    per_half = {}
     for spec in heart_specs:
         ob = objects[spec.node]
         hV, hF = mesh_arrays(ob.data)
@@ -1326,14 +1371,24 @@ def build(args: argparse.Namespace) -> None:
             ventricular_V=vent_V,
             pulmonary_trunk_V=trunk_V,
         )
+        seg = np.zeros(len(hV), dtype=int)
+        lv_region = np.zeros(len(hV), dtype=bool)
         if std_cfg:
-            seg, _t = aha_segments(hV, ma_c=ma_c, apex=apex, pap_V=pap_V, lad_V=lad_V, pda_V=pda_V)
+            seg, lv_region = aha_segments(hV, ma_c=ma_c, apex=apex, pap_V=pap_V, lad_V=lad_V, pda_V=pda_V)
             d_lad_sep = nearest_distance(hV, lad_sep_V)
             d_rca_sep = nearest_distance(hV, rca_sep_V)
             septal = mo.smoothstep(-std_cfg["septal_width_mm"] * scale, std_cfg["septal_width_mm"] * scale, d_rca_sep - d_lad_sep)
             rgb = standard_blend(rgb, seg, ventricular, alpha=std_cfg["alpha"], septal=septal)
-            rgb = np.clip(mo.smooth_vertex_values(rgb, hF, iterations=std_cfg["smooth_iterations"]), 0.0, 1.0)
             node_stats[spec.node]["aha_segment_vertices"] = {int(k): int(v) for k, v in zip(*np.unique(seg, return_counts=True))}
+        per_half[spec.node] = [hV, hF, rgb, ventricular, qa_values, np.where(lv_region, seg, 0)]
+    if std_cfg and std_cfg.get("target_shares"):
+        shares = calibrate_shares(per_half, np.array(std_cfg["target_shares"], dtype=float))
+        log(f"  territory shares of the LV region (LAD, LCX, RCA): {shares}")
+    for spec in heart_specs:
+        ob = objects[spec.node]
+        hV, hF, rgb, ventricular, qa_values, _lv_seg = per_half[spec.node]
+        if std_cfg:
+            rgb = np.clip(mo.smooth_vertex_values(rgb, hF, iterations=std_cfg["smooth_iterations"]), 0.0, 1.0)
         set_color_attribute(ob, terr_cfg["attribute"], rgb)
         # QA-only attribute (not exported): R = landmark rule, G = thickness rule, B = final mask.
         qa = ob.data.color_attributes.new(name="QA_Ventricular", type="FLOAT_COLOR", domain="POINT")

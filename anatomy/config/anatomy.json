@@ -479,7 +479,13 @@
         0.0
       ],
       "target": null,
-      "description": "Dome-shaped respiratory muscle; the inferior (diaphragmatic) wall of the heart rests on its central tendon."
+      "description": "Dome-shaped respiratory muscle; the inferior (diaphragmatic) wall of the heart rests on its central tendon.",
+      "translate_mm": [
+        0.0,
+        0.0,
+        -4.0
+      ],
+      "_translate_comment": "BodyParts3D's diaphragm dome rises ~3-4 mm into the inferior heart wall: the whole sheet is lowered (rigid transform fix) instead of denting it."
     },
     {
       "node": "Heart_Wall_Anterior",
@@ -1080,10 +1086,15 @@
     },
     "smooth_iterations": 6,
     "standard_blend": {
-      "_comment": "Blend of the nearest-artery weights towards the AHA-17 standard territories (Cerqueira 2002) on ventricular myocardium; septal segments are split between the LAD and RCA septal perforators. Targets: LAD ~42 %, LCX ~29 %, RCA ~26 % of the LV (REFERENCE.md §5.10).",
+      "_comment": "Blend of the nearest-artery weights towards the AHA-17 standard territories (Cerqueira 2002) on ventricular myocardium; septal segments are split between the LAD and RCA septal perforators. Targets: LAD ~42 %, LCX ~29 %, RCA ~26 % of the LV (REFERENCE.md §5.10). target_shares: iterative proportional fitting of the three weights on the LV region to the population territory shares.",
       "alpha": 0.85,
       "septal_width_mm": 4.0,
-      "smooth_iterations": 4
+      "smooth_iterations": 4,
+      "target_shares": [
+        0.425,
+        0.288,
+        0.264
+      ]
     }
   },
   "synthesis": {
@@ -1246,22 +1257,6 @@
         "Coronary_RCA_Septal"
       ],
       "margin_mm": 0.6
-    },
-    {
-      "yielder": "Diaphragm",
-      "masters": [
-        "Heart_Wall_Anterior",
-        "Heart_Wall_Posterior",
-        "EpicardialFat_Anterior",
-        "EpicardialFat_Posterior",
-        "CardiacVeins",
-        "Coronary_RCA",
-        "Coronary_RCA_PDA",
-        "Coronary_RCA_PL",
-        "Coronary_RCA_Marginal",
-        "Coronary_LAD"
-      ],
-      "margin_mm": 0.5
     }
   ]
 }

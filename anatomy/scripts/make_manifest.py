@@ -315,7 +315,8 @@ def build_manifest(cfg: dict, report: dict, vessels: dict | None = None, definit
                 "closer to inflow/outflow vessels than to ventricular landmarks) and far from every artery; on ventricular "
                 "myocardium blended "
                 f"{int(round(100 * cfg['territories'].get('standard_blend', {}).get('alpha', 0.0)))} % towards the AHA-17 "
-                "standard territories (Cerqueira 2002), the septum split between the LAD and RCA septal perforators."
+                "standard territories (Cerqueira 2002), the septum split between the LAD and RCA septal perforators, and the "
+                "three weights re-balanced towards the population shares of LV myocardium (LAD 42.5 %, LCX 28.8 %, RCA 26.4 %)."
             ),
             "interpretation": (
                 "Approximates the standard coronary perfusion territories of the AHA 17-segment model on this "
