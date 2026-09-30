@@ -22,12 +22,13 @@
  *    the left-main ostium, right tree from the RCA ostium), for flow / ripple effects along the vessels.
  *    The centreline stage therefore runs before this one.
  */
-import { existsSync, readFileSync, statSync } from 'node:fs';
+import { createHash } from 'node:crypto';
+import { existsSync, readFileSync, statSync, writeFileSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 import { NodeIO, PropertyType } from '@gltf-transform/core';
-import { ALL_EXTENSIONS, EXTMeshoptCompression, EXTTextureWebP, KHRMeshQuantization } from '@gltf-transform/extensions';
+import { ALL_EXTENSIONS, EXTMeshoptCompression, EXTTextureWebP, KHRMaterialsClearcoat, KHRMeshQuantization } from '@gltf-transform/extensions';
 import { prune, quantize, reorder } from '@gltf-transform/functions';
 import { MeshoptDecoder, MeshoptEncoder } from 'meshoptimizer';
 import sharp from 'sharp';
@@ -35,8 +36,9 @@ import sharp from 'sharp';
 const HERE = dirname(fileURLToPath(import.meta.url));
 const REPO = resolve(HERE, '..', '..');
 const input = resolve(process.argv[2] ?? resolve(REPO, 'anatomy/build/cardiotwin_anatomy.raw.glb'));
-const output = resolve(process.argv[3] ?? resolve(REPO, 'frontend/public/anatomy/cardiotwin_anatomy.glb'));
-const vesselsPath = resolve(REPO, 'frontend/public/anatomy/vessels.json');
+const publicDir = process.env.CARDIOTWIN_PUBLIC_DIR ? resolve(process.env.CARDIOTWIN_PUBLIC_DIR) : resolve(REPO, 'frontend/public/anatomy');
+const output = resolve(process.argv[3] ?? resolve(publicDir, 'cardiotwin_anatomy.glb'));
+const vesselsPath = resolve(publicDir, 'vessels.json');
 const bakeDir = resolve(REPO, 'anatomy/build/bake');
 /** WebP quality per map (normal maps need more bits: block artefacts read as facets). */
 const WEBP = { base: { quality: 84, effort: 6 }, normal: { quality: 90, effort: 6 }, orm: { quality: 86, effort: 6 } };
@@ -126,6 +128,11 @@ for (const mesh of root.listMeshes()) {
     }
     const accessor = doc.createAccessor(`${mesh.getName()}_territory`).setType('VEC3').setArray(rgb).setBuffer(color.getBuffer());
     prim.setAttribute('COLOR_0', accessor);
+    // _TERRITORY: the same weights under a custom name (unorm8). glTF viewers multiply COLOR_0 into the base colour;
+    // readers of the territory data should use _TERRITORY (COLOR_0 is kept for contract v1.1 consumers).
+    const u8 = new Uint8Array(n * 3);
+    for (let i = 0; i < n * 3; i++) u8[i] = Math.round(Math.min(1, Math.max(0, rgb[i])) * 255);
+    prim.setAttribute('_TERRITORY', doc.createAccessor(`${mesh.getName()}_territory_u8`).setType('VEC3').setArray(u8).setNormalized(true).setBuffer(color.getBuffer()));
     reference.set(mesh.getName(), { rgb, position: prim.getAttribute('POSITION').getArray().slice() });
     converted++;
   }
@@ -228,16 +235,73 @@ if (!Object.keys(labelCounts).some((n) => n.startsWith('Coronary_'))) {
   process.exit(1);
 }
 
-// 1d. Baked PBR textures (anatomy/build/bake, from anatomy/blender/bake_textures.py): WebP (EXT_texture_webp) on each
-//     node's own material: baseColor (sRGB), normal (tangent space), occlusion + metallicRoughness from one ORM map.
-//     Factors become neutral (the colour lives in the texture); the viewer's Clinical look ignores the maps.
+// 1d. Baked PBR textures (anatomy/build/bake, from anatomy/blender/bake_textures.py) on each node's own material:
+//     baseColor (sRGB, lossy WebP), normal (tangent space; lossless WebP, renormalised) and occlusion + roughness
+//     from one ORM map (near-lossless WebP). A normal map whose 99th-percentile tilt is under NORMAL_MIN_TILT_DEG
+//     carries no relief (8-bit quantisation noise only) and is dropped, as is an ORM map whose occlusion and
+//     roughness channels are uniform (replaced by the roughness factor). The decoded GPU footprint (RGBA8 + mips)
+//     is summed and must stay under GPU_BUDGET_MIB. The wet look (KHR_materials_clearcoat) goes into the GLB too, so
+//     standalone glTF viewers show what the app adds.
 const bakeManifestPath = join(bakeDir, 'bake_manifest.json');
+const NORMAL_MIN_TILT_DEG = 5.0;
+const GPU_BUDGET_MIB = 128;
+/** Wet serous / adventitial surfaces: clearcoat factor, clearcoat roughness (matches looks.py Coat_*). */
+const CLEARCOAT = {
+  Myocardium: [0.22, 0.16], Fat: [0.3, 0.18], Artery: [0.3, 0.2], PulmonaryArtery: [0.3, 0.2], PulmonaryVein: [0.3, 0.2],
+  Vein: [0.3, 0.2], CardiacVein: [0.35, 0.2], Valve: [0.35, 0.15], Papillary: [0.25, 0.2], Lung: [0.25, 0.2],
+  Airway: [0.3, 0.15], Oesophagus: [0.3, 0.15], Diaphragm: [0.3, 0.15], Cartilage: [0.3, 0.15],
+};
+/** Upload order hint for the viewer: the heart first, the ghosted outer layers last. */
+const TEXTURE_PRIORITY = ['Heart_Wall_Anterior', 'Heart_Wall_Posterior', 'EpicardialFat_Anterior', 'EpicardialFat_Posterior',
+  'GreatVessel_Aorta', 'GreatVessel_PulmonaryArtery', 'CardiacVeins', 'Valve_Aortic', 'Valve_Mitral', 'Valve_Tricuspid',
+  'Valve_Pulmonary', 'Papillary_Muscles', 'GreatVessel_PulmonaryVeins', 'GreatVessel_SVC', 'GreatVessel_IVC',
+  'GreatVessel_Aorta_ArchBranches', 'GreatVessel_SVC_BrachiocephalicVeins'];
 let textured = 0;
 let textureBytes = 0;
+let gpuBytes = 0;
+const textureReport = {};
+const srgbHex = (lin) => '#' + lin.map((x) => {
+  const c = x <= 0.0031308 ? 12.92 * x : 1.055 * x ** (1 / 2.4) - 0.055;
+  return Math.round(Math.min(1, Math.max(0, c)) * 255).toString(16).padStart(2, '0');
+}).join('');
+const toLinear = (c) => (c <= 0.04045 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4);
+const gpu = (w, h) => (w * h * 4 * 4) / 3;
+
+async function normalStats(file) {
+  const { data, info } = await sharp(readFileSync(join(bakeDir, file))).removeAlpha().raw().toBuffer({ resolveWithObject: true });
+  const n = info.width * info.height;
+  const tilts = new Float32Array(n);
+  const out = Buffer.alloc(n * 3);
+  let bad = 0;
+  for (let i = 0; i < n; i++) {
+    let x = data[3 * i] / 127.5 - 1, y = data[3 * i + 1] / 127.5 - 1, z = data[3 * i + 2] / 127.5 - 1;
+    const len = Math.hypot(x, y, z);
+    if (len < 0.9) bad++;
+    if (len > 1e-6) { x /= len; y /= len; z /= len; } else { x = 0; y = 0; z = 1; }
+    if (z < 0.5) { const s = Math.sqrt((1 - 0.25) / Math.max(1e-6, x * x + y * y)); x *= s; y *= s; z = 0.5; } // clamp tilt <= 60 deg
+    tilts[i] = Math.acos(Math.min(1, z)) * 180 / Math.PI;
+    out[3 * i] = Math.round((x + 1) * 127.5); out[3 * i + 1] = Math.round((y + 1) * 127.5); out[3 * i + 2] = Math.round((z + 1) * 127.5);
+  }
+  const sorted = Float32Array.from(tilts).sort();
+  return { p50: sorted[Math.floor(n * 0.5)], p99: sorted[Math.floor(n * 0.99)], invalid: bad / n, width: info.width, height: info.height,
+           image: sharp(out, { raw: { width: info.width, height: info.height, channels: 3 } }) };
+}
+
+async function channelStats(file) {
+  const { data, info } = await sharp(readFileSync(join(bakeDir, file))).removeAlpha().raw().toBuffer({ resolveWithObject: true });
+  const n = info.width * info.height;
+  const mean = [0, 0, 0];
+  const sq = [0, 0, 0];
+  for (let i = 0; i < n; i++) for (let c = 0; c < 3; c++) { const v = data[3 * i + c] / 255; mean[c] += v; sq[c] += v * v; }
+  const m = mean.map((v) => v / n);
+  const sd = sq.map((v, c) => Math.sqrt(Math.max(0, v / n - m[c] * m[c])));
+  return { mean: m, sd, width: info.width, height: info.height };
+}
+
 if (existsSync(bakeManifestPath)) {
   const bake = JSON.parse(readFileSync(bakeManifestPath, 'utf8'));
   doc.createExtension(EXTTextureWebP).setRequired(true);
-  const encode = async (file, opts) => sharp(readFileSync(join(bakeDir, file))).removeAlpha().webp(opts).toBuffer();
+  const clearcoatExt = doc.createExtension(KHRMaterialsClearcoat);
   for (const node of root.listNodes()) {
     const entry = bake.nodes[node.getName()];
     const mesh = node.getMesh();
@@ -245,21 +309,58 @@ if (existsSync(bakeManifestPath)) {
     const prim = mesh.listPrimitives()[0];
     if (!prim.getAttribute('TEXCOORD_0')) throw new Error(`${node.getName()}: baked maps but no TEXCOORD_0`);
     const mat = prim.getMaterial();
-    const tex = async (kind) => {
-      const data = await encode(entry.files[kind], WEBP[kind]);
+    const name = node.getName();
+    const rep = {};
+    const add = (kind, data, w, h) => {
       textureBytes += data.byteLength;
-      return doc.createTexture(`${node.getName()}_${kind}`).setImage(new Uint8Array(data)).setMimeType('image/webp').setURI(`${node.getName()}_${kind}.webp`);
+      gpuBytes += gpu(w, h);
+      rep[kind] = { size: w, kB: Math.round(data.byteLength / 1024) };
+      return doc.createTexture(`${name}_${kind}`).setImage(new Uint8Array(data)).setMimeType('image/webp').setURI(`${name}_${kind}.webp`);
     };
+    // base colour (lossy, full-resolution chroma)
+    const base = await channelStats(entry.files.base);
+    const baseData = await sharp(readFileSync(join(bakeDir, entry.files.base))).removeAlpha()
+      .webp({ quality: 86, effort: 6, smartSubsample: true }).toBuffer();
     const alpha = mat.getBaseColorFactor()[3];
-    mat.setBaseColorTexture(await tex('base')).setBaseColorFactor([1, 1, 1, alpha]);
-    mat.setNormalTexture(await tex('normal')).setNormalScale(1.0);
-    const orm = await tex('orm');
-    mat.setOcclusionTexture(orm).setOcclusionStrength(1.0);
-    mat.setMetallicRoughnessTexture(orm).setMetallicFactor(0.0).setRoughnessFactor(1.0);
-    mat.setExtras({ ...mat.getExtras(), ct_baked: true, ct_look: entry.look });
+    mat.setBaseColorTexture(add('base', baseData, base.width, base.height)).setBaseColorFactor([1, 1, 1, alpha]);
+    const meanLin = base.mean.map(toLinear);
+    // normal: keep only real relief
+    const nrm = await normalStats(entry.files.normal);
+    rep.normal_tilt_p50_p99 = [Number(nrm.p50.toFixed(2)), Number(nrm.p99.toFixed(2))];
+    if (nrm.p99 >= NORMAL_MIN_TILT_DEG) {
+      const data = await nrm.image.webp({ lossless: true, effort: 6 }).toBuffer();
+      mat.setNormalTexture(add('normal', data, nrm.width, nrm.height)).setNormalScale(1.0);
+    } else {
+      mat.setNormalTexture(null);
+      rep.normal = 'dropped (flat)';
+    }
+    // occlusion + roughness
+    const orm = await channelStats(entry.files.orm);
+    if (Math.max(orm.sd[0], orm.sd[1]) < 0.012) {
+      mat.setOcclusionTexture(null).setMetallicRoughnessTexture(null).setMetallicFactor(0.0).setRoughnessFactor(Number(orm.mean[1].toFixed(3)));
+      rep.orm = `dropped (uniform: roughness ${orm.mean[1].toFixed(2)})`;
+    } else {
+      const data = await sharp(readFileSync(join(bakeDir, entry.files.orm))).removeAlpha().webp({ nearLossless: true, quality: 80, effort: 6 }).toBuffer();
+      const tex = add('orm', data, orm.width, orm.height);
+      mat.setOcclusionTexture(tex).setOcclusionStrength(1.0);
+      mat.setMetallicRoughnessTexture(tex).setMetallicFactor(0.0).setRoughnessFactor(1.0);
+    }
+    const cc = CLEARCOAT[entry.look];
+    if (cc) mat.setExtension('KHR_materials_clearcoat', clearcoatExt.createClearcoat().setClearcoatFactor(cc[0]).setClearcoatRoughnessFactor(cc[1]));
+    const prio = TEXTURE_PRIORITY.indexOf(name);
+    mat.setExtras({ ...mat.getExtras(), ct_baked: true, ct_look: entry.look, ct_mean_rgb: srgbHex(meanLin),
+                    ct_texture_priority: prio >= 0 ? prio : TEXTURE_PRIORITY.length + 1 });
+    rep.mean_rgb = srgbHex(meanLin);
+    textureReport[name] = rep;
     textured++;
   }
-  console.log(`[optimize] baked textures on ${textured} nodes: ${(textureBytes / 1e6).toFixed(2)} MB of WebP`);
+  const gpuMiB = gpuBytes / 2 ** 20;
+  console.log(`[optimize] baked textures on ${textured} nodes: ${(textureBytes / 1e6).toFixed(2)} MB of WebP, ${gpuMiB.toFixed(1)} MiB on the GPU (RGBA8 + mips)`);
+  if (gpuMiB > GPU_BUDGET_MIB) {
+    console.error(`[optimize] ERROR: texture GPU footprint ${gpuMiB.toFixed(1)} MiB exceeds the ${GPU_BUDGET_MIB} MiB budget`);
+    process.exit(1);
+  }
+  writeFileSync(join(bakeDir, 'texture_report.json'), JSON.stringify({ gpu_mib: Number(gpuMiB.toFixed(1)), webp_mb: Number((textureBytes / 1e6).toFixed(2)), nodes: textureReport }, null, 1));
 } else {
   console.log('[optimize] no baked textures (anatomy/build/bake/bake_manifest.json missing): geometry-only GLB');
 }
@@ -278,9 +379,11 @@ await doc.transform(
 doc.createExtension(KHRMeshQuantization).setRequired(true);
 
 // 3. Lossless meshopt compression of every buffer view.
+// FILTER: NORMAL is stored with the OCTAHEDRAL filter (8-bit), everything else as QUANTIZE; POSITION stays float32.
 doc.createExtension(EXTMeshoptCompression).setRequired(true).setEncoderOptions({
-  method: EXTMeshoptCompression.EncoderMethod.QUANTIZE,
+  method: EXTMeshoptCompression.EncoderMethod.FILTER,
 });
+root.getAsset().extras = { ...(root.getAsset().extras || {}), ct_build: new Date().toISOString().slice(0, 10), ct_contract: '1.1' };
 
 if (nodeSignature() !== before) {
   console.error('[optimize] ERROR: node names / transforms / hierarchy changed during optimisation');
@@ -320,3 +423,8 @@ const inMB = statSync(input).size / 1e6;
 const outMB = statSync(output).size / 1e6;
 console.log(`[optimize] ${converted} territory attribute(s) converted to RGB, _ARCLEN on ${withArclen} coronary nodes, textures on ${textured} nodes`);
 console.log(`[optimize] ${input} (${inMB.toFixed(2)} MB) -> ${output} (${outMB.toFixed(2)} MB)`);
+const bytes = readFileSync(output);
+writeFileSync(join(bakeDir, '..', 'optimize_report.json'), JSON.stringify({
+  glb_bytes: bytes.byteLength, glb_sha256: createHash('sha256').update(bytes).digest('hex'),
+  textures_gpu_mib: Number((gpuBytes / 2 ** 20).toFixed(1)), textures_webp_mb: Number((textureBytes / 1e6).toFixed(2)),
+}, null, 1));

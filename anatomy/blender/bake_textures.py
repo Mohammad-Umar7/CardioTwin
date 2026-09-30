@@ -34,30 +34,30 @@ from common import BAKE_DIR, BUILD_BLEND, BUILD_REPORT, read_json, write_json  #
 T0 = time.perf_counter()
 LAYERS = ("Layer_Skin", "Layer_Muscle", "Layer_Skeleton", "Layer_Lungs", "Layer_Diaphragm", "Layer_Heart")
 
-#: Texture sizes (base, normal, orm) per node; everything else gets DEFAULT_SIZE. Budget: GLB <= 16 MB.
+#: Texture sizes (base, normal, orm) per node; everything else gets DEFAULT_SIZE. Budgets: GLB <= 16 MB and <= 128 MiB
+#: of GPU memory once decoded (RGBA8 + mips); optimize_glb.mjs drops normal maps that carry no relief and ORM maps
+#: that are uniform, and asserts the GPU total. The heart walls carry the detail (2048 albedo); the ghosted outer
+#: layers only reach ~1.5 texels/mm on screen, so 512 is enough there.
 SIZES = {
-    "Heart_Wall_Anterior": (2048, 2048, 1024),
-    "Heart_Wall_Posterior": (2048, 2048, 1024),
-    "EpicardialFat_Anterior": (1024, 1024, 512),
-    "EpicardialFat_Posterior": (1024, 1024, 512),
-    "GreatVessel_Aorta": (1024, 1024, 512),
-    "GreatVessel_PulmonaryArtery": (1024, 1024, 512),
-    "GreatVessel_PulmonaryVeins": (1024, 512, 512),
-    "Lung_L": (1024, 1024, 512),
-    "Lung_R": (1024, 1024, 512),
-    "Ribs_L": (1024, 1024, 512),
-    "Ribs_R": (1024, 1024, 512),
-    "Spine_Thoracic": (1024, 1024, 512),
-    "Pectoralis_L": (1024, 1024, 512),
-    "Pectoralis_R": (1024, 1024, 512),
-    "Diaphragm": (1024, 1024, 512),
-    "Skin_Torso": (1024, 512, 512),
-    "CostalCartilage": (1024, 512, 512),
-    "Trachea_Bronchi": (1024, 1024, 512),
-    "CardiacVeins": (1024, 512, 512),
-    "Papillary_Muscles": (512, 512, 512),
+    "Heart_Wall_Anterior": (2048, 1024, 512),
+    "Heart_Wall_Posterior": (2048, 1024, 512),
+    "EpicardialFat_Anterior": (512, 1024, 256),
+    "EpicardialFat_Posterior": (512, 1024, 256),
+    "GreatVessel_Aorta": (1024, 512, 256),
+    "GreatVessel_PulmonaryArtery": (512, 512, 256),
+    "GreatVessel_PulmonaryVeins": (512, 256, 256),
+    "CardiacVeins": (512, 512, 256),
+    "Papillary_Muscles": (512, 256, 256),
+    "Valve_Mitral": (512, 256, 256),
+    "Valve_Tricuspid": (512, 256, 256),
+    "Valve_Aortic": (512, 256, 256),
+    "Valve_Pulmonary": (512, 256, 256),
+    "Lung_L": (512, 512, 256),
+    "Lung_R": (512, 512, 256),
+    "Pectoralis_L": (512, 256, 256),
+    "Pectoralis_R": (512, 256, 256),
 }
-DEFAULT_SIZE = (512, 512, 256)
+DEFAULT_SIZE = (512, 256, 128)
 MARGIN_PX = 6
 
 
