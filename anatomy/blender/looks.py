@@ -196,11 +196,12 @@ class G:
 # =============================================================================================
 # Looks
 # =============================================================================================
-MYO = srgb("#6b1d16")          # deep red-brown ventricular myocardium under the epicardium
-MYO_DARK = srgb("#48110d")
-MYO_LIGHT = srgb("#80281d")
-MYO_CUT = srgb("#9a4538")      # cut surface: paler, matte muscle
-EPI_FAT = srgb("#b98a55")      # thin subepicardial fat showing through the serous epicardium
+MYO = srgb("#6a221c")          # deep red-brown ventricular myocardium under the translucent epicardium
+MYO_DARK = srgb("#4e1713")
+MYO_LIGHT = srgb("#7c2b23")
+MYO_SHEEN = srgb("#8a6a78")    # the thin serous epicardium gives a faint violet-grey sheen at grazing angles
+MYO_CUT = srgb("#7c3228")      # cut surface: deep red-brown, matte, a little darker than fresh epicardium
+EPI_FAT = srgb("#c9a36a")      # thin subepicardial fat showing through the serous epicardium
 
 
 def attribute(g: "G", name: str):
@@ -211,11 +212,13 @@ def attribute(g: "G", name: str):
 
 
 def myocardium(name="L_Myocardium", tone=1.0):
-    """Epicardial surface of the heart: a smooth, wet serous layer over deep red-brown muscle. No fibre striation on
-    the surface (it only shows where the epicardium is removed): a low-contrast subepicardial mottle, faint streaks
-    of subepicardial fat, a faint serous micro-relief and gentle large undulations, subsurface scattering and
-    a thin, broken wet coat. The flat faces of the long-axis cut (``ct_cap`` face attribute written by the build)
-    get a paler, matte cut-muscle look with faint fibre bundles."""
+    """Epicardial surface of the heart: a thin, moist (not glossy) serous layer over deep red-brown muscle.
+
+    Colour: low-contrast mottle between dark and light red-brown, faint streaks of subepicardial fat and faint,
+    open streaks of subepicardial vessels. Relief (baked into the web normal map): gentle 5 mm swellings of the muscle
+    and a serous micro-relief, so highlights break up instead of smearing across the ventricle. Subsurface scattering, a violet-grey sheen and a very thin coat
+    (0.08). The flat faces of the long-axis cut (``ct_cap``) get a matte, deep red-brown cut-muscle look with a very
+    faint, irregular fibre texture (no periodic bands)."""
     g = G(name)
     p = g.heart()
     o = g.obj()
@@ -223,51 +226,52 @@ def myocardium(name="L_Myocardium", tone=1.0):
     fine = g.noise(p, 140.0, detail=2.0, rough=0.5)                            # serous micro-relief (~0.7 mm)
     swell = g.noise(p, 22.0, detail=2.0, rough=0.4)                            # gentle ~5 mm undulation
     fatn = g.noise(p, 16.0, detail=4.0, rough=0.6, distortion=0.8)             # subepicardial fat marbling
+    # a faint, open (never cellular) trace of the subepicardial vessels: thin, low-contrast streaks along a distorted
+    # noise's zero set, colour only (as relief it read as a cracked-mud cell pattern at close range)
+    streak = g.noise(p, 11.0, detail=3.0, rough=0.55, distortion=1.2)
+    vess = g.maprange(g.math("ABSOLUTE", g.math("SUBTRACT", streak, 0.5)), 0.0, 0.02, 1.0, 0.0)
     base = g.ramp(mott, [(0.25, MYO_DARK), (0.55, MYO), (0.85, MYO_LIGHT)])
-    base = g.mixc(g.maprange(fatn, 0.62, 0.78, 0.0, 0.22), base, EPI_FAT)
-    rough = g.maprange(g.math("ADD", g.math("MULTIPLY", fine, 0.6), g.math("MULTIPLY", mott, 0.4)), 0.25, 0.75, 0.30, 0.48)
-    h = g.math("ADD", g.math("MULTIPLY", fine, 0.15), g.math("MULTIPLY", swell, 0.85))
-    # cut faces
-    sep = g.n("ShaderNodeSeparateXYZ")
-    g.link(p, sep.inputs[0])
-    theta = g.math("ARCTAN2", sep.outputs["Y"], sep.outputs["X"])
-    w = g.math("ADD", g.math("MULTIPLY", theta, 0.35), g.math("MULTIPLY", sep.outputs["Z"], 1.6))
-    comb = g.n("ShaderNodeCombineXYZ")
-    g.link(w, comb.inputs["X"])
-    g.link(g.math("MULTIPLY", sep.outputs["Z"], 3.0), comb.inputs["Y"])
-    fibres = g.wave(comb.outputs[0], 7.0, distortion=5.0, detail=3.0)
+    base = g.mixc(g.maprange(fatn, 0.64, 0.8, 0.0, 0.2), base, EPI_FAT)
+    base = g.mixc(g.math("MULTIPLY", vess, 0.12), base, srgb("#3c0f0d"))
+    rough = g.maprange(g.math("ADD", g.math("MULTIPLY", fine, 0.6), g.math("MULTIPLY", mott, 0.4)), 0.25, 0.75, 0.40, 0.55)
+    h = g.math("ADD", g.math("MULTIPLY", fine, 0.12), g.math("MULTIPLY", swell, 0.6))
+    # cut faces: matte, deep red-brown, irregular (non-periodic) faint fibre texture
     cap = attribute(g, "ct_cap")
-    cut = g.mixc(g.maprange(fibres, 0.3, 0.9, 0.0, 0.12), MYO_CUT, MYO_DARK)
-    cut = g.mixc(g.maprange(g.noise(o, 30.0), 0.3, 0.7, 0.0, 0.1), cut, srgb("#b35c4c"))
+    fib = g.noise(g.vmath("MULTIPLY", o, (60.0, 60.0, 9.0)), 1.0, detail=3.0, rough=0.6, distortion=1.5)
+    cut = g.mixc(g.maprange(fib, 0.35, 0.8, 0.0, 0.05), MYO_CUT, MYO_DARK)
+    cut = g.mixc(g.maprange(g.noise(o, 30.0), 0.3, 0.7, 0.0, 0.06), cut, srgb("#8a3a30"))
     base = g.mixc(cap, base, cut)
-    rough = g.math("ADD", g.math("MULTIPLY", rough, g.math("SUBTRACT", 1.0, cap)), g.math("MULTIPLY", cap, 0.72))
-    h = g.math("ADD", g.math("MULTIPLY", h, g.math("SUBTRACT", 1.0, cap)), g.math("MULTIPLY", g.math("MULTIPLY", fibres, 0.3), cap))
-    nrm = g.bump(h, 0.6, 0.004)
-    g.set(Subsurface_Weight=0.15, Subsurface_Radius=(1.0, 0.2, 0.1), Subsurface_Scale=0.012,
-          Coat_Weight=0.22, Coat_Roughness=0.16, Sheen_Weight=0.04, Specular_IOR_Level=0.45)
+    rough = g.math("ADD", g.math("MULTIPLY", rough, g.math("SUBTRACT", 1.0, cap)), g.math("MULTIPLY", cap, 0.78))
+    h = g.math("ADD", g.math("MULTIPLY", h, g.math("SUBTRACT", 1.0, cap)), g.math("MULTIPLY", g.math("MULTIPLY", fib, 0.1), cap))
+    nrm = g.bump(h, 1.0, 0.009)  # strong enough to survive the web bake's 5 deg flatness test
+    g.set(Subsurface_Weight=0.18, Subsurface_Radius=(1.0, 0.2, 0.1), Subsurface_Scale=0.012,
+          Coat_Weight=0.08, Coat_Roughness=0.3, Sheen_Weight=0.12, Sheen_Roughness=0.45, Specular_IOR_Level=0.42)
+    g.bsdf.inputs["Sheen Tint"].default_value = (*MYO_SHEEN, 1.0)
     return g.finish(base=base, rough=rough, normal=nrm, category="Myocardium")
 
 
 def fat(name="L_Fat"):
-    """Epicardial adipose tissue: golden yellow, softly lobulated (rounded 2-4 mm lobules as relief only - no
-    cell-edge lines in the colour), faintly translucent (short, warm sub-millimetre scattering) and moist."""
+    """Epicardial adipose tissue: golden yellow, softly lobulated (2-4 mm lobules in the geometry and as relief,
+    faint deeper-toned septa between them), faintly translucent (short, warm scattering) and moist but not glossy."""
     g = G(name)
     p = g.heart()
     lob = g.voronoi(p, 30.0, "SMOOTH_F1", "Distance", randomness=0.9, smooth=1.0)   # ~3.3 mm lobules
     sub = g.voronoi(p, 70.0, "SMOOTH_F1", "Distance", randomness=0.9, smooth=1.0)   # ~1.4 mm
+    edge = g.voronoi(p, 30.0, "DISTANCE_TO_EDGE", "Distance", randomness=0.9)
     tint = g.noise(p, 8.0, detail=3.0)
     fine = g.noise(p, 180.0, detail=2.0)
-    base = g.ramp(tint, [(0.3, srgb("#c99a40")), (0.55, srgb("#d6ab52")), (0.8, srgb("#e0bb66"))])
-    base = g.mixc(g.maprange(lob, 0.15, 0.75, 0.0, 0.14), base, srgb("#b38230"))       # slightly deeper between lobules
+    base = g.ramp(tint, [(0.3, srgb("#c8943a")), (0.55, srgb("#d6a64b")), (0.8, srgb("#e1b85f"))])
+    base = g.mixc(g.maprange(edge, 0.0, 0.012, 0.22, 0.0), base, srgb("#a06f2c"))     # faint septa between lobules
+    base = g.mixc(g.maprange(lob, 0.2, 0.8, 0.0, 0.08), base, srgb("#b98a3e"))
     dome = g.math("ADD", g.math("SUBTRACT", 1.0, lob), g.math("MULTIPLY", g.math("SUBTRACT", 1.0, sub), 0.35))
-    nrm = g.bump(g.math("ADD", dome, g.math("MULTIPLY", fine, 0.04)), 1.0, 0.005)
-    rough = g.maprange(lob, 0.1, 0.8, 0.28, 0.44)
-    g.set(Subsurface_Weight=0.25, Subsurface_Radius=(1.0, 0.55, 0.25), Subsurface_Scale=0.008,
-          Coat_Weight=0.3, Coat_Roughness=0.18, Specular_IOR_Level=0.5)
+    nrm = g.bump(g.math("ADD", dome, g.math("MULTIPLY", fine, 0.04)), 0.9, 0.005)
+    rough = g.maprange(lob, 0.1, 0.8, 0.45, 0.6)
+    g.set(Subsurface_Weight=0.18, Subsurface_Radius=(1.0, 0.7, 0.35), Subsurface_Scale=0.006,
+          Coat_Weight=0.12, Coat_Roughness=0.3, Specular_IOR_Level=0.45)
     return g.finish(base=base, rough=rough, normal=nrm, category="Fat")
 
 
-def vessel(name, hexes, *, rough=(0.34, 0.48), stria=0.05, sss=0.25, coat=0.3, scale_long=120.0, category="Vessel",
+def vessel(name, hexes, *, rough=(0.42, 0.58), stria=0.05, sss=0.25, coat=0.14, scale_long=120.0, category="Vessel",
            vasa: float = 0.0):
     """Vessel wall: atlas colour with a smooth wet adventitia (soft large-scale tone, faint longitudinal fibres, a
     fine micro-relief that breaks up the highlight) and optionally faint vasa vasorum."""
@@ -288,23 +292,23 @@ def vessel(name, hexes, *, rough=(0.34, 0.48), stria=0.05, sss=0.25, coat=0.3, s
 
 
 def artery(name="L_Artery"):
-    return vessel(name, ("#8c1d18", "#a8271f", "#bb3a2e"), category="Artery", vasa=0.12)
+    return vessel(name, ("#8a2622", "#a2322b", "#b44639"), category="Artery", vasa=0.12)
 
 
 def pulmonary_vein(name="L_PulmonaryVein"):
-    return vessel(name, ("#97261f", "#b3352c", "#c64a3e"), category="PulmonaryVein")
+    return vessel(name, ("#952e28", "#ad3f36", "#bf5448"), category="PulmonaryVein")
 
 
 def pulmonary_artery(name="L_PulmonaryArtery"):
-    return vessel(name, ("#2e4288", "#3d57a3", "#5470b6"), stria=0.04, category="PulmonaryArtery")
+    return vessel(name, ("#344686", "#43599e", "#5a70ae"), stria=0.04, category="PulmonaryArtery")
 
 
 def vein(name="L_Vein"):
-    return vessel(name, ("#28336f", "#384b93", "#5063a6"), stria=0.03, sss=0.3, category="Vein")
+    return vessel(name, ("#2d386e", "#3d4e8f", "#5465a2"), stria=0.03, sss=0.3, category="Vein")
 
 
 def cardiac_vein(name="L_CardiacVein"):
-    return vessel(name, ("#26336f", "#33468f", "#4a5fa8"), stria=0.03, sss=0.3, coat=0.35, category="CardiacVein")
+    return vessel(name, ("#2e3c7c", "#3d57a3", "#5268b0"), stria=0.03, sss=0.3, coat=0.16, category="CardiacVein")
 
 
 def coronary(name, color, glow=0.0):
@@ -320,30 +324,31 @@ def coronary(name, color, glow=0.0):
 
 
 def valve(name="L_Valve"):
-    """Pale, translucent fibrous leaflets with faint collagen striation."""
+    """Thin, pale, translucent fibrous leaflets (cream, faintly yellow towards the thicker free edge), with a very
+    faint collagen texture (no stripes) and light transmission / scattering so they glow when back-lit."""
     g = G(name)
     p = g.obj()
-    fib = g.wave(p, 60.0, distortion=4.0, detail=3.0, direction="Z")
     mott = g.noise(p, 20.0)
-    base = g.ramp(mott, [(0.3, srgb("#e2d3bd")), (0.7, srgb("#f2e9d8"))])
-    base = g.mixc(g.maprange(fib, 0.3, 0.9, 0.0, 0.08), base, srgb("#cdb296"))
-    nrm = g.bump(fib, 0.12, 0.0006)
-    g.set(Subsurface_Weight=0.6, Subsurface_Radius=(1.0, 0.8, 0.6), Subsurface_Scale=0.004,
-          Coat_Weight=0.35, Coat_Roughness=0.15, Transmission_Weight=0.0)
-    return g.finish(base=base, rough=0.36, normal=nrm, category="Valve")
+    fib = g.noise(g.vmath("MULTIPLY", p, (8.0, 8.0, 60.0)), 1.0, detail=2.0, distortion=1.0)
+    base = g.ramp(mott, [(0.3, srgb("#e6d7ba")), (0.7, srgb("#efe3c8"))])
+    base = g.mixc(g.maprange(fib, 0.4, 0.8, 0.0, 0.05), base, srgb("#d8c3a0"))
+    nrm = g.bump(fib, 0.06, 0.0006)
+    g.set(Subsurface_Weight=0.7, Subsurface_Radius=(1.0, 0.85, 0.65), Subsurface_Scale=0.004,
+          Coat_Weight=0.12, Coat_Roughness=0.25, Transmission_Weight=0.25)
+    return g.finish(base=base, rough=0.42, normal=nrm, category="Valve")
 
 
 def papillary(name="L_Papillary"):
-    """Papillary muscles: endocardium-covered muscle, longitudinal trabecular ridges running to the chordae."""
+    """Papillary muscles: smooth, endocardium-covered muscle (a soft mottle, no ridges), slightly paler at the head
+    where the chordae arise."""
     g = G(name)
     p = g.obj()
-    ridges = g.wave(p, 45.0, distortion=3.0, detail=2.0, direction="Z")
     mott = g.noise(p, 10.0)
-    base = g.ramp(mott, [(0.3, srgb("#5a1812")), (0.7, srgb("#7a261c"))])
-    base = g.mixc(g.maprange(ridges, 0.4, 0.9, 0.0, 0.12), base, srgb("#3b0d09"))
-    nrm = g.bump(ridges, 0.35, 0.002)
-    g.set(Subsurface_Weight=0.15, Subsurface_Radius=(1.0, 0.2, 0.1), Subsurface_Scale=0.01, Coat_Weight=0.25, Coat_Roughness=0.2)
-    return g.finish(base=base, rough=g.maprange(ridges, 0.0, 1.0, 0.36, 0.5), normal=nrm, category="Papillary")
+    fine = g.noise(p, 120.0, detail=2.0)
+    base = g.ramp(mott, [(0.3, srgb("#5e1a14")), (0.7, srgb("#7a2a20"))])
+    nrm = g.bump(fine, 0.08, 0.001)
+    g.set(Subsurface_Weight=0.18, Subsurface_Radius=(1.0, 0.2, 0.1), Subsurface_Scale=0.01, Coat_Weight=0.08, Coat_Roughness=0.3)
+    return g.finish(base=base, rough=g.maprange(fine, 0.0, 1.0, 0.42, 0.55), normal=nrm, category="Papillary")
 
 
 def bone(name="L_Bone"):
@@ -400,8 +405,8 @@ def airway(name="L_Airway"):
     p = g.world()
     rings = g.wave(p, 11.0, distortion=0.4, detail=1.0, direction="Z", profile="SIN")
     mott = g.noise(g.obj(), 12.0)
-    base = g.ramp(mott, [(0.3, srgb("#c9a49a")), (0.75, srgb("#e2c7bb"))])
-    base = g.mixc(g.maprange(rings, 0.5, 1.0, 0.0, 0.3), base, srgb("#eee6dc"))
+    base = g.ramp(mott, [(0.3, srgb("#b98f8a")), (0.75, srgb("#cda6a0"))])       # pink-grey mucosa, not bone white
+    base = g.mixc(g.maprange(rings, 0.5, 1.0, 0.0, 0.22), base, srgb("#d9c4be"))  # faint cartilage rings
     nrm = g.bump(rings, 0.4, 0.002)
     g.set(Subsurface_Weight=0.35, Subsurface_Scale=0.01, Coat_Weight=0.3, Coat_Roughness=0.15)
     return g.finish(base=base, rough=0.4, normal=nrm, category="Airway")
@@ -451,13 +456,15 @@ def diaphragm(name="L_Diaphragm"):
     fib = g.wave(comb.outputs[0], 30.0, distortion=2.0, detail=2.0)
     r = g.vmath("LENGTH", g.vmath("MULTIPLY", p, (1.0, 1.0, 0.0)))
     tendon = g.maprange(g.math("ADD", r, g.math("MULTIPLY", g.noise(p, 5.0), 0.25)), 0.55, 0.75, 1.0, 0.0)
+    # the central tendon is the upper, central part of the dome: the crura hanging below it are muscle
+    tendon = g.math("MULTIPLY", tendon, g.maprange(sep.outputs["Z"], -0.35, -0.05, 0.0, 1.0))
     mott = g.noise(p, 8.0)
-    musc = g.ramp(mott, [(0.3, srgb("#6d1b16")), (0.7, srgb("#942d25"))])
-    musc = g.mixc(g.maprange(fib, 0.2, 0.9, 0.0, 0.2), musc, srgb("#4a0f0c"))
-    base = g.mixc(tendon, musc, srgb("#d9d2c6"))
+    musc = g.ramp(mott, [(0.3, srgb("#5e1713")), (0.7, srgb("#7e261f"))])
+    musc = g.mixc(g.maprange(fib, 0.2, 0.9, 0.0, 0.2), musc, srgb("#3e0c0a"))
+    base = g.mixc(tendon, musc, srgb("#bdb3a6"))
     nrm = g.bump(fib, 0.2, 0.0015)
-    g.set(Subsurface_Weight=0.25, Subsurface_Scale=0.012, Coat_Weight=0.3, Coat_Roughness=0.15)
-    return g.finish(base=base, rough=g.maprange(tendon, 0.0, 1.0, 0.45, 0.3), normal=nrm, category="Diaphragm")
+    g.set(Subsurface_Weight=0.25, Subsurface_Scale=0.012, Coat_Weight=0.12, Coat_Roughness=0.3)
+    return g.finish(base=base, rough=g.maprange(tendon, 0.0, 1.0, 0.55, 0.42), normal=nrm, category="Diaphragm")
 
 
 def skin(name="L_Skin"):
