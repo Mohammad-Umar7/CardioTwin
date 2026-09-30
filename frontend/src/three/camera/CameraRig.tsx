@@ -61,8 +61,10 @@ const OPEN_FIT_MARGIN = 0.08;
 const VIEW_WINDOW: readonly [number, number] = [0.05, 0.8];
 /** Margin (px) between the free-area edge and the visible great vessels (≥ 24 px from the canvas top). */
 const KEEP_MARGIN = 12;
-/** A vessel's best view sits a touch closer than home so the selection reads as "going to it". */
-const FOCUS_ZOOM = 0.9;
+/** A vessel's best view keeps the home distance for its angle: the target leaning onto the vessel is the "going to it". */
+const FOCUS_ZOOM = 1;
+/** How far the orbit target may lean from the heart centre to the selected vessel (tried in order, 0–1). */
+const VESSEL_FOCUS_LEANS = [0.85, 0.75, 0.65, 0.55, 0.45, 0.35, 0.2, 0];
 
 /**
  * Orbit limits (V2 §5.15): in the default mode the polar angle is clamped to 35°–145° and the distance
@@ -126,7 +128,7 @@ export function CameraRig() {
   const replaying = useRef(false);
   const readyFrames = useRef(0);
   /** The View-menu state that goes with `viewerStore.cameraReturn`. */
-  const returnView = useRef<{ kind: ViewKind; presetId: string | null; label: string } | null>(null);
+  const returnView = useRef<{ kind: ViewKind; presetId: string | null; label: string; bias: Offset } | null>(null);
   /** A vessel flown to before its centrelines loaded (re-checked when they arrive). */
   const pendingVessel = useRef<{ target: TargetId; at: number } | null>(null);
   /** Visible best view per vessel (the search raycasts, so it runs once per anatomy). */
@@ -159,6 +161,22 @@ export function CameraRig() {
       ? toVec(torso.position as number[], new Vector3(0, 0.3, 6)).sub(toVec(torso.target as number[], new Vector3())).normalize()
       : new Vector3(0, 0.05, 1).normalize();
     return { box, target, direction, heroDirection };
+  }, [manifest]);
+
+  // Centre of each vessel target's anatomy (union of its manifest boxes, rest frame), for the selection focus.
+  const vesselCentres = useMemo(() => {
+    const out = new Map<string, Vector3>();
+    for (const t of ['LAD', 'LCX', 'RCA']) {
+      const box = new Box3();
+      for (const s of manifest?.structures ?? []) {
+        const raw = s as unknown as { target?: string; bbox?: { min: number[]; max: number[] } };
+        if (raw.target !== t || !raw.bbox || raw.bbox.min.length < 3) continue;
+        box.expandByPoint(new Vector3(raw.bbox.min[0], raw.bbox.min[1], raw.bbox.min[2]));
+        box.expandByPoint(new Vector3(raw.bbox.max[0], raw.bbox.max[1], raw.bbox.max[2]));
+      }
+      if (!box.isEmpty()) out.set(t, box.getCenter(new Vector3()));
+    }
+    return out;
   }, [manifest]);
 
   // Trunk samples per vessel, to make sure a best view really shows its vessel (P0-2). The view search
@@ -202,19 +220,21 @@ export function CameraRig() {
     return Math.min(l.maxDistance, Math.max(l.minDistance, d));
   };
 
-  const flyTo = (direction: Vector3, distance: number, animate: boolean) => {
+  const flyTo = (direction: Vector3, distance: number, animate: boolean, focus: Vector3 | null = null) => {
     const controls = ref.current;
     if (!controls) return;
+    const target = focus ?? geo.target;
     // Centre the heart's real silhouette (not the orbit target) in the free area: the walls are not
-    // symmetric about the target, so the view offset takes the small remainder (a few px).
+    // symmetric about the target, so the view offset takes the small remainder (a few px). A focus point
+    // (a selected vessel) is centred itself.
     const points = sceneRuntime.framing.heart;
     const { width, height } = sizeRef.current;
-    if (points.length > 0 && width > 0 && height > 0) {
-      const e = projectedExtent({ target: geo.target, direction, fov: CAMERA_FOV, width, height }, points, distance);
+    if (!focus && points.length > 0 && width > 0 && height > 0) {
+      const e = projectedExtent({ target, direction, fov: CAMERA_FOV, width, height }, points, distance);
       silhouetteBias.current = { x: -(e.right - e.left) / 2, y: -(e.down - e.up) / 2 };
     } else silhouetteBias.current = ZERO_OFFSET;
-    const pos = geo.target.clone().addScaledVector(direction, distance);
-    void controls.setLookAt(pos.x, pos.y, pos.z, geo.target.x, geo.target.y, geo.target.z, animate);
+    const pos = target.clone().addScaledVector(direction, distance);
+    void controls.setLookAt(pos.x, pos.y, pos.z, target.x, target.y, target.z, animate);
     lastInteraction.current = performance.now();
     invalidate();
   };
@@ -357,7 +377,33 @@ export function CameraRig() {
     }
     const { azimuth, polar } = toControlsAngles(view.azimuth, view.elevation);
     const direction = new Vector3().setFromSphericalCoords(1, polar, azimuth);
-    flyTo(direction, distanceFor(direction) * FOCUS_ZOOM, animate);
+    // Lean the orbit target toward the vessel (its manifest box centre), so the selected artery — not the
+    // heart's centre — sits near the middle of the free area, as far as the whole heart still fits inside it.
+    const distance = distanceFor(direction) * FOCUS_ZOOM;
+    const vesselCentre = closed ? vesselCentres.get(target) : undefined;
+    let focus: Vector3 | null = null;
+    if (vesselCentre) {
+      const { width, height } = sizeRef.current;
+      const free = freeArea(width, height, insetsFor('workstation'));
+      const points = sceneRuntime.framing.heart;
+      for (const lean of VESSEL_FOCUS_LEANS) {
+        const candidate = geo.target.clone().lerp(vesselCentre, lean);
+        if (points.length === 0 || !(width > 0)) {
+          focus = candidate;
+          break;
+        }
+        const view = { target: candidate, direction, fov: CAMERA_FOV, width, height };
+        const halfW = free.width / 2 - KEEP_MARGIN;
+        const halfH = free.height / 2 - KEEP_MARGIN;
+        const inside = (e: ReturnType<typeof projectedExtent>) => e.left <= halfW && e.right <= halfW && e.up <= halfH && e.down <= halfH;
+        const keep = sceneRuntime.framing.keep;
+        if (inside(projectedExtent(view, points, distance)) && (keep.length === 0 || inside(projectedExtent(view, keep, distance)))) {
+          focus = lean > 0 ? candidate : null;
+          break;
+        }
+      }
+    }
+    flyTo(direction, distance, animate, focus);
     useCameraState.getState().setView('focus', { label: angleLabel(view.azimuth, view.elevation) });
   };
 
@@ -403,7 +449,7 @@ export function CameraRig() {
         if (s.selectedStructure && !prev.selectedStructure && !s.cameraReturn) {
           const pose = poseOf(controls);
           const cam = useCameraState.getState();
-          returnView.current = { kind: cam.viewKind, presetId: cam.presetId, label: cam.viewLabel };
+          returnView.current = { kind: cam.viewKind, presetId: cam.presetId, label: cam.viewLabel, bias: silhouetteBias.current };
           s.setCameraReturn({ position: pose.position, target: pose.target });
         } else if (!s.selectedStructure && prev.selectedStructure) {
           const homeCommand = s.cameraCommand !== prev.cameraCommand && s.cameraCommand?.kind === 'home';
@@ -412,6 +458,7 @@ export function CameraRig() {
           if (!homeCommand && back) {
             flyToPose(back, !reducedRef.current);
             const view = returnView.current;
+            silhouetteBias.current = view?.bias ?? ZERO_OFFSET;
             // Back where it was: the View menu names that view again ("Home", "LAO 45"…).
             useCameraState.getState().setView(view?.kind ?? 'custom', view ? { presetId: view.presetId, label: view.label } : {});
             returnView.current = null;

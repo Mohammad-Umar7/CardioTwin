@@ -11,8 +11,12 @@ import type { BestView } from '@/types/contracts';
 import { facing, type AnchorCandidate } from '../labels/dynamicAnchor';
 import { toControlsAngles } from './presets';
 
-/** Mean facing of the three most camera-facing (visible) candidates that counts as "clearly visible". */
-export const VISIBLE_FACING = 0.35;
+/**
+ * Mean facing of the three most camera-facing (visible) candidates that counts as "clearly visible": high
+ * enough that the trunk is seen face-on, not along the heart's silhouette (a surface rendering is not a
+ * projection angiogram).
+ */
+export const VISIBLE_FACING = 0.55;
 /** Weight of the angular distance from the conventional view (per 180°) in the search. */
 const DISTANCE_PENALTY = 0.3;
 /**
@@ -20,8 +24,8 @@ const DISTANCE_PENALTY = 0.3;
  * angiographic convention wins.
  */
 const VISIBILITY_CAP = 0.5;
-/** Share of the trunk candidates that must be visible for a view to count (a whole stretch, not a stub). */
-const MIN_COVERAGE = 0.5;
+/** Share of the trunk candidates that must face the camera for a view to count (a whole stretch, not a stub). */
+const MIN_COVERAGE = 0.6;
 
 export function eyeFor(view: Pick<BestView, 'azimuth' | 'elevation' | 'distance'>, target = new Vector3()): Vector3 {
   const { azimuth, polar } = toControlsAngles(view.azimuth, view.elevation);

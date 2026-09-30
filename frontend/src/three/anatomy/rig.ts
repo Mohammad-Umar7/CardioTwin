@@ -347,8 +347,9 @@ export class AnatomyRig {
       const step = Math.max(1, Math.floor(pos.count / budget));
       for (let i = 0; i < pos.count; i += step) each(v.fromBufferAttribute(pos, i).applyMatrix4(restWorld));
     };
+    // "Visible" = the clip fade still leaves ≥ 10 % alpha (alpha = keep², keep = 1 − smoothstep over the feather).
     const visibleIn = (clip: { centre: readonly number[]; radius: number; feather: number }, p: Vector3) =>
-      Math.hypot(p.x - clip.centre[0]!, p.y - clip.centre[1]!, p.z - clip.centre[2]!) < clip.radius - clip.feather * 0.5;
+      Math.hypot(p.x - clip.centre[0]!, p.y - clip.centre[1]!, p.z - clip.centre[2]!) < clip.radius - clip.feather * 0.35;
     for (const entry of this.entries) {
       const k = entry.kind;
       if (k === 'myocardium') sample(entry, 500, (p) => heart.push(p.clone()));

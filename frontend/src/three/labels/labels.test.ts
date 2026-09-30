@@ -50,10 +50,16 @@ describe('dynamic label anchors (V2 §5.14, P0-2)', () => {
     });
   }
 
-  it('keeps the conventional angiographic view whenever the trunk is visible from it', () => {
+  it('keeps the conventional angiographic view whenever the trunk is clearly visible from it', () => {
     const lad = tracks.find((t) => t.target === 'LAD')!;
-    const conventional = { azimuth: -30, elevation: 25, distance: 3.3 };
-    expect(visibleBestView(conventional, lad.candidates)).toBe(conventional);
+    const clear = { azimuth: -10, elevation: 30, distance: 3.3 };
+    expect(visibleBestView(clear, lad.candidates)).toBe(clear);
+    // RAO 30 / CRA 25 puts the LAD on the silhouette in a surface rendering: a nearby angle shows the whole
+    // proximal–mid trunk face-on (≥ 60 % of it facing the camera) instead.
+    const edge = { azimuth: -30, elevation: 25, distance: 3.3 };
+    const better = visibleBestView(edge, lad.candidates);
+    expect(trunkVisibility(lad.candidates, better).coverage).toBeGreaterThanOrEqual(0.6);
+    expect(trunkVisibility(lad.candidates, better).score).toBeGreaterThan(trunkVisibility(lad.candidates, edge).score);
     // The LCX runs in the posterior AV groove: hidden from RAO 30 / CAU 25 in a surface rendering.
     const lcx = tracks.find((t) => t.target === 'LCX')!;
     const moved = visibleBestView({ azimuth: -30, elevation: -25, distance: 3.3 }, lcx.candidates);

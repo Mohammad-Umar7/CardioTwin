@@ -26,14 +26,22 @@ export const emissiveFor = (p: number, floorScale = 1) => {
   return EMISSIVE.floor * floorScale + EMISSIVE.gain * t * t * (3 - 2 * t);
 };
 
-/** Territory strength (V2 §5.15): selected mode 0.10 + 0.25·p, all mode 0.10 + 0.30·Σwp. */
+/**
+ * Territory strength (V2 §5.15): selected mode 0.10 + 0.25·p, all mode 0.10 + 0.30·Σwp on the Clinical
+ * clay. The Realistic look mixes the ramp into a baked red muscle, where the same share is invisible, so it
+ * uses a stronger gain (still an approximate wash, never as saturated as the vessel itself).
+ */
 export const TERRITORY_GAIN = { selected: 0.25, all: 0.3 } as const;
+export const TERRITORY_GAIN_REALISTIC = { selected: 0.42, all: 0.42 } as const;
+/** The selected vessel's glow is lifted by this share so it is the hero of the frame (V2 §5.14). */
+export const SELECTED_LIFT = 0.35;
 
 interface Anim {
   p: number;
   pending: number;
   dim: number;
   hover: number;
+  sel: number;
 }
 
 export interface VesselLike {
@@ -109,7 +117,7 @@ export function useRiskAnimation({ vessels, territories }: RiskAnimationTargets)
       const hasGoal = typeof goal === 'number';
       let a = anim.current.get(target);
       if (!a) {
-        a = { p: hasGoal ? goal : 0, pending: hasGoal ? 0 : 1, dim: 0, hover: 0 };
+        a = { p: hasGoal ? goal : 0, pending: hasGoal ? 0 : 1, dim: 0, hover: 0, sel: 0 };
         anim.current.set(target, a);
       }
       if (hasGoal) a.p = step(a.p, goal, LAMBDA_P);
@@ -117,6 +125,7 @@ export function useRiskAnimation({ vessels, territories }: RiskAnimationTargets)
       a.pending = step(a.pending, unavailable ? 1 : stale ? 0.6 : 0, LAMBDA_FAST);
       a.dim = step(a.dim, selected && selected !== target && !scene.ghostOthers ? 1 : 0, LAMBDA_FAST);
       a.hover = step(a.hover, viewer.hoveredStructure === target ? 1 : 0, LAMBDA_FAST * 1.5);
+      a.sel = step(a.sel, selected === target ? 1 : 0, LAMBDA_FAST);
 
       const [r0, g0, b0] = riskLinear(a.p);
       const [pr, pg, pb] = pendingColor.linear;
@@ -130,7 +139,7 @@ export function useRiskAnimation({ vessels, territories }: RiskAnimationTargets)
       r = (r + (lum - r) * desat) * k;
       g = (g + (lum - g) * desat) * k;
       b = (b + (lum - b) * desat) * k;
-      const lift = (1 - a.pending) * (1 + 0.2 * a.hover) * (1 - 0.6 * a.dim);
+      const lift = (1 - a.pending) * (1 + 0.2 * a.hover + SELECTED_LIFT * a.sel) * (1 - 0.6 * a.dim);
       for (const material of materials) {
         material.color.setRGB(r, g, b);
         material.emissive.setRGB(r, g, b);
@@ -151,7 +160,8 @@ export function useRiskAnimation({ vessels, territories }: RiskAnimationTargets)
       t.mask[0] = step(t.mask[0]!, mask('LAD'), LAMBDA_TERRITORY);
       t.mask[1] = step(t.mask[1]!, mask('LCX'), LAMBDA_TERRITORY);
       t.mask[2] = step(t.mask[2]!, mask('RCA'), LAMBDA_TERRITORY);
-      t.gain = step(t.gain, mode === 'all' ? TERRITORY_GAIN.all : TERRITORY_GAIN.selected, LAMBDA_TERRITORY);
+      const gains = scene.look === 'realistic' ? TERRITORY_GAIN_REALISTIC : TERRITORY_GAIN;
+      t.gain = step(t.gain, mode === 'all' ? gains.all : gains.selected, LAMBDA_TERRITORY);
       for (const u of sets) {
         u.uP.value.set(pOf('LAD'), pOf('LCX'), pOf('RCA'));
         u.uTerritoryOn.value = t.on;
