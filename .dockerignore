@@ -1,0 +1,44 @@
+# Keep the Docker build context small: only backend/, ml/ (package + artifacts), docs/ and the
+# frontend sources are needed; everything else is excluded.
+
+# VCS, editors, local tooling
+.git
+.gitignore
+.gitattributes
+.claude
+.vscode
+.idea
+**/.DS_Store
+**/Thumbs.db
+
+# Secrets and local configuration
+**/.env
+**/.env.*
+
+# Python environments and caches
+.venv
+**/__pycache__
+**/*.py[cod]
+**/.pytest_cache
+**/.mypy_cache
+**/.ruff_cache
+**/*.egg-info
+**/.coverage
+**/htmlcov
+
+# Node dependencies and build output (rebuilt inside the image)
+**/node_modules
+frontend/dist
+frontend/.vite
+**/*.tsbuildinfo
+
+# Not needed at runtime: raw data, the anatomy build pipeline, tests, reports and media
+data
+anatomy
+ml/tests
+ml/reports
+backend/tests
+**/*.blend
+**/*.blend1
+**/*.mp4
+**/*.mov
