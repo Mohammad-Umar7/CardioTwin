@@ -30,7 +30,7 @@ def test_fixture_suite_is_rich(fixtures_json) -> None:  # noqa: ANN001
 
 
 def test_portable_matches_native_on_every_fixture(pm, fixtures_json) -> None:  # noqa: ANN001
-    worst = {"probability": 0.0, "logit": 0.0, "base_value": 0.0, "shap": 0.0}
+    worst = {"probability": 0.0, "logit": 0.0, "base_value": 0.0, "shap": 0.0, "calibrated": 0.0}
     for case in fixtures_json["cases"]:
         out = pm.predict(case["features"])
         exp = case["expected"]
@@ -47,12 +47,37 @@ def test_portable_matches_native_on_every_fixture(pm, fixtures_json) -> None:  #
             worst["logit"] = max(worst["logit"], abs(got["logit"] - pred["logit"]))
             e_got, e_exp = out["explanations"][t], exp["explanations"][t]
             worst["base_value"] = max(worst["base_value"], abs(e_got["base_value"] - e_exp["base_value"]))
+            for key in ("calibrated_base_value", "calibrated_output_value"):
+                worst["calibrated"] = max(worst["calibrated"], abs(e_got[key] - e_exp[key]))
             got_rows = {r["feature"]: r for r in e_got["contributions"]}
             assert len(got_rows) == len(e_exp["contributions"])
             for r in e_exp["contributions"]:
                 assert got_rows[r["feature"]]["value"] == r["value"]
                 worst["shap"] = max(worst["shap"], abs(got_rows[r["feature"]]["shap"] - r["shap"]))
+                worst["calibrated"] = max(worst["calibrated"], abs(got_rows[r["feature"]]["shap_calibrated"] - r["shap_calibrated"]))
     assert all(v < PARITY for v in worst.values()), worst
+
+
+def test_portable_matches_native_on_every_dataset_patient(pm, predictor, values) -> None:  # noqa: ANN001
+    """All 303 patients (development and test), not only the fixtures: same labels, |dp|, |dshap| < 1e-9."""
+    from cardiotwin_ml.explain import aggregate
+    from cardiotwin_ml.export import api_record
+
+    enc = predictor.encoder
+    X = enc.transform(values)
+    records = [api_record(values.loc[i].to_dict(), enc) for i in values.index]
+    outs = [pm.predict(r) for r in records]
+    assert len(outs) == 303
+    for t, model in predictor.models.items():
+        p = model.predict_proba(X)
+        m = model.margin(X)
+        agg, names = aggregate(model.shap(X), enc)
+        for i, out in enumerate(outs):
+            got = out["predictions"][t]
+            assert abs(got["probability"] - p[i]) < PARITY and abs(got["logit"] - m[i]) < PARITY
+            assert got["label"] == int(p[i] >= model.threshold)
+            rows = {r["feature"]: r["shap"] for r in out["explanations"][t]["contributions"]}
+            assert max(abs(rows[n] - agg[i, j]) for j, n in enumerate(names)) < PARITY
 
 
 def test_native_predictor_matches_fixtures(predictor, fixtures_json) -> None:  # noqa: ANN001

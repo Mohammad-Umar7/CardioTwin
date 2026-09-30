@@ -7,6 +7,10 @@
   ``base = w * base_LR + (1 - w) * base_XGB``; hence ``base + sum(phi) = w*m_LR + (1-w)*m_XGB = margin``.
 * Reporting - one-hot columns are summed back into their raw feature; derived features (if any are
   adopted) are separate rows carrying ``derived_from``. Every row set is still exactly additive.
+* Calibrated scale - the displayed probability is ``sigmoid(a * margin + b)`` (Platt). Multiplying every
+  SHAP value by ``a`` and mapping the base value to ``a * base + b`` gives an equally exact decomposition of
+  the calibrated log-odds (``shap_calibrated``, ``calibrated_base_value``, ``calibrated_output_value``), so a
+  UI can show contributions on the scale of the probability it displays.
 """
 
 from __future__ import annotations
@@ -46,9 +50,17 @@ def explain_rows(
 
 
 def contribution_list(
-    encoder: FeatureEncoder, values: Mapping[str, Any], shap_row: np.ndarray, derived_values: Mapping[str, float]
+    encoder: FeatureEncoder,
+    values: Mapping[str, Any],
+    shap_row: np.ndarray,
+    derived_values: Mapping[str, float],
+    calibration_slope: float,
 ) -> list[dict[str, Any]]:
-    """Contract §3.2 ``contributions``: one row per raw feature (+ derived rows), sorted by |shap| desc."""
+    """Contract §3.2 ``contributions``: one row per raw feature (+ derived rows), sorted by |shap| desc.
+
+    ``shap`` is in the uncalibrated ensemble margin space (the contract); ``shap_calibrated`` = Platt slope x
+    ``shap`` is the same contribution on the log-odds scale of the displayed, calibrated probability.
+    """
     agg, names = aggregate(shap_row[None, :], encoder)
     derived = {d.key: d for d in encoder.derived}
     rows = []
@@ -59,12 +71,20 @@ def contribution_list(
                     "feature": name,
                     "value": float(derived_values[name]),
                     "shap": float(s),
+                    "shap_calibrated": calibration_slope * float(s),
                     "derived_from": list(derived[name].inputs),
                 }
             )
         else:
             v = values[name]
-            rows.append({"feature": name, "value": v if isinstance(v, str) else _num(v), "shap": float(s)})
+            rows.append(
+                {
+                    "feature": name,
+                    "value": v if isinstance(v, str) else _num(v),
+                    "shap": float(s),
+                    "shap_calibrated": calibration_slope * float(s),
+                }
+            )
     rows.sort(key=lambda r: (-abs(r["shap"]), r["feature"]))
     return rows
 

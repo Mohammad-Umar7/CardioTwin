@@ -14,6 +14,7 @@ Pipeline for one patient::
       -> ensemble margin m = sum(weight_k * m_k)
       -> probability p = 1 / (1 + exp(-(a*m + b)))   (Platt)
       -> SHAP: sum(weight_k * shap_k), one-hot columns summed per raw feature
+      -> calibrated scale: shap_calibrated = a * shap, calibrated_base_value = a * base + b
 
 Numerical rules that MUST be mirrored exactly:
 
@@ -357,7 +358,8 @@ class PortableModel:
                 for j in range(len(x)):
                     shap_cols[j] += w * s[j]
             cal = tm["calibration"]
-            p = sigmoid(cal["a"] * margin + cal["b"])
+            calibrated = cal["a"] * margin + cal["b"]
+            p = sigmoid(calibrated)
             predictions[target] = {
                 "probability": p,
                 "label": 1 if p >= tm["threshold"] else 0,
@@ -369,7 +371,9 @@ class PortableModel:
                 "space": "log-odds",
                 "base_value": base,
                 "output_value": margin,
-                "contributions": self._contributions(values, derived, shap_cols),
+                "contributions": self._contributions(values, derived, shap_cols, cal["a"]),
+                "calibrated_base_value": cal["a"] * base + cal["b"],
+                "calibrated_output_value": calibrated,
             }
         vessels = spec["vessel_targets"]
         expected = 0.0
@@ -386,7 +390,7 @@ class PortableModel:
         }
 
     def _contributions(
-        self, values: dict[str, Any], derived: dict[str, float], shap_cols: list[float]
+        self, values: dict[str, Any], derived: dict[str, float], shap_cols: list[float], slope: float
     ) -> list[dict[str, Any]]:
         rows = []
         for group in self.spec["attribution"]:
@@ -395,12 +399,20 @@ class PortableModel:
                 s += shap_cols[j]
             name = group["feature"]
             if group.get("derived_from"):
-                rows.append({"feature": name, "value": derived[name], "shap": s, "derived_from": group["derived_from"]})
+                rows.append(
+                    {
+                        "feature": name,
+                        "value": derived[name],
+                        "shap": s,
+                        "shap_calibrated": slope * s,
+                        "derived_from": group["derived_from"],
+                    }
+                )
             else:
                 v = values[name]
                 if not isinstance(v, str):
                     v = int(v) if float(v).is_integer() else float(v)
-                rows.append({"feature": name, "value": v, "shap": s})
+                rows.append({"feature": name, "value": v, "shap": s, "shap_calibrated": slope * s})
         rows.sort(key=lambda r: (-abs(r["shap"]), r["feature"]))
         return rows
 

@@ -134,7 +134,11 @@ class CardioTwinPredictor:
                 "space": "log-odds",
                 "base_value": base,
                 "output_value": margin,
-                "contributions": contribution_list(self.encoder, values, phi, derived),
+                "contributions": contribution_list(self.encoder, values, phi, derived, model.platt_a),
+                # Same explanation on the scale of the displayed (calibrated) probability:
+                # probability = sigmoid(calibrated_base_value + sum(shap_calibrated)) exactly.
+                "calibrated_base_value": model.platt_a * base + model.platt_b,
+                "calibrated_output_value": model.platt_a * margin + model.platt_b,
             }
         expected = float(sum(predictions[v]["probability"] for v in self.vessel_targets))
         highest = max(self.vessel_targets, key=lambda v: predictions[v]["probability"]) if self.vessel_targets else None

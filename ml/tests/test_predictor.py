@@ -33,6 +33,12 @@ def test_response_shape(predictor, schema_json) -> None:  # noqa: ANN001
         mags = [abs(r["shap"]) for r in rows]
         assert mags == sorted(mags, reverse=True)
         assert abs(exp["base_value"] + sum(r["shap"] for r in rows) - exp["output_value"]) < 1e-6
+        # The same decomposition on the scale of the displayed probability (Platt slope x SHAP).
+        cal_out = exp["calibrated_output_value"]
+        assert abs(exp["calibrated_base_value"] + sum(r["shap_calibrated"] for r in rows) - cal_out) < 1e-6
+        assert 1.0 / (1.0 + np.exp(-cal_out)) == pytest.approx(pred["probability"], abs=1e-12)
+        slope = rows[0]["shap_calibrated"] / rows[0]["shap"]
+        assert slope > 0 and all(r["shap_calibrated"] == pytest.approx(slope * r["shap"], rel=1e-12, abs=1e-15) for r in rows)
     vessels = ["LAD", "LCX", "RCA"]
     s = out["summary"]
     assert s["expected_diseased_vessels"] == pytest.approx(sum(out["predictions"][v]["probability"] for v in vessels))
