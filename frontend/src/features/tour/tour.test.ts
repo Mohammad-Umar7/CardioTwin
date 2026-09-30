@@ -5,7 +5,7 @@ import { useUiStore } from '@/state/uiStore';
 import { PEEL_REST, useViewerStore } from '@/state/viewerStore';
 import { sampleCohort, samplePrediction, sampleSchema } from '@/test/fixtures';
 import { overallProgress, tick, type ClockState } from './clock';
-import { inflate, mergeOverlapping, placeCard, scrimPath, union, type Bounds } from './geometry';
+import { inflate, keepOffHeart, mergeOverlapping, placeCard, scrimPath, union, type Bounds } from './geometry';
 import { planTransition } from './plan';
 import {
   PeelAnimator,
@@ -325,5 +325,22 @@ describe('snapshot', () => {
     expect(usePatientStore.getState().features.BP).toBe(150);
     expect(useViewerStore.getState()).toMatchObject({ selectedStructure: 'RCA', explode: 0.3, isolate: true, territoryMode: 'all' });
     expect(useUiStore.getState()).toMatchObject({ chrome: 'focus', drawer: 'inputs', patientCardOpen: false, explainTab: 'model' });
+  });
+});
+
+describe('keepOffHeart', () => {
+  const card = { width: 360, height: 196 };
+  const bounds = { left: 0, top: 92, right: 1280, bottom: 592 };
+  const heart = { left: 400, top: 104, width: 420, height: 350 };
+  it('docks a card that would cover the heart at the bottom, centred on the free area', () => {
+    const p = keepOffHeart({ left: 565, top: 95, side: 'below' }, card, bounds, heart, [], null, 610);
+    expect(p).toEqual({ left: 430, top: 592 - 196 - 12, side: 'inside' });
+  });
+  it('keeps a placement already off the heart, or when the docked spot is blocked', () => {
+    const off = { left: 20, top: 300, side: 'right' as const };
+    expect(keepOffHeart(off, card, bounds, heart, [], null, 610)).toBe(off);
+    const over = { left: 565, top: 95, side: 'below' as const };
+    const blocker = { left: 400, top: 380, width: 400, height: 200 };
+    expect(keepOffHeart(over, card, bounds, heart, [blocker], null, 610)).toBe(over);
   });
 });

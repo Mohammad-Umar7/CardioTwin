@@ -11,7 +11,7 @@ import { usePatientStore } from '@/state/patientStore';
 import { useUiStore } from '@/state/uiStore';
 import { useViewerStore } from '@/state/viewerStore';
 import { useTourClock } from './clock';
-import { placeCard, union, type Rect } from './geometry';
+import { keepOffHeart, placeCard, union, type Rect } from './geometry';
 import { planTransition } from './plan';
 import { PeelAnimator, buildCaptionContext, ensureShowcasePatient, executeAction, type ExecuteDeps } from './runtime';
 import { BEATS, CHAPTERS, CHAPTER_START, clampBeat } from './script';
@@ -45,6 +45,23 @@ function keepClearRects(extra: readonly Rect[]): Rect[] {
     out.push({ left: r.left - 8, top: r.top - 8, width: r.width + 16, height: r.height + 16 });
   });
   return out;
+}
+
+/**
+ * The heart's part of the stage while no beat shows the stage itself: the upper two thirds of the free area
+ * (stage minus the chrome insets), centred. Null off the workstation.
+ */
+function heartKeepOut(): { heart: Rect; centreX: number } | null {
+  const stage = document.querySelector<HTMLElement>('[data-region="stage"]');
+  if (!stage || stage.closest('[inert],[aria-hidden="true"]')) return null;
+  const r = stage.getBoundingClientRect();
+  const i = useUiStore.getState().stageInsets;
+  const free = { left: r.left + i.left, top: r.top + i.top, width: r.width - i.left - i.right, height: r.height - i.top - i.bottom };
+  if (free.width < 1 || free.height < 1) return null;
+  return {
+    heart: { left: free.left + free.width * 0.18, top: free.top, width: free.width * 0.64, height: free.height * 0.66 },
+    centreX: free.left + free.width / 2,
+  };
 }
 
 /** "1/2" within a chapter, so the two beats of one chapter never read the same. */
@@ -374,7 +391,14 @@ function TourView() {
     return r !== null && spec !== undefined && !('stage' in spec);
   });
   const avoid = bounds.right > 0 ? keepClearRects(spotlitElements) : [];
-  const pos = bounds.right > 0 ? placeCard(anchorRect, { width: CARD_W, height: cardH }, cardBounds, 16, avoid) : null;
+  const placed = bounds.right > 0 ? placeCard(anchorRect, { width: CARD_W, height: cardH }, cardBounds, 16, avoid) : null;
+  // Beats about the patient or the answer (not the stage) dock the card above the chapter rail rather than
+  // over the heart (chapter 1 at 1280 covered its upper third).
+  const offHeart = placed && !beat.spotlight.some((s) => 'stage' in s) ? heartKeepOut() : null;
+  const pos =
+    placed && offHeart
+      ? keepOffHeart(placed, { width: CARD_W, height: cardH }, cardBounds, offHeart.heart, avoid, anchorRect, offHeart.centreX)
+      : placed;
   const chapter = CHAPTERS[beat.chapter]!;
   const inChapter = beatInChapter(index);
 
