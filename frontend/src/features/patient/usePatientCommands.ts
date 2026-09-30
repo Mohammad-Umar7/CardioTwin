@@ -98,7 +98,8 @@ function inputCommands(index: SchemaIndex, features: FeatureVector, recorded: Fe
       group: 'inputs',
       title: spec.label,
       subtitle: `${group} · ${displayValue(spec, value)}${edited ? ` (was ${displayValue(spec, recorded[spec.key])})` : ''}`,
-      keywords: aliasesFor(spec.key),
+      // "flip ang" finds the angina rows too (V2 §4.9), not only the Suggested lever.
+      keywords: binary ? [...aliasesFor(spec.key), `flip ${spec.label}`, `toggle ${spec.label}`] : aliasesFor(spec.key),
       icon: binary ? ToggleRight : PencilLine,
       ...(binary ? { preview: () => flipPreview(spec, usePatientStore.getState().features) } : null),
       run: binary ? () => flipInput(spec) : open,
@@ -160,7 +161,9 @@ export function usePatientCommands(): void {
       list.push({
         id: PATIENT_CMD.flipSuggestion,
         group: 'suggested',
-        title: `Flip ${lever.label.toLowerCase()} (${now ? 'Yes → No' : 'No → Yes'})`,
+        // The preview says the rest ("Yes → No · CAD ≥95 % → 62 %"), even at rest; the hint covers the wait.
+        title: `Flip ${lever.label.toLowerCase()}`,
+        hint: now ? 'Yes → No' : 'No → Yes',
         keywords: aliasesFor(lever.key),
         icon: ToggleRight,
         preview: () => flipPreview(lever, usePatientStore.getState().features),

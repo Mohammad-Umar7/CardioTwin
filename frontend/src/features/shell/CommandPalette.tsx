@@ -155,6 +155,36 @@ function PalettePanel({ reduced, prewarm = false }: { reduced: boolean; prewarm?
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeIndex, rows.length]);
 
+  // At rest, the Suggested levers show their effect before they are even hovered ("Flip typical angina ·
+  // CAD ≥95 % → 62 %"): a handful of rows, each one worker batch of two.
+  const [restPreviews, setRestPreviews] = useState<ReadonlyMap<string, string>>(new Map());
+  const suggestedWithPreview = useMemo(
+    () =>
+      query.trim() || level
+        ? []
+        : (sections.find((x) => x.group === 'suggested')?.items ?? []).filter((c) => c.preview).slice(0, 3),
+    [sections, query, level],
+  );
+  useEffect(() => {
+    if (prewarm || suggestedWithPreview.length === 0) return;
+    let cancelled = false;
+    void Promise.all(
+      suggestedWithPreview.map((c) =>
+        Promise.resolve()
+          .then(() => c.preview!())
+          .then(
+            (text) => [c.id, text] as const,
+            () => null,
+          ),
+      ),
+    ).then((pairs) => {
+      if (!cancelled) setRestPreviews(new Map(pairs.filter((x): x is readonly [string, string] => x !== null)));
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [suggestedWithPreview, prewarm]);
+
   // Preview of the active row's effect ("CAD 98 % → 91 %"), fetched for that row only.
   useEffect(() => {
     const command = current?.command;
@@ -308,7 +338,12 @@ function PalettePanel({ reduced, prewarm = false }: { reduced: boolean; prewarm?
                   const i = index;
                   const isActive = i === activeIndex;
                   const Icon = command.icon;
-                  const previewText = preview?.id === command.id && isActive ? preview.text : null;
+                  const previewText =
+                    preview?.id === command.id && isActive
+                      ? preview.text
+                      : section.group === 'suggested'
+                        ? (restPreviews.get(command.id) ?? null)
+                        : null;
                   return (
                     <div
                       key={`${section.group}:${command.id}`}
