@@ -759,7 +759,8 @@ export function RobustnessStatsModule({
 }) {
   const rows = [
     { label: 'ROC-AUC', d: r.rocAuc, lowerBetter: false },
-    { label: 'F1', d: r.f1, lowerBetter: false },
+    { label: 'Sensitivity', d: r.sensitivity, lowerBetter: false },
+    { label: 'Specificity', d: r.specificity, lowerBetter: false },
     { label: 'Brier score', d: r.brier, lowerBetter: true },
     { label: 'Clinical baseline ROC-AUC', d: r.baselineRocAuc, lowerBetter: false },
   ].filter((x) => x.d);
@@ -795,14 +796,14 @@ export function RobustnessStatsModule({
         <tbody>
           {rows.map(({ label, d }) => (
             <tr key={label} className="border-t border-hairline">
-              <th scope="row" className="py-2 pr-2 text-left font-normal text-secondary">
+              <th scope="row" className="py-1.5 pr-2 text-left font-normal text-secondary">
                 {label}
               </th>
-              <td className="num px-2 py-2 text-right text-primary">{f2(d!.p50)}</td>
-              <td className="num px-2 py-2 text-right text-tertiary">
+              <td className="num px-2 py-1.5 text-right text-primary">{f2(d!.p50)}</td>
+              <td className="num px-2 py-1.5 text-right text-tertiary">
                 {f2(d!.p05)}–{f2(d!.p95)}
               </td>
-              <td className="num py-2 pl-2 text-right text-secondary">
+              <td className="num py-1.5 pl-2 text-right text-secondary">
                 {f2(d!.fixed)}
                 {d!.fixedPercentile !== null && (
                   <span className="text-tertiary"> · {ordinal(d!.fixedPercentile)}</span>

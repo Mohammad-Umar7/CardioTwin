@@ -46,6 +46,8 @@ describe('additive metrics readers', () => {
     expect(r.samples).toHaveLength(200);
     expect(r.deltaVsBaseline?.sharePositive).toBe(0.81);
     expect(r.cvEstimate).toEqual({ rocAuc: 0.9367, percentile: 71 });
+    expect(r.sensitivity).toMatchObject({ p50: 0.84, fixedPercentile: 49 });
+    expect(r.specificity).toMatchObject({ fixed: 0.76, fixedPercentile: 14 });
   });
 
   it('read cumulative, leave-one-out and instrumental modality blocks with Holm p-values', () => {

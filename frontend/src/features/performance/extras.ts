@@ -146,6 +146,8 @@ export interface RobustnessResult {
   nSplits: number;
   rocAuc: Distribution;
   f1: Distribution | null;
+  sensitivity: Distribution | null;
+  specificity: Distribution | null;
   brier: Distribution | null;
   /** Percentile of the locked split's ROC-AUC (top-level copy). */
   fixedPercentile: number | null;
@@ -171,6 +173,8 @@ export function readRobustness(report: MetricsReport | undefined, target: string
     nSplits: num(t.n_splits) ?? rocAuc.n ?? samples.length,
     rocAuc,
     f1: readDistribution(t.f1),
+    sensitivity: readDistribution(t.recall),
+    specificity: readDistribution(t.specificity),
     brier: readDistribution(t.brier),
     fixedPercentile: num(t.fixed_split_percentile) ?? rocAuc.fixedPercentile,
     baselineRocAuc: readDistribution(t.baseline_roc_auc),

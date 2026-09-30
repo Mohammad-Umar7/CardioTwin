@@ -162,6 +162,8 @@ export const sampleReport = {
       n_splits: 200,
       roc_auc: distribution(0.91, 0.858, 12.5),
       f1: distribution(0.88, 0.87, 45),
+      recall: distribution(0.84, 0.84, 49),
+      specificity: distribution(0.86, 0.76, 14),
       brier: distribution(0.1, 0.123, 80),
       fixed_split_percentile: 12.5,
       baseline_roc_auc: distribution(0.89, 0.82, 20),
