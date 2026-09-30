@@ -28,14 +28,21 @@ export interface CurveProps {
   nTest: number;
 }
 
-function markersFor(points: OperatingPoint[], deployed: number, explore: number | null, map: (p: OperatingPoint) => [number, number] | null): XYMarker[] {
+function markersFor(
+  points: OperatingPoint[],
+  deployed: number,
+  explore: number | null,
+  map: (p: OperatingPoint) => [number, number] | null,
+  placement?: { deployed: XYMarker['placement']; explore: XYMarker['placement'] },
+): XYMarker[] {
   const out: XYMarker[] = [];
   const dep = points[deployed];
   const depXY = dep ? map(dep) : null;
-  if (dep && depXY) out.push({ x: depXY[0], y: depXY[1], kind: 'operating', label: `deployed thr ${f2(dep.threshold)}` });
+  if (dep && depXY)
+    out.push({ x: depXY[0], y: depXY[1], kind: 'operating', label: `deployed thr ${f2(dep.threshold)}`, placement: placement?.deployed });
   const ex = explore !== null && explore !== deployed ? points[explore] : undefined;
   const exXY = ex ? map(ex) : null;
-  if (ex && exXY) out.push({ x: exXY[0], y: exXY[1], kind: 'explore', label: `exploring ${f2(ex.threshold)}` });
+  if (ex && exXY) out.push({ x: exXY[0], y: exXY[1], kind: 'explore', label: `exploring ${f2(ex.threshold)}`, placement: placement?.explore });
   return out;
 }
 
@@ -100,7 +107,11 @@ export function RocModule({ target, m, points, deployed, explore, onExplore, hei
           { id: 'roc', label: 'Model', kind: 'main', hover: false, points: roc.fpr.map((x, i) => [x, roc.tpr[i] ?? 0] as const) },
           opsSeries,
         ]}
-        markers={markersFor(points, deployed, explore, (p) => [N ? p.fp / N : 0, P ? p.tp / P : 0])}
+        // A concave ROC leaves the area below-right and above-left of each point empty.
+        markers={markersFor(points, deployed, explore, (p) => [N ? p.fp / N : 0, P ? p.tp / P : 0], {
+          deployed: 'below-right',
+          explore: 'above-left',
+        })}
         readout={readout}
         onPick={(h) => onExplore(h.index)}
       />

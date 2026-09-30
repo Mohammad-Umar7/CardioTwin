@@ -33,6 +33,11 @@ export interface XYMarker {
   /** Permanent annotation next to the mark ("deployed thr 0.75"). */
   label?: string;
   kind: 'operating' | 'explore';
+  /**
+   * Where the annotation sits relative to the mark. `auto` goes above and flips left near the right
+   * edge; charts whose curve would cross that spot (ROC) pass the empty side explicitly.
+   */
+  placement?: 'auto' | 'above-right' | 'below-right' | 'above-left' | 'below-left';
 }
 
 export interface XYRule {
@@ -370,8 +375,12 @@ export function XYChart({
           {markers.map((mk) => {
             const cx = xs(mk.x);
             const cy = clampY(mk.y);
-            const flip = cx > left + plotW * 0.62;
-            const below = cy < TOP + 24;
+            const place = mk.placement ?? 'auto';
+            const nearRight = cx > left + plotW * 0.62;
+            const nearTop = cy < TOP + 24;
+            const nearBottom = cy > TOP + plotH - 24;
+            const flip = place === 'auto' ? nearRight : place.endsWith('left') ? cx > left + 96 : nearRight;
+            const below = place === 'auto' ? nearTop : place.startsWith('below') ? !nearBottom : nearTop;
             return (
               <g key={`mk-${mk.kind}`} pointerEvents="none">
                 {mk.kind === 'operating' ? (
