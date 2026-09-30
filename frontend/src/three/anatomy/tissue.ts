@@ -184,12 +184,13 @@ const REALISTIC: Partial<Record<TissueKind, Look>> = {
     clearcoat: 0.4,
     clearcoatRoughness: 0.34,
     sheen: 0.3,
-    sheenColor: '#FFE9B8',
+    sheenColor: '#FFF3DE',
     sheenRoughness: 0.5,
     detail: { freq: 16, bump: 0.004, colorVar: 0.14, roughVar: 0.1, deep: REAL.fatDeep },
-    sss: { wrap: 0.3, tint: '#FFE0A6', color: '#C8902E', strength: 0.16 },
-    // The bake is a saturated ochre: grey it toward the pale cream-yellow of real epicardial fat.
-    baked: { tint: '#FFF6E4', saturation: 0.7 },
+    sss: { wrap: 0.3, tint: '#FFF0D6', color: '#B89A6A', strength: 0.14 },
+    // The bake is a saturated ochre: grey it toward the pale ivory-yellow of real epicardial fat, well away
+    // from the ramp's high (apricot / orange) end so a high-risk artery never melts into its groove.
+    baked: { tint: '#F6EEE2', saturation: 0.5 },
     polygonOffset: true,
   },
   papillary: {

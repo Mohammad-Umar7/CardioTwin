@@ -18,8 +18,8 @@ export const REAL = {
   interior: '#3A1716',
   fat: '#8E7A5C',
   /** Epicardial fat meshes (EpicardialFat_*), close to the mean of their baked albedo. */
-  fatMesh: '#C99A4E',
-  fatDeep: '#9C7434',
+  fatMesh: '#C8B08A',
+  fatDeep: '#9C8460',
   /** Cardiac veins: dark plum-grey, never the ramp's blue. */
   cardiacVein: '#4A3E48',
   wrapTint: '#E0503C',
