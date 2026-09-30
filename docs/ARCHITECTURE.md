@@ -18,7 +18,7 @@ flowchart LR
         BP3D[("BodyParts3D STL<br/>SHA-256 pinned")] --> ABUILD["anatomy/build.py<br/>fetch · synth · Blender · centrelines<br/>optimise · verify · manifest · explode"]
     end
     TRAIN --> MA[("ml/artifacts<br/>schema · model · metrics · metrics_summary<br/>cohort · fixtures · joblib")]
-    MA -.mirror.-> FM[("frontend/public/model")]
+    MA -. mirror .-> FM[("frontend/public/model")]
     ABUILD --> FA[("frontend/public/anatomy<br/>GLB · manifest · vessels")]
     subgraph run["Run time"]
         direction TB
@@ -169,8 +169,8 @@ viewer can explode them safely.
 criteria derived from the cited reference ([`anatomy/REFERENCE.md`](anatomy/REFERENCE.md): SCCT 2014, AHA 2002,
 ASE/EACVI 2015 and others). The baseline before the realism work scored 35 PASS, 12 MINOR and 23 FAIL
 ([`gap_report.md`](../anatomy/checks/gap_report.md)). A re-run on the current 41-structure realism rebuild
-(30 Sep 2026) scored **44 PASS, 7 MINOR and 19 FAIL**. The coronary centrelines lie 99.85 % inside their vessel meshes (max 0.31 mm
-outside).
+(30 Sep 2026) scored **45 PASS, 8 MINOR and 17 FAIL**. The coronary centrelines lie 99.85 % inside their vessel
+meshes (max 0.31 mm outside).
 
 ## 6. Design system
 
