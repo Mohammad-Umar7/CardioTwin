@@ -82,6 +82,9 @@ describe('narrative phrase rules (WORKSTATION_V2 §5.10)', () => {
     expect(say('BP', 140)).toBe('high blood pressure');
     expect(say('BP', 110)).toBe('normal blood pressure');
     expect(say('EF-TTE', 40)).toBe('a reduced ejection fraction');
+    // 50 % sits just under this schema's reference range but is still a preserved EF: never "reduced".
+    expect(say('EF-TTE', 50)).toBe('a borderline-low ejection fraction');
+    expect(say('EF-TTE', 45)).toBe('a mildly reduced ejection fraction');
     expect(say('EF-TTE', 60)).toBe('a normal ejection fraction');
     expect(say('HDL', 30)).toBe('low HDL cholesterol');
     expect(say('TG', 220)).toBe('high triglycerides');

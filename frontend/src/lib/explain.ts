@@ -227,6 +227,12 @@ export function narrativePhrase(
   const value = toNumber(c.value);
   if (lex.zero !== undefined && value !== null) return phrase(value === 0 ? lex.zero : (lex.some ?? noun));
   const status = value !== null ? rangeStatus(value, spec?.normal) : null;
+  // Ejection fraction below the reference range in the heart-failure bands: ≥ 50 % is preserved (only
+  // "borderline-low" against this schema's range), 41–49 % mildly reduced, ≤ 40 % reduced.
+  if (c.feature === 'EF-TTE' && status === 'below' && value !== null) {
+    if (value >= 50) return phrase('a borderline-low ejection fraction');
+    if (value > 40) return phrase('a mildly reduced ejection fraction');
+  }
   if (status) {
     const verbatim = status === 'within' ? lex.normal : status === 'above' ? lex.high : lex.low;
     if (verbatim) return phrase(verbatim);

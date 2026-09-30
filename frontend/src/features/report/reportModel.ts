@@ -35,6 +35,7 @@ import {
   type FormattedProbability,
   type RangeStatus,
 } from '@/lib/format';
+import { narrativePhrase } from '@/lib/explain';
 import { DEFAULT_RISK_BANDS, RISK_BAND_STYLES, bandFor, type RiskBandId, type RiskBandSpec } from '@/theme/risk';
 
 // ------------------------------------------------------------------------------------------ input
@@ -435,9 +436,13 @@ const lowerFirst = (s: string) =>
   s.length > 1 && s[1] === s[1]!.toLowerCase() ? s.charAt(0).toLowerCase() + s.slice(1) : s;
 
 /** Words for one input in a sentence: "typical angina", "no diabetes", "ejection fraction 40 %", "LBBB". */
+/** Inputs the report words exactly as the workstation's narrative does ("normal wall motion pulls it down"). */
+const SHARED_VOCABULARY: ReadonlySet<string> = new Set(['Region RWMA', 'EF-TTE']);
+
 export function phraseForInput(spec: FeatureSpec | undefined, feature: string, value: unknown): string {
   if (!spec) return feature;
   if (spec.phrase) return spec.phrase;
+  if (SHARED_VOCABULARY.has(spec.key)) return narrativePhrase({ feature, value: value as FeatureValue }, spec).text;
   const label = lowerFirst(spec.label);
   if (spec.type === 'binary') {
     const on = value === 1 || value === true || value === '1';

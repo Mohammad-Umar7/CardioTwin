@@ -230,11 +230,12 @@ describe('phraseForInput', () => {
   it('describes binary, numeric and categorical inputs in words', () => {
     expect(phraseForInput(byKey.get('BP'), 'BP', 140)).toBe('high blood pressure');
     expect(phraseForInput(byKey.get('BP'), 'BP', 110)).toBe('normal blood pressure');
-    expect(phraseForInput(byKey.get('EF-TTE'), 'EF-TTE', 40)).toBe('low ejection fraction');
+    // Same words as the workstation's narrative (one vocabulary on every surface).
+    expect(phraseForInput(byKey.get('EF-TTE'), 'EF-TTE', 40)).toBe('a reduced ejection fraction');
     expect(phraseForInput(byKey.get('Age'), 'Age', 62)).toBe(`age 62${T}y`);
     const rwma = { ...byKey.get('Region RWMA')!, normal: { low: 0, high: 0 } };
-    expect(phraseForInput(rwma, 'Region RWMA', 0)).toBe('no regional wall motion abnormality');
-    expect(phraseForInput(rwma, 'Region RWMA', 2)).toBe('regional wall motion abnormality (2)');
+    expect(phraseForInput(rwma, 'Region RWMA', 0)).toBe('normal wall motion');
+    expect(phraseForInput(rwma, 'Region RWMA', 2)).toBe('a regional wall-motion abnormality');
     expect(phraseForInput(byKey.get('BBB'), 'BBB', 'LBBB')).toBe('LBBB');
     expect(phraseForInput(byKey.get('BBB'), 'BBB', 'N')).toBe('no bundle branch block');
     expect(phraseForInput(undefined, 'Mystery', 1)).toBe('Mystery');
