@@ -11,7 +11,7 @@
  */
 import { Box3, Vector3 } from 'three';
 import type { AnatomyManifest } from '@/types/contracts';
-import { PEEL_SOLID_UNTIL, PEEL_WINDOWS, windowProgress } from '../anatomy/explode';
+import { PEEL_WINDOWS, peeledAt, windowProgress } from '../anatomy/explode';
 
 /** V2 §4.1: the heart's bounding box fills 62 % of the free-area height at the workstation home pose. */
 export const WORKSTATION_HEART_SHARE = 0.62;
@@ -91,7 +91,7 @@ export function heartBox(manifest: AnatomyManifest | null | undefined): Box3 {
 /** Layers the thorax view always frames (with the chest layers still solid at the peel value). */
 const THORAX_LAYERS = new Set(['heart', 'coronary']);
 
-/** Outer layers that turn solid again as the chest closes (rig.ts: solid while their progress < PEEL_SOLID_UNTIL). */
+/** Outer layers that turn solid again as the chest closes (rig.ts: solid below PEEL_SOLID_UNTIL[layer]). */
 const CHEST_LAYERS = new Set(['muscle', 'skeleton', 'lungs', 'diaphragm']);
 
 /**
@@ -104,7 +104,7 @@ const CHEST_LAYERS = new Set(['muscle', 'skeleton', 'lungs', 'diaphragm']);
 export function opaqueThoraxBox(
   manifest: AnatomyManifest | null | undefined,
   e: number,
-  visible: (layerId: string) => boolean = (id) => id !== 'lungs',
+  visible: (layerId: string) => boolean = () => true,
 ): Box3 | null {
   if (!manifest) return null;
   const layers = new Map(manifest.layers.map((l) => [l.id, l]));
@@ -118,11 +118,11 @@ export function opaqueThoraxBox(
     if (/^GreatVessel_/.test(raw.node)) continue;
     if (!raw.bbox || raw.bbox.min.length < 3 || raw.bbox.max.length < 3 || !visible(raw.layer)) continue;
     const chest = CHEST_LAYERS.has(raw.layer);
+    if (chest && peeledAt(raw.layer, e, raw.node)) continue;
     const k = chest ? windowProgress(e, PEEL_WINDOWS[raw.layer] ?? [0, 1]) : 0;
-    if (chest && k >= PEEL_SOLID_UNTIL) continue;
     const l = layers.get(raw.layer)?.explode ?? [0, 0, 0];
     const x = raw.explode ?? [0, 0, 0];
-    v.set((l[0] ?? 0) + (x[0] ?? 0), (l[1] ?? 0) + (x[1] ?? 0), (l[2] ?? 0) + (x[2] ?? 0)).multiplyScalar(chest ? Math.min(1, PEEL_SOLID_UNTIL + 0.15) : 0);
+    v.set((l[0] ?? 0) + (x[0] ?? 0), (l[1] ?? 0) + (x[1] ?? 0), (l[2] ?? 0) + (x[2] ?? 0)).multiplyScalar(chest ? k : 0);
     const min = new Vector3(raw.bbox.min[0], raw.bbox.min[1], raw.bbox.min[2]);
     const max = new Vector3(raw.bbox.max[0], raw.bbox.max[1], raw.bbox.max[2]);
     box.expandByPoint(min).expandByPoint(max).expandByPoint(min.clone().add(v)).expandByPoint(max.clone().add(v));
@@ -138,28 +138,12 @@ export function opaqueThoraxBox(
 const GREAT_VESSEL_ROOTS = 0.4;
 
 /**
- * What the camera frames for a peel value (V2 §5.11): the heart ('heart'), the whole opaque thorax while any
- * chest layer is solid again ('thorax'), or both opened halves ('open'). Derived from the value itself (with
- * hysteresis against the current mode), never from threshold crossings, so any path — the ▶/⟲ player, a
- * slider jump from Open heart straight to Closed, the tour, a deep link — ends on the framing of where the
- * peel actually is.
- *
- *  - thorax below 0.58: the diaphragm and the lungs turn solid again right under rest (their windows end at
- *    0.65 / 0.6), so the chest is framed before "Ribs open" (0.45), never at the heart framing;
- *  - back to the heart above 0.595 (rest is 0.6);
- *  - open from 0.7 (the heart's window), back below 0.66.
+ * Where the displayed peel value is, for the camera (CameraRig's peel follower): the chest ('thorax', below
+ * the rest detent), the heart at rest ('heart', where the camera is free), or the opening heart ('open').
  */
 export type PeelMode = 'heart' | 'thorax' | 'open';
-export const PEEL_THORAX_BELOW = 0.58;
-export const PEEL_THORAX_EXIT_ABOVE = 0.595;
+/** The heart's own peel window starts here: below it a selection still sees a closed heart. */
 export const PEEL_OPEN_AT = 0.7;
-export const PEEL_OPEN_EXIT_BELOW = 0.66;
-
-export function peelModeFor(e: number, current: PeelMode): PeelMode {
-  if (current === 'open' ? e >= PEEL_OPEN_EXIT_BELOW : e >= PEEL_OPEN_AT) return 'open';
-  if (current === 'thorax') return e <= PEEL_THORAX_EXIT_ABOVE ? 'thorax' : 'heart';
-  return e < PEEL_THORAX_BELOW ? 'thorax' : 'heart';
-}
 
 export interface FramingInput {
   box: Box3;
@@ -276,6 +260,95 @@ export function framingDistance(input: FramingInput, min = 1.2, max = 14): numbe
   let lo = min;
   let hi = max;
   for (let k = 0; k < 40; k += 1) {
+    const mid = (lo + hi) / 2;
+    if (fits(mid)) hi = mid;
+    else lo = mid;
+  }
+  return hi;
+}
+
+// ------------------------------------------------------------------------------ peel follower maths
+
+/** Surface samples of the opened heart (sceneRuntime.framing): fully open, at rest, and each one's window. */
+export interface OpenSamples {
+  open: readonly Vector3[];
+  openRest: readonly Vector3[];
+  openWindow: readonly (readonly [number, number])[];
+}
+
+/**
+ * Where the opened heart's samples are at peel value `e`: each between its rest and its fully open position
+ * by its own peel window (the halves by the heart's, the great vessels by their earlier lift). The hinge is
+ * approximated by its chord (under 1 % of the half's size at 16°). `out` is reused.
+ */
+export function openPointsAt(f: OpenSamples, e: number, out: Vector3[] = []): Vector3[] {
+  const n = Math.min(f.open.length, f.openRest.length);
+  out.length = n;
+  for (let i = 0; i < n; i += 1) {
+    const k = windowProgress(e, f.openWindow[i] ?? PEEL_WINDOWS.heart!);
+    (out[i] ??= new Vector3()).lerpVectors(f.openRest[i]!, f.open[i]!, k);
+  }
+  return out;
+}
+
+/** Screen shift (px) that centres the projected extent on the free area's centre. */
+export const centringBias = (e: Extent): Offset => ({ x: -(e.right - e.left) / 2, y: -(e.down - e.up) / 2 });
+
+export interface ContainInput extends ProjectInput {
+  /** Free-area size (px). */
+  freeWidth: number;
+  freeHeight: number;
+  /** The view offset's extra shift of the target from the free-area centre (px). */
+  bias: Offset;
+  /** Margin from the free-area edges (px); `marginTop` for the top edge (a chip there). */
+  margin: number;
+  marginTop?: number;
+}
+
+/**
+ * Smallest camera distance at which every point projects inside the free area (less the margins), with the
+ * orbit target at the free-area centre shifted by `bias`. Bisection on the exact projection; the extents
+ * shrink monotonically with distance.
+ */
+export function containDistance(input: ContainInput, points: readonly Vector3[], min = 1.2, max = 18): number {
+  if (points.length === 0) return min;
+  const halfW = input.freeWidth / 2 - input.margin;
+  const halfH = input.freeHeight / 2 - input.margin;
+  const halfUp = input.freeHeight / 2 - (input.marginTop ?? input.margin);
+  const { x, y } = input.bias;
+  const fits = (d: number) => {
+    const e = projectedExtent(input, points, d);
+    return x - e.left >= -halfW && x + e.right <= halfW && y - e.up >= -halfUp && y + e.down <= halfH;
+  };
+  if (fits(min)) return min;
+  if (!fits(max)) return max;
+  let lo = min;
+  let hi = max;
+  for (let k = 0; k < 26; k += 1) {
+    const mid = (lo + hi) / 2;
+    if (fits(mid)) hi = mid;
+    else lo = mid;
+  }
+  return hi;
+}
+
+/**
+ * Distance at which the points, CENTRED on the free area (see `centringBias`), fill it up to `margin` px from
+ * its edges — the tightest framing of an exploded state.
+ */
+export function fitCentredDistance(input: Omit<ContainInput, 'bias'>, points: readonly Vector3[], min = 1.2, max = 18): number {
+  if (points.length === 0) return min;
+  const w = input.freeWidth - 2 * input.margin;
+  const h = input.freeHeight - input.margin - (input.marginTop ?? input.margin);
+  const fits = (d: number) => {
+    const e = projectedExtent(input, points, d);
+    return e.left + e.right <= w && e.up + e.down <= h;
+  };
+  if (fits(min)) return min;
+  if (!fits(max)) return max;
+  let lo = min;
+  let hi = max;
+  for (let k = 0; k < 26; k += 1) {
     const mid = (lo + hi) / 2;
     if (fits(mid)) hi = mid;
     else lo = mid;

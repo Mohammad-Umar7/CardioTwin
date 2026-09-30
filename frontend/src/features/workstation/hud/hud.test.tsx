@@ -59,9 +59,12 @@ describe('peel detents (V2 §5.11)', () => {
   it('explodes heart-centric from rest in one unhurried sweep; dissects a closed chest in one pass; assembles to rest', () => {
     const plan = peelPlan(0.6, 'dissect');
     expect(plan).toEqual([{ from: 0.6, to: 1, ms: PEEL_OPEN_MS }]);
-    // Never closes the chest first: a single segment from wherever the peel is.
-    expect(peelPlan(0, 'dissect')).toEqual([{ from: 0, to: 1, ms: PEEL_FORWARD_MS }]);
-    expect(peelPlan(0.3, 'dissect')).toHaveLength(1);
+    // Never closes the chest first: from a closed chest the dissection to rest, then the heart opens.
+    expect(peelPlan(0, 'dissect')).toEqual([
+      { from: 0, to: PEEL_REST, ms: PEEL_FORWARD_MS, ease: 'sine' },
+      { from: PEEL_REST, to: 1, ms: PEEL_OPEN_MS },
+    ]);
+    for (const seg of peelPlan(0.3, 'dissect')) expect(seg.to).toBeGreaterThan(seg.from);
     expect(peelPlan(1, 'dissect')).toEqual([]);
     expect(peelPlan(1, 'assemble')).toEqual([{ from: 1, to: PEEL_REST, ms: PEEL_ASSEMBLE_MS }]);
     expect(peelPlan(PEEL_REST, 'assemble')).toEqual([]);
@@ -82,7 +85,8 @@ describe('peel detents (V2 §5.11)', () => {
 
 describe('layers and quality', () => {
   it('knows each layer default (lungs only on the landing hero) and resets hand changes', () => {
-    expect(layerDefault('lungs', 'workstation')).toBe(false);
+    // The lungs are part of the dissection (solid in the closed chest, parting as the ribs open).
+    expect(layerDefault('lungs', 'workstation')).toBe(true);
     expect(layerDefault('lungs', 'hero')).toBe(true);
     expect(layerDefault('skin', 'workstation')).toBe(true);
     useViewerStore.getState().setLayerVisible('skin', false);

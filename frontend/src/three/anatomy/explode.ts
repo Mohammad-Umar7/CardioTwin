@@ -23,19 +23,43 @@ export type Vec3 = readonly [number, number, number];
 export const PEEL_WINDOWS: Readonly<Record<string, readonly [number, number]>> = {
   skin: [0, 0.25],
   muscle: [0.05, 0.3],
-  skeleton: [0.15, 0.45],
-  lungs: [0.3, 0.6],
+  skeleton: [0.12, 0.42],
+  lungs: [0.28, 0.58],
   diaphragm: [0.45, 0.65],
   heart: [0.7, 1],
   coronary: [0.7, 1],
 };
 
 /**
- * An outer layer (skin, muscle, ribs, lungs, diaphragm) is solid only in the first 30 % of its window: it fades
- * to its ghost while it has barely moved, so no opaque piece ever flies past the framed thorax or under a
- * card (and a closing chest turns solid only once it is nearly home).
+ * Peel value from which each outer layer is a ghost (it is solid below it). The dissection reads as one:
+ * the skin is always a ghost (the torso's contour), the pectorals turn to ghosts as they lift away, the ribs
+ * stay solid while they swing open like a book (solid at "Ribs open"), the lungs stay solid while they part
+ * laterally and only fade as the heart takes the stage, and the diaphragm (a lump under the heart from the
+ * front) is a ghost from early on.
  */
-export const PEEL_SOLID_UNTIL = 0.3;
+export const PEEL_SOLID_UNTIL: Readonly<Record<string, number>> = {
+  skin: 0,
+  muscle: 0.2,
+  skeleton: 0.5,
+  lungs: 0.55,
+  diaphragm: 0.12,
+};
+
+/**
+ * Structures that leave earlier than their layer: the costal cartilages and the spine (which drift toward
+ * the lens and under the heart as the cage opens) and the airway and oesophagus (in front of the heart's
+ * base from the anterior view), so "Ribs open" shows the ribs, the lungs and the heart, not floating blocks.
+ */
+export const PEEL_SOLID_UNTIL_NODE: Readonly<Record<string, number>> = {
+  CostalCartilage: 0.3,
+  Spine_Thoracic: 0.3,
+  Trachea_Bronchi: 0.36,
+  Oesophagus: 0.36,
+};
+
+/** True when an outer layer (or one of its early structures) is peeled (a ghost, or gone) at peel value `e`. */
+export const peeledAt = (layerId: string, e: number, node?: string): boolean =>
+  e >= ((node ? PEEL_SOLID_UNTIL_NODE[node] : undefined) ?? PEEL_SOLID_UNTIL[layerId] ?? 0.3);
 
 /** Peel detents (V2 §5.11): Closed · Skin off · Ribs open · Lungs aside ◆ · Open heart. */
 export const PEEL_DETENTS = [

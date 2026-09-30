@@ -1,7 +1,8 @@
 /**
  * Anatomy layers shown in Layers ▾ (WORKSTATION_V2 §5.11) and their defaults. The scene treats a layer
- * missing from `viewerStore.layerVisibility` as its default: every layer is visible except the lungs,
- * which only the landing hero shows (§5.15). Pure helpers, unit-tested in hud.test.ts.
+ * missing from `viewerStore.layerVisibility` as its default: every layer is visible. The lungs are solid in
+ * the closed chest and part during the dissection; at the rest detent the whole thorax is set aside, so the
+ * heart stands alone (§5.15). Pure helpers, unit-tested in hud.test.ts.
  */
 import { useViewerStore, type LayerVisibility, type Stage } from '@/state/viewerStore';
 import { useSceneControls } from '@/three/stage/sceneControls';
@@ -17,7 +18,7 @@ export const ANATOMY_LAYERS: readonly { id: AnatomyLayerId; label: string }[] = 
 ];
 
 /** Default visibility of a layer on a stage (mirrors the anatomy rig's rule). */
-export const layerDefault = (id: string, stage: Stage): boolean => (id === 'lungs' ? stage === 'hero' : true);
+export const layerDefault = (_id: string, _stage: Stage): boolean => true;
 
 export const layerVisible = (id: string, visibility: LayerVisibility, stage: Stage): boolean =>
   visibility[id] ?? layerDefault(id, stage);

@@ -6,9 +6,12 @@ import type { AnatomyManifest } from '@/types/contracts';
 import { angleLabel, presetLabel, useCameraState } from './cameraState';
 import {
   WORKSTATION_HEART_SHARE,
+  centringBias,
+  containDistance,
   easeOutCubic,
+  fitCentredDistance,
   opaqueThoraxBox,
-  peelModeFor,
+  openPointsAt,
   framingDistance,
   freeArea,
   glide,
@@ -148,35 +151,59 @@ describe('heart framing (V2 §4.1: 62 % of the free-area height)', () => {
 });
 
 describe('thorax view of the peel', () => {
-  it('bounds what is opaque at each detent: the diaphragm under the heart at Ribs open, the whole chest when closed', () => {
+  it('bounds what is opaque at each detent: the opened ribs and lungs at Ribs open, the whole chest when closed', () => {
     const ribs = opaqueThoraxBox(manifest, 0.45)!;
     expect(ribs).not.toBeNull();
     expect(ribs.containsBox(heartBox(manifest))).toBe(true);
-    // The ribs are ghosts by then (their window ends at 0.45): the box is the heart over the diaphragm dome.
-    expect(ribs.min.y).toBeLessThan(-2);
-    expect(ribs.max.x).toBeLessThan(1.2);
+    // Ribs open: the ribs are still solid, swung out like a book (wider than the closed cage).
     const closed = opaqueThoraxBox(manifest, 0)!;
-    // Closed: the ribs are solid at rest (and never framed as far as their swung-out halves).
-    expect(closed.max.x).toBeGreaterThan(ribs.max.x);
-    expect(closed.max.x).toBeLessThan(1.14 + 1.95);
-    // Lungs count only when their layer is shown.
-    expect(opaqueThoraxBox(manifest, 0.2, () => true)!.min.x).toBeLessThanOrEqual(opaqueThoraxBox(manifest, 0.2)!.min.x);
+    expect(ribs.max.x).toBeGreaterThan(closed.max.x);
+    // Closed: every chest layer at rest.
+    expect(closed.min.y).toBeLessThan(-1);
+    // Past the dissection only the heart (and its roots) remain.
+    const rest = opaqueThoraxBox(manifest, 0.58)!;
+    expect(rest.max.x).toBeLessThan(ribs.max.x);
     expect(opaqueThoraxBox(null, 0)).toBeNull();
   });
+});
 
-  it('derives the framing mode from the peel value, whatever the path (hysteresis, no threshold crossings)', () => {
-    expect(peelModeFor(0.6, 'heart')).toBe('heart');
-    // Ribs open (0.45) and anything where the diaphragm is solid again: the thorax.
-    expect(peelModeFor(0.45, 'heart')).toBe('thorax');
-    expect(peelModeFor(0.57, 'heart')).toBe('thorax');
-    expect(peelModeFor(0.59, 'thorax')).toBe('thorax');
-    expect(peelModeFor(0.6, 'thorax')).toBe('heart');
-    expect(peelModeFor(0.7, 'heart')).toBe('open');
-    expect(peelModeFor(0.67, 'open')).toBe('open');
-    expect(peelModeFor(0.62, 'open')).toBe('heart');
-    // A jump from Open heart straight to Closed frames the thorax; from Closed straight to Open, the open heart.
-    expect(peelModeFor(0, 'open')).toBe('thorax');
-    expect(peelModeFor(1, 'thorax')).toBe('open');
+describe('peel follower maths', () => {
+  const view = { target: new Vector3(), direction: new Vector3(0, 0, 1), fov: 30, width: 1440, height: 824 };
+  const square = [new Vector3(-0.5, -0.5, 0), new Vector3(0.5, 0.5, 0), new Vector3(0.9, 0.1, 0)];
+
+  it('places every open sample between rest and fully open by its own window', () => {
+    const samples = {
+      openRest: [new Vector3(0, 0, 0), new Vector3(1, 0, 0)],
+      open: [new Vector3(0, 0, 1), new Vector3(1, 1, 0)],
+      openWindow: [[0.7, 1] as const, [0.6, 0.88] as const],
+    };
+    const at = (e: number) => openPointsAt(samples, e).map((p) => p.toArray());
+    expect(at(0.6)).toEqual([[0, 0, 0], [1, 0, 0]]);
+    expect(at(1)).toEqual([[0, 0, 1], [1, 1, 0]]);
+    // At 0.7 the halves have not moved yet; the great vessels are already part-way up.
+    const mid = at(0.7);
+    expect(mid[0]).toEqual([0, 0, 0]);
+    expect(mid[1]![1]).toBeGreaterThan(0);
+    expect(mid[1]![1]).toBeLessThan(1);
+  });
+
+  it('solves the smallest distance that keeps points inside the free area, bias included', () => {
+    const input = { ...view, freeWidth: 760, freeHeight: 748, bias: { x: 0, y: 0 }, margin: 20 };
+    const d = containDistance(input, square);
+    const e = projectedExtent(input, square, d);
+    expect(e.right).toBeLessThanOrEqual(760 / 2 - 20 + 0.5);
+    expect(e.right).toBeGreaterThan(760 / 2 - 20 - 2);
+    // Shifting the target toward the side the points reach needs more distance.
+    expect(containDistance({ ...input, bias: { x: 60, y: 0 } }, square)).toBeGreaterThan(d);
+  });
+
+  it('fits centred points to the free area and centres them with the bias', () => {
+    const input = { ...view, freeWidth: 760, freeHeight: 748, margin: 20 };
+    const d = fitCentredDistance(input, square);
+    const e = projectedExtent(input, square, d);
+    expect(e.left + e.right).toBeLessThanOrEqual(720 + 0.5);
+    const bias = centringBias(e);
+    expect(bias.x + e.right).toBeCloseTo(-(bias.x - e.left), 6);
   });
 });
 

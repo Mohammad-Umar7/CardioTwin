@@ -34,9 +34,10 @@ export const REAL = {
   atlasVein: '#34405C',
   atlasVeinDeep: '#1F2638',
   leftMain: '#8E7A72',
-  bone: '#E2D6BF',
-  boneDeep: '#B5A07E',
-  cartilage: '#BCC9CB',
+  bone: '#DCCDB0',
+  boneDeep: '#A88F68',
+  /** Hyaline costal cartilage: a translucent blue-grey, never a white plastic slab. */
+  cartilage: '#A4B0B2',
   lung: '#C99B98',
   lungDeep: '#8E5E62',
   airway: '#D8C9BA',

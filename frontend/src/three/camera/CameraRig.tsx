@@ -6,7 +6,7 @@ import { Box3, Vector3, type PerspectiveCamera } from 'three';
 import { useManifest, useVessels } from '@/hooks/useData';
 import { useIsReducedMotion } from '@/hooks/useMediaQuery';
 import { useUiStore } from '@/state/uiStore';
-import { useViewerStore, type Stage } from '@/state/viewerStore';
+import { PEEL_REST, useViewerStore, type Stage } from '@/state/viewerStore';
 import type { CameraPose, TargetId } from '@/types/contracts';
 import { buildTracks } from '../labels/anchorTracks';
 import { SURFACE_PREFERRED, surfaceBestView, type SurfaceViewScore } from './bestView';
@@ -18,13 +18,16 @@ import {
   HERO_HEART_SHARE,
   WORKSTATION_HEART_SHARE,
   ZERO_OFFSET,
+  centringBias,
+  containDistance,
+  fitCentredDistance,
   framingDistance,
   freeArea,
   glide,
   PEEL_OPEN_AT,
   heartBox,
   opaqueThoraxBox,
-  peelModeFor,
+  openPointsAt,
   projectedExtent,
   sameOffset,
   viewOffsetFor,
@@ -46,19 +49,20 @@ const THORAX_DISTANCE = 7;
 const THORAX_MAX_DISTANCE = 18;
 const THORAX_SHARE = 0.9;
 /**
- * Open-heart framing: when the peel enters the heart's window the camera fits both exploded halves into the
- * free area with a 6 % margin (the anterior half swings toward viewer-left, which would otherwise put it
- * under the patient card); the peel mode (framing.ts `peelModeFor`) glides it back once the heart closes.
+ * Open-heart framing: the camera fits both exploded halves (with the fat, the coronaries and the lifted great
+ * vessels riding them) into the free area with a 6 % margin — the anterior half swings toward viewer-left,
+ * which would otherwise put it under the patient card.
  */
 const OPEN_FIT_MARGIN = 0.06;
+/** Half-width of the rest detent's "heart" zone of the displayed peel value (the camera is free there). */
+const HEART_ZONE = 0.004;
 /**
- * A peel passing THROUGH the heart framing (the chest re-opening on its way to Open heart, or closing from
- * Open heart to Closed) does not stop there: the heart framing is taken only once the value has stayed in it
- * this long, so a dissection is one camera move, not three.
+ * The closed-chest framing holds up to this peel value (the whole rib cage in view while it starts to open,
+ * like an atlas plate); from here to the rest detent the camera's distance falls log-linearly with the peel,
+ * so "Ribs open" (0.45) already shows the heart at ~40 % of the free height while the ribs swing out of the
+ * frame, and under the player's sine easing no half-second holds more than half of the dolly (no crash-zoom).
  */
-const HEART_SETTLE_MS = 160;
-/** A peel resting on another detent inside the thorax view is re-framed after this pause. */
-const THORAX_REFIT_MS = 260;
+const THORAX_FULL_UNTIL = 0.2;
 /** Share of the trunk a best view must show (proximal 5–80 %). */
 const VIEW_WINDOW: readonly [number, number] = [0.05, 0.8];
 /** Margin (px) between the free-area edge and the visible great vessels (≥ 24 px from the canvas top). */
@@ -67,9 +71,14 @@ const KEEP_MARGIN = 12;
 const FOCUS_ZOOM = 1;
 /**
  * Room kept free at the top of the free area while a vessel is selected: the selection chip (12 + 32 px)
- * and a margin, so no great vessel runs under it.
+ * and a 24 px margin, so no great vessel runs under it.
  */
-const SELECTION_CHIP_ROOM = 56;
+const SELECTION_CHIP_ROOM = 68;
+/**
+ * A selection view centres a blend of the selected vessel (60 %) and the heart walls (40 %): the vessel is the
+ * subject, but the heart stays balanced in the free area instead of riding high with an empty lower third.
+ */
+const VESSEL_WEIGHT = 0.6;
 
 /**
  * Orbit limits (V2 §5.15): in the default mode the polar angle is clamped to 35°–145° and the distance
@@ -89,6 +98,35 @@ function poseOf(controls: CameraControlsImpl): Pose {
   const p = controls.getPosition(new Vector3());
   const t = controls.getTarget(new Vector3());
   return { position: [p.x, p.y, p.z], target: [t.x, t.y, t.z] };
+}
+
+const poseDistance = (a: Pose, b: Pose) =>
+  Math.hypot(a.position[0] - b.position[0], a.position[1] - b.position[1], a.position[2] - b.position[2]) +
+  Math.hypot(a.target[0] - b.target[0], a.target[1] - b.target[1], a.target[2] - b.target[2]);
+
+/** The camera moved (more than a rounding error) between two poses. */
+const movedFrom = (a: Pose, b: Pose) => poseDistance(a, b) > 2e-3;
+
+const clamp01 = (x: number) => (x < 0 ? 0 : x > 1 ? 1 : x);
+const smooth = (x: number) => {
+  const t = clamp01(x);
+  return t * t * (3 - 2 * t);
+};
+const mix = (a: number, b: number, t: number) => a + (b - a) * t;
+
+/** A camera pose the peel follower computes: orbit target, distance along the view direction, view-offset bias. */
+interface PeelPose {
+  target: Vector3;
+  distance: number;
+  bias: Offset;
+}
+
+/** The heart-zone pose the peel follower leaves from and returns to, with its View-menu state. */
+interface PeelAnchor extends PeelPose {
+  home: boolean;
+  kind: ViewKind;
+  presetId: string | null;
+  label: string;
 }
 
 /** Stage insets as the camera should honour them: the page's published free area, none when parked. */
@@ -134,7 +172,7 @@ export function CameraRig() {
   const replaying = useRef(false);
   const readyFrames = useRef(0);
   /** The View-menu state that goes with `viewerStore.cameraReturn`. */
-  const returnView = useRef<{ kind: ViewKind; presetId: string | null; label: string; bias: Offset } | null>(null);
+  const returnView = useRef<{ kind: ViewKind; presetId: string | null; label: string; bias: Offset; zone: PeelMode } | null>(null);
   /** A vessel flown to before its centrelines loaded (re-checked when they arrive). */
   const pendingVessel = useRef<{ target: TargetId; at: number } | null>(null);
   /** Visible best view per vessel (the search raycasts, so it runs once per anatomy). */
@@ -154,6 +192,8 @@ export function CameraRig() {
   stageRef.current = stage;
   const reducedRef = useRef(reduced);
   reducedRef.current = reduced;
+  const freeOrbitRef = useRef(freeOrbit);
+  freeOrbitRef.current = freeOrbit;
 
   // Heart geometry from the manifest: target, heart box, workstation and hero directions.
   const geo = useMemo(() => {
@@ -185,15 +225,17 @@ export function CameraRig() {
     return out;
   }, [manifest]);
 
-  // Every centreline point of each vessel's own node (the LAD with its diagonals, the LCX with its marginals,
-  // the RCA), to centre the selected vessel — not its trunk's first centimetres — in the free area.
+  // Every centreline point of each target's whole tree (the LAD with its diagonals and septals, the LCX with
+  // its marginals, the RCA with its marginal, PDA and posterolateral branches), to centre the selected vessel —
+  // not its trunk's first centimetres — in the free area.
   const vesselSamples = useMemo(() => {
     const out = new Map<string, Vector3[]>();
-    for (const v of (vessels?.vessels ?? []) as unknown as { id?: string; segments: { points: number[][] }[] }[]) {
-      if (!v.id || !['LAD', 'LCX', 'RCA'].includes(v.id)) continue;
-      const pts: Vector3[] = [];
+    for (const v of (vessels?.vessels ?? []) as unknown as { id?: string; target?: string; segments: { points: number[][] }[] }[]) {
+      const t = v.target ?? v.id;
+      if (!t || !['LAD', 'LCX', 'RCA'].includes(t)) continue;
+      const pts = out.get(t) ?? [];
       for (const seg of v.segments) for (let i = 0; i < seg.points.length; i += 2) pts.push(new Vector3(seg.points[i]![0], seg.points[i]![1], seg.points[i]![2]));
-      out.set(v.id, pts);
+      out.set(t, pts);
     }
     return out;
   }, [vessels]);
@@ -281,14 +323,20 @@ export function CameraRig() {
     const onKey = (e: KeyboardEvent) => {
       controls.mouseButtons.left = e.shiftKey ? CameraControlsImpl.ACTION.TRUCK : CameraControlsImpl.ACTION.ROTATE;
     };
+    // A press that does not move the camera (a click to select, to focus the canvas before pressing a key) is
+    // not an orbit: the view becomes "Custom" only once the pose really changes.
+    let pressed: Pose | null = null;
     const onUser = () => {
       lastInteraction.current = performance.now();
-      userTouched.current = true;
       replaying.current = false;
-      if (useCameraState.getState().viewKind !== 'custom') useCameraState.getState().setView('custom');
+      pressed = poseOf(controls);
     };
     const onControl = () => {
       lastInteraction.current = performance.now();
+      if (!pressed || !movedFrom(pressed, poseOf(controls))) return;
+      pressed = null;
+      userTouched.current = true;
+      if (useCameraState.getState().viewKind !== 'custom') useCameraState.getState().setView('custom');
     };
     const onRest = () => {
       if (stageRef.current !== 'workstation') return;
@@ -296,8 +344,11 @@ export function CameraRig() {
         replaying.current = false;
         return;
       }
-      history.current.push(poseOf(controls));
+      const pose = poseOf(controls);
+      history.current.push(pose);
       useCameraState.getState().setHistory(history.current.canBack, history.current.canForward);
+      // The View label follows the actual pose: back exactly at home (by any path) reads "Home".
+      if (useCameraState.getState().viewKind !== 'home' && isHomePose(pose)) useCameraState.getState().setView('home');
     };
     window.addEventListener('keydown', onKey);
     window.addEventListener('keyup', onKey);
@@ -312,6 +363,7 @@ export function CameraRig() {
       controls.removeEventListener('control', onControl);
       controls.removeEventListener('sleep', onRest);
     };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   // Stage poses: the workstation home frames the heart in the free area; the hero sits on the torso axis.
@@ -329,9 +381,9 @@ export function CameraRig() {
     offset.current.applied = '';
     if (stage === 'workstation') {
       useCameraState.getState().setView('home');
-      // Arriving on an already opened heart or a closed chest (a deep link, a reload, the tour): frame that
-      // state straight away.
-      applyPeelMode(peelModeFor(useViewerStore.getState().explode, 'heart'), false);
+      // Arriving on an already opened heart or a closed chest (a deep link, a reload, the tour): the follower
+      // frames that state on the next frame.
+      peel.current.dirty = true;
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [stage, geo]);
@@ -370,10 +422,9 @@ export function CameraRig() {
   useEffect(() => {
     if (stage === 'hidden' || !(size.width > 0)) return;
     const t = window.setTimeout(() => {
-      if (userTouched.current) return;
       const mode = peel.current.mode;
-      if (stage === 'workstation' && mode === 'open') return fitOpenHeart(false);
-      if (stage === 'workstation' && mode === 'thorax') return fitThorax(false);
+      if (stage === 'workstation' && mode !== 'heart') return fitOpenHeart(false);
+      if (userTouched.current) return;
       const atHome = stage === 'hero' || useCameraState.getState().viewKind === 'home';
       if (atHome) flyHome(false);
     }, 120);
@@ -484,13 +535,16 @@ export function CameraRig() {
     let focus: Vector3 | null = null;
     let distance = distanceFor(direction);
     const samples = vesselSamples.get(target);
+    const walls = sceneRuntime.framing.heart;
     if (closed && samples && samples.length > 1) {
-      // The orbit target goes where the vessel's projected box is centred in the free area (two refinements
-      // of its 3D centre; the distance keeps the whole heart and the visible great vessels inside).
+      // The orbit target goes where a 60 / 40 blend of the vessel's and the walls' projected boxes is centred
+      // in the free area (two refinements; the distance keeps the whole heart and the visible great vessels
+      // inside, clear of the selection chip).
       focus = new Box3().setFromPoints(samples).getCenter(new Vector3());
-      for (let i = 0; i < 2; i += 1) {
+      for (let i = 0; i < 3; i += 1) {
         distance = focusDistance(direction, focus);
-        focus = recentre(samples, direction, focus, distance);
+        const onVessel = recentre(samples, direction, focus, distance);
+        focus = walls.length > 0 ? recentre(walls, direction, focus, distance).lerp(onVessel, VESSEL_WEIGHT) : onVessel;
       }
       distance = focusDistance(direction, focus);
     } else if (closed) {
@@ -545,17 +599,21 @@ export function CameraRig() {
       // Home frames the peel's own state from the home direction (the open heart, the thorax), and the
       // heart framing it later returns to is home.
       const p = peel.current;
-      if (p.mode !== 'heart') p.back = null;
-      if (p.mode === 'open' && stageRef.current === 'workstation') fitOpenHeart(animate, geo.direction);
-      else if (p.mode === 'thorax' && stageRef.current === 'workstation') fitThorax(animate, geo.direction);
-      else flyHome(animate);
+      if (p.mode !== 'heart' && stageRef.current === 'workstation') {
+        p.anchor = homeAnchor();
+        framePeel(geo.direction, animate);
+      } else flyHome(animate);
       state.setView('home');
     } else if (command.kind === 'preset' && command.preset) {
       const preset = PROJECTIONS.find((p) => p.id === command.preset);
       if (preset) {
         const { azimuth, polar } = toControlsAngles(preset.azimuth, preset.elevation);
         const direction = new Vector3().setFromSphericalCoords(1, polar, azimuth);
-        flyTo(direction, distanceFor(direction), animate);
+        const p = peel.current;
+        if (p.mode !== 'heart' && stageRef.current === 'workstation') {
+          p.anchor = { ...homeAnchor(), home: false, kind: 'preset', presetId: preset.id, label: preset.label };
+          framePeel(direction, animate);
+        } else flyTo(direction, distanceFor(direction), animate);
         state.setView('preset', { presetId: preset.id });
       }
     } else if (command.kind === 'focus' && command.target) {
@@ -574,19 +632,35 @@ export function CameraRig() {
         if (s.selectedStructure && !prev.selectedStructure && !s.cameraReturn) {
           const pose = poseOf(controls);
           const cam = useCameraState.getState();
-          returnView.current = { kind: cam.viewKind, presetId: cam.presetId, label: cam.viewLabel, bias: silhouetteBias.current };
+          returnView.current = { kind: cam.viewKind, presetId: cam.presetId, label: cam.viewLabel, bias: silhouetteBias.current, zone: peel.current.mode };
           s.setCameraReturn({ position: pose.position, target: pose.target });
         } else if (!s.selectedStructure && prev.selectedStructure) {
           const homeCommand = s.cameraCommand !== prev.cameraCommand && s.cameraCommand?.kind === 'home';
           const back = s.cameraReturn;
           if (back) s.setCameraReturn(null);
+          const view = returnView.current;
+          returnView.current = null;
           if (!homeCommand && back) {
-            flyToPose(back, !reducedRef.current);
-            const view = returnView.current;
-            silhouetteBias.current = view?.bias ?? ZERO_OFFSET;
-            // Back where it was: the View menu names that view again ("Home", "LAO 45"…).
-            useCameraState.getState().setView(view?.kind ?? 'custom', view ? { presetId: view.presetId, label: view.label } : {});
-            returnView.current = null;
+            const animate = !reducedRef.current;
+            const [px, py, pz] = back.position as number[];
+            const [tx, ty, tz] = back.target as number[];
+            const far = Math.hypot(px! - tx!, py! - ty!, pz! - tz!) > ORBIT_LIMITS.clamped.maxDistance + 0.05;
+            // A saved pose from another peel state (the tour's closed chest), a far thorax pose or a pose that
+            // was home is never replayed verbatim: home is re-solved for where the peel is NOW, so Esc can
+            // never restore a stale far camera while the View menu reads "Home".
+            const stale = !view || view.zone !== peel.current.mode || far;
+            if (view?.kind === 'home' || (stale && !freeOrbitRef.current)) {
+              if (peel.current.mode !== 'heart') {
+                peel.current.anchor = homeAnchor();
+                framePeel(currentDirection() ?? geo.direction, animate);
+              } else flyHome(animate);
+              useCameraState.getState().setView('home');
+            } else {
+              flyToPose(back, animate);
+              silhouetteBias.current = view?.bias ?? ZERO_OFFSET;
+              // Back where it was: the View menu names that view again ("LAO 45"…).
+              useCameraState.getState().setView(view?.kind ?? 'custom', view ? { presetId: view.presetId, label: view.label } : {});
+            }
           }
         }
       }),
@@ -594,149 +668,224 @@ export function CameraRig() {
     [],
   );
 
-  // Peel camera modes (framing.ts `peelModeFor`): the heart, the whole opaque thorax while the chest is
-  // closed again, or both opened halves. The mode follows the peel VALUE (hysteresis), never a threshold
-  // crossing, so every path ends on the framing of where the peel is; leaving the heart framing remembers the
-  // pose to come back to (home re-solves home), and a peel passing through the heart framing on its way from
-  // the thorax to the open heart (or back) makes one camera move, not three.
+  // ---- Peel camera: a FOLLOWER (V2 §5.11). While the DISPLAYED peel value (the rig's spring output,
+  // sceneRuntime.peel.e) changes, the camera pose is recomputed every frame as a continuous function of it,
+  // from the current view direction:
+  //   - opening (above rest): a blend from the heart-zone pose (the "anchor": home, a projection, a vessel
+  //     view) to the tight fit of the halves WHERE THEY ARE NOW, with a containment floor so the union of the
+  //     walls, fat, coronaries and lifted great vessels never leaves the free area — ▶ Explode, ⟲ Assemble,
+  //     the tour and a slider scrub all move the camera in lockstep with the pieces (never ahead of them);
+  //   - dissecting (below rest): a log-distance ease between the closed-chest framing (held until 0.1) and
+  //     the anchor, so the chest opens in one continuous dolly — no crash-zoom;
+  //   - back at rest: the anchor exactly (home is re-solved for the current direction) and its View label.
+  // The camera is free whenever the peel is still (orbit, zoom, selections).
   const peel = useRef<{
     mode: PeelMode;
-    back: { pose: Pose; bias: Offset; home: boolean } | null;
-    timer: number;
-    limits: number;
-    refit: number;
-  }>({ mode: 'heart', back: null, timer: 0, limits: 0, refit: 0 });
+    anchor: PeelAnchor | null;
+    active: boolean;
+    lastE: number;
+    dirty: boolean;
+  }>({ mode: 'heart', anchor: null, active: false, lastE: NaN, dirty: false });
+  /** Subsampled open samples (the follower projects them every frame) and a reusable output array. */
+  const openCache = useRef<{ version: number; src: { open: Vector3[]; openRest: Vector3[]; openWindow: (readonly [number, number])[] }; out: Vector3[] }>({
+    version: -1,
+    src: { open: [], openRest: [], openWindow: [] },
+    out: [],
+  });
+  const snapOffset = useRef(false);
+
+  const zoneOf = (e: number): PeelMode => (e > PEEL_REST + HEART_ZONE ? 'open' : e < PEEL_REST - HEART_ZONE ? 'thorax' : 'heart');
 
   const resetPeel = () => {
     const p = peel.current;
-    window.clearTimeout(p.timer);
-    window.clearTimeout(p.limits);
-    window.clearTimeout(p.refit);
-    p.mode = 'heart';
-    p.back = null;
-    p.timer = 0;
+    p.mode = zoneOf(useViewerStore.getState().explode);
+    p.anchor = null;
+    p.active = false;
+    p.lastE = NaN;
+    p.dirty = false;
   };
 
-  /**
-   * The thorax view of the peel: frame everything OPAQUE at the peel value (framing.ts `opaqueThoraxBox`: the
-   * heart plus the chest layers still solid there, as far as they travel before turning into ghosts) inside
-   * the free area, from the current angle, so no solid layer ever balloons past the lens or runs under the
-   * cards or the toolbar; re-fitted once the value settles on another detent.
-   */
-  const fitThorax = (animate: boolean, from?: Vector3) => {
+  const currentDirection = (): Vector3 | null => {
     const controls = ref.current;
+    if (!controls) return null;
+    const d = controls.getPosition(new Vector3()).sub(controls.getTarget(new Vector3()));
+    return d.lengthSq() > 1e-10 ? d.normalize() : null;
+  };
+
+  /** Screen shift that centres the heart walls' silhouette seen from `direction` at `distance` (home). */
+  const homeBias = (direction: Vector3, distance: number): Offset => {
+    const points = sceneRuntime.framing.heart;
     const { width, height } = sizeRef.current;
-    if (!controls || !(width > 0) || !(height > 0)) return;
+    if (points.length === 0 || !(width > 0) || !(height > 0)) return ZERO_OFFSET;
+    return centringBias(projectedExtent({ target: geo.target, direction, fov: CAMERA_FOV, width, height }, points, distance));
+  };
+
+  const homeAnchor = (): PeelAnchor => ({ target: geo.target.clone(), distance: 0, bias: ZERO_OFFSET, home: true, kind: 'home', presetId: null, label: 'Home' });
+
+  /** The current camera pose and View state as the follower's anchor. */
+  const captureAnchor = (): PeelAnchor => {
+    const controls = ref.current;
+    const cam = useCameraState.getState();
+    if (!controls || cam.viewKind === 'home') return homeAnchor();
+    const target = controls.getTarget(new Vector3());
+    return {
+      target,
+      distance: controls.getPosition(new Vector3()).distanceTo(target),
+      bias: silhouetteBias.current,
+      home: false,
+      kind: cam.viewKind,
+      presetId: cam.presetId,
+      label: cam.viewLabel,
+    };
+  };
+
+  /** The anchor's pose from `direction` (home is re-solved: 62 % of the free height from that direction). */
+  const anchorPose = (anchor: PeelAnchor, direction: Vector3): PeelPose => {
+    if (!anchor.home) return anchor;
+    const distance = distanceFor(direction, 'workstation');
+    return { target: geo.target.clone(), distance, bias: homeBias(direction, distance) };
+  };
+
+  /** The closed chest, everything opaque at Closed, framed at THORAX_SHARE of the free area. */
+  const thoraxPose = (direction: Vector3): PeelPose => {
+    const { width, height } = sizeRef.current;
     const viewer = useViewerStore.getState();
-    const box =
-      opaqueThoraxBox(manifest, viewer.explode, (id) => viewer.layerVisibility[id] ?? id !== 'lungs') ??
-      new Box3(new Vector3(-3.6, -3.8, -1.3), new Vector3(3.2, 2.6, 2.1));
-    const centre = box.getCenter(new Vector3());
-    const direction = from?.clone() ?? controls.getPosition(new Vector3()).sub(controls.getTarget(new Vector3())).normalize();
+    const box = opaqueThoraxBox(manifest, 0, (id) => viewer.layerVisibility[id] ?? true) ?? new Box3(new Vector3(-3.6, -3.8, -1.3), new Vector3(3.2, 2.6, 2.1));
+    const target = box.getCenter(new Vector3());
     const free = freeArea(width, height, insetsFor('workstation'));
-    const d = framingDistance(
-      { box, target: centre, direction, fov: CAMERA_FOV, width, height, freeWidth: free.width, freeHeight: free.height, share: THORAX_SHARE },
+    const distance = framingDistance(
+      { box, target, direction, fov: CAMERA_FOV, width, height, freeWidth: free.width, freeHeight: free.height, share: THORAX_SHARE },
       THORAX_DISTANCE,
       THORAX_MAX_DISTANCE,
     );
-    window.clearTimeout(peel.current.limits);
-    setThoraxView(true);
-    controls.maxDistance = Math.max(controls.maxDistance, d);
-    silhouetteBias.current = ZERO_OFFSET;
-    const pos = centre.clone().addScaledVector(direction, d);
-    void controls.setLookAt(pos.x, pos.y, pos.z, centre.x, centre.y, centre.z, animate);
-    invalidate();
+    return { target, distance, bias: ZERO_OFFSET };
   };
 
-  /** Frame the opened heart (both halves, the fat and the coronaries riding them) from the current angle. */
-  const fitOpenHeart = (animate: boolean, from?: Vector3) => {
-    const controls = ref.current;
-    const points = sceneRuntime.framing.open;
-    const { width, height } = sizeRef.current;
-    if (!controls || points.length === 0 || !(width > 0) || !(height > 0)) return;
-    const box = new Box3().setFromPoints(points);
-    const centre = box.getCenter(new Vector3());
-    const direction = from?.clone() ?? controls.getPosition(new Vector3()).sub(controls.getTarget(new Vector3())).normalize();
-    const free = freeArea(width, height, insetsFor('workstation'));
-    const input = { box, points, target: centre, direction, fov: CAMERA_FOV, width, height, freeWidth: free.width, freeHeight: free.height };
-    const l = useCameraState.getState().freeOrbit ? ORBIT_LIMITS.free : ORBIT_LIMITS.clamped;
-    const d = Math.min(
-      l.maxDistance,
-      Math.max(
-        l.minDistance,
-        framingDistance({ ...input, share: 1 - 2 * OPEN_FIT_MARGIN, keep: points, keepMargin: OPEN_FIT_MARGIN * Math.min(free.width, free.height) }),
-      ),
-    );
-    const e = projectedExtent(input, points, d);
-    silhouetteBias.current = { x: -(e.right - e.left) / 2, y: -(e.down - e.up) / 2 };
-    const pos = centre.clone().addScaledVector(direction, d);
-    void controls.setLookAt(pos.x, pos.y, pos.z, centre.x, centre.y, centre.z, animate);
-    invalidate();
-  };
-
-  /** Take the framing of `mode` (no-op when it is already the current one). */
-  const applyPeelMode = (mode: PeelMode, animate: boolean) => {
-    const controls = ref.current;
-    const p = peel.current;
-    window.clearTimeout(p.timer);
-    p.timer = 0;
-    if (!controls || mode === p.mode) return;
-    if (p.mode === 'heart' && !p.back) {
-      const cam = useCameraState.getState();
-      p.back = { pose: poseOf(controls), bias: silhouetteBias.current, home: cam.viewKind === 'home' };
-    }
-    p.mode = mode;
-    if (mode === 'open') fitOpenHeart(animate);
-    else if (mode === 'thorax') fitThorax(animate);
-    else {
-      const back = p.back;
-      p.back = null;
-      if (!back || back.home) flyHome(animate);
-      else {
-        silhouetteBias.current = back.bias;
-        flyToPose(back.pose, animate);
+  /** Open samples, every other one (the follower projects them each frame while the heart opens). */
+  const openSamples = () => {
+    const c = openCache.current;
+    const f = sceneRuntime.framing;
+    if (c.version !== f.version) {
+      c.version = f.version;
+      c.src = { open: [], openRest: [], openWindow: [] };
+      for (let i = 0; i < f.open.length && i < f.openRest.length; i += 2) {
+        c.src.open.push(f.open[i]!);
+        c.src.openRest.push(f.openRest[i]!);
+        c.src.openWindow.push(f.openWindow[i] ?? [0.7, 1]);
       }
     }
-    // Back to the orbit limits once the glide out of the thorax has landed (lowering them mid-glide would
-    // clamp it).
-    if (mode !== 'thorax') {
-      window.clearTimeout(p.limits);
-      p.limits = window.setTimeout(() => peel.current.mode !== 'thorax' && setThoraxView(false), 1400);
-    }
+    return c;
   };
 
-  useEffect(
-    () =>
-      useViewerStore.subscribe((s, prev) => {
-        if (!ref.current || s.explode === prev.explode || s.stage !== 'workstation') return;
-        const p = peel.current;
-        const next = peelModeFor(s.explode, p.mode);
-        window.clearTimeout(p.refit);
-        if (next === p.mode) {
-          window.clearTimeout(p.timer);
-          p.timer = 0;
-          // Another detent inside the thorax view: frame what is opaque there once the value has settled.
-          if (next === 'thorax' && !userTouched.current) {
-            p.refit = window.setTimeout(() => peel.current.mode === 'thorax' && fitThorax(!reducedRef.current), THORAX_REFIT_MS);
-          }
-          return;
-        }
-        if (next !== 'heart') {
-          applyPeelMode(next, !reducedRef.current);
-          return;
-        }
-        // Into the heart framing: only once the peel has stayed there (it may be passing through).
-        if (p.timer) return;
-        p.timer = window.setTimeout(() => {
-          peel.current.timer = 0;
-          const v = useViewerStore.getState();
-          if (v.stage !== 'workstation') return;
-          applyPeelMode(peelModeFor(v.explode, peel.current.mode), !reducedRef.current);
-        }, reducedRef.current ? 0 : HEART_SETTLE_MS);
-      }),
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    [],
-  );
+  /** The camera pose for displayed peel value `e` from `direction` (see the follower above). */
+  const peelPose = (e: number, direction: Vector3, anchor: PeelAnchor): PeelPose => {
+    const A = anchorPose(anchor, direction);
+    const zone = zoneOf(e);
+    const { width, height } = sizeRef.current;
+    if (zone === 'heart' || !(width > 0) || !(height > 0)) return A;
+    const free = freeArea(width, height, insetsFor('workstation'));
+    const view = { direction, fov: CAMERA_FOV, width, height, freeWidth: free.width, freeHeight: free.height };
+    if (zone === 'open') {
+      const c = openSamples();
+      if (c.src.open.length === 0) return A;
+      const points = openPointsAt(c.src, e, c.out);
+      const s = smooth((e - PEEL_REST) / (1 - PEEL_REST));
+      const centre = new Box3().setFromPoints(points).getCenter(new Vector3());
+      const margin = OPEN_FIT_MARGIN * Math.min(free.width, free.height);
+      const fitD = fitCentredDistance({ ...view, target: centre, margin }, points);
+      const fitBias = centringBias(projectedExtent({ ...view, target: centre }, points, fitD));
+      const target = A.target.clone().lerp(centre, s);
+      const bias = { x: mix(A.bias.x, fitBias.x, s), y: mix(A.bias.y, fitBias.y, s) };
+      const eased = Math.exp(mix(Math.log(A.distance), Math.log(fitD), s));
+      // Containment floor: the margin grows with the opening (at rest the heart framing itself holds).
+      const floor = containDistance({ ...view, target, bias, margin: mix(-40, margin, s) }, points);
+      return { target, distance: Math.max(eased, floor), bias };
+    }
+    const T = thoraxPose(direction);
+    const s = clamp01((e - THORAX_FULL_UNTIL) / (PEEL_REST - THORAX_FULL_UNTIL));
+    return {
+      target: T.target.clone().lerp(A.target, s),
+      distance: Math.exp(mix(Math.log(T.distance), Math.log(A.distance), s)),
+      bias: { x: mix(0, A.bias.x, s), y: mix(0, A.bias.y, s) },
+    };
+  };
+
+  /** Put the camera on `pose` from `direction` (animated for commands; per frame the follower snaps). */
+  const applyPeelPose = (pose: PeelPose, direction: Vector3, animate: boolean) => {
+    const controls = ref.current;
+    if (!controls) return;
+    const clampMax = (useCameraState.getState().freeOrbit ? ORBIT_LIMITS.free : ORBIT_LIMITS.clamped).maxDistance;
+    if (pose.distance > clampMax) {
+      // Beyond the orbit clamp (the chest): lift it for the move (the prop follows on the next render).
+      controls.maxDistance = Math.max(controls.maxDistance, pose.distance + 0.01);
+      setThoraxView(true);
+    }
+    silhouetteBias.current = pose.bias;
+    snapOffset.current = !animate;
+    const pos = pose.target.clone().addScaledVector(direction, pose.distance);
+    void controls.setLookAt(pos.x, pos.y, pos.z, pose.target.x, pose.target.y, pose.target.z, animate);
+    if (!animate) controls.update(0);
+    invalidate();
+  };
+
+  /** Frame the peel's current state from `direction` (Home / a projection while the peel is not at rest). */
+  const framePeel = (direction: Vector3, animate: boolean) => {
+    const p = peel.current;
+    p.anchor ??= captureAnchor();
+    applyPeelPose(peelPose(sceneRuntime.peel.e, direction, p.anchor), direction, animate);
+  };
+
+  /** Per frame (workstation): follow the displayed peel value while it moves. */
+  const followPeel = () => {
+    const controls = ref.current;
+    const p = peel.current;
+    if (!controls) return;
+    const e = sceneRuntime.peel.e;
+    const changed = !(Math.abs(e - p.lastE) < 1e-6) || p.dirty;
+    p.lastE = e;
+    p.dirty = false;
+    const zone = zoneOf(e);
+    if (!changed && !p.active) return;
+    if (!p.active && zone === 'heart') {
+      p.mode = zone;
+      return;
+    }
+    if (!p.active) {
+      p.active = true;
+      p.anchor ??= captureAnchor();
+    }
+    const direction = currentDirection() ?? geo.direction;
+    applyPeelPose(peelPose(e, direction, p.anchor!), direction, false);
+    p.mode = zone;
+    const settled = !changed && Math.abs(e - useViewerStore.getState().explode) < 1e-4;
+    if (!settled) return;
+    p.active = false;
+    if (zone !== 'heart') return;
+    // Home again: the anchor's View state (home only if the direction is still home's), the orbit clamp back.
+    const anchor = p.anchor!;
+    p.anchor = null;
+    const cam = useCameraState.getState();
+    if (anchor.home) cam.setView(direction.dot(geo.direction) > 0.9995 ? 'home' : 'custom');
+    else cam.setView(anchor.kind, { presetId: anchor.presetId, label: anchor.label });
+    controls.maxDistance = (cam.freeOrbit ? ORBIT_LIMITS.free : ORBIT_LIMITS.clamped).maxDistance;
+    setThoraxView(false);
+  };
+
+  /** True when `pose` is the workstation home pose (the View label follows the actual pose). */
+  const isHomePose = (pose: Pose): boolean => {
+    if (peel.current.mode !== 'heart') return false;
+    const distance = distanceFor(geo.direction, 'workstation');
+    const home = geo.target.clone().addScaledVector(geo.direction, distance);
+    const t = geo.target;
+    return poseDistance(pose, { position: [home.x, home.y, home.z], target: [t.x, t.y, t.z] }) < 0.02;
+  };
+
+  /** Re-frame the peel's current state (a resize while the heart is open or the chest closed). */
+  const fitOpenHeart = (animate: boolean, from?: Vector3) => {
+    const direction = from?.clone() ?? currentDirection() ?? geo.direction;
+    framePeel(direction, animate);
+  };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(() => () => resetPeel(), []);
 
   // Back / Forward through the settled poses.
@@ -769,8 +918,10 @@ export function CameraRig() {
       const animate = !reduced && useCameraState.getState().firstFrame;
       const mode = st === 'workstation' ? peel.current.mode : 'heart';
       if (st !== 'hidden' && atHome && !userTouched.current && mode === 'heart') flyHome(animate);
-      else if (mode === 'open' && !userTouched.current) fitOpenHeart(animate);
+      else if (mode !== 'heart') peel.current.dirty = true;
     }
+
+    if (stage === 'workstation') followPeel();
 
     // View offset: the orbit target sits at the centre of the free area; glides over `flyout`.
     const { width, height } = size;
@@ -782,6 +933,12 @@ export function CameraRig() {
       off.from = off.current;
       off.to = goal;
       off.t0 = now;
+    }
+    // The peel follower moves the camera in lockstep with the pieces: its bias is applied at once, not glided.
+    if (snapOffset.current) {
+      snapOffset.current = false;
+      off.from = goal;
+      off.to = goal;
     }
     off.current = reduced || off.applied === '' ? goal : glide(off.from, off.to, now - off.t0);
     const key = `${width}x${height}:${off.current.x.toFixed(2)},${off.current.y.toFixed(2)}`;

@@ -14,8 +14,10 @@
  *                          multiply by `solid` so they vanish with isolate / ghost / assembly.
  *   sceneRuntime.framing   surface samples for the camera's framing (world = rest frame): the heart walls
  *                          at rest (`heart`), the visible parts of the great vessels (`keep`, never cut by
- *                          the stage edge) and the whole opened heart at full explode (`open`). `version`
- *                          bumps when a new anatomy publishes them.
+ *                          the stage edge) and the whole opened heart at full explode (`open`), with each
+ *                          open sample's rest position (`openRest`) and peel window (`openWindow`) so the
+ *                          camera can frame any intermediate state. `version` bumps when a new anatomy
+ *                          publishes them.
  */
 import type { Plane, Vector3 } from 'three';
 import { ASSEMBLY_DURATION, ASSEMBLY_IGNITE_AT } from '../anatomy/assembly';
@@ -27,7 +29,14 @@ export const sceneRuntime = {
   beat: { phase: 0, v: 0, a: 0, bpm: 72 },
   nodes: {} as Record<string, { solid: number; ghost: number }>,
   sectionPlanes: [] as Plane[],
-  framing: { heart: [] as Vector3[], keep: [] as Vector3[], open: [] as Vector3[], version: 0 },
+  framing: {
+    heart: [] as Vector3[],
+    keep: [] as Vector3[],
+    open: [] as Vector3[],
+    openRest: [] as Vector3[],
+    openWindow: [] as (readonly [number, number])[],
+    version: 0,
+  },
 };
 
 export type SceneRuntime = typeof sceneRuntime;

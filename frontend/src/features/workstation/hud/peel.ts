@@ -55,11 +55,12 @@ export function peelValueText(value: number): string {
 /**
  * Peel timings. ▶ Explode from rest is heart-centric and unhurried (the owner's "separates and comes back"):
  * the great vessels lift, then the anterior half swings open over PEEL_OPEN_MS while the thorax stays
- * ghosted — one camera move. From a closed chest the whole dissection plays (PEEL_FORWARD_MS for 0 → 1).
+ * ghosted — one camera move. From a closed chest the dissection plays first (PEEL_FORWARD_MS for 0 → rest:
+ * the ribs swing open, the lungs part, the camera eases in to the heart), then the heart opens.
  * ⟲ Assemble takes PEEL_ASSEMBLE_MS from the open heart back to rest (scaled by the distance).
  */
 export const PEEL_OPEN_MS = 2400;
-export const PEEL_FORWARD_MS = 2800;
+export const PEEL_FORWARD_MS = 2600;
 export const PEEL_ASSEMBLE_MS = 1500;
 /** Shortest segment (a nudge from just below Open heart still reads as motion). */
 const MIN_SEGMENT_MS = 500;
@@ -68,12 +69,14 @@ export interface PeelSegment {
   from: number;
   to: number;
   ms: number;
+  /** Easing of the segment: the LUMEN peel curve (default), or a gentler sine for the chest dissection. */
+  ease?: 'peel' | 'sine';
 }
 
 /**
  * ▶ Explode: from rest (or anywhere in the heart's range) straight to the open heart; from a closed chest, the
- * whole dissection (skin, ribs, lungs, then the heart) in one sweep — never closing the chest first.
- * ⟲ Assemble: back to rest.
+ * whole dissection (skin, ribs, lungs), a breath at the heart, then the heart opens — never closing the chest
+ * first. ⟲ Assemble: back to rest.
  */
 export function peelPlan(current: number, to: 'dissect' | 'assemble'): PeelSegment[] {
   if (to === 'assemble') {
@@ -82,21 +85,28 @@ export function peelPlan(current: number, to: 'dissect' | 'assemble'): PeelSegme
     return [{ from: current, to: PEEL_REST, ms: Math.max(MIN_SEGMENT_MS, Math.round((PEEL_ASSEMBLE_MS * span) / (1 - PEEL_REST))) }];
   }
   if (current >= 1 - 1e-3) return [];
-  const ms =
-    current >= PEEL_REST - 0.02
-      ? (PEEL_OPEN_MS * (1 - current)) / (1 - PEEL_REST)
-      : PEEL_FORWARD_MS * (1 - current);
-  return [{ from: current, to: 1, ms: Math.max(MIN_SEGMENT_MS, Math.round(ms)) }];
+  const open = (from: number): PeelSegment => ({
+    from,
+    to: 1,
+    ms: Math.max(MIN_SEGMENT_MS, Math.round((PEEL_OPEN_MS * (1 - from)) / (1 - PEEL_REST))),
+  });
+  if (current >= PEEL_REST - 0.02) return [open(current)];
+  const chest = Math.max(MIN_SEGMENT_MS, Math.round((PEEL_FORWARD_MS * (PEEL_REST - current)) / PEEL_REST));
+  // The chest segment eases with a sine: the camera's dolly follows the peel value, and the peel curve's steep
+  // middle would bunch it into a crash-zoom.
+  return [{ from: current, to: PEEL_REST, ms: chest, ease: 'sine' }, open(PEEL_REST)];
 }
 
 /** LUMEN `peel` easing, cubic-bezier(.65,0,.35,1) ≈ ease-in-out cubic. */
 export const peelEase = (t: number): number => (t < 0.5 ? 4 * t * t * t : 1 - (-2 * t + 2) ** 3 / 2);
+/** Sine in-out: a gentler start and a slower middle than `peelEase`. */
+export const sineEase = (t: number): number => (1 - Math.cos(Math.PI * Math.min(1, Math.max(0, t)))) / 2;
 
 /** Peel value at `elapsed` ms into a plan (and whether it is finished). */
 export function peelAt(plan: readonly PeelSegment[], elapsed: number): { value: number; done: boolean } {
   let t = elapsed;
   for (const seg of plan) {
-    if (t < seg.ms) return { value: seg.from + (seg.to - seg.from) * peelEase(t / seg.ms), done: false };
+    if (t < seg.ms) return { value: seg.from + (seg.to - seg.from) * (seg.ease === 'sine' ? sineEase : peelEase)(t / seg.ms), done: false };
     t -= seg.ms;
   }
   const last = plan[plan.length - 1];

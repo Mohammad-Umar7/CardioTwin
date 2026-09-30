@@ -45,11 +45,11 @@ import {
 } from './classify';
 import {
   OPENING_WALL,
-  PEEL_SOLID_UNTIL,
   PEEL_SPRING_OMEGA,
   buildExplodeSpecs,
   explodeDelta,
   heartFrameFrom,
+  peeledAt,
   riderDelta,
   springStep,
   windowProgress,
@@ -159,6 +159,8 @@ export const GREAT_VESSEL_CLIP = { centre: [0, 0.05, -0.05] as const, radius: 0.
  * the diaphragm keep a trace of the thorax at the frame's edges.
  */
 const workstationGhost = (kind: TissueKind) => (kind === 'bone' || kind === 'cartilage' ? 0.15 : 0.3);
+/** Workstation skin ghost at Closed: the torso's contour must read ("Skin" is on in Layers). */
+const SKIN_GHOST = 0.85;
 /** Landing hero lung ghost strength: a trace of context, never a smear behind the copy or the cards. */
 const HERO_LUNG_GHOST = 0.4;
 /** Peel value from which the chest counts as set aside (the camera's thorax framing ends just below it). */
@@ -487,6 +489,10 @@ export class AnatomyRig {
     const heart: Vector3[] = [];
     const keep: Vector3[] = [];
     const open: Vector3[] = [];
+    // Each open sample's rest position and peel window, so the camera can frame the heart at ANY peel value
+    // while it opens or closes (framing.ts `openPointsAt`), not only at full explode.
+    const openRest: Vector3[] = [];
+    const openWindow: (readonly [number, number])[] = [];
     const restWorld = new Matrix4();
     const openDelta = new Matrix4();
     const v = new Vector3();
@@ -523,6 +529,12 @@ export class AnatomyRig {
         if (spec && wall) riderDelta(spec, wall, 1, 1, openDelta);
         else if (spec) explodeDelta(spec, 1, openDelta);
         else openDelta.identity();
+        const win = (wall ?? spec)?.window ?? ([0.7, 1] as const);
+        const push = (p: Vector3) => {
+          openRest.push(p.clone());
+          open.push(p.clone().applyMatrix4(openDelta));
+          openWindow.push(win);
+        };
         const clip = k === 'pulmonaryArtery' || k === 'pulmonaryVeins' ? PULMONARY_CLIP : GREAT_VESSEL_CLIP;
         const along = (entry.mesh.geometry as BufferGeometry).getAttribute('_dist_heart');
         const fade = ALONG_FADE[k];
@@ -531,11 +543,10 @@ export class AnatomyRig {
           restWorld.copy(rootInverse).multiply(entry.mesh.matrixWorld);
           const step = Math.max(1, Math.floor(pos.count / 120));
           const limit = fade[0] + 0.35 * (fade[1] - fade[0]);
-          for (let i = 0; i < pos.count; i += step)
-            if (along.getX(i) < limit) open.push(v.fromBufferAttribute(pos, i).applyMatrix4(restWorld).clone().applyMatrix4(openDelta));
+          for (let i = 0; i < pos.count; i += step) if (along.getX(i) < limit) push(v.fromBufferAttribute(pos, i).applyMatrix4(restWorld));
         } else
           sample(entry, k === 'myocardium' ? 500 : 120, (p) => {
-            if (!vessel || visibleIn(clip, p)) open.push(p.clone().applyMatrix4(openDelta));
+            if (!vessel || visibleIn(clip, p)) push(p);
           });
       }
     }
@@ -543,6 +554,8 @@ export class AnatomyRig {
     f.heart = heart;
     f.keep = keep;
     f.open = open;
+    f.openRest = openRest;
+    f.openWindow = openWindow;
     f.version += 1;
   }
 
@@ -811,9 +824,10 @@ export class AnatomyRig {
 
       // ---- visibility targets
       const outer = OUTER_KINDS.has(entry.kind);
-      const peeled = outer && kPeel >= PEEL_SOLID_UNTIL;
-      const layerDefault = entry.layerId === 'lungs' ? inp.stage === 'hero' : true;
-      const layerVisible = inp.layerVisibility[entry.layerId] ?? layerDefault;
+      const peeled = outer && peeledAt(entry.layerId, this.e, entry.node);
+      // Every layer defaults to visible: the lungs are solid in the closed chest and part during the
+      // dissection; at the rest detent they are set aside with the rest of the thorax (chestAway below).
+      const layerVisible = inp.layerVisibility[entry.layerId] ?? true;
       const isVessel = entry.kind === 'coronary' || entry.kind === 'leftMain';
       const selectedVessel = !!sel && (entry.target === sel || (entry.kind === 'leftMain' && (sel === 'LAD' || sel === 'LCX')));
       const isolateMember = entry.kind === 'myocardium' || selectedVessel;
@@ -836,8 +850,9 @@ export class AnatomyRig {
         solidT = 0;
         ghostT = 1;
       } else if (entry.kind === 'skin') {
+        // The closed chest shows the torso's contour (a clear fresnel ghost), fading as the skin peels.
         solidT = 0;
-        ghostT = inp.ghostLayers || kPeel < 0.5 ? (1 - 0.85 * kPeel) * (inp.stage === 'workstation' ? workstationGhost(entry.kind) : 1) : 0;
+        ghostT = inp.ghostLayers || kPeel < 0.5 ? (1 - 0.85 * kPeel) * (inp.stage === 'workstation' ? SKIN_GHOST : 1) : 0;
       } else if (peeled || (entry.kind === 'lung' && inp.look === 'clinical')) {
         solidT = 0;
         ghostT = peeled && !inp.ghostLayers ? 0 : inp.stage === 'workstation' ? workstationGhost(entry.kind) : HERO_LUNG_GHOST;
@@ -865,6 +880,15 @@ export class AnatomyRig {
       const solidVisible = entry.solidAmt * entry.assemblyReveal;
       const material = entry.mesh.material as TissueMaterial;
       material.userData.ct.uniforms.uReveal.value = solidVisible;
+      // A chest layer fades with alpha only WHILE it fades: fully solid it is an opaque draw (depth-sorted
+      // with the heart, never behind a transparent great vessel by object-centre sorting).
+      if (material.userData.ct.flags.fadeAlpha && material.opacity >= 0.999) {
+        const blend = solidVisible < 0.995;
+        if (material.transparent !== blend) {
+          material.transparent = blend;
+          material.needsUpdate = true;
+        }
+      }
       // Hide the solid by making the node's own draw invisible while keeping its ghost child: a zero reveal
       // discards every fragment, so switch the material's visibility rather than the object's.
       material.visible = solidVisible > 0.002;
