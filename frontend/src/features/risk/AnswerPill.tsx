@@ -43,6 +43,14 @@ export function AnswerPill({ className }: AnswerPillProps) {
           className={cn('absolute right-[var(--stage-inset)] top-[var(--stage-inset)]', className)}
         >
           <StageCard as="div" shape="chip" region="answer-pill" enterDelay={120} className="h-10 gap-3 pl-1.5 pr-1.5">
+            {/* The numbers below are hypothetical while inputs are edited: say so here too (the what-if pill
+                and the stage frame are hidden in focus mode). */}
+            {view.edits > 0 && (
+              <span className="ml-1.5 inline-flex items-center gap-1.5 whitespace-nowrap text-label font-medium text-primary">
+                <span aria-hidden className={cn('size-1.5 rounded-full', view.comparing ? 'bg-secondary' : 'bg-accent')} />
+                {view.comparing ? 'Recorded' : `What-if · ${view.edits} ${view.edits === 1 ? 'change' : 'changes'}`}
+              </span>
+            )}
             <Tooltip content="Back to the Risk card">
               <button
                 type="button"
