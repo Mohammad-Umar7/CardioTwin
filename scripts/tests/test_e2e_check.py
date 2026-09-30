@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import copy
+import http.client
 import json
 import socket
 import threading
@@ -229,3 +230,60 @@ def test_unreachable_server_exits_with_2(capsys: pytest.CaptureFixture[str]) -> 
         port = probe.getsockname()[1]
     assert e2e.main(["--url", f"http://127.0.0.1:{port}", "--latency-n", "0", "--timeout", "2"]) == 2
     assert "unreachable" in capsys.readouterr().err
+
+
+class _FlakyConnection:
+    """Stands in for ``http.client.HTTPConnection``: the first request fails as a dropped keep-alive socket does."""
+
+    def __init__(self, error: BaseException | None, calls: list[str]) -> None:
+        self.error, self.calls = error, calls
+
+    def request(self, method: str, url: str, body: bytes | None = None, headers: dict[str, str] | None = None) -> None:
+        self.calls.append(f"{method} {url}")
+        if self.error is not None:
+            raise self.error
+
+    def getresponse(self) -> Any:
+        class _Response:
+            status = 200
+
+            def read(self) -> bytes:
+                return b'{"status": "ok"}'
+
+            def getheaders(self) -> list[tuple[str, str]]:
+                return [("Content-Type", "application/json")]
+
+        return _Response()
+
+    def close(self) -> None:
+        return None
+
+
+@pytest.mark.parametrize(
+    "error",
+    [
+        ConnectionAbortedError(10053, "aborted"),
+        ConnectionResetError(),
+        BrokenPipeError(),
+        http.client.RemoteDisconnected(),
+    ],
+)
+def test_a_dropped_keep_alive_socket_is_retried_once(monkeypatch: pytest.MonkeyPatch, error: BaseException) -> None:
+    client = e2e.HttpClient("http://127.0.0.1:9", timeout=1.0)
+    calls: list[str] = []
+    connections = iter([_FlakyConnection(error, calls), _FlakyConnection(None, calls)])
+    monkeypatch.setattr(client, "_connection", lambda: next(connections))
+    response = client.get("/api/health")
+    assert response.status == 200 and response.json() == {"status": "ok"}
+    assert calls == ["GET /api/health", "GET /api/health"]
+
+
+def test_a_second_drop_reports_the_server_unreachable(monkeypatch: pytest.MonkeyPatch) -> None:
+    client = e2e.HttpClient("http://127.0.0.1:9", timeout=1.0)
+    calls: list[str] = []
+    monkeypatch.setattr(
+        client, "_connection", lambda: _FlakyConnection(ConnectionAbortedError(10053, "aborted"), calls)
+    )
+    with pytest.raises(e2e.ServerUnreachable, match="connection dropped"):
+        client.get("/api/health")
+    assert len(calls) == 2

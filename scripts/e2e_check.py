@@ -142,6 +142,7 @@ class HttpClient:
             except (
                 http.client.RemoteDisconnected,
                 ConnectionResetError,
+                ConnectionAbortedError,  # Windows (WinError 10053) when uvicorn closed an idle keep-alive socket
                 BrokenPipeError,
                 http.client.CannotSendRequest,
             ) as exc:
