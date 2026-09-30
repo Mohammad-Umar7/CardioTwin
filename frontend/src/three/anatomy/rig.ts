@@ -128,6 +128,10 @@ export interface RigOptions {
 }
 
 const LAMBDA_FADE = 11;
+/** A frame gap longer than this during the assembly means the page was not on screen: finish it. */
+const ASSEMBLY_GAP_S = 0.5;
+/** First frames of the assembly (program compilation, first texture uploads) never count as slow. */
+const ASSEMBLY_WARMUP_FRAMES = 6;
 const LAMBDA_SECTION = 6;
 /** Section plane parked far away (nothing clipped) — the plane stays attached so no program recompiles. */
 const SECTION_OFF = 3;
@@ -191,6 +195,8 @@ export class AnatomyRig {
   private e: number;
   private ev = 0;
   private sectionS = SECTION_OFF;
+  private assemblyTicks = 0;
+  private frameEma = 1 / 60;
   private look: SceneLook;
   private tier: QualityTier;
   private readonly beatM = new Matrix4();
@@ -476,17 +482,29 @@ export class AnatomyRig {
     let moving = false;
     FRAME_UNIFORMS.uCtFrame.value = (FRAME_UNIFORMS.uCtFrame.value + 1) % 64;
 
-    // Assembly clock (only while the canvas is on a page).
+    // Assembly clock (only while the canvas is on a page). It runs on wall-clock time — a slow or throttled
+    // frame loop never stretches it — and it never rests half-materialised: after the warm-up frames (which
+    // compile the programs and may stall), a gap longer than ASSEMBLY_GAP_S (the page was not composited,
+    // nobody saw it) finishes it, and a sustained frame rate under 20 fps skips to the end (SKIP_FINISH_S).
     if (inp.stage !== 'hidden') {
       if (inp.reduced) this.assembly.finish();
-      const wasDone = this.assembly.done;
-      this.assembly.tick(dt);
-      if (!wasDone) moving = true;
+      if (!this.assembly.done) {
+        const warm = this.assemblyTicks++ < ASSEMBLY_WARMUP_FRAMES;
+        const raw = warm ? Math.min(Math.max(0, inp.dt), 1 / 30) : Math.max(0, inp.dt);
+        if (raw > ASSEMBLY_GAP_S) this.assembly.finish();
+        else {
+          this.frameEma = this.frameEma * 0.8 + raw * 0.2;
+          if (!warm && this.frameEma > 1 / 20) this.assembly.skip();
+          this.assembly.tick(raw);
+        }
+        moving = true;
+      }
     }
     const at = this.assembly.t;
     sceneRuntime.assembly.t = at;
     sceneRuntime.assembly.done = this.assembly.done;
     sceneRuntime.assembly.playing = !this.assembly.done && inp.stage !== 'hidden';
+    FRAME_UNIFORMS.uCtEdgeGain.value = sceneRuntime.assembly.playing ? 1 : 0;
 
     // Peel spring (critically damped, no overshoot).
     if (inp.reduced) {

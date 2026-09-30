@@ -460,11 +460,12 @@ export function createTissueMaterial(o: TissueOptions): TissueMaterial {
     uBeatMode: { value: o.beatMode },
     uReveal: { value: 1 },
     uInflate: { value: o.inflate ?? 0 },
+    // The materialise front samples the shared noise volume on every material (shaders.ts MATERIALISE).
+    uNoise3D: { value: getNoiseTexture() },
   };
   if (L.detail) {
     const fibre = L.detail.fibre;
     Object.assign(uniforms, {
-      uNoise3D: { value: getNoiseTexture() },
       uDetailFreq: { value: L.detail.freq },
       uBump: { value: L.detail.bump * (maps?.normalMap ? 0.35 : 1) },
       uColorVar: { value: L.detail.colorVar * (maps?.map ? 0.4 : 1) },

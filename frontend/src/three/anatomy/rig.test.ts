@@ -245,3 +245,36 @@ describe('anatomy rig: baked textures and picking', () => {
     expect(node('Lung_L').pickable).toBe(false);
   });
 });
+
+describe('anatomy rig: assembly on a time budget', () => {
+  it('finishes on wall-clock time at 4 fps instead of stalling half-materialised', () => {
+    const { rig } = makeRig(true);
+    let wall = 0;
+    for (let i = 0; i < 40 && !rig.assembly.done; i += 1) {
+      rig.update(inputs({ reduced: false, dt: 0.25 }));
+      wall += 0.25;
+    }
+    expect(rig.assembly.done).toBe(true);
+    // Warm-up frames plus the sub-20-fps skip: well under the 2.2 s choreography.
+    expect(wall).toBeLessThanOrEqual(2.5);
+  });
+
+  it('finishes at once when the page was not on screen (a long frame gap)', () => {
+    const { rig } = makeRig(true);
+    for (let i = 0; i < 8; i += 1) rig.update(inputs({ reduced: false, dt: 1 / 60 }));
+    expect(rig.assembly.done).toBe(false);
+    rig.update(inputs({ reduced: false, dt: 3 }));
+    expect(rig.assembly.done).toBe(true);
+  });
+
+  it('plays in full at 60 fps', () => {
+    const { rig } = makeRig(true);
+    let frames = 0;
+    while (!rig.assembly.done && frames < 600) {
+      rig.update(inputs({ reduced: false, dt: 1 / 60 }));
+      frames += 1;
+    }
+    expect(frames).toBeGreaterThan(100);
+    expect(frames).toBeLessThan(160);
+  });
+});

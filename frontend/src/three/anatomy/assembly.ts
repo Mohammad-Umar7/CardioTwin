@@ -72,7 +72,7 @@ export function settle(u: number): number {
 export interface StagePose {
   /** Multiple of the fly-in vector still to travel (0 = at rest). */
   offset: number;
-  /** Materialisation 0..1 (dithered dissolve for opaque tissue, alpha for ghosts). */
+  /** Materialisation 0..1 (world-space noise front for opaque tissue, alpha for ghosts). */
   reveal: number;
 }
 
@@ -109,9 +109,10 @@ export class AssemblyClock {
     return clamp01(this.t / ASSEMBLY_DURATION);
   }
 
+  /** Advance by `dt` seconds of wall-clock time (a frame of up to 0.5 s counts in full). */
   tick(dt: number): void {
     if (this.done) return;
-    this.t = Math.min(ASSEMBLY_DURATION, this.t + Math.max(0, Math.min(dt, 0.1)) * this.rate);
+    this.t = Math.min(ASSEMBLY_DURATION, this.t + Math.max(0, Math.min(dt, 0.5)) * this.rate);
   }
 
   skip(): void {

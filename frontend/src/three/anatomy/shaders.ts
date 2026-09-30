@@ -41,8 +41,28 @@ vec4 ctFbm(vec3 p, float f, float aa) {
 }
 `;
 
-/** Per-frame counter shared by every tissue material: animates the dither so a dissolve reads as a fade. */
-export const FRAME_UNIFORMS = { uCtFrame: { value: 0 } as IUniform<number> };
+/**
+ * Uniforms shared by every tissue material (by reference): a frame counter, and the gain of the warm edge
+ * that rims the materialise front while the cold-load assembly plays (0 otherwise, so peel fades stay plain).
+ */
+export const FRAME_UNIFORMS = { uCtFrame: { value: 0 } as IUniform<number>, uCtEdgeGain: { value: 0 } as IUniform<number> };
+
+/**
+ * Materialise (assembly dissolve, solid ↔ ghost peel fades): a WORLD-SPACE noise front in the tissue's rest
+ * frame, not a per-pixel screen-door dither — the tissue fills in as soft organic patches that ride with it,
+ * with no dot lattice at any frame rate, and it rests only at fully shown or fully hidden. `ctEdge` (1 on
+ * the front) feeds the warm rim of the assembly.
+ */
+export const MATERIALISE = /* glsl */ `
+float ctEdge = 0.0;
+if (uReveal < 0.999) {
+  float ctN = 0.65 * texture(uNoise3D, vCtRest * 0.75).x + 0.35 * texture(uNoise3D, vCtRest * 2.3 + vec3(0.31, 0.17, 0.53)).x;
+  ctN = clamp((ctN - 0.5) * 2.6 + 0.5, 0.0, 1.0);
+  float ctFront = uReveal * 1.12 - 0.06;
+  if (ctN > ctFront) discard;
+  ctEdge = 1.0 - smoothstep(0.0, 0.07, ctFront - ctN);
+}
+`;
 
 export interface PatchFlags {
   /** Procedural bump + albedo variation. */
@@ -134,7 +154,8 @@ ${defines.join('\n')}
 varying vec3 vCtRest;
 uniform float uReveal;
 uniform float uCtFrame;
-${IGN}
+uniform float uCtEdgeGain;
+${f.detail ? '' : 'uniform highp sampler3D uNoise3D;'}
 ${f.cavity ? 'varying vec3 vCtCavity;\nuniform float uCavityAO;\nuniform float uGrooveAO;\nuniform float uVesselFat;' : ''}
 ${f.detail ? `${NOISE}
 uniform mat3 normalMatrix;
@@ -154,11 +175,11 @@ ${f.clipSphere ? 'uniform vec3 uClipCentre;\nuniform float uClipRadius;\nuniform
 ${f.desaturateMap ? 'uniform float uSaturation;' : ''}`,
   );
 
-  // Materialise (assembly dissolve) and the pulmonary sphere clip — dithered, so the pass stays opaque.
+  // Materialise (world-space noise front, see MATERIALISE) and the pulmonary / great-vessel sphere clip.
   fs = fs.replace(
     '#include <clipping_planes_fragment>',
     `#include <clipping_planes_fragment>
-if (uReveal < 0.999 && ctIGN(gl_FragCoord.xy + 5.588238 * mod(uCtFrame, 64.0)) >= uReveal) discard;
+${MATERIALISE}
 ${f.clipSphere ? `float ctClipKeep = 1.0 - smoothstep(uClipRadius - uClipFeather, uClipRadius, distance(vCtRest, uClipCentre));
 if (ctClipKeep <= 0.0) discard;` : ''}`,
   );
@@ -232,6 +253,13 @@ roughnessFactor = clamp(roughnessFactor + uRoughVar * ctDetail.x, 0.04, 1.0);`,
 }`,
     );
   }
+
+  // The warm rim on the materialise front (assembly only: uCtEdgeGain is 0 the rest of the time).
+  fs = fs.replace(
+    '#include <emissivemap_fragment>',
+    `#include <emissivemap_fragment>
+totalEmissiveRadiance += vec3(1.0, 0.62, 0.45) * (0.9 * ctEdge * uCtEdgeGain);`,
+  );
 
   if (f.rim) {
     fs = fs.replace(
