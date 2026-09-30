@@ -126,9 +126,9 @@ describe('landingMetricsResource', () => {
 describe('honest test vs CV text', () => {
   it('formats CV as mean ± sd and reconciles it with the test CI', () => {
     const cad = performanceFor(fromSummary(summary), 'CAD')!;
-    expect(formatCv(cad.cvAuc)).toBe('0.94 ± 0.03');
+    expect(formatCv(cad.cvAuc)).toBe('0.94\u2009±\u20090.03');
     const text = reconcileTestAndCv(cad, 61)!;
-    expect(text).toMatch(/^Test ROC-AUC 0\.86 \(n = 61, CI 0\.74–0\.95\) is below cross-validation/);
+    expect(text).toMatch(/^Test ROC-AUC 0\.86 \(n\u2009=\u200961, CI 0\.74–0\.95\) is below cross-validation/);
     expect(text).toMatch(/the CI includes the CV value/);
   });
 
