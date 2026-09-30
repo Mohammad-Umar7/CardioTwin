@@ -4,6 +4,7 @@ import { useEffect, useState, type KeyboardEvent, type PointerEvent } from 'reac
 import { StageCard, Tooltip } from '@/design';
 import { useIsReducedMotion } from '@/hooks/useMediaQuery';
 import { cn } from '@/lib/cn';
+import { SHORTCUT } from '@/state/commandIds';
 import { selectEditCount, usePatientStore } from '@/state/patientStore';
 import { useUiStore } from '@/state/uiStore';
 import { EASE, MOTION } from '@/theme/tokens';
@@ -24,7 +25,14 @@ export interface WhatIfPillProps {
   className?: string;
 }
 
-function useHoldToCompare() {
+/** Typing into a field never triggers the hold (the palette's input, a number field, a textarea). */
+const isTypingTarget = (t: EventTarget | null) =>
+  t instanceof HTMLElement && (t.isContentEditable || t.matches('input, textarea, select'));
+
+const isCompareKey = (e: globalThis.KeyboardEvent) =>
+  e.key.toUpperCase() === SHORTCUT.compare && !e.ctrlKey && !e.metaKey && !e.altKey && !e.shiftKey;
+
+function useHoldToCompare(enabled: boolean) {
   const comparing = usePatientStore((s) => s.comparing);
   const setComparing = usePatientStore((s) => s.setComparing);
   // Never leave the app stuck on the recorded state (unmount, window blur).
@@ -36,6 +44,26 @@ function useHoldToCompare() {
       release();
     };
   }, []);
+  // Hold R anywhere on the workstation (keyboard-only demo): press shows the recorded estimate, release
+  // returns to the what-if. The guided demo suspends single-key shortcuts before they reach this listener.
+  useEffect(() => {
+    if (!enabled) return;
+    const down = (e: globalThis.KeyboardEvent) => {
+      if (!isCompareKey(e) || isTypingTarget(e.target) || e.defaultPrevented) return;
+      e.preventDefault();
+      if (!e.repeat) usePatientStore.getState().setComparing(true);
+    };
+    const up = (e: globalThis.KeyboardEvent) => {
+      if (e.key.toUpperCase() !== SHORTCUT.compare) return;
+      usePatientStore.getState().setComparing(false);
+    };
+    document.addEventListener('keydown', down);
+    document.addEventListener('keyup', up);
+    return () => {
+      document.removeEventListener('keydown', down);
+      document.removeEventListener('keyup', up);
+    };
+  }, [enabled]);
   return {
     comparing,
     handlers: {
@@ -72,8 +100,8 @@ function useHoldToCompare() {
 }
 
 function Pill({ edits, className }: { edits: number; className?: string }) {
-  const { comparing, handlers } = useHoldToCompare();
   const canCompare = usePatientStore((s) => s.recordedPrediction !== null);
+  const { comparing, handlers } = useHoldToCompare(canCompare);
   const openDrawer = useUiStore((s) => s.openDrawer);
   const sep = <span aria-hidden className="h-4 w-px bg-hairline" />;
 
@@ -92,10 +120,11 @@ function Pill({ edits, className }: { edits: number; className?: string }) {
       {canCompare && (
         <>
           {sep}
-          <Tooltip content="Hold to show the recorded estimate · Space">
+          <Tooltip content={`Hold to show the recorded estimate · hold ${SHORTCUT.compare} (or Space here)`}>
             <button
               type="button"
               aria-pressed={comparing}
+              aria-keyshortcuts={SHORTCUT.compare}
               {...handlers}
               className={cn(
                 'inline-flex h-6 select-none items-center gap-1.5 rounded-full px-2 text-label transition-colors duration-instant',

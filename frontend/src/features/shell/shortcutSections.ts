@@ -61,7 +61,7 @@ export interface SheetRow {
 const STATIC_ROWS: Record<SheetSection, SheetRow[]> = {
   navigate: [{ key: 'esc', action: 'Close the top layer', shortcuts: ['Esc'] }],
   inspect: [],
-  edit: [],
+  edit: [{ key: 'compare', action: 'Hold to compare with the recorded estimate', shortcuts: ['R'] }],
   view: [
     { key: 'orbit', action: 'Orbit 15° (canvas focused)', shortcuts: ['ArrowLeft', 'ArrowRight'] },
     { key: 'zoom', action: 'Zoom (canvas focused)', shortcuts: ['+', '-'] },

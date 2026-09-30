@@ -45,7 +45,7 @@ describe('sheet sections', () => {
     expect(all).not.toContain('Model performance');
     expect(all).not.toContain('Keyboard shortcuts');
     expect(rows.navigate.map((r) => r.action)).toEqual(['Command palette', 'Close the top layer']);
-    expect(rows.edit.map((r) => r.action)).toEqual(['Edit inputs']);
+    expect(rows.edit.map((r) => r.action)).toEqual(['Edit inputs', 'Hold to compare with the recorded estimate']);
   });
 });
 

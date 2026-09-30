@@ -69,4 +69,6 @@ export const SHORTCUT = {
   isolate: 'O',
   ghost: 'G',
   peel: 'P',
+  /** Held (not pressed): show the recorded estimate while what-if edits exist. */
+  compare: 'R',
 } as const;
