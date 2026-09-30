@@ -4,7 +4,7 @@
  * On the first load of a session the anatomy does not simply appear: each layer flies in from its explode
  * direction and materialises, outside-in — skin → muscle → ribs → lungs → great vessels → the heart halves
  * close — and the coronary tree ignites once the heart has closed (the ignition sweep itself belongs to the
- * fx layer; `ASSEMBLY_IGNITE_AT` tells it when). ≈ 2.2 s in total, skippable by any input (it then
+ * fx layer; `ASSEMBLY_IGNITE_AT` tells it when). ≈ 1.7 s in total, skippable by any input (it then
  * finishes within `SKIP_FINISH_S`), and replaced by the rest state under reduced motion.
  *
  * Motion is a critically damped response (a spring without bounce, LUMEN §6: no overshoot): the offset
@@ -23,25 +23,29 @@ export interface AssemblyStage {
   distance: number;
 }
 
-/** The choreography, in the order the owner asked for. */
+/**
+ * The choreography, in the order the owner asked for (outside-in). The chest layers rest as ghosts or are
+ * set aside in the workstation and hidden on the landing, so their flights overlap BEFORE t = 0: the first
+ * frame already shows the great vessels and the posterior half materialising (never an empty stage), and
+ * the heart's own motion — posterior half, then the anterior half swinging shut with the coronaries riding
+ * it — fills the ≈ 1.7 s.
+ */
 export const ASSEMBLY_STAGES: readonly AssemblyStage[] = [
-  // Outer layers overlap tightly: in the workstation they settle as faint ghosts at the frame's edges, so
-  // the heart itself starts assembling after 0.4 s instead of waiting for them.
-  { id: 'skin', start: 0, duration: 0.8, distance: 1.25 },
-  { id: 'muscle', start: 0.08, duration: 0.8, distance: 1.25 },
-  { id: 'skeleton', start: 0.16, duration: 0.85, distance: 1.3 },
-  { id: 'lungs', start: 0.26, duration: 0.85, distance: 1.4 },
-  { id: 'diaphragm', start: 0.3, duration: 0.8, distance: 1.3 },
-  { id: 'greatVessels', start: 0.38, duration: 0.9, distance: 1 },
-  { id: 'heartPosterior', start: 0.55, duration: 1.0, distance: 1 },
-  // The anterior half swings shut last and carries the coronaries that ride on it.
-  { id: 'heartAnterior', start: 0.95, duration: 1.2, distance: 1 },
-  { id: 'coronary', start: 0.95, duration: 1.2, distance: 1 },
+  { id: 'skin', start: -0.4, duration: 0.8, distance: 1.25 },
+  { id: 'muscle', start: -0.36, duration: 0.8, distance: 1.25 },
+  { id: 'skeleton', start: -0.32, duration: 0.85, distance: 1.3 },
+  { id: 'lungs', start: -0.28, duration: 0.85, distance: 1.4 },
+  { id: 'diaphragm', start: -0.24, duration: 0.8, distance: 1.3 },
+  { id: 'greatVessels', start: -0.16, duration: 0.9, distance: 1 },
+  { id: 'heartPosterior', start: -0.1, duration: 1.0, distance: 1 },
+  // The anterior half swings shut last and carries the coronaries, fat and veins that ride on it.
+  { id: 'heartAnterior', start: 0.4, duration: 1.25, distance: 1 },
+  { id: 'coronary', start: 0.4, duration: 1.25, distance: 1 },
 ];
 
 export const ASSEMBLY_DURATION = Math.max(...ASSEMBLY_STAGES.map((s) => s.start + s.duration));
 /** When the fx layer should start the coronary ignition (the heart has just closed). */
-export const ASSEMBLY_IGNITE_AT = 1.95;
+export const ASSEMBLY_IGNITE_AT = 1.5;
 /** After a skip, the remaining motion is compressed into this many seconds. */
 export const SKIP_FINISH_S = 0.15;
 

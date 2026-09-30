@@ -20,12 +20,17 @@ describe('cold-load assembly choreography', () => {
     }
   });
 
-  it('lasts about 2.4 s and ignites the coronaries once the heart has closed', () => {
-    expect(ASSEMBLY_DURATION).toBeGreaterThan(2);
+  it('lasts about 1.7 s, never starts on an empty stage and ignites the coronaries once the heart has closed', () => {
+    expect(ASSEMBLY_DURATION).toBeGreaterThanOrEqual(1.5);
     expect(ASSEMBLY_DURATION).toBeLessThanOrEqual(2.5);
     const anterior = stageById('heartAnterior');
     expect(ASSEMBLY_IGNITE_AT).toBeGreaterThan(anterior.start + 0.6 * anterior.duration);
     expect(ASSEMBLY_IGNITE_AT).toBeLessThanOrEqual(ASSEMBLY_DURATION);
+    // Frame 0 already shows the posterior half and the great vessels materialising.
+    expect(stagePose(stageById('heartPosterior'), 0).reveal).toBeGreaterThan(0.1);
+    expect(stagePose(stageById('greatVessels'), 0).reveal).toBeGreaterThan(0.1);
+    // ...and they are still flying in (visible motion), not already home.
+    expect(stagePose(stageById('heartPosterior'), 0).offset).toBeGreaterThan(0.85);
   });
 
   it('moves every stage from fully out to rest monotonically, landing without overshoot', () => {
