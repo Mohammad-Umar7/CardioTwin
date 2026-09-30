@@ -77,21 +77,26 @@ export interface ExplodeSpec {
   rides: string | null;
 }
 
+const tmpQ = new Quaternion();
+const tmpR = new Matrix4();
+const tmpT = new Matrix4();
+const tmpV = new Vector3();
+
 /**
  * Rigid delta (rest frame → displayed frame) of a structure at progress k: first the hinge about its pivot,
- * then the explode translation. `out` is overwritten and returned.
+ * then the explode translation. `out` is overwritten and returned. Allocation-free (called per frame).
+ * `clamp = false` lets the cold-load assembly start a layer further out than its full explode (k > 1).
  */
-export function explodeDelta(spec: Pick<ExplodeSpec, 'vector' | 'hinge'>, k: number, out = new Matrix4()): Matrix4 {
-  const t = clamp01(k);
+export function explodeDelta(spec: Pick<ExplodeSpec, 'vector' | 'hinge'>, k: number, out = new Matrix4(), clamp = true): Matrix4 {
+  const t = clamp ? clamp01(k) : Math.max(0, k);
   out.makeTranslation(spec.vector.x * t, spec.vector.y * t, spec.vector.z * t);
   if (spec.hinge && spec.hinge.deg !== 0 && t > 0) {
     const { pivot, axis, deg } = spec.hinge;
-    const q = new Quaternion().setFromAxisAngle(axis, ((deg * Math.PI) / 180) * t);
-    const hinge = new Matrix4()
-      .makeTranslation(pivot.x, pivot.y, pivot.z)
-      .multiply(new Matrix4().makeRotationFromQuaternion(q))
-      .multiply(new Matrix4().makeTranslation(-pivot.x, -pivot.y, -pivot.z));
-    out.multiply(hinge);
+    const angle = ((deg * Math.PI) / 180) * Math.min(t, 1);
+    tmpQ.setFromAxisAngle(axis, angle);
+    out.multiply(tmpT.makeTranslation(pivot.x, pivot.y, pivot.z));
+    out.multiply(tmpR.makeRotationFromQuaternion(tmpQ));
+    out.multiply(tmpT.makeTranslation(-pivot.x, -pivot.y, -pivot.z));
   }
   return out;
 }
@@ -108,8 +113,11 @@ export function riderDelta(
   out = new Matrix4(),
 ): Matrix4 {
   explodeDelta(wall, kWall, out);
-  const extra = rider.vector.clone().multiplyScalar(clamp01(kRider)).sub(wall.vector.clone().multiplyScalar(clamp01(kWall)));
-  if (extra.lengthSq() > 1e-12) out.premultiply(new Matrix4().makeTranslation(extra.x, extra.y, extra.z));
+  const extra = tmpV.copy(rider.vector).multiplyScalar(clamp01(kRider));
+  extra.x -= wall.vector.x * clamp01(kWall);
+  extra.y -= wall.vector.y * clamp01(kWall);
+  extra.z -= wall.vector.z * clamp01(kWall);
+  if (extra.lengthSq() > 1e-12) out.premultiply(tmpT.makeTranslation(extra.x, extra.y, extra.z));
   return out;
 }
 

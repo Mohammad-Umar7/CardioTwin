@@ -14,6 +14,9 @@ import { Background } from './stage/Background';
 import { Lights, SceneEnvironment } from './stage/Lights';
 import { SceneFX } from './fx/SceneFX';
 import { QualityMonitor } from './stage/QualityMonitor';
+import { debugHandles } from './stage/debug';
+import { usePickStore } from './stage/pickStore';
+import { useSceneControls } from './stage/sceneControls';
 import { probeWebGL } from './webgl';
 
 const DPR: Record<RenderTier, number | [number, number]> = { A: [1, 1.5], B: [1, 1.25], C: 1, D: 1 };
@@ -70,6 +73,13 @@ export default function SceneCanvas({ active }: { active: boolean }) {
   const animating = !reduced && (heartbeat || stage === 'hero');
   const frameloop = !active || !visible ? 'never' : animating ? 'always' : 'demand';
 
+  // A click on empty space (not a drag) clears the selection (DESIGN_SYSTEM §7.5, V2 §8.2).
+  const onPointerMissed = (e: MouseEvent) => {
+    if (e.type !== 'click') return;
+    const viewer = useViewerStore.getState();
+    if (viewer.selectedStructure) viewer.select(null);
+  };
+
   const onKeyDown = (e: KeyboardEvent<HTMLDivElement>) => {
     if (handleCanvasKey(e.key)) e.preventDefault();
   };
@@ -83,8 +93,11 @@ export default function SceneCanvas({ active }: { active: boolean }) {
         performance={{ min: 0.5 }}
         gl={{ antialias: false, alpha: false, stencil: false, powerPreference: 'high-performance' }}
         camera={{ fov: 30, near: 0.1, far: 50, position: [0, 0.3, 6] }}
-        onCreated={({ gl }) => {
+        onCreated={({ gl, scene, camera }) => {
           gl.outputColorSpace = SRGBColorSpace;
+          // The heart section plane is a per-material clipping plane (anatomy/rig.ts).
+          gl.localClippingEnabled = true;
+          if (debugHandles()) (window as unknown as { __ct?: unknown }).__ct = { gl, scene, camera, viewer: useViewerStore, controls: useSceneControls, pick: usePickStore };
           gl.setClearColor('#06080A', 1);
           gl.domElement.addEventListener('webglcontextlost', (event) => {
             event.preventDefault();
@@ -97,6 +110,7 @@ export default function SceneCanvas({ active }: { active: boolean }) {
         aria-describedby={summaryId}
         tabIndex={0}
         onKeyDown={onKeyDown}
+        onPointerMissed={onPointerMissed}
         className="!absolute inset-0 outline-none"
         style={{ touchAction: 'none' }}
       >

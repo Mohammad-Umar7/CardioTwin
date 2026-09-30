@@ -1,0 +1,299 @@
+/**
+ * GLSL chunks for the anatomy materials (§7.9 Realistic mode). Everything procedural runs in the heart's
+ * REST frame (`vCtRest` = object position + the mesh's rest offset), so detail, clipping and the beat stick
+ * to the tissue while nodes explode, hinge and beat. No UVs are needed; baked textures (CONTRACTS §7.1) are
+ * layered on top when a GLB carries them.
+ */
+import { ShaderChunk, type IUniform } from 'three';
+import { BEAT_VERTEX, BEAT_VERTEX_PARS } from './beatDeform';
+
+type Shader = { vertexShader: string; fragmentShader: string; uniforms: Record<string, IUniform> };
+
+/** Interleaved gradient noise (Jimenez 2014): a cheap, stable per-pixel dither in [0, 1). */
+export const IGN = /* glsl */ `
+float ctIGN(vec2 p) { return fract(52.9829189 * fract(dot(p, vec2(0.06711056, 0.00583715)))); }
+`;
+
+/**
+ * 3D value noise with analytic derivatives (after Inigo Quilez): returns (value ∈ [−1, 1], ∂/∂x, ∂/∂y, ∂/∂z).
+ * The fBm fades its octaves out as they approach the pixel footprint (`aa` = world units per pixel), so
+ * distant tissue never shimmers.
+ */
+export const NOISE = /* glsl */ `
+float ctHash(vec3 p) {
+  p = fract(p * 0.3183099 + vec3(0.71, 0.113, 0.419));
+  p *= 17.0;
+  return fract(p.x * p.y * p.z * (p.x + p.y + p.z));
+}
+vec4 ctNoised(vec3 x) {
+  vec3 i = floor(x);
+  vec3 w = fract(x);
+  vec3 u = w * w * w * (w * (w * 6.0 - 15.0) + 10.0);
+  vec3 du = 30.0 * w * w * (w * (w - 2.0) + 1.0);
+  float a = ctHash(i + vec3(0.0, 0.0, 0.0));
+  float b = ctHash(i + vec3(1.0, 0.0, 0.0));
+  float c = ctHash(i + vec3(0.0, 1.0, 0.0));
+  float d = ctHash(i + vec3(1.0, 1.0, 0.0));
+  float e = ctHash(i + vec3(0.0, 0.0, 1.0));
+  float f = ctHash(i + vec3(1.0, 0.0, 1.0));
+  float g = ctHash(i + vec3(0.0, 1.0, 1.0));
+  float h = ctHash(i + vec3(1.0, 1.0, 1.0));
+  float k0 = a;
+  float k1 = b - a;
+  float k2 = c - a;
+  float k3 = e - a;
+  float k4 = a - b - c + d;
+  float k5 = a - c - e + g;
+  float k6 = a - b - e + f;
+  float k7 = -a + b + c - d + e - f - g + h;
+  return vec4(
+    -1.0 + 2.0 * (k0 + k1 * u.x + k2 * u.y + k3 * u.z + k4 * u.x * u.y + k5 * u.y * u.z + k6 * u.z * u.x + k7 * u.x * u.y * u.z),
+    2.0 * du * vec3(
+      k1 + k4 * u.y + k6 * u.z + k7 * u.y * u.z,
+      k2 + k5 * u.z + k4 * u.x + k7 * u.z * u.x,
+      k3 + k6 * u.x + k5 * u.y + k7 * u.x * u.y));
+}
+// fBm with derivatives; f = base frequency, aa = pixel footprint (same units as p).
+vec4 ctFbm(vec3 p, float f, float aa) {
+  vec4 sum = vec4(0.0);
+  float amp = 0.5;
+  for (int i = 0; i < CT_OCTAVES; i++) {
+    float fade = 1.0 - smoothstep(0.25, 0.6, aa * f);
+    if (fade <= 0.0) break;
+    vec4 n = ctNoised(p * f);
+    sum += amp * fade * vec4(n.x, n.yzw * f);
+    f *= 2.07;
+    amp *= 0.5;
+  }
+  return sum;
+}
+`;
+
+/** Per-frame counter shared by every tissue material: animates the dither so a dissolve reads as a fade. */
+export const FRAME_UNIFORMS = { uCtFrame: { value: 0 } as IUniform<number> };
+
+export interface PatchFlags {
+  /** Procedural bump + albedo variation. */
+  detail: boolean;
+  /** Stretch the detail across the long axis (myocardial fibres run circumferentially). */
+  fibre: boolean;
+  /** Epicardial fat in the AV groove (myocardium only). */
+  fat: boolean;
+  /** Wrap-diffuse + back-scatter translucency (fake subsurface scattering). */
+  sss: boolean;
+  /** Back faces (chamber interiors, cut faces) get their own colour. */
+  interior: boolean;
+  /** Supplied-territory tint from a vertex attribute (name). */
+  territory: string | null;
+  /** Fresnel rim added to emission. */
+  rim: boolean;
+  /** Dithered sphere clip (pulmonary trees, V2 §5.15). */
+  clipSphere: boolean;
+  /** Clamp the saturation of a baked albedo (so anatomical red never competes with the ramp). */
+  desaturateMap: boolean;
+  /** Per-vertex cavity attribute `aCavity` (crease AO, vessel groove, fat along vessels). */
+  cavity: boolean;
+  /** Noise octaves (tier dependent). */
+  octaves: number;
+}
+
+export const NO_PATCH: PatchFlags = {
+  detail: false,
+  fibre: false,
+  fat: false,
+  sss: false,
+  interior: false,
+  territory: null,
+  rim: false,
+  clipSphere: false,
+  desaturateMap: false,
+  cavity: false,
+  octaves: 3,
+};
+
+export function patchKey(f: PatchFlags): string {
+  return [
+    f.detail ? 'd' : '',
+    f.fibre ? 'f' : '',
+    f.fat ? 't' : '',
+    f.sss ? 's' : '',
+    f.interior ? 'i' : '',
+    f.territory ? `T${f.territory}` : '',
+    f.rim ? 'r' : '',
+    f.clipSphere ? 'c' : '',
+    f.desaturateMap ? 'x' : '',
+    f.cavity ? 'v' : '',
+    `o${f.octaves}`,
+  ].join('');
+}
+
+/**
+ * Patch a MeshStandard/MeshPhysical shader in place. `uniforms` must hold every uniform the flags use (see
+ * `tissue.ts`); they are shared by reference so the scene animates them without recompiling.
+ */
+export function patchTissueShader(shader: Shader, uniforms: Record<string, IUniform>, f: PatchFlags): void {
+  Object.assign(shader.uniforms, uniforms);
+
+  // ------------------------------------------------------------------------------------ vertex
+  let vs = shader.vertexShader.replace(
+    '#include <common>',
+    `#include <common>
+${BEAT_VERTEX_PARS}
+varying vec3 vCtRest;
+${f.territory ? `attribute vec3 ${f.territory};\nvarying vec3 vCtTerritory;` : ''}
+${f.cavity ? 'attribute vec3 aCavity;\nvarying vec3 vCtCavity;' : ''}`,
+  );
+  vs = vs.replace(
+    '#include <begin_vertex>',
+    `#include <begin_vertex>
+vCtRest = transformed + uRestOffset;
+${BEAT_VERTEX}
+${f.territory ? `vCtTerritory = ${f.territory};` : ''}
+${f.cavity ? 'vCtCavity = aCavity;' : ''}`,
+  );
+  shader.vertexShader = vs;
+
+  // ---------------------------------------------------------------------------------- fragment
+  const defines = [`#define CT_OCTAVES ${Math.max(1, Math.min(5, f.octaves))}`];
+  let fs = shader.fragmentShader.replace(
+    '#include <common>',
+    `#include <common>
+${defines.join('\n')}
+varying vec3 vCtRest;
+uniform float uReveal;
+uniform float uCtFrame;
+${IGN}
+${f.cavity ? 'varying vec3 vCtCavity;\nuniform float uCavityAO;\nuniform float uGrooveAO;\nuniform float uVesselFat;' : ''}
+${f.detail ? `${NOISE}
+uniform mat3 normalMatrix;
+uniform float uDetailFreq;
+uniform float uBump;
+uniform float uColorVar;
+uniform float uRoughVar;
+uniform vec3 uTintDeep;
+uniform vec3 uFibreAxis;
+uniform float uFibreStretch;` : ''}
+${f.fat ? 'uniform vec3 uFatColor;\nuniform float uFatAmount;\nuniform vec3 uHeartApex;\nuniform vec3 uHeartAxis;\nuniform float uHeartLength;' : ''}
+${f.sss ? 'uniform float uWrap;\nuniform vec3 uWrapTint;\nuniform vec3 uSssColor;\nuniform float uSssStrength;' : ''}
+${f.interior ? 'uniform vec3 uInteriorColor;' : ''}
+${f.territory ? 'uniform vec3 uP;\nuniform sampler2D uRiskLUT;\nuniform float uTerritoryOn;\nuniform vec3 uSelMask;\nuniform float uTerritoryGain;\nvarying vec3 vCtTerritory;' : ''}
+${f.rim ? 'uniform vec3 uRimColor;\nuniform float uRimStrength;' : ''}
+${f.clipSphere ? 'uniform vec3 uClipCentre;\nuniform float uClipRadius;\nuniform float uClipFeather;' : ''}
+${f.desaturateMap ? 'uniform float uSaturation;' : ''}`,
+  );
+
+  // Materialise (assembly dissolve) and the pulmonary sphere clip — dithered, so the pass stays opaque.
+  fs = fs.replace(
+    '#include <clipping_planes_fragment>',
+    `#include <clipping_planes_fragment>
+if (uReveal < 0.999 && ctIGN(gl_FragCoord.xy + 5.588238 * mod(uCtFrame, 64.0)) >= uReveal) discard;
+${f.clipSphere ? `float ctClipKeep = 1.0 - smoothstep(uClipRadius - uClipFeather, uClipRadius, distance(vCtRest, uClipCentre));
+if (ctClipKeep <= 0.0) discard;` : ''}`,
+  );
+
+  fs = fs.replace(
+    '#include <color_fragment>',
+    `#include <color_fragment>
+${f.desaturateMap ? `diffuseColor.rgb = mix(vec3(dot(diffuseColor.rgb, vec3(0.2126, 0.7152, 0.0722))), diffuseColor.rgb, uSaturation);` : ''}
+${f.detail ? `
+vec3 ctP = vCtRest;
+${f.fibre ? 'ctP += uFibreAxis * (dot(ctP, uFibreAxis) * (uFibreStretch - 1.0));' : ''}
+float ctAA = length(fwidth(vCtRest));
+vec4 ctDetail = ctFbm(ctP, uDetailFreq, ctAA);
+vec4 ctBroad = ctNoised(vCtRest * (uDetailFreq * 0.23) + vec3(3.1, 7.7, 1.3));
+diffuseColor.rgb *= 1.0 + uColorVar * (0.55 * ctDetail.x + 0.45 * ctBroad.x);
+diffuseColor.rgb = mix(diffuseColor.rgb, uTintDeep, uColorVar * smoothstep(0.1, 0.9, ctBroad.x));` : 'vec4 ctDetail = vec4(0.0);\nvec4 ctBroad = vec4(0.0);'}
+${f.fat ? `{
+  float ctH = dot(vCtRest - uHeartApex, uHeartAxis) / uHeartLength;
+  float ctGroove = smoothstep(0.78, 0.93, ctH) * (1.0 - smoothstep(1.02, 1.12, ctH));
+  float ctFat = clamp(ctGroove * (0.6 + 0.7 * ctDetail.x + 0.5 * ctBroad.x), 0.0, 1.0) * uFatAmount;
+  diffuseColor.rgb = mix(diffuseColor.rgb, uFatColor * (0.9 + 0.2 * ctDetail.x), ctFat);
+}` : ''}
+${f.cavity ? `{
+  float ctVesselFat = vCtCavity.z * (1.0 - 0.8 * vCtCavity.y) * clamp(0.55 + 0.6 * ctDetail.x + 0.4 * ctBroad.x, 0.0, 1.0);
+  ${f.fat ? 'diffuseColor.rgb = mix(diffuseColor.rgb, uFatColor * (0.9 + 0.2 * ctDetail.x), ctVesselFat * uVesselFat);' : ''}
+}` : ''}
+${f.territory ? `{
+  vec3 ctW = pow(max(vCtTerritory, vec3(0.0)), vec3(2.0));
+  float ctSum = ctW.x + ctW.y + ctW.z;
+  if (uTerritoryOn > 0.001 && ctSum > 1e-4) {
+    float ctNeutral = clamp(1.0 - (vCtTerritory.x + vCtTerritory.y + vCtTerritory.z), 0.0, 1.0);
+    ctW /= ctSum;
+    vec3 ctTint = ctW.x * texture2D(uRiskLUT, vec2(uP.x, 0.5)).rgb
+                + ctW.y * texture2D(uRiskLUT, vec2(uP.y, 0.5)).rgb
+                + ctW.z * texture2D(uRiskLUT, vec2(uP.z, 0.5)).rgb;
+    float ctStrength = (0.10 + uTerritoryGain * dot(ctW, uP)) * dot(ctW, uSelMask) * uTerritoryOn * (1.0 - ctNeutral);
+    diffuseColor.rgb = mix(diffuseColor.rgb, ctTint, ctStrength);
+  }
+}` : ''}
+${f.interior ? `if (!gl_FrontFacing) diffuseColor.rgb = uInteriorColor * (1.0 + 0.35 * ctDetail.x);` : ''}`,
+  );
+
+  if (f.detail) {
+    fs = fs.replace(
+      '#include <roughnessmap_fragment>',
+      `#include <roughnessmap_fragment>
+roughnessFactor = clamp(roughnessFactor + uRoughVar * ctDetail.x, 0.04, 1.0);`,
+    );
+    // Bump: tilt the shading normal by the tangential part of the noise gradient (object → view space).
+    fs = fs.replace(
+      '#include <normal_fragment_maps>',
+      `#include <normal_fragment_maps>
+{
+  vec3 ctG = normalMatrix * ctDetail.yzw;
+  vec3 ctT = ctG - dot(ctG, normal) * normal;
+  normal = normalize(normal - uBump * ctT);
+}`,
+    );
+  }
+
+  if (f.cavity) {
+    fs = fs.replace(
+      '#include <aomap_fragment>',
+      `#include <aomap_fragment>
+{
+  float ctAO = (1.0 - uCavityAO * vCtCavity.x) * (1.0 - uGrooveAO * vCtCavity.y);
+  reflectedLight.indirectDiffuse *= ctAO;
+  reflectedLight.indirectSpecular *= ctAO;
+  reflectedLight.directDiffuse *= mix(1.0, ctAO, 0.65);
+  reflectedLight.directSpecular *= mix(1.0, ctAO, 0.5);
+}`,
+    );
+  }
+
+  if (f.rim) {
+    fs = fs.replace(
+      '#include <emissivemap_fragment>',
+      `#include <emissivemap_fragment>
+{
+  float ctF = pow(1.0 - clamp(abs(dot(normalize(normal), normalize(vViewPosition))), 0.0, 1.0), 3.0);
+  totalEmissiveRadiance += uRimColor * uRimStrength * ctF;
+}`,
+    );
+  }
+
+  if (f.sss) {
+    // Wrap diffuse (light bleeds past the terminator, tinted like blood-filled tissue) + back-scatter where
+    // the rim light shines through thin edges. Specular keeps the true N·L.
+    const lights = ShaderChunk.lights_physical_pars_fragment.replace(
+      'reflectedLight.directDiffuse += irradiance * BRDF_Lambert( material.diffuseColor );',
+      `{
+    float ctNL = dot( geometryNormal, directLight.direction );
+    float ctWrapNL = saturate( ( ctNL + uWrap ) / ( 1.0 + uWrap ) );
+    vec3 ctIrr = directLight.color * ( dotNL + uWrapTint * max( ctWrapNL - dotNL, 0.0 ) );
+    reflectedLight.directDiffuse += ctIrr * BRDF_Lambert( material.diffuseColor );
+    vec3 ctH = normalize( directLight.direction + geometryNormal * 0.4 );
+    float ctBack = pow( saturate( dot( geometryViewDir, -ctH ) ), 3.0 );
+    reflectedLight.directDiffuse += directLight.color * uSssColor * ( ctBack * uSssStrength );
+  }`,
+    );
+    fs = fs.replace('#include <lights_physical_pars_fragment>', lights);
+  }
+
+  if (f.clipSphere) {
+    // Fade the trimmed vessel into the dark stage (no dither sparkle at the cut).
+    fs = fs.replace('#include <opaque_fragment>', `outgoingLight *= ctClipKeep * ctClipKeep;\n#include <opaque_fragment>`);
+  }
+
+  shader.fragmentShader = fs;
+}

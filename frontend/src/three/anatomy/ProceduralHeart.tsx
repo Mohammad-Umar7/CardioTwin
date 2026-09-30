@@ -100,9 +100,15 @@ export function ProceduralHeart() {
 
   useEffect(() => {
     materials.myocardium.color.set(look === 'clay' ? ANATOMY.clay : ANATOMY.flesh);
+    // (the procedural placeholder keeps the LUMEN clay / flesh pair in both looks)
   }, [look, materials]);
 
-  useRiskAnimation({ vessels: materials.vessels, myocardium: [materials.myocardium] });
+  const riskTargets = useMemo(() => {
+    const vessels = new Map([...materials.vessels].map(([t, m]) => [t, [m]] as const));
+    const territories = [materials.myocardium.userData.uniforms];
+    return { vessels: () => vessels, territories: () => territories };
+  }, [materials]);
+  useRiskAnimation(riskTargets);
 
   useEffect(() => {
     setAnchors(built.anchors);
