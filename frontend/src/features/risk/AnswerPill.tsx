@@ -1,47 +1,83 @@
-import { BandChip, Kbd, Probability, StageCard } from '@/design';
-import { selectDisplayedPrediction, usePatientStore } from '@/state/patientStore';
+import { AnimatePresence, motion } from 'framer-motion';
+import { BandChip, Kbd, Probability, StageCard, Tooltip } from '@/design';
+import { useSchemaIndex } from '@/hooks/useData';
+import { useIsReducedMotion } from '@/hooks/useMediaQuery';
+import { cn } from '@/lib/cn';
+import { SHORTCUT } from '@/state/commandIds';
 import { useUiStore } from '@/state/uiStore';
+import { EASE } from '@/theme/tokens';
+import { useRiskView } from './useRiskView';
+import { flaggedCount } from './verdict';
 
-/**
- * AnswerPill — WORKSTATION_V2 §5.16: `CAD 98 % ▌VERY HIGH · 3 of 3 flagged · Exit \`. The fallback home of
- * P(CAD) while focus mode hides the Risk card. Rendered in StageLayout's `overlay` slot; it positions
- * itself top-right at the stage inset (h 40, r-full, stage-card material). StageLayout moves the right
- * column below it in focus mode.
- *
- * STUB (agent A, Wave 0). Ownership transferred to agent C on creation; A never edits this file again.
- *
- * Contract:
- *   export interface AnswerPillProps { className?: string }
- *   - Renders only while `uiStore.chrome === 'focus'`.
- *   - The CAD numeral renders `data-prob="CAD"` (design `Probability` with `target="CAD"`).
- *   - Clicking the numeral exits focus mode and focuses the Risk card; `[Exit \]` calls `setChrome('workstation')`.
- */
 export interface AnswerPillProps {
   className?: string;
 }
 
+/** Leave focus mode and put keyboard focus on the Risk card once it is back. */
+function exitToRiskCard() {
+  useUiStore.getState().setChrome('workstation');
+  window.setTimeout(() => document.getElementById('risk-summary')?.focus({ preventScroll: true }), 260);
+}
+
+/**
+ * AnswerPill — WORKSTATION_V2 §5.16: `CAD 98 % ▌VERY HIGH · 3 of 3 flagged · Exit \`. The fallback home of
+ * P(CAD) while focus mode hides the Risk card (the numeral carries `data-prob="CAD"`). h 40, stage-card
+ * material, r-full, top-right at the stage inset. Enters over `base` after 120 ms; exits over 170 ms.
+ * Clicking the numeral exits focus mode and focuses the Risk card.
+ */
 export function AnswerPill({ className }: AnswerPillProps) {
   const chrome = useUiStore((s) => s.chrome);
-  const cad = usePatientStore((s) => selectDisplayedPrediction(s)?.predictions.CAD);
-  const stale = usePatientStore((s) => s.status === 'loading');
-  if (chrome !== 'focus') return null;
+  const index = useSchemaIndex();
+  const view = useRiskView();
+  const reduced = useIsReducedMotion();
+  const cad = view.prediction?.predictions.CAD;
+  const count = flaggedCount(view.prediction, (index?.vessels ?? []).map((v) => v.id));
+
   return (
-    <StageCard
-      as="div"
-      shape="chip"
-      region="answer-pill"
-      className={`absolute right-[var(--stage-inset)] top-[var(--stage-inset)] h-10 gap-3 pl-4 pr-1.5 ${className ?? ''}`}
-    >
-      <span className="text-body-s font-semibold text-secondary">CAD</span>
-      <Probability p={cad?.probability} target="CAD" size="l" stale={stale} />
-      <BandChip band={cad?.risk_band ?? null} pending={stale} size="sm" showMeter={false} />
-      <button
-        type="button"
-        onClick={() => useUiStore.getState().setChrome('workstation')}
-        className="inline-flex h-7 items-center gap-1.5 rounded-full px-2.5 text-label text-secondary hover:bg-surface-2 hover:text-primary"
-      >
-        Exit <Kbd>\</Kbd>
-      </button>
-    </StageCard>
+    <AnimatePresence>
+      {chrome === 'focus' && (
+        <motion.div
+          key="answer-pill"
+          exit={reduced ? { opacity: 0 } : { opacity: 0, y: -4 }}
+          transition={{ duration: 0.17, ease: EASE.exit }}
+          className={cn('absolute right-[var(--stage-inset)] top-[var(--stage-inset)]', className)}
+        >
+          <StageCard as="div" shape="chip" region="answer-pill" enterDelay={120} className="h-10 gap-3 pl-1.5 pr-1.5">
+            <Tooltip content="Back to the Risk card">
+              <button
+                type="button"
+                onClick={exitToRiskCard}
+                aria-label="Coronary artery disease estimate: exit focus mode and show the Risk card"
+                className="flex h-8 items-center gap-2 rounded-full px-2.5 outline-none hover:bg-surface-2 focus-visible:shadow-focus"
+              >
+                <span className="text-body-s font-semibold text-secondary">CAD</span>
+                <Probability
+                  p={cad?.probability}
+                  target="CAD"
+                  size="l"
+                  stale={view.stale}
+                  className="[&_.pct-sign]:font-normal"
+                />
+              </button>
+            </Tooltip>
+            <BandChip band={cad?.risk_band ?? null} pending={view.stale || !cad} size="sm" showMeter={false} />
+            {count && (
+              <span className="whitespace-nowrap text-label font-normal text-secondary">
+                {view.stale ? 'Updating' : count.text}
+              </span>
+            )}
+            <span aria-hidden className="h-5 w-px bg-hairline" />
+            <button
+              type="button"
+              onClick={() => useUiStore.getState().setChrome('workstation')}
+              aria-keyshortcuts={SHORTCUT.focusMode}
+              className="inline-flex h-8 items-center gap-1.5 rounded-full px-2.5 text-label text-secondary outline-none hover:bg-surface-2 hover:text-primary focus-visible:shadow-focus"
+            >
+              Exit <Kbd>{SHORTCUT.focusMode}</Kbd>
+            </button>
+          </StageCard>
+        </motion.div>
+      )}
+    </AnimatePresence>
   );
 }
