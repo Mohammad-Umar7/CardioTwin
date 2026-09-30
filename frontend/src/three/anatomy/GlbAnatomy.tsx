@@ -305,6 +305,12 @@ export function GlbAnatomy({ url }: { url: string }) {
     inp.beatV = beat.current.v;
     inp.beatA = beat.current.a;
     const moving = rig.update(inp);
+    // An outer layer turning solid (the peel closing the chest) gets its baked maps now, one mesh a frame.
+    const lazy = rig.nextSolidWithoutMaps();
+    if (lazy) {
+      for (const t of lazy.textures) gl.initTexture(t);
+      rig.markMapsReady(lazy.entry);
+    }
     // Landing hero: ghosts (the fresnel lungs) fade out over the copy column, so the headline keeps its
     // contrast; the workstation keeps them everywhere (faint anyway).
     const mask = GHOST_MASK.uGhostMask.value;

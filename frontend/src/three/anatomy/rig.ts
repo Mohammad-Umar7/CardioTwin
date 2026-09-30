@@ -177,6 +177,9 @@ function defaultFlyIn(kind: TissueKind, restOffset: Vector3): Vector3 {
   }
 }
 
+const texturesOf = (e: RigEntry): Texture[] =>
+  [e.maps?.map, e.maps?.normalMap, e.maps?.roughnessMap, e.maps?.aoMap].filter((t, i, all): t is Texture => !!t && all.indexOf(t) === i);
+
 /** Baked PBR maps of the original glTF material (CONTRACTS §7.1), if the GLB carries any. */
 function bakedMaps(material: Material | Material[]): BakedMaps | null {
   const m = (Array.isArray(material) ? material[0] : material) as Partial<MeshStandardMaterial> | undefined;
@@ -428,11 +431,20 @@ export class AnatomyRig {
     entry.mesh.material = this.solidFor(entry);
   }
 
-  /** Textures to upload lazily (CONTRACTS §7.1), one entry at a time. */
+  /**
+   * Textures to upload in idle time after load (CONTRACTS §7.1), one entry at a time: the heart, its vessels,
+   * valves and fat. The outer layers (skin, muscle, ribs, lungs, diaphragm) rest as ghosts, which never
+   * sample a map, so theirs wait until the layer actually turns solid (`nextSolidWithoutMaps`) — about a
+   * third of the GLB's texture memory is never uploaded in a normal session.
+   */
   pendingTextures(): { entry: RigEntry; textures: Texture[] }[] {
-    return this.entries
-      .filter((e) => !e.mapsReady && e.maps)
-      .map((e) => ({ entry: e, textures: [e.maps!.map, e.maps!.normalMap, e.maps!.roughnessMap, e.maps!.aoMap].filter((t): t is Texture => !!t) }));
+    return this.entries.filter((e) => !e.mapsReady && e.maps && !OUTER_KINDS.has(e.kind)).map((e) => ({ entry: e, textures: texturesOf(e) }));
+  }
+
+  /** An outer-layer mesh that is turning solid without its baked maps yet (upload them now, one a frame). */
+  nextSolidWithoutMaps(): { entry: RigEntry; textures: Texture[] } | null {
+    for (const e of this.entries) if (!e.mapsReady && e.maps && OUTER_KINDS.has(e.kind) && e.solidAmt > 1e-3) return { entry: e, textures: texturesOf(e) };
+    return null;
   }
 
   /**

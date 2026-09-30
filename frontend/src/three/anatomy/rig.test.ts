@@ -224,6 +224,19 @@ describe('anatomy rig: baked textures and picking', () => {
     expect(rig.pendingTextures()).toHaveLength(0);
   });
 
+  it('leaves the maps of an outer layer un-uploaded while it rests as a ghost, uploading them once it turns solid', () => {
+    const root = buildScene({ baked: true });
+    const lung = root.getObjectByName('Lung_L') as Mesh;
+    (lung.material as MeshStandardMaterial).map = new DataTexture(new Uint8Array(4), 1, 1);
+    const rig = new AnatomyRig(root, { manifest: MANIFEST, nodeTargets: TARGETS, look: 'realistic', tier: 'B', assemble: false }, 0.6);
+    expect(rig.pendingTextures().map((p) => p.entry.node)).not.toContain('Lung_L');
+    rig.update(inputs({ explodeTarget: 0.6, layerVisibility: { lungs: true } }));
+    expect(rig.nextSolidWithoutMaps()).toBeNull(); // peeled: a ghost, no map needed
+    rig.update(inputs({ explodeTarget: 0, layerVisibility: { lungs: true } }));
+    expect(rig.nextSolidWithoutMaps()?.entry.node).toBe('Lung_L');
+    rig.dispose();
+  });
+
   it('resolves structure, target, SCCT segment and territory under the pointer', () => {
     const { rig, node } = makeRig(false, 0.6, { segments: true });
     rig.update(inputs());
