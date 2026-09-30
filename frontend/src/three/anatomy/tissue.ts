@@ -20,6 +20,7 @@ import {
   MeshBasicMaterial,
   MeshPhysicalMaterial,
   MeshStandardMaterial,
+  Vector2,
   Vector3,
   type IUniform,
   type Material,
@@ -533,9 +534,17 @@ export interface GhostUniforms extends Record<string, IUniform> {
   uFade: IUniform<number>;
   uNearFade: IUniform<number>;
   uRestOffset: IUniform<Vector3>;
+  uGhostMask: IUniform<Vector2>;
 }
 
 export type GhostMaterial = MeshBasicMaterial & { userData: { ct: { uniforms: GhostUniforms; ghost: true } } };
+
+/**
+ * Screen-space mask shared by every ghost (by reference): ghosts fade out left of `x` (drawing-buffer px),
+ * over `y` px — on the landing hero the copy column sits there, and a fresnel lung behind the headline
+ * costs the text its contrast. (−1, 1) = no mask.
+ */
+export const GHOST_MASK = { uGhostMask: { value: new Vector2(-1, 1) } as IUniform<Vector2> };
 
 /** Ghost opacity curves per kind (LUMEN §7.3): α = (base + rim·F^power) · fade. */
 const GHOST_CURVES: Partial<Record<TissueKind, [number, number, number]>> = {
@@ -590,6 +599,7 @@ export function createGhostMaterial(kind: TissueKind, look: SceneLookId, restOff
     uFade: { value: 1 },
     uNearFade: { value: 0.9 },
     uRestOffset: { value: restOffset.clone() },
+    ...GHOST_MASK,
     ...(clipSet ?? {}),
   };
   const material = new MeshBasicMaterial({
@@ -621,6 +631,7 @@ uniform float uRim;
 uniform float uPower;
 uniform float uFade;
 uniform float uNearFade;
+uniform vec2 uGhostMask;
 varying vec3 vCtNormal;
 varying vec3 vCtView;
 varying vec3 vCtRest;
@@ -632,6 +643,7 @@ ${clip ? 'uniform vec3 uClipCentre;\nuniform float uClipRadius;\nuniform float u
         '#include <opaque_fragment>',
         `float ctF = pow(1.0 - abs(dot(normalize(vCtNormal), normalize(vCtView))), uPower);
         diffuseColor.a = (uBase + uRim * ctF) * uFade * smoothstep(uNearFade * 0.35, uNearFade, vCtDepth);
+        diffuseColor.a *= smoothstep(uGhostMask.x - uGhostMask.y, uGhostMask.x, gl_FragCoord.x);
         ${clip ? 'diffuseColor.a *= 1.0 - smoothstep(uClipRadius - uClipFeather, uClipRadius, distance(vCtRest, uClipCentre));' : ''}
         if (diffuseColor.a < 0.002) discard;
         #include <opaque_fragment>`,

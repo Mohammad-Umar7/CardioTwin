@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useRef } from 'react';
 import { Box3, Mesh, Vector3, type Object3D } from 'three';
 import { useManifest, useSchemaIndex, useVessels } from '@/hooks/useData';
 import { useReducedMotion } from '@/hooks/useMediaQuery';
+import { useUiStore } from '@/state/uiStore';
 import { PEEL_REST, useViewerStore } from '@/state/viewerStore';
 import type { AnatomyManifest, TargetId, TargetSpec } from '@/types/contracts';
 import { debugHandles } from '../stage/debug';
@@ -14,7 +15,7 @@ import { clearAnchors, setAnchors, toVector, type LabelAnchor } from './anchors'
 import { ASSEMBLY_IGNITE_AT } from './assembly';
 import { Picker, type CentrelineLike } from './picking';
 import { AnatomyRig, type RigInputs } from './rig';
-import type { QualityTier } from './tissue';
+import { GHOST_MASK, type QualityTier } from './tissue';
 import { useBeat } from './useHeartbeat';
 import { useRiskAnimation } from './useRiskAnimation';
 
@@ -304,6 +305,14 @@ export function GlbAnatomy({ url }: { url: string }) {
     inp.beatV = beat.current.v;
     inp.beatA = beat.current.a;
     const moving = rig.update(inp);
+    // Landing hero: ghosts (the fresnel lungs) fade out over the copy column, so the headline keeps its
+    // contrast; the workstation keeps them everywhere (faint anyway).
+    const mask = GHOST_MASK.uGhostMask.value;
+    if (hero) {
+      const px = state.gl.getPixelRatio();
+      const left = useUiStore.getState().stageInsets.left;
+      mask.set(left * px, Math.max(1, left * 0.35 * px));
+    } else mask.set(-1, 1);
     // Labels follow the wall they sit on through the peel and the assembly (never the beat).
     for (const a of anchorRest.current) {
       const entry = rig.byNode.get(a.node);
