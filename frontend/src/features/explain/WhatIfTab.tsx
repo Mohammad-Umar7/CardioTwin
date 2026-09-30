@@ -2,6 +2,7 @@ import { RotateCcw } from 'lucide-react';
 import { Button, IconButton, Probability, Skeleton, Tooltip } from '@/design';
 import { useRiskView } from '@/features/risk/useRiskView';
 import { useSchemaIndex } from '@/hooks/useData';
+import { ASSOCIATION_LEGEND, ASSOCIATION_MARK, ASSOCIATION_NOTE, isAssociationOnly } from '@/lib/associations';
 import { cn } from '@/lib/cn';
 import { formatDeltaPts, formatFeatureValue, formatProbability } from '@/lib/format';
 import { editedKeys, usePatientStore } from '@/state/patientStore';
@@ -116,7 +117,10 @@ export function WhatIfTab({ target }: { target: TargetId }) {
           <ul className="mt-1 flex flex-col">
             {edited.map((k) => (
               <li key={k} className="grid h-8 grid-cols-[minmax(0,1fr)_auto_28px] items-center gap-2 pl-1">
-                <span className="truncate text-body-s text-secondary">{specOf(k)?.label ?? k}</span>
+                <span className="truncate text-body-s text-secondary">
+                  {specOf(k)?.label ?? k}
+                  {isAssociationOnly(k) && <span className="ml-0.5 text-tertiary">{ASSOCIATION_MARK}</span>}
+                </span>
                 <span className="num whitespace-nowrap text-body-s">
                   <span className="text-tertiary">{valueText(k, recordedInputs[k], specOf)}</span>
                   <span aria-hidden className="mx-1.5 text-tertiary">
@@ -145,6 +149,7 @@ export function WhatIfTab({ target }: { target: TargetId }) {
         </div>
         <p id="whatif-levers-note" className="mt-2 text-label font-normal text-tertiary">
           Model counterfactuals, not treatment advice: how this model’s estimate responds when one input differs.
+          {levers.levers.some((l) => isAssociationOnly(l.feature)) && ` ${ASSOCIATION_LEGEND}: changing it moves the estimate, not the arteries.`}
         </p>
         {levers.status === 'unavailable' ? (
           <p className="mt-3 text-body-s text-tertiary">Counterfactuals need the in-browser model, which could not load.</p>
@@ -166,7 +171,14 @@ export function WhatIfTab({ target }: { target: TargetId }) {
               return (
                 <li key={l.feature} className="grid h-11 grid-cols-[minmax(0,1fr)_auto_auto] items-center gap-3 border-b border-hairline pl-1 last:border-b-0">
                   <span className="flex min-w-0 flex-col">
-                    <span className="truncate text-body-s text-primary">{spec?.label ?? l.feature}</span>
+                    <span className="truncate text-body-s text-primary">
+                      {spec?.label ?? l.feature}
+                      {isAssociationOnly(l.feature) && (
+                        <span className="ml-0.5 text-tertiary" title={ASSOCIATION_NOTE}>
+                          {ASSOCIATION_MARK}
+                        </span>
+                      )}
+                    </span>
                     <span className="num truncate text-label font-normal text-tertiary">
                       {valueText(l.feature, l.from, specOf)} → {valueText(l.feature, l.to, specOf)}
                     </span>
@@ -185,7 +197,7 @@ export function WhatIfTab({ target }: { target: TargetId }) {
                     variant="ghost"
                     size="sm"
                     className="h-7"
-                    aria-label={`Apply: set ${spec?.label ?? l.feature} to ${valueText(l.feature, l.to, specOf)}`}
+                    aria-label={`Apply: set ${spec?.label ?? l.feature} to ${valueText(l.feature, l.to, specOf)}${isAssociationOnly(l.feature) ? ' (association only, not a known cause)' : ''}`}
                     onClick={() => usePatientStore.getState().setFeature(l.feature, l.to)}
                   >
                     {undo ? 'Undo' : 'Apply'}
