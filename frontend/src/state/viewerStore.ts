@@ -5,7 +5,7 @@
  * through refs in useFrame. This store only holds discrete, user-meaningful state.
  */
 import { create } from 'zustand';
-import type { TargetId } from '@/types/contracts';
+import type { CameraPose, TargetId } from '@/types/contracts';
 
 export type ViewMode = 'anatomy' | 'risk' | 'xray' | 'flow';
 /** Render quality tier (DESIGN_SYSTEM §7.7): A full, B balanced (start), C lite, D static 2D fallback. */
@@ -14,6 +14,13 @@ export type RenderTier = 'A' | 'B' | 'C' | 'D';
 export type Stage = 'hero' | 'workstation' | 'hidden';
 export type MyocardiumLook = 'clay' | 'anat';
 export type AnatomySource = 'loading' | 'glb' | 'procedural' | 'error';
+
+/**
+ * Territory tint (V2 §2, §5.15): off · only the selected vessel's territory (default) · all three.
+ * The legacy `territories` boolean is kept in sync (= mode !== 'off') until every reader migrates.
+ */
+export type TerritoryMode = 'off' | 'selected' | 'all';
+export const TERRITORY_MODES: readonly TerritoryMode[] = ['off', 'selected', 'all'];
 
 /** Layer ids match `manifest.layers[].id`; unknown layers default to visible. */
 export type LayerVisibility = Record<string, boolean>;
@@ -59,6 +66,14 @@ export interface ViewerState {
   cameraCommand: CameraCommand | null;
   /** Live C-arm readout, updated at most a few times per second by the camera rig. */
   carm: { azimuth: number; elevation: number } | null;
+  /** V2: territory tint mode; `territories` mirrors `territoryMode !== 'off'`. */
+  territoryMode: TerritoryMode;
+  /** V2 (O): heart + the selected artery + its territory only. Only meaningful while a vessel is selected. */
+  isolate: boolean;
+  /** V2 (G): ghost every structure except the selected vessel. Only meaningful while a vessel is selected. */
+  ghostOthers: boolean;
+  /** V2: camera pose before select / isolate, so Esc can fly back (set by the camera rig). */
+  cameraReturn: CameraPose | null;
 
   setViewMode(mode: ViewMode): void;
   setExplode(e: number): void;
@@ -75,6 +90,14 @@ export interface ViewerState {
   flyToPreset(preset: string): void;
   focusTarget(target: TargetId): void;
   setCarm(carm: { azimuth: number; elevation: number } | null): void;
+  setTerritoryMode(mode: TerritoryMode): void;
+  /** T: off → selected → all → off. */
+  cycleTerritoryMode(): void;
+  /** Ignored (stays false) while nothing is selected. */
+  setIsolate(on: boolean): void;
+  /** Ignored (stays false) while nothing is selected. */
+  setGhostOthers(on: boolean): void;
+  setCameraReturn(pose: CameraPose | null): void;
 }
 
 type ViewerSettable = Pick<
@@ -84,6 +107,14 @@ type ViewerSettable = Pick<
 
 let nonce = 0;
 const nextNonce = () => (nonce += 1);
+
+/** Isolate and ghost exist only while a vessel is selected (V2 §1.7), so clearing the selection ends them. */
+const CLEARED_SELECTION_MODES = { isolate: false, ghostOthers: false } as const;
+
+const territoryPatch = (territoryMode: TerritoryMode): Pick<ViewerState, 'territoryMode' | 'territories'> => ({
+  territoryMode,
+  territories: territoryMode !== 'off',
+});
 
 export const useViewerStore = create<ViewerState>()((set) => ({
   viewMode: 'risk',
@@ -107,6 +138,10 @@ export const useViewerStore = create<ViewerState>()((set) => ({
   anatomyProgress: null,
   cameraCommand: null,
   carm: null,
+  territoryMode: 'selected',
+  isolate: false,
+  ghostOthers: false,
+  cameraReturn: null,
 
   setViewMode: (viewMode) => set({ viewMode }),
   setExplode: (e) => set({ explode: Math.min(1, Math.max(0, e)) }),
@@ -114,20 +149,37 @@ export const useViewerStore = create<ViewerState>()((set) => ({
     set(() =>
       target
         ? { selectedStructure: target, cameraCommand: { kind: 'focus', target, nonce: nextNonce() } }
-        : { selectedStructure: null },
+        : { selectedStructure: null, ...CLEARED_SELECTION_MODES },
     ),
   hover: (hoveredStructure) => set({ hoveredStructure }),
   setLayerVisible: (layer, visible) =>
     set((s) => ({ layerVisibility: { ...s.layerVisibility, [layer]: visible } })),
-  toggle: (key) => set((s) => ({ [key]: !s[key] }) as Partial<ViewerState>),
-  set: (key, value) => set({ [key]: value } as Partial<ViewerState>),
+  toggle: (key) =>
+    set((s) =>
+      key === 'territories'
+        ? territoryPatch(s.territories ? 'off' : 'selected')
+        : ({ [key]: !s[key] } as Partial<ViewerState>),
+    ),
+  set: (key, value) =>
+    set((s) =>
+      key === 'territories'
+        ? territoryPatch(value ? (s.territoryMode === 'off' ? 'selected' : s.territoryMode) : 'off')
+        : ({ [key]: value } as Partial<ViewerState>),
+    ),
   setTier: (tier, lock = false) => set((s) => ({ tier, tierLocked: lock || s.tierLocked })),
   setFps: (fps) => set({ fps }),
   setStage: (stage) => set({ stage }),
   setAnatomySource: (anatomySource, anatomyProgress = null) => set({ anatomySource, anatomyProgress }),
-  flyHome: () => set({ cameraCommand: { kind: 'home', nonce: nextNonce() }, selectedStructure: null }),
+  flyHome: () =>
+    set({ cameraCommand: { kind: 'home', nonce: nextNonce() }, selectedStructure: null, ...CLEARED_SELECTION_MODES }),
   flyToPreset: (preset) => set({ cameraCommand: { kind: 'preset', preset, nonce: nextNonce() } }),
   focusTarget: (target) =>
     set({ selectedStructure: target, cameraCommand: { kind: 'focus', target, nonce: nextNonce() } }),
   setCarm: (carm) => set({ carm }),
+  setTerritoryMode: (mode) => set(territoryPatch(mode)),
+  cycleTerritoryMode: () =>
+    set((s) => territoryPatch(TERRITORY_MODES[(TERRITORY_MODES.indexOf(s.territoryMode) + 1) % TERRITORY_MODES.length]!)),
+  setIsolate: (on) => set((s) => ({ isolate: on && s.selectedStructure !== null })),
+  setGhostOthers: (on) => set((s) => ({ ghostOthers: on && s.selectedStructure !== null })),
+  setCameraReturn: (cameraReturn) => set({ cameraReturn }),
 }));

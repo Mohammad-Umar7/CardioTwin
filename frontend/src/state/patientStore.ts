@@ -14,7 +14,12 @@ import type {
   PredictResponse,
 } from '@/types/contracts';
 
-export type PatientMode = 'cohort' | 'custom';
+/**
+ * cohort — a cohort patient (recorded = the cohort row)
+ * blank  — V2 "New blank patient": recorded = features = schema defaults, 0 edits
+ * custom — legacy Custom mode (retired once the V2 PatientSwitcher lands)
+ */
+export type PatientMode = 'cohort' | 'blank' | 'custom';
 export type PredictionStatus = 'idle' | 'loading' | 'ready' | 'error';
 /**
  * resolving   — health check in flight
@@ -38,6 +43,13 @@ export interface PatientState {
   previous: PredictResponse | null;
   /** Pinned A/B baseline: deltas persist as "was → now" while set. */
   baseline: PredictResponse | null;
+  /**
+   * V2 automatic baseline: the prediction for the RECORDED inputs, captured whenever a prediction succeeds
+   * while there are no edits (so on load, and again after Reset). Null until the first such prediction.
+   */
+  recordedPrediction: PredictResponse | null;
+  /** V2 hold-to-compare: while true the UI shows `recordedPrediction` (see `selectDisplayedPrediction`). */
+  comparing: boolean;
   status: PredictionStatus;
   error: string | null;
   /** Increments on every committed prediction; lets effects react to "a new result arrived". */
@@ -51,6 +63,9 @@ export interface PatientState {
 
   loadPatient(patient: CohortPatient): void;
   startCustom(defaults: FeatureVector): void;
+  /** V2: a blank patient from the schema defaults, with 0 edits (recorded = features = defaults). */
+  startBlank(defaults: FeatureVector): void;
+  setComparing(comparing: boolean): void;
   setFeature(key: string, value: FeatureValue): void;
   resetFeature(key: string): void;
   resetAll(): void;
@@ -73,6 +88,21 @@ export function editedKeys(features: FeatureVector, recorded: FeatureVector): st
   return [...keys].filter((k) => !sameValue(features[k], recorded[k]));
 }
 
+/**
+ * The prediction the UI should display: the recorded baseline while hold-to-compare is active (and a
+ * baseline exists), otherwise the current prediction.
+ */
+export const selectDisplayedPrediction = (
+  s: Pick<PatientState, 'comparing' | 'recordedPrediction' | 'prediction'>,
+): PredictResponse | null => (s.comparing && s.recordedPrediction ? s.recordedPrediction : s.prediction);
+
+/** Number of what-if edits (features that differ from the recorded values). */
+export const selectEditCount = (s: Pick<PatientState, 'features' | 'recorded'>): number =>
+  editedKeys(s.features, s.recorded).length;
+
+/** Fields reset whenever a different patient is loaded. */
+const FRESH_PATIENT = { baseline: null, recordedPrediction: null, comparing: false, revealed: false } as const;
+
 export const usePatientStore = create<PatientState>()((set, get) => ({
   selectedPatientId: null,
   split: null,
@@ -82,6 +112,8 @@ export const usePatientStore = create<PatientState>()((set, get) => ({
   prediction: null,
   previous: null,
   baseline: null,
+  recordedPrediction: null,
+  comparing: false,
   status: 'idle',
   error: null,
   predictionSeq: 0,
@@ -98,8 +130,7 @@ export const usePatientStore = create<PatientState>()((set, get) => ({
       mode: 'cohort',
       recorded: { ...patient.features },
       features: { ...patient.features },
-      baseline: null,
-      revealed: false,
+      ...FRESH_PATIENT,
       error: null,
     });
   },
@@ -113,9 +144,24 @@ export const usePatientStore = create<PatientState>()((set, get) => ({
       mode: 'custom',
       recorded: { ...defaults },
       features: { ...start },
-      baseline: null,
-      revealed: false,
+      ...FRESH_PATIENT,
     });
+  },
+
+  startBlank(defaults) {
+    set({
+      selectedPatientId: null,
+      split: null,
+      mode: 'blank',
+      recorded: { ...defaults },
+      features: { ...defaults },
+      ...FRESH_PATIENT,
+      error: null,
+    });
+  },
+
+  setComparing(comparing) {
+    set({ comparing });
   },
 
   setFeature(key, value) {
@@ -147,6 +193,8 @@ export const usePatientStore = create<PatientState>()((set, get) => ({
     set((s) => ({
       previous: s.prediction,
       prediction,
+      // Stale requests are aborted when the inputs change, so a success belongs to the current inputs.
+      recordedPrediction: editedKeys(s.features, s.recorded).length === 0 ? prediction : s.recordedPrediction,
       status: 'ready',
       error: null,
       latencyMs,
