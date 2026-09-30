@@ -45,7 +45,7 @@ export const SELECTED_LIFT_REALISTIC = 0.4;
  * uses a stronger gain (still an approximate wash, never as saturated as the vessel itself).
  */
 export const TERRITORY_GAIN = { selected: 0.25, all: 0.3 } as const;
-export const TERRITORY_GAIN_REALISTIC = { selected: 0.42, all: 0.42 } as const;
+export const TERRITORY_GAIN_REALISTIC = { selected: 0.42, all: 0.42, isolated: 0.7 } as const;
 /** The selected vessel's glow is lifted by this share so it is the hero of the frame (V2 §5.14). */
 export const SELECTED_LIFT = 0.35;
 /**
@@ -196,7 +196,9 @@ export function useRiskAnimation({ vessels, territories }: RiskAnimationTargets)
       t.mask[1] = step(t.mask[1]!, mask('LCX'), LAMBDA_TERRITORY);
       t.mask[2] = step(t.mask[2]!, mask('RCA'), LAMBDA_TERRITORY);
       const gains = scene.look === 'realistic' ? TERRITORY_GAIN_REALISTIC : TERRITORY_GAIN;
-      t.gain = step(t.gain, mode === 'all' ? gains.all : gains.selected, LAMBDA_TERRITORY);
+      // Isolate: the isolated vessel's supplied territory is the subject, so the Realistic wash is stronger.
+      const isolated = scene.isolate && selected && scene.look === 'realistic';
+      t.gain = step(t.gain, isolated ? TERRITORY_GAIN_REALISTIC.isolated : mode === 'all' ? gains.all : gains.selected, LAMBDA_TERRITORY);
       for (const u of sets) {
         u.uP.value.set(pOf('LAD'), pOf('LCX'), pOf('RCA'));
         u.uTerritoryOn.value = t.on;

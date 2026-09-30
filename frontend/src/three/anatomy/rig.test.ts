@@ -180,13 +180,15 @@ describe('anatomy rig: visibility', () => {
     expect((node('Lung_L').mesh.material as MeshStandardMaterial).visible).toBe(false);
   });
 
-  it('isolates the selected artery with the myocardium and fades everything else out', () => {
+  it('isolates the selected artery with the heart itself (walls, great-vessel roots) and fades the other vessels out', () => {
     const { rig, node } = makeRig();
     rig.update(inputs({ selected: 'LAD', isolate: true }));
     expect(node('Coronary_LAD').mesh.visible).toBe(true);
     expect(node('Heart_Wall_Anterior').mesh.visible).toBe(true);
     expect(node('Coronary_LCX').mesh.visible).toBe(false);
-    expect(node('GreatVessel_Aorta').mesh.visible).toBe(false);
+    // The organ stays whole (no open annuli where the aorta was).
+    expect(node('GreatVessel_Aorta').mesh.visible).toBe(true);
+    expect(node('Lung_L').mesh.visible).toBe(false);
   });
 
   it('ghosts the others and keeps the selected artery solid and pickable', () => {

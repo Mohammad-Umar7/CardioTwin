@@ -249,13 +249,16 @@ ${f.territory ? `{
                 + ctW.z * texture2D(uRiskLUT, vec2(uP.z, 0.5)).rgb;
     float ctPw = dot(ctW, uP);
     float ctMask = dot(ctW, uSelMask) * uTerritoryOn * (1.0 - ctNeutral);
-    ${f.territoryOverlay ? `// Realistic: luminance-preserving hue overlay (max 25 percent), hue only from the High band.
+    ${f.territoryOverlay ? `// Realistic: luminance-preserving hue overlay (max 25 percent; up to 56 percent when the gain is raised
+    // for an isolated vessel), hue only from the High band.
     float ctL = dot(diffuseColor.rgb, vec3(0.2126, 0.7152, 0.0722));
     vec3 ctHue = ctTint * (ctL / max(dot(ctTint, vec3(0.2126, 0.7152, 0.0722)), 1e-3));
     float ctWarm = smoothstep(0.45, 0.55, ctPw);
-    float ctStrength = min(0.25, 0.06 + uTerritoryGain * ctPw) * ctMask;
+    float ctStrength = min(max(0.25, 0.8 * uTerritoryGain), 0.06 + uTerritoryGain * ctPw) * ctMask;
     diffuseColor.rgb = mix(diffuseColor.rgb, ctHue, ctStrength * ctWarm);
-    diffuseColor.rgb *= 1.0 + 0.5 * ctStrength * (1.0 - ctWarm);` : `float ctStrength = (0.10 + uTerritoryGain * ctPw) * ctMask;
+    // A raised gain (an isolated vessel) also lifts the territory's luminance, so it reads on the dark muscle.
+    float ctLift = 0.5 * (1.0 - ctWarm) + 0.7 * step(0.5, uTerritoryGain) * ctWarm;
+    diffuseColor.rgb *= 1.0 + ctLift * ctStrength;` : `float ctStrength = (0.10 + uTerritoryGain * ctPw) * ctMask;
     diffuseColor.rgb = mix(diffuseColor.rgb, ctTint, ctStrength);`}
     // Hairline seam where the two largest territory weights cross.
     float ctHi = max(ctW.x, max(ctW.y, ctW.z));

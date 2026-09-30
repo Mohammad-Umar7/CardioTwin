@@ -853,7 +853,14 @@ export class AnatomyRig {
       const layerVisible = inp.layerVisibility[entry.layerId] ?? true;
       const isVessel = entry.kind === 'coronary' || entry.kind === 'leftMain';
       const selectedVessel = !!sel && (entry.target === sel || (entry.kind === 'leftMain' && (sel === 'LAD' || sel === 'LCX')));
-      const isolateMember = entry.kind === 'myocardium' || selectedVessel;
+      // Isolate keeps the heart itself (walls, the great-vessel roots and, in Realistic, the epicardial fat)
+      // with the vessel: an organ, not a maroon blob with open annuli.
+      const isolateMember =
+        entry.kind === 'myocardium' ||
+        selectedVessel ||
+        entry.kind === 'aorta' ||
+        entry.kind === 'pulmonaryArtery' ||
+        (entry.kind === 'fat' && inp.look === 'realistic');
       let solidT = 1;
       let ghostT = 0;
       // Valves and papillary muscles live inside the chambers: they appear as the heart opens or is cut
