@@ -1,0 +1,30 @@
+{
+  "compilerOptions": {
+    "tsBuildInfoFile": "./node_modules/.tmp/tsconfig.app.tsbuildinfo",
+    "target": "ES2022",
+    "lib": ["ES2023", "DOM", "DOM.Iterable", "WebWorker.ImportScripts"],
+    "module": "ESNext",
+    "moduleResolution": "bundler",
+    "moduleDetection": "force",
+    "allowImportingTsExtensions": false,
+    "resolveJsonModule": true,
+    "isolatedModules": true,
+    "useDefineForClassFields": true,
+    "jsx": "react-jsx",
+    "noEmit": true,
+    "skipLibCheck": true,
+
+    "strict": true,
+    "noUnusedLocals": true,
+    "noUnusedParameters": true,
+    "noFallthroughCasesInSwitch": true,
+    "noImplicitOverride": true,
+    "noUncheckedSideEffectImports": true,
+    "forceConsistentCasingInFileNames": true,
+
+    "baseUrl": ".",
+    "paths": { "@/*": ["src/*"] },
+    "types": ["vite/client", "vitest/globals", "@testing-library/jest-dom"]
+  },
+  "include": ["src"]
+}
