@@ -183,10 +183,21 @@ export function WhatIfTab({ target }: { target: TargetId }) {
                       {valueText(l.feature, l.from, specOf)} → {valueText(l.feature, l.to, specOf)}
                     </span>
                   </span>
-                  <Tooltip content={`${target} would be ${formatProbability(l.then).text} instead of ${formatProbability(l.now).text}, with every other input unchanged.`}>
+                  <Tooltip
+                    content={
+                      formatProbability(l.now).capped && formatProbability(l.then).capped && d.direction === 'none'
+                        ? `${target} stays ${formatProbability(l.then).text} with every other input unchanged; any change happens beyond the range the display resolves.`
+                        : `${target} would be ${formatProbability(l.then).text} instead of ${formatProbability(l.now).text}, with every other input unchanged.`
+                    }
+                  >
                     <span tabIndex={0} className="flex flex-col items-end rounded-xs outline-none focus-visible:shadow-focus">
                       <span className="num whitespace-nowrap text-body-s font-semibold text-primary">
-                        {d.direction === 'none' ? '±0 pts' : `${d.glyph} ${d.text}`}
+                        {d.direction !== 'none'
+                          ? `${d.glyph} ${d.text}`
+                          : // Both ends beyond the same display cap: it moves, but not within what can be shown.
+                            formatProbability(l.now).capped && formatProbability(l.then).capped
+                            ? 'capped'
+                            : '±0 pts'}
                       </span>
                       <span className="num text-label font-normal text-tertiary">
                         {undo ? 'back to recorded' : `→ ${formatProbability(l.then).text}`}
