@@ -229,22 +229,25 @@ def myocardium(name="L_Myocardium", tone=1.0):
 
 
 def fat(name="L_Fat"):
-    """Epicardial adipose tissue: glistening yellow lobules (Voronoi domes ~4-5 mm) separated by thin, slightly
-    darker and more orange septa, strongly translucent."""
+    """Epicardial adipose tissue: soft, glistening yellow lobules (smooth Voronoi domes ~5 mm, a second finer
+    lobulation ~2 mm) with slightly deeper, more orange folds between them; strongly translucent."""
     g = G(name)
     p = g.heart()
-    lob = g.voronoi(p, 20.0, "SMOOTH_F1", "Distance", randomness=0.95, smooth=0.35)
-    edge = g.voronoi(p, 20.0, "DISTANCE_TO_EDGE", "Distance", randomness=0.95)
-    fine = g.noise(p, 70.0, detail=3.0)
-    base = g.ramp(lob, [(0.0, srgb("#f6cf5a")), (0.3, srgb("#eab547")), (0.55, srgb("#d9973a")), (0.85, srgb("#b8742e"))])
-    base = g.mixc(g.maprange(edge, 0.0, 0.025, 0.22, 0.0), base, srgb("#b86a30"))
-    base = g.mixc(g.maprange(fine, 0.3, 0.7, 0.0, 0.12), base, srgb("#fff2b0"))
-    dome = g.math("SUBTRACT", 1.0, g.math("POWER", lob, 1.2))
-    h = g.math("ADD", g.math("MULTIPLY", dome, 0.9), g.maprange(edge, 0.0, 0.03, 0.0, 0.15))
-    nrm = g.bump(g.math("ADD", h, g.math("MULTIPLY", fine, 0.06)), 0.5, 0.004)
-    rough = g.maprange(edge, 0.0, 0.05, 0.36, 0.24)
-    g.set(Subsurface_Weight=0.55, Subsurface_Radius=(1.0, 0.75, 0.35), Subsurface_Scale=0.025,
-          Coat_Weight=0.45, Coat_Roughness=0.06, Specular_IOR_Level=0.55)
+    lob = g.voronoi(p, 16.0, "SMOOTH_F1", "Distance", randomness=1.0, smooth=0.6)
+    edge = g.voronoi(p, 16.0, "DISTANCE_TO_EDGE", "Distance", randomness=1.0)
+    sub = g.voronoi(p, 40.0, "SMOOTH_F1", "Distance", randomness=1.0, smooth=0.6)
+    tint = g.noise(p, 12.0, detail=3.0)
+    fine = g.noise(p, 90.0, detail=2.0)
+    base = g.ramp(tint, [(0.3, srgb("#d69a2e")), (0.55, srgb("#e2ac3b")), (0.8, srgb("#ebbd52"))])
+    base = g.mixc(g.maprange(lob, 0.2, 0.8, 0.0, 0.3), base, srgb("#b9772a"))
+    base = g.mixc(g.maprange(edge, 0.0, 0.012, 0.18, 0.0), base, srgb("#b06c2c"))
+    base = g.mixc(g.maprange(fine, 0.35, 0.7, 0.0, 0.06), base, srgb("#fbe39a"))
+    dome = g.math("ADD", g.math("SUBTRACT", 1.0, lob), g.math("MULTIPLY", g.math("SUBTRACT", 1.0, sub), 0.3))
+    h = g.math("ADD", dome, g.maprange(edge, 0.0, 0.015, -0.12, 0.0))
+    nrm = g.bump(g.math("ADD", h, g.math("MULTIPLY", fine, 0.05)), 0.7, 0.004)
+    rough = g.maprange(lob, 0.2, 0.8, 0.22, 0.42)
+    g.set(Subsurface_Weight=0.35, Subsurface_Radius=(1.0, 0.7, 0.3), Subsurface_Scale=0.015,
+          Coat_Weight=0.4, Coat_Roughness=0.07, Specular_IOR_Level=0.5)
     return g.finish(base=base, rough=rough, normal=nrm, category="Fat")
 
 
