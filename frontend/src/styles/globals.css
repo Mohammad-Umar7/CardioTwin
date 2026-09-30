@@ -118,6 +118,19 @@
     letter-spacing: 0;
     margin-left: 0.08em;
   }
+  /* Status line: "Vessel-level risk · no lesion localisation" appears only when it fits whole beside the
+     disclaimer (the cue measures 224 px at 12 px Inter). */
+  .status-cue {
+    container-type: inline-size;
+  }
+  .status-cue > span {
+    visibility: hidden;
+  }
+  @container (min-width: 228px) {
+    .status-cue > span {
+      visibility: visible;
+    }
+  }
   /* "≥95 %" / "≤5 %": the display bound, set like the % sign, before the digits. */
   .pct-sign.pct-qual {
     margin-left: 0;

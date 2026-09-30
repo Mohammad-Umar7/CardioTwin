@@ -15,8 +15,10 @@ export const ANATOMY_CREDIT = 'BodyParts3D © DBCLS · CC BY-SA 2.1 JP';
  * and full screen targets the app container, so it stays visible.
  *   Left:  (i) + the LUMEN wording, "not a diagnosis" in text/primary 500. Below 1280 the sentence keeps
  *          "not a diagnosis" and drops the substitute clause (it stays in Details).
- *   Right: "Vessel-level risk · no lesion localisation" (≥ 1440 only; below, it lives in Details and the
- *          legend chip), the anatomy credit (11 px, text/tertiary, anatomy routes only), then "Details ›".
+ *   Right: "Vessel-level risk · no lesion localisation" whenever it fits beside the full sentence (1280 and
+ *          up; it wraps out of the one-line row rather than truncate the disclaimer, and always lives in
+ *          Details and the legend chip), the anatomy credit (11 px, text/tertiary, anatomy routes only), then
+ *          "Details ›".
  * One line at h 28 (24 below 1440); below 1100 it may wrap.
  */
 export function StatusLine() {
@@ -33,15 +35,19 @@ export function StatusLine() {
       data-tour="status-line"
       className="fixed inset-x-0 bottom-0 z-status flex min-h-[var(--status-h)] items-center border-t border-hairline bg-app px-3 min-[1440px]:px-4"
     >
-      <div className="flex w-full flex-wrap items-center gap-x-4 gap-y-0.5 py-0.5 text-label font-normal text-secondary min-[1100px]:flex-nowrap">
-        <p className="flex min-w-0 flex-1 items-center gap-2 max-[1099.98px]:basis-full">
+      <div className="flex w-full flex-wrap items-center gap-x-3 gap-y-0.5 py-0.5 text-label font-normal text-secondary min-[1100px]:flex-nowrap min-[1440px]:gap-x-4">
+        <p className="flex min-w-0 flex-1 items-center gap-2 max-[1099.98px]:basis-full min-[1100px]:flex-initial">
           <Info aria-hidden className="size-3.5 shrink-0 stroke-[1.5]" />
           <span className="min-w-0 min-[1100px]:truncate">
             Decision support &amp; education only — <strong className="font-medium text-primary">not a diagnosis</strong>
             <span className="max-[1279.98px]:sr-only">; not a substitute for angiography, CTCA or formal diagnostic imaging</span>.
           </span>
         </p>
-        <span className="hidden whitespace-nowrap text-tertiary min-[1440px]:inline">Vessel-level risk · no lesion localisation</span>
+        {/* Takes the room the sentence leaves and shows the cue only when all of it fits (a container query in
+            globals.css), so neither the cue nor the disclaimer is ever truncated. */}
+        <span className="status-cue hidden min-w-0 flex-1 justify-end min-[1100px]:flex">
+          <span className="whitespace-nowrap text-tertiary">Vessel-level risk · no lesion localisation</span>
+        </span>
         {anatomy && (
           <span data-region="credits" className="whitespace-nowrap text-[0.6875rem] leading-4 text-tertiary">
             {ANATOMY_CREDIT}
