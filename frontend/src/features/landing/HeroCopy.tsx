@@ -49,7 +49,8 @@ export function HeroCopy({ leaving, onOpenWorkstation, onGuidedDemo, className }
         Predicts <abbr title="Coronary artery disease">CAD</abbr> and{' '}
         <abbr title="Left anterior descending artery">LAD</abbr> · <abbr title="Left circumflex artery">LCX</abbr> ·{' '}
         <abbr title="Right coronary artery">RCA</abbr> stenosis from {nInputs ?? 'routine'} routine clinical inputs, explains
-        every estimate with exact <abbr title="SHapley Additive exPlanations">SHAP</abbr>, and maps it onto real anatomy.
+        every estimate with exact <abbr title="SHapley Additive exPlanations">SHAP</abbr>, and maps it onto a real
+        reference heart: a per-patient risk twin, not a scan of this patient.
       </p>
       <div className="flex flex-wrap items-center gap-2 pt-1 animate-rise-in" style={rise(3)}>
         <Button
