@@ -12,7 +12,7 @@ import { VesselLabelsOverlay } from './labels/VesselLabels';
 import { SceneSummary } from './SceneSummary';
 import { Background } from './stage/Background';
 import { Lights, SceneEnvironment } from './stage/Lights';
-import { PostFX } from './stage/PostFX';
+import { SceneFX } from './fx/SceneFX';
 import { QualityMonitor } from './stage/QualityMonitor';
 import { probeWebGL } from './webgl';
 
@@ -109,7 +109,7 @@ export default function SceneCanvas({ active }: { active: boolean }) {
         <CameraRig />
         <Anatomy />
         <LabelProjector />
-        {tier !== 'C' && <PostFX tier={tier} />}
+        <SceneFX /* fx layer: flow, pulse, ignition, atmosphere AND the post chain (was stage/PostFX) — fx/README.md */ />
       </Canvas>
       <VesselLabelsOverlay />
       <SceneSummary id={summaryId} />
