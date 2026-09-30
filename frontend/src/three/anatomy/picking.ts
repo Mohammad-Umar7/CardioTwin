@@ -22,7 +22,9 @@ import { MeshBVH, acceleratedRaycast, type HitPointInfo } from 'three-mesh-bvh';
 import type { PickInfo } from '../stage/pickStore';
 import { PICKABLE_KINDS } from './classify';
 import type { RigEntry } from './rig';
+import type { HeartFrame } from './explode';
 import { segmentAtFace, segmentTable, territoryAtFace, veinTable, type SegmentInfo, type VeinInfo } from './segments';
+import { axial, heartWall, meanAngle, type AxisFrame, type RvArc } from './territory';
 
 /** Proxy tube radius = max(3 × lumen radius, floor) — LUMEN §10: "3D hit tubes are 3× vessel radius". */
 export const PROXY_SCALE = 3;
@@ -30,6 +32,7 @@ export const PROXY_MIN_RADIUS = 0.016;
 const PROXY_SIDES = 6;
 
 export interface CentrelineLike {
+  id?: string;
   node: string;
   segments: readonly { points: readonly (readonly number[])[]; radius?: readonly number[] }[];
 }
@@ -96,6 +99,7 @@ export function buildProxyGeometry(segments: CentrelineLike['segments'], restOff
 
 const proxyMaterial = new MeshBasicMaterial({ visible: false });
 const tmpLocal = new Vector3();
+const tmpRest = new Vector3();
 const tmpTri = new Triangle();
 const tmpBary = new Vector3();
 const hitInfo: HitPointInfo = { point: new Vector3(), distance: 0, faceIndex: 0 };
@@ -121,15 +125,29 @@ export class Picker {
   private readonly veins: Map<number, VeinInfo>;
   private pending: IdleHandle | null = null;
   private disposed = false;
+  /** Long-axis frame and interventricular grooves, for naming the wall under the pointer. */
+  private readonly axis: AxisFrame | null;
+  private readonly arc: RvArc | null;
 
   constructor(
     private readonly entries: readonly RigEntry[],
     manifestSegments: unknown,
     vessels: readonly CentrelineLike[] | null,
     manifestVeins: unknown = null,
+    frame: HeartFrame | null = null,
   ) {
     this.segments = segmentTable(manifestSegments);
     this.veins = veinTable(manifestVeins);
+    this.axis = frame ? { apex: frame.apex, axis: frame.axis, length: frame.length } : null;
+    const trunk = (id: string, lo: number, hi: number) => {
+      const pts = vessels?.find((v) => v.id === id)?.segments[0]?.points ?? [];
+      const a = Math.floor(pts.length * lo);
+      return pts.slice(a, Math.max(a + 1, Math.floor(pts.length * hi))).map((q) => new Vector3(q[0], q[1], q[2]));
+    };
+    const lad = this.axis ? meanAngle(this.axis, trunk('LAD', 0.2, 0.8)) : null;
+    const pda = this.axis ? meanAngle(this.axis, trunk('RCA_PDA', 0.2, 0.9)) : null;
+    const margin = this.axis ? meanAngle(this.axis, trunk('RCA_MARGINAL', 0.3, 1)) : null;
+    this.arc = lad !== null && pda !== null && margin !== null ? { lad, pda, margin } : null;
     for (const entry of entries) {
       if (!PICKABLE_KINDS.has(entry.kind)) continue;
       const mesh = entry.mesh;
@@ -224,6 +242,9 @@ export class Picker {
     }
     const colour = geometry.getAttribute('color');
     const territory = entry.kind === 'myocardium' && face !== null && colour ? territoryAtFace(geometry, colour, face) : null;
+    // The wall under the pointer, from its REST position (local = rest geometry; + the node's rest offset).
+    const wall =
+      entry.kind === 'myocardium' && this.axis && this.arc ? heartWall(this.arc, axial(this.axis, tmpRest.copy(tmpLocal).add(entry.restOffset))) : null;
     return {
       structureId: entry.structureId,
       node: entry.node,
@@ -233,6 +254,7 @@ export class Picker {
       segment,
       territory,
       vein,
+      wall,
       point: [point.x, point.y, point.z],
     };
   }

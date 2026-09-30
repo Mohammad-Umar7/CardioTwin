@@ -41,6 +41,20 @@ export const clip = (text: string | null | undefined, max = 220): string | null 
  */
 export const anatomicalTitle = (label: string): string => label.replace(/\s*\((anterior|posterior) half\)\s*$/i, '');
 
+/**
+ * A definition without the exploded view's engineering ("opened by a long-axis cut", "anterior half"): the
+ * split is how the model opens, not anatomy.
+ */
+export const anatomyOnly = (text: string | null | undefined): string | null => {
+  if (!text) return null;
+  const kept = text
+    .split(/(?<=[.;])\s+/)
+    .map((sentence) => sentence.replace(/,?\s*opened by [^,;.]*(?:cut|split)[^,;.]*/i, '').replace(/\b(anterior|posterior) half of (the )?/i, ''))
+    .filter((sentence) => !/\b(half|halves|long-axis cut)\b/i.test(sentence));
+  const out = kept.join(' ').trim();
+  return out ? out.charAt(0).toUpperCase() + out.slice(1) : null;
+};
+
 export function hoverContent(info: PickInfo, manifest: AnatomyManifest | null | undefined): HoverContent {
   const structure = manifest?.structures.find((s) => s.id === info.structureId || s.node === info.node);
   const title = anatomicalTitle(structure?.label ?? info.label);
@@ -62,18 +76,21 @@ export function hoverContent(info: PickInfo, manifest: AnatomyManifest | null | 
       note: 'Venous anatomy · not predicted by the model',
     };
   }
-  if (info.territory) {
+  if (info.kind === 'myocardium' && (info.territory || info.wall)) {
     return {
-      title,
-      segment: null,
-      definition: `Supplied mostly by the ${TERRITORY_NAME[info.territory]} (${info.territory}).`,
-      note: 'Approximate supplied territory, not a perfusion scan',
+      // "Left ventricle · mid anterolateral wall" rather than "Myocardium".
+      title: info.wall?.name ?? title,
+      segment: info.wall?.aha ? `AHA segment ${info.wall.aha} (approximate)` : null,
+      definition: info.territory
+        ? `Supplied mostly by the ${TERRITORY_NAME[info.territory]} (${info.territory}).`
+        : clip(anatomyOnly(definition ?? structure?.description)),
+      note: info.territory ? 'Approximate supplied territory and segment, not a perfusion scan' : null,
     };
   }
   return {
     title,
     segment: null,
-    definition: clip(definition ?? structure?.description),
+    definition: clip(info.kind === 'myocardium' ? anatomyOnly(definition ?? structure?.description) : (definition ?? structure?.description)),
     note: info.kind === 'leftMain' ? 'Left main · not predicted by the model' : info.kind === 'cardiacVein' ? 'Venous anatomy · not predicted by the model' : null,
   };
 }

@@ -3,7 +3,7 @@ import { resolve } from 'node:path';
 import { Vector3 } from 'three';
 import { describe, expect, it } from 'vitest';
 import { heartFrameFrom } from './explode';
-import { axial, correctWeights, meanAngle, rvShare, type RvArc } from './territory';
+import { axial, correctWeights, heartWall, meanAngle, rvShare, type RvArc } from './territory';
 
 const read = <T,>(file: string) => JSON.parse(readFileSync(resolve(__dirname, '../../../public/anatomy', file), 'utf8')) as T;
 const manifest = read<{ heart: unknown }>('manifest.json');
@@ -53,5 +53,20 @@ describe('right-ventricular free wall territory (the RCA, not the LAD)', () => {
     expect(Math.abs(a.phi)).toBeLessThan(1);
     expect(a.height).toBeCloseTo(0.5, 5);
     expect(a.radius).toBeGreaterThan(0.2);
+  });
+});
+
+describe('heart wall naming for the hover (approximate AHA segments)', () => {
+  it('names the RV free wall, the LV walls by ring, the apex and the atria', () => {
+    expect(heartWall(arc, { phi: arc.margin, radius: 0.4, height: 0.5 }).name).toMatch(/^Right ventricle/);
+    const lcx = meanAngle(axisFrame, trunk('LCX', 0.2, 0.8))!;
+    const lateral = heartWall(arc, { phi: lcx, radius: 0.45, height: 0.55 });
+    expect(lateral.name).toMatch(/^Left ventricle · mid (anterolateral|inferolateral) wall$/);
+    expect([11, 12]).toContain(lateral.aha);
+    expect(heartWall(arc, { phi: lcx, radius: 0.45, height: 0.05 })).toEqual({ name: 'Left ventricle · apex', aha: 17 });
+    expect(heartWall(arc, { phi: lcx, radius: 0.3, height: 0.95 }).name).toBe('Left atrium');
+    expect(heartWall(arc, { phi: arc.margin, radius: 0.3, height: 0.95 }).name).toBe('Right atrium');
+    // Near the axis between the grooves: the septum.
+    expect(heartWall(arc, { phi: arc.margin, radius: 0.1, height: 0.75 }).name).toMatch(/^Interventricular septum · basal/);
   });
 });

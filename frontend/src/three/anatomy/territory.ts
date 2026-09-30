@@ -89,3 +89,49 @@ export function correctWeights(w: readonly [number, number, number], share: numb
   const k = 1 - share;
   return [w[0] * k, w[1] * k, w[2] * k + sum * share];
 }
+
+// ------------------------------------------------------------------------------------ wall naming
+
+export interface HeartWallName {
+  /** "Left ventricle · mid anterolateral wall", "Right ventricle · anterior free wall", "Left atrium". */
+  name: string;
+  /** Approximate AHA 17-segment number (left ventricle and septum only), else null. */
+  aha: number | null;
+}
+
+/** Long-axis levels (fraction apex → base): apex cap, apical, mid, basal, then the atria above the AV plane. */
+export const WALL_LEVELS = { apex: 0.12, apical: 0.42, mid: 0.7, basal: 0.86 } as const;
+
+type Level = 'basal' | 'mid' | 'apical';
+type Wall = 'anterior' | 'anteroseptal' | 'inferoseptal' | 'inferior' | 'inferolateral' | 'anterolateral';
+const RING: Record<Level, Record<Wall, number>> = {
+  basal: { anterior: 1, anteroseptal: 2, inferoseptal: 3, inferior: 4, inferolateral: 5, anterolateral: 6 },
+  mid: { anterior: 7, anteroseptal: 8, inferoseptal: 9, inferior: 10, inferolateral: 11, anterolateral: 12 },
+  apical: { anterior: 13, anteroseptal: 14, inferoseptal: 14, inferior: 15, inferolateral: 16, anterolateral: 16 },
+};
+
+/**
+ * Anatomical name of a heart-wall point from its position around and along the long axis (approximate, for
+ * the hover): atria above the AV plane; the RV free wall (`rvShare`); the septum between the grooves near the
+ * axis; the LV free wall split, from the anterior to the posterior interventricular groove, into anterior,
+ * anterolateral, inferolateral and inferior quarters of the AHA rings. Pure.
+ */
+export function heartWall(arc: RvArc, p: { phi: number; radius: number; height: number }): HeartWallName {
+  const towardMargin = wrap360(arc.lad - arc.margin) < wrap360(arc.lad - arc.pda) ? 1 : -1;
+  const d = wrap360(towardMargin * (arc.lad - p.phi));
+  const span = wrap360(towardMargin * (arc.lad - arc.pda));
+  const onRvSide = d <= span;
+  if (p.height > WALL_LEVELS.basal) return { name: onRvSide ? 'Right atrium' : 'Left atrium', aha: null };
+  if (p.height < WALL_LEVELS.apex) return { name: 'Left ventricle · apex', aha: 17 };
+  const level: Level = p.height < WALL_LEVELS.apical ? 'apical' : p.height < WALL_LEVELS.mid ? 'mid' : 'basal';
+  if (onRvSide && rvShare(arc, p) > 0.5) return { name: `Right ventricle · ${d < span / 2 ? 'anterior' : 'inferior'} free wall`, aha: null };
+  if (onRvSide) {
+    const wall: Wall = d < span / 2 ? 'anteroseptal' : 'inferoseptal';
+    return { name: `Interventricular septum · ${level} ${level === 'apical' ? 'septal' : wall}`, aha: RING[level][wall] };
+  }
+  // LV free wall: s = 0 at the anterior groove -> 1 at the posterior groove, around the lateral side.
+  const s = (d - span) / Math.max(1e-6, 360 - span);
+  const wall: Wall = s < 0.25 ? 'anterior' : s < 0.5 ? 'anterolateral' : s < 0.75 ? 'inferolateral' : 'inferior';
+  const shown = level === 'apical' && (wall === 'anterolateral' || wall === 'inferolateral') ? 'lateral' : wall;
+  return { name: `Left ventricle · ${level} ${shown} wall`, aha: RING[level][wall] };
+}

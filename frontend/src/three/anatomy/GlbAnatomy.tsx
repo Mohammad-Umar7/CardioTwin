@@ -160,7 +160,7 @@ export function GlbAnatomy({ url }: { url: string }) {
     if (!rig) return null;
     const lines = (vessels?.vessels ?? null) as CentrelineLike[] | null;
     const extra = manifest as { segments?: unknown; veins?: unknown } | undefined;
-    return new Picker(rig.entries, extra?.segments, lines, extra?.veins);
+    return new Picker(rig.entries, extra?.segments, lines, extra?.veins, rig.frame);
   }, [rig, vessels, manifest]);
   useEffect(() => {
     if (!picker) return;

@@ -6,7 +6,7 @@ import type { AnatomyManifest, PredictResponse, VesselsFile } from '@/types/cont
 import { SURFACE_MIN_COVERAGE, VISIBLE_FACING, surfaceBestView, surfaceViewScore, trunkVisibility, visibleBestView } from '../camera/bestView';
 import { bestViewFor, toControlsAngles } from '../camera/presets';
 import { buildTracks, heartAxisFrame, restToDisplayed } from './anchorTracks';
-import { anatomicalTitle, clip, hoverContent } from './hoverContent';
+import { anatomicalTitle, anatomyOnly, clip, hoverContent } from './hoverContent';
 import { nearestPeelStage, sceneSummaryText } from './sceneSummaryText';
 import { ANCHOR_PERIOD_MS, AnchorChooser, bestCandidate, buildCandidates, facing, mainTrunk } from './dynamicAnchor';
 import { LABEL_MIN_GAP, chamberFade, coverFade, labelShowsProbability, laneFor, layoutLanes, layoutRow, resolveLane, stackLane, type LaneItem } from './labelRegistry';
@@ -317,5 +317,15 @@ describe('open-heart label row (V2 §10 explode)', () => {
     expect(chamberFade(0.5)).toBe(0);
     expect(chamberFade(1)).toBe(1);
     expect(chamberFade(0.8)).toBeGreaterThan(0);
+  });
+});
+
+describe('wall hover wording', () => {
+  it('drops the exploded view engineering from the wall definition', () => {
+    const text =
+      'Anterior half of the heart wall (myocardium of all four chambers), opened by a long-axis cut through both ventricles; carries the sternocostal surface: right ventricle, anterior interventricular groove and the anterior left ventricle.';
+    const out = anatomyOnly(text)!;
+    expect(out).not.toMatch(/half|long-axis cut|opened by/i);
+    expect(out).toMatch(/sternocostal surface/);
   });
 });

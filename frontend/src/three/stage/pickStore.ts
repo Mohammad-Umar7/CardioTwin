@@ -29,6 +29,8 @@ export interface PickInfo {
   territory: 'LAD' | 'LCX' | 'RCA' | null;
   /** Named cardiac vein under the pointer (CardiacVeins with `_VEIN`, manifest `veins[]`), else null. */
   vein?: VeinInfo | null;
+  /** Chamber / wall and approximate AHA segment under the pointer (heart walls), else null. */
+  wall?: { name: string; aha: number | null } | null;
   /** World-space face point at the time of the pick. */
   point: [number, number, number];
 }
