@@ -58,7 +58,7 @@ describe('test vs CV reconciliation (§6.4 rule 2)', () => {
   it('explains a lower test AUC whose CI includes the CV mean, citing only the CV number', () => {
     const s = reconcileSentence(cadMetrics, 'test', facts)!;
     expect(s).toContain('below cross-validation (0.94 ± 0.03)');
-    expect(s).toContain('61 test patients');
+    expect(s).toContain('small test set');
     expect(s).toContain('includes the CV value');
     expect(s).not.toContain('0.86'); // the test value lives on the ROC-AUC tile
   });
@@ -201,7 +201,7 @@ describe('analysis findings', () => {
 
   it('makes the multimodal gain the headline', () => {
     const a = readModalityAblation(sampleReport, 'CAD')!;
-    expect(modalityFinding(a)).toBe('ECG, Labs and Echo lift ROC-AUC from 0.90 to 0.94 over bedside information');
+    expect(modalityFinding(a)).toBe('ECG, labs and echo lift ROC-AUC from 0.90 to 0.94 over bedside information');
   });
 
   it('reports subgroups with no clear difference', () => {

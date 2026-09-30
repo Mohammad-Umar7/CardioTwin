@@ -106,7 +106,7 @@ export function reconcileSentence(m: TargetMetrics, split: Split, facts: SplitFa
   const diff = test.value - cv.mean;
   const ci = test.ci ?? null;
   const includes = ci ? ci[0] <= cv.mean && cv.mean <= ci[1] : null;
-  const small = `with ${facts.nTest} test patients`;
+  const small = 'with a small test set';
   if (split === 'test') {
     const cvText = `cross-validation (${f2(cv.mean)} ± ${f2(cv.std)})`;
     if (Math.abs(diff) < 0.015) return `Held-out ROC-AUC matches ${cvText}: the model generalised as estimated.`;
@@ -205,7 +205,7 @@ export function kpis(m: TargetMetrics, split: Split, target: string, facts: Spli
         'Mean squared gap between the estimated probability and what happened (0 or 1). Lower is better; predicting the prevalence for everyone scores about ' +
         `${f2(noSkillBrier)}.`,
       ...pick('brier'),
-      sub: split === 'test' ? `${facts.nTest} patients · lower is better` : `${folds} · lower is better`,
+      sub: split === 'test' ? 'lower is better' : `${folds} · lower is better`,
       domain: [0, brierMax],
       domainLabels: ['perfect', 'no skill'],
       higherIsBetter: false,
@@ -470,11 +470,18 @@ export function robustnessFinding(r: RobustnessResult): string {
   return `${range}; the published split was ${kind} (${ordinal(pct)} percentile)`;
 }
 
+/** Modality name mid-sentence: "labs", "echo", but "ECG". */
+export function modalityInSentence(id: string): string {
+  const short = modalityName(id, 'short');
+  return short === 'ECG' ? short : short.toLowerCase();
+}
+
 export function modalityFinding(a: ModalityAblation): string {
   const inst = a.instrumental;
   if (inst) {
-    const added = inst.addedGroups.map((g) => modalityName(g, 'short'));
-    const list = added.length > 1 ? `${added.slice(0, -1).join(', ')} and ${added.at(-1)}` : (added[0] ?? 'Instruments');
+    const added = inst.addedGroups.map((g) => modalityInSentence(g));
+    const joined = added.length > 1 ? `${added.slice(0, -1).join(', ')} and ${added.at(-1)}` : (added[0] ?? 'instrumental data');
+    const list = joined.charAt(0).toUpperCase() + joined.slice(1);
     const clear = inst.delta?.ci ? inst.delta.ci[0] > 0 : false;
     return clear
       ? `${list} lift ROC-AUC from ${f2(inst.bedside.mean)} to ${f2(inst.full.mean)} over bedside information`
@@ -484,7 +491,7 @@ export function modalityFinding(a: ModalityAblation): string {
   const best = [...steps].sort((x, y) => (y.delta?.mean ?? 0) - (x.delta?.mean ?? 0))[0];
   const full = a.full ?? a.cumulative.at(-1)?.auc;
   if (best && full)
-    return `${modalityName(best.group)} add the most; all seven modalities together reach ${f2(full.mean)}`;
+    return `${modalityName(best.group)} add${best.group === 'symptoms' || best.group === 'labs' ? '' : 's'} the most; all modalities together reach ${f2(full.mean)}`;
   return 'What each data modality adds';
 }
 
@@ -503,3 +510,26 @@ export function subgroupFinding(s: Subgroups, source: SubgroupSource): string {
   return `Discrimination differs for ${flagged.join(', ')}`;
 }
 
+// ---------------------------------------------------------------------------------------- protocol
+
+/** The validation protocol as a checklist of facts, each read from metrics.json where it can be. */
+export function protocolItems(report: MetricsReport, facts: SplitFacts): string[] {
+  const p = report.protocol as Record<string, unknown>;
+  const seed = typeof p.seed === 'number' ? p.seed : null;
+  const history = Array.isArray(p.test_set_history) ? p.test_set_history.length : 0;
+  const items = [
+    'Angiography results are never model inputs; a unit test and the API both enforce it',
+    `Locked ${facts.nTest}-patient test split${seed !== null ? ` (seed ${seed})` : ''}, stratified on the joint four-label pattern`,
+    facts.cvSplits && facts.cvRepeats
+      ? `Nested cross-validation: ${facts.cvSplits}-fold × ${facts.cvRepeats} repeats outside, tuning inside, identical folds for every model`
+      : 'Nested cross-validation with identical folds for every model',
+    'Ensemble weight, Platt calibration and thresholds fitted on out-of-fold predictions only',
+    facts.nBootstrap ? `${facts.nBootstrap.toLocaleString('en-US')} stratified bootstrap resamples behind every test interval` : 'Bootstrap intervals on every test metric',
+    'Browser (edge) engine matches the server within 10⁻⁶ on every parity fixture',
+  ];
+  if (history > 1)
+    items.push(
+      `Test set re-scored ${history - 1 === 1 ? 'once' : `${history - 1} times`} after an independent review found a calibration defect; disclosed, no model choice changed`,
+    );
+  return items;
+}

@@ -1,294 +1,362 @@
-import { Check } from 'lucide-react';
-import { useState, type ReactNode } from 'react';
-import { Link } from 'react-router-dom';
-import { Card, EmptyState, SegmentedControl, Skeleton, Stat, Tabs, Tooltip } from '@/design';
-import { useMetrics } from '@/hooks/useData';
-import { cn } from '@/lib/cn';
-import { formatCi, formatMetricValue, formatPercent } from '@/lib/format';
+import { useEffect, useMemo, useState, type ReactNode } from 'react';
+import { useSearchParams } from 'react-router-dom';
+import { EmptyState, SegmentedControl, Skeleton, Tabs } from '@/design';
 import { tabPanelId } from '@/design/tabIds';
-import { ROUTES } from '@/routes';
-import { TARGET_ORDER, type TargetMetrics } from '@/types/contracts';
-import { LineChart } from './LineChart';
+import { useMetrics, useSchemaIndex } from '@/hooks/useData';
+import { useMediaQuery } from '@/hooks/useMediaQuery';
+import { cn } from '@/lib/cn';
+import { formatMetricValue } from '@/lib/format';
+import { deployedModelName } from '@/lib/modelNames';
+import { TARGET_ORDER, type KnownTargetId, type MetricsReport } from '@/types/contracts';
+import {
+  CumulativeModule,
+  LeaveOneOutModule,
+  MultimodalHeadline,
+  RobustnessModule,
+  RobustnessStatsModule,
+  SubgroupsModule,
+} from './AnalysisModules';
+import { CalibrationModule, DecisionCurveModule, PrModule, RocModule } from './CurveModules';
+import { ConfusionModule, ThresholdExplorer } from './DecisionModules';
+import {
+  readBaseline,
+  readCalibrationSummary,
+  readComponents,
+  readModalityAblation,
+  readRobustness,
+  readSubgroups,
+} from './extras';
+import { DriversModule, LeaderboardModule } from './ModelModules';
+import {
+  deployedIndex,
+  kpis,
+  moreMetrics,
+  operatingPoints,
+  pageTakeaway,
+  reconcileSentence,
+  splitFacts,
+  testPrevalence,
+  type Split,
+} from './model';
+import { ProtocolStrip } from './ProtocolStrip';
+import { SummaryTiles } from './SummaryTiles';
 
-function ChartFrame({ title, howTo, children }: { title: string; howTo: string; children: ReactNode }) {
+const TARGET_NAMES: Record<KnownTargetId, string> = {
+  CAD: 'Coronary artery disease',
+  LAD: 'Left anterior descending artery',
+  LCX: 'Left circumflex artery',
+  RCA: 'Right coronary artery',
+};
+
+const isTarget = (v: string | null): v is KnownTargetId => !!v && (TARGET_ORDER as readonly string[]).includes(v);
+
+interface SectionProps {
+  id: string;
+  title: string;
+  lede?: ReactNode;
+  children: ReactNode;
+}
+
+/** Section rhythm (§6.4 rule 9): overline name, one plain lede, then a 12-column grid of modules. */
+function Section({ id, title, lede, children }: SectionProps) {
   return (
-    <Card className="flex flex-col gap-2">
-      <h2 className="text-title-2 text-primary">{title}</h2>
-      <p className="text-label font-normal text-tertiary">How to read: {howTo}</p>
+    <section id={id} aria-labelledby={`${id}-title`} className="flex scroll-mt-[calc(var(--topbar-h)+72px)] flex-col gap-4">
+      <div className="flex flex-col gap-1">
+        <h2 id={`${id}-title`} className="eyebrow text-secondary">
+          {title}
+        </h2>
+        {lede && <p className="max-w-[88ch] text-body-s text-tertiary text-pretty">{lede}</p>}
+      </div>
       {children}
-    </Card>
+    </section>
   );
 }
 
-function Tiles({ m, split }: { m: TargetMetrics; split: 'test' | 'cv' }) {
-  const t = m.test;
-  const cv = m.cv;
-  const cm = m.confusion_matrix;
-  const cell = (name: string, label: string, def: string, sub?: ReactNode) => {
-    const value = split === 'test' ? t[name]?.value : cv[name]?.mean;
-    const extra = split === 'test' ? formatCi(t[name]?.ci) : cv[name] ? `± ${formatMetricValue(cv[name]?.std)}` : '';
-    return (
-      <Tooltip content={def}>
-        <div tabIndex={0} className="rounded-md border border-hairline bg-panel px-4 py-3 outline-none">
-          <Stat
-            label={label}
-            value={
-              <span className="num">
-                {formatMetricValue(value)} <span className="text-body-s font-medium text-tertiary">{extra}</span>
-              </span>
-            }
-            sub={sub}
-          />
-        </div>
-      </Tooltip>
+const SECTIONS = [
+  ['summary', 'Summary'],
+  ['multimodal', 'Multimodal value'],
+  ['discrimination', 'Discrimination'],
+  ['calibration', 'Calibration'],
+  ['decisions', 'Decisions'],
+  ['robustness', 'Robustness'],
+  ['subgroups', 'Subgroups'],
+  ['models', 'Models'],
+  ['protocol', 'Protocol'],
+] as const;
+
+function useActiveSection(ids: readonly string[]): string | null {
+  const [active, setActive] = useState<string | null>(null);
+  useEffect(() => {
+    if (typeof IntersectionObserver === 'undefined') return;
+    const seen = new Map<string, boolean>();
+    const io = new IntersectionObserver(
+      (entries) => {
+        for (const e of entries) seen.set(e.target.id, e.isIntersecting);
+        const first = ids.find((id) => seen.get(id));
+        if (first) setActive(first);
+      },
+      { rootMargin: '-140px 0px -55% 0px' },
     );
-  };
+    for (const id of ids) {
+      const el = document.getElementById(id);
+      if (el) io.observe(el);
+    }
+    return () => io.disconnect();
+  }, [ids]);
+  return active;
+}
+
+function SectionNav({ ids }: { ids: readonly (readonly [string, string])[] }) {
+  const active = useActiveSection(useMemo(() => ids.map(([id]) => id), [ids]));
   return (
-    <div className="grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-6">
-      {cell('roc_auc', 'ROC-AUC', 'Probability that a random diseased patient is ranked above a random healthy one.', cv.roc_auc ? `CV ${formatMetricValue(cv.roc_auc.mean)} ± ${formatMetricValue(cv.roc_auc.std)}` : undefined)}
-      {cell('pr_auc', 'PR-AUC', 'Average precision across recall levels; compare with the prevalence baseline.')}
-      {cell('f1', `F1 @ thr ${formatMetricValue(m.threshold)}`, 'Harmonic mean of precision and recall at the deployed threshold.', t.precision ? `precision ${formatMetricValue(t.precision.value)}` : undefined)}
-      {cell('recall', 'Sensitivity', 'Share of diseased patients flagged at the deployed threshold.', `FN ${cm.fn} of ${cm.fn + cm.tp}`)}
-      {cell('specificity', 'Specificity', 'Share of healthy patients correctly not flagged.', `FP ${cm.fp} of ${cm.fp + cm.tn}`)}
-      {cell('brier', 'Brier · lower = better', 'Mean squared error of the calibrated probabilities.', t.mcc ? `MCC ${formatMetricValue(t.mcc.value)}` : undefined)}
+    <nav aria-label="Sections on this page" className="ml-auto hidden items-center gap-0.5 min-[1360px]:flex">
+      {ids.map(([id, label]) => (
+        <button
+          key={id}
+          type="button"
+          aria-current={active === id ? 'true' : undefined}
+          onClick={() => document.getElementById(id)?.scrollIntoView({ behavior: 'smooth', block: 'start' })}
+          className={cn(
+            'relative h-8 rounded-sm px-2 text-label transition-colors duration-fast',
+            active === id ? 'text-primary' : 'text-tertiary hover:text-secondary',
+          )}
+        >
+          {label}
+          {active === id && <span aria-hidden className="absolute inset-x-2 -bottom-[11px] h-0.5 rounded-full bg-accent" />}
+        </button>
+      ))}
+    </nav>
+  );
+}
+
+function PageSkeleton({ height }: { height: number }) {
+  return (
+    <div className="flex flex-col gap-8" aria-busy="true">
+      <div className="flex flex-col gap-3">
+        <Skeleton className="h-4 w-48" />
+        <Skeleton className="h-11 w-3/4" />
+        <Skeleton className="h-5 w-2/3" />
+      </div>
+      <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+        {Array.from({ length: 4 }, (_, i) => (
+          <Skeleton key={i} className="h-[136px] rounded-lg" />
+        ))}
+      </div>
+      <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
+        <Skeleton className="rounded-lg" style={{ height: height + 96 }} label="Loading evaluation report" />
+        <Skeleton className="rounded-lg" style={{ height: height + 96 }} />
+      </div>
     </div>
   );
 }
 
-function Confusion({ m }: { m: TargetMetrics }) {
-  const { tn, fp, fn, tp } = m.confusion_matrix;
-  const c = (label: string, n: number, correct: boolean) => (
-    <td className={cn('h-14 rounded-sm text-center', correct ? 'bg-[var(--accent-subtle)]' : 'hatch bg-surface-2')}>
-      <div className="text-label font-normal text-secondary">{label}</div>
-      <div className="num font-numeral text-numeral-l text-primary">{n}</div>
-    </td>
-  );
-  return (
-    <table className="w-full border-separate border-spacing-1 text-body-s">
-      <caption className="sr-only">Confusion matrix at the deployed threshold</caption>
-      <thead>
-        <tr className="text-label text-tertiary">
-          <th>
-            <span className="sr-only">Actual class</span>
-          </th>
-          <th scope="col" className="font-medium">
-            predicted −
-          </th>
-          <th scope="col" className="font-medium">
-            predicted +
-          </th>
-        </tr>
-      </thead>
-      <tbody>
-        <tr>
-          <th scope="row" className="pr-2 text-left text-label font-medium text-tertiary">
-            actual −
-          </th>
-          {c('TN', tn, true)}
-          {c('FP', fp, false)}
-        </tr>
-        <tr>
-          <th scope="row" className="pr-2 text-left text-label font-medium text-tertiary">
-            actual +
-          </th>
-          {c('FN', fn, false)}
-          {c('TP', tp, true)}
-        </tr>
-      </tbody>
-    </table>
-  );
-}
-
 /**
- * Model performance (DESIGN_SYSTEM §4.4), foundation version: every number is read from metrics.json —
- * KPI tiles with CIs (held-out test) or mean ± sd (5-fold CV), neutral ROC / PR / calibration / decision
- * curves, the confusion matrix, the CV leaderboard and the validation protocol. Phase 2 adds the linked
- * what-if threshold, table views and exports.
+ * Model performance (WORKSTATION_V2 §6.4): a report that answers "how good is it, how do we know,
+ * and where does it fail?" Summary first (takeaway title, test-vs-CV sentence, four KPI tiles), then
+ * the multimodal evidence, discrimination, calibration, the linked threshold explorer, robustness
+ * across re-splits, subgroups, the model comparison and the protocol. Every number comes from
+ * metrics.json; sections for analyses not yet published are simply absent.
  */
 export default function PerformancePage() {
   const metrics = useMetrics();
-  const [target, setTarget] = useState<string>('CAD');
-  const [split, setSplit] = useState<'test' | 'cv'>('test');
-  const m = metrics.data?.targets[target];
-  const ds = metrics.data?.dataset;
+  const schema = useSchemaIndex();
+  const [params, setParams] = useSearchParams();
+  const wide = useMediaQuery('(min-width: 1440px)');
+  const H = wide ? 240 : 200;
+
+  const target: KnownTargetId = isTarget(params.get('t')) ? (params.get('t') as KnownTargetId) : 'CAD';
+  const split: Split = params.get('split') === 'cv' ? 'cv' : 'test';
+  const setView = (next: { t?: KnownTargetId; split?: Split }) => {
+    const p = new URLSearchParams(params);
+    const t = next.t ?? target;
+    const s = next.split ?? split;
+    if (t === 'CAD') p.delete('t');
+    else p.set('t', t);
+    if (s === 'test') p.delete('split');
+    else p.set('split', s);
+    setParams(p, { replace: true });
+  };
+
+  const [exploreState, setExploreState] = useState<{ target: string; index: number } | null>(null);
+  const explore = exploreState?.target === target ? exploreState.index : null;
+  const onExplore = (i: number | null) => setExploreState(i === null ? null : { target, index: i });
+
+  const report: MetricsReport | undefined = metrics.data;
+  const m = report?.targets[target];
+  const facts = useMemo(() => splitFacts(report), [report]);
+  const points = useMemo(() => (m ? operatingPoints(m) : []), [m]);
+  const deployed = deployedIndex(points);
+
+  const extras = useMemo(
+    () => ({
+      components: readComponents(m),
+      calibration: readCalibrationSummary(m),
+      baseline: readBaseline(m),
+      robustness: readRobustness(report, target),
+      modality: readModalityAblation(report, target),
+      subgroups: readSubgroups(report, target),
+    }),
+    [m, report, target],
+  );
+
+  const modelVersion = (report as { model_version?: string } | undefined)?.model_version ?? report?.version ?? '';
+  const provenance = `CardioTwin model ${modelVersion} · ${target} · held-out test (n = ${facts.nTest})`;
+  const prevalence = testPrevalence(report, target, m);
+  const logisticId = extras.components?.logisticId ?? null;
+
+  const visibleSections = SECTIONS.filter(([id]) => {
+    if (id === 'robustness') return !!extras.robustness;
+    if (id === 'subgroups') return !!extras.subgroups;
+    if (id === 'multimodal') return !!(extras.modality || extras.baseline || extras.robustness?.deltaVsBaseline);
+    return true;
+  });
 
   return (
-    <div className="mx-auto flex w-full max-w-[1320px] flex-col gap-5 px-6 py-6">
-      <header className="flex flex-col gap-3 animate-rise-in">
-        <div className="flex flex-wrap items-end justify-between gap-4">
-          <div>
-            <p className="eyebrow text-accent">Model performance</p>
-            <h1 className="font-display text-display-2 text-primary">How well does it separate diseased from healthy?</h1>
-            <p className="mt-1 text-body text-secondary">On patients it never saw: the held-out test split was scored once, after every decision was frozen.</p>
-          </div>
-          <div className="flex flex-wrap items-center gap-3">
-            <Tabs
-              idBase="perf-target"
-              label="Target"
-              value={target}
-              onChange={setTarget}
-              items={TARGET_ORDER.map((t) => ({ value: t, label: t }))}
-            />
-            <SegmentedControl
-              label="Evaluation split"
-              value={split}
-              onChange={(v) => setSplit(v as 'test' | 'cv')}
-              options={[
-                { value: 'test', label: `Held-out test${ds ? ` n=${ds.n_test}` : ''}` },
-                { value: 'cv', label: `5-fold CV${ds ? ` · dev n=${ds.n_dev}` : ''}` },
-              ]}
-            />
-          </div>
+    <div className="flex w-full flex-col">
+      <div className="sticky top-[var(--topbar-h)] z-hud border-b border-hairline bg-app">
+        <div className="mx-auto flex h-14 w-full max-w-[1280px] items-center gap-4 px-6">
+          <Tabs
+            idBase="perf-target"
+            label="Target"
+            size="md"
+            value={target}
+            onChange={(t) => setView({ t })}
+            items={TARGET_ORDER.map((t) => ({ value: t, label: t }))}
+            className="h-full items-stretch border-b-0 [&>button]:h-full"
+          />
+          <SegmentedControl
+            label="Evaluation split"
+            value={split}
+            onChange={(v) => setView({ split: v as Split })}
+            options={[
+              { value: 'test', label: 'Held-out test', title: 'Patients never seen during development; scored once' },
+              { value: 'cv', label: 'Cross-validation', title: 'Repeated nested cross-validation on the development set' },
+            ]}
+          />
+          {m && <SectionNav ids={visibleSections} />}
         </div>
-        {m && <p className="text-label font-normal text-tertiary">{m.selected_model} · deployed threshold {formatPercent(m.threshold)}</p>}
-      </header>
+      </div>
 
-      {metrics.status === 'loading' && (
-        <div className="grid grid-cols-3 gap-3">
-          {Array.from({ length: 6 }, (_, i) => (
-            <Skeleton key={i} className="h-20" />
-          ))}
-        </div>
-      )}
-      {(metrics.status === 'missing' || metrics.status === 'error') && (
-        <EmptyState title="Evaluation report not published yet">
-          <span className="mono">model/metrics.json</span> is produced by the ML pipeline (<span className="mono">ml/</span>). Run
-          the training pipeline or start the API to see the numbers here.
-        </EmptyState>
-      )}
+      <div className="mx-auto flex w-full max-w-[1280px] flex-col gap-8 px-6 pb-16 pt-8">
+        {metrics.status === 'loading' && <PageSkeleton height={H} />}
+        {(metrics.status === 'missing' || metrics.status === 'error') && (
+          <EmptyState title="Evaluation report not published yet">
+            The ML pipeline writes the evaluation report next to the model. Run the training pipeline or start the API to see
+            the numbers here.
+          </EmptyState>
+        )}
 
-      {m && (
-        <div id={tabPanelId('perf-target', target)} role="tabpanel" aria-labelledby={`perf-target-tab-${target}`} className="flex flex-col gap-5">
-          <Tiles m={m} split={split} />
-          <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
-            <ChartFrame title="ROC · 95 % bootstrap band" howTo="the closer the curve hugs the top-left corner, the better; the diagonal is chance.">
-              <LineChart
-                xLabel="False-positive rate"
-                yLabel="True-positive rate"
-                band={
-                  m.curves.roc_band
-                    ? { x: m.curves.roc_band.fpr, low: m.curves.roc_band.tpr_low, high: m.curves.roc_band.tpr_high }
-                    : null
-                }
-                series={[
-                  { id: 'roc', label: `${target} model`, x: m.curves.roc.fpr, y: m.curves.roc.tpr },
-                  { id: 'chance', label: 'Chance', x: [0, 1], y: [0, 1], kind: 'reference' },
-                ]}
-                summary={`ROC curve for ${target}; test ROC-AUC ${formatMetricValue(m.test.roc_auc?.value)}.`}
-              />
-            </ChartFrame>
-            <ChartFrame title="Precision–recall · baseline = prevalence" howTo="precision stays high across recall when the model ranks well; the dashed line is prevalence.">
-              <LineChart
-                xLabel="Recall"
-                yLabel="Precision"
-                series={[
-                  { id: 'pr', label: `${target} model`, x: m.curves.pr.recall, y: m.curves.pr.precision },
-                  {
-                    id: 'base',
-                    label: `Prevalence ${formatMetricValue(ds?.prevalence[target])}`,
-                    x: [0, 1],
-                    y: [ds?.prevalence[target] ?? 0, ds?.prevalence[target] ?? 0],
-                    kind: 'reference',
-                  },
-                ]}
-                summary={`Precision-recall curve for ${target}; test PR-AUC ${formatMetricValue(m.test.pr_auc?.value)}.`}
-              />
-            </ChartFrame>
-            <ChartFrame title="Calibration · reliability" howTo="points on the diagonal mean predicted probabilities match observed frequencies; point size = patients in the bin.">
-              <LineChart
-                xLabel="Predicted probability"
-                yLabel="Observed frequency"
-                series={[
-                  {
-                    id: 'cal',
-                    label: 'Quantile bins',
-                    x: m.curves.calibration.mean_predicted,
-                    y: m.curves.calibration.fraction_positive,
-                    points: true,
-                    sizes: m.curves.calibration.count,
-                  },
-                  { id: 'perfect', label: 'Perfect calibration', x: [0, 1], y: [0, 1], kind: 'reference' },
-                ]}
-                summary={`Calibration curve for ${target}; Brier score ${formatMetricValue(m.test.brier?.value)}.`}
-              />
-            </ChartFrame>
-            <ChartFrame title="Decision curve · net benefit" howTo="the model helps wherever its curve is above both 'treat all' and 'treat none'.">
-              <LineChart
-                xLabel="Threshold probability"
-                yLabel="Net benefit"
-                yDomain={[
-                  Math.min(0, ...m.curves.dca.model, ...m.curves.dca.treat_all.filter((v) => v > -0.5)),
-                  Math.max(0.05, ...m.curves.dca.model, ...m.curves.dca.treat_all),
-                ]}
-                series={[
-                  { id: 'model', label: 'Model', x: m.curves.dca.thresholds, y: m.curves.dca.model },
-                  { id: 'all', label: 'Treat all', x: m.curves.dca.thresholds, y: m.curves.dca.treat_all.map((v) => Math.max(v, -0.5)), kind: 'secondary' },
-                  { id: 'none', label: 'Treat none', x: m.curves.dca.thresholds, y: m.curves.dca.treat_none, kind: 'reference' },
-                ]}
-                summary={`Decision curve for ${target}.`}
-              />
-            </ChartFrame>
+        {report && m && (
+          <div id={tabPanelId('perf-target', target)} role="tabpanel" aria-labelledby={`perf-target-tab-${target}`} className="flex flex-col gap-8">
+            <section id="summary" aria-labelledby="summary-title" className="flex scroll-mt-[calc(var(--topbar-h)+72px)] flex-col gap-5">
+              <header className="flex flex-col gap-2">
+                <p className="eyebrow text-accent">
+                  Model performance · {TARGET_NAMES[target]}
+                </p>
+                <h1 id="summary-title" className="max-w-[30ch] font-display text-display-2 text-primary text-balance">
+                  {pageTakeaway(target, m, split)}
+                </h1>
+                <p className="max-w-[92ch] text-body text-secondary text-pretty">{reconcileSentence(m, split, facts)}</p>
+                <p className="text-label font-normal text-tertiary">
+                  Deployed: {deployedModelName(logisticId)}, Platt-calibrated, decision threshold{' '}
+                  <span className="num text-secondary">{formatMetricValue(m.threshold)}</span> chosen on development folds.
+                </p>
+              </header>
+              <SummaryTiles tiles={kpis(m, split, target, facts, prevalence)} split={split} more={moreMetrics(m)} />
+            </section>
+
+            {visibleSections.some(([id]) => id === 'multimodal') && (
+              <Section
+                id="multimodal"
+                title="Multimodal value"
+                lede="CardioTwin fuses seven clinical modalities: demographics, history, symptoms, examination, resting ECG, laboratory tests and echocardiography. These analyses test whether the fusion pays off, against a bedside-only baseline and modality by modality."
+              >
+                <MultimodalHeadline
+                  target={target}
+                  modality={extras.modality}
+                  baseline={extras.baseline}
+                  testAuc={m.test.roc_auc?.value ?? null}
+                  robustness={extras.robustness}
+                  nFolds={facts.nFolds}
+                />
+                {extras.modality && (
+                  <div className="grid grid-cols-1 gap-6 lg:grid-cols-12">
+                    <div className="lg:col-span-7">
+                      <CumulativeModule target={target} a={extras.modality} height={H + 24} />
+                    </div>
+                    <div className="lg:col-span-5">
+                      <LeaveOneOutModule target={target} a={extras.modality} height={H + 24} />
+                    </div>
+                  </div>
+                )}
+              </Section>
+            )}
+
+            <Section id="discrimination" title="Discrimination" lede="Can it tell who has the disease from who does not? Curves are drawn on the held-out test set.">
+              <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
+                <RocModule target={target} m={m} points={points} deployed={deployed} explore={explore} onExplore={onExplore} height={H} provenance={provenance} nTest={facts.nTest} />
+                <PrModule target={target} m={m} points={points} deployed={deployed} explore={explore} onExplore={onExplore} height={H} provenance={provenance} nTest={facts.nTest} prevalence={prevalence} />
+              </div>
+            </Section>
+
+            <Section id="calibration" title="Calibration and clinical usefulness" lede="Can the percentages be taken at face value, and would acting on them help?">
+              <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
+                <CalibrationModule target={target} m={m} height={H} provenance={provenance} nTest={facts.nTest} summary={extras.calibration} />
+                <DecisionCurveModule target={target} m={m} points={points} deployed={deployed} explore={explore} onExplore={onExplore} height={H} provenance={provenance} nTest={facts.nTest} />
+              </div>
+            </Section>
+
+            <Section id="decisions" title="Decisions" lede="What happens at the threshold, and what would change if it moved. Exploring never changes the deployed model.">
+              <div className="grid grid-cols-1 gap-6 lg:grid-cols-12">
+                <div className="lg:col-span-5">
+                  <ConfusionModule target={target} m={m} points={points} deployed={deployed} explore={explore} height={H} nTest={facts.nTest} />
+                </div>
+                <div className="lg:col-span-7">
+                  <ThresholdExplorer target={target} points={points} deployed={deployed} explore={explore} onExplore={onExplore} height={H} nTest={facts.nTest} />
+                </div>
+              </div>
+            </Section>
+
+            {extras.robustness && (
+              <Section
+                id="robustness"
+                title="Robustness"
+                lede={`One ${facts.nTest}-patient test set is a single draw. Re-running the complete recipe on many random splits shows how much a held-out estimate can move, and where the published split falls.`}
+              >
+                <div className="grid grid-cols-1 gap-6 lg:grid-cols-12">
+                  <div className="lg:col-span-7">
+                    <RobustnessModule target={target} r={extras.robustness} height={H} provenance={provenance} />
+                  </div>
+                  <div className="lg:col-span-5">
+                    <RobustnessStatsModule target={target} r={extras.robustness} height={H} />
+                  </div>
+                </div>
+              </Section>
+            )}
+
+            {extras.subgroups && (
+              <Section id="subgroups" title="Subgroups" lede="Does it work equally well for women and men, across ages, and with or without diabetes? Follows the split selector above.">
+                <SubgroupsModule target={target} s={extras.subgroups} source={split === 'test' ? 'test' : 'oof'} height={H + 40} />
+              </Section>
+            )}
+
+            <Section id="models" title="Model comparison" lede="Every candidate was cross-validated on identical folds; the deployed ensemble is highlighted.">
+              <div className="grid grid-cols-1 gap-6 lg:grid-cols-12">
+                <div className="lg:col-span-7">
+                  <LeaderboardModule target={target} m={m} logisticId={logisticId} byKey={schema?.byKey} height={H + 24} nFolds={facts.nFolds} />
+                </div>
+                <div className="lg:col-span-5">
+                  <DriversModule target={target} m={m} logisticId={logisticId} byKey={schema?.byKey} height={H + 24} nFolds={facts.nFolds} />
+                </div>
+              </div>
+            </Section>
+
+            <Section id="protocol" title="Validation protocol">
+              <ProtocolStrip report={report} facts={facts} />
+            </Section>
           </div>
-          <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
-            <ChartFrame title={`Confusion @ thr ${formatMetricValue(m.threshold)}`} howTo="correct cells are tinted; errors are hatched (never red).">
-              <Confusion m={m} />
-            </ChartFrame>
-            <ChartFrame title="Leaderboard · 5-fold CV ROC-AUC" howTo="mean ± sd over repeated cross-validation on the development set; identical folds for every model.">
-              <ol className="flex flex-col gap-1">
-                {[...m.leaderboard]
-                  .sort((a, b) => b.roc_auc_mean - a.roc_auc_mean)
-                  .map((row, i) => (
-                    <li key={row.model} className={cn('flex items-center justify-between gap-2 rounded-sm px-2 py-1 text-body-s', i === 0 && 'border-l-2 border-accent bg-surface-2')}>
-                      <span className="truncate text-secondary">{row.label ?? row.model}</span>
-                      <span className="num whitespace-nowrap text-primary">
-                        {formatMetricValue(row.roc_auc_mean)} <span className="text-tertiary">± {formatMetricValue(row.roc_auc_std)}</span>
-                      </span>
-                    </li>
-                  ))}
-              </ol>
-            </ChartFrame>
-            <ChartFrame title="Global drivers · mean |SHAP|" howTo="average absolute contribution across patients, in log-odds.">
-              <ul className="flex flex-col gap-1">
-                {m.global_importance.slice(0, 8).map((g) => {
-                  const max = m.global_importance[0]?.mean_abs_shap || 1;
-                  return (
-                    <li key={g.feature} className="grid grid-cols-[minmax(0,1fr)_120px_44px] items-center gap-2 text-body-s">
-                      <span className="truncate text-secondary">{g.feature}</span>
-                      <span className="h-2 rounded-xs bg-secondary/70" style={{ width: `${(g.mean_abs_shap / max) * 100}%` }} />
-                      <span className="num text-right text-numeral-m text-primary">{g.mean_abs_shap.toFixed(2)}</span>
-                    </li>
-                  );
-                })}
-              </ul>
-            </ChartFrame>
-          </div>
-          <Card className="flex flex-col gap-2" id="protocol">
-            <h2 className="eyebrow text-tertiary">Protocol</h2>
-            <ul className="grid grid-cols-1 gap-x-6 gap-y-1.5 text-body-s text-secondary md:grid-cols-2">
-              {[
-                'LAD / LCX / RCA / Cath are never inputs (unit-tested)',
-                `Stratified hold-out ${ds ? `${ds.n_dev} / ${ds.n_test}` : ''}, seed ${metrics.data?.protocol.seed ?? 42}`,
-                'Test split scored once, after every decision was frozen',
-                'Label check: Cath = CAD ⇔ ≥ 1 stenotic vessel',
-                'Edge / server parity on fixtures: |Δp| < 1e-6',
-                'Thresholds tuned on development folds only',
-              ].map((item) => (
-                <li key={item} className="flex items-start gap-2">
-                  <Check aria-hidden className="mt-0.5 size-4 shrink-0 text-success" />
-                  {item}
-                </li>
-              ))}
-            </ul>
-            <Link to={ROUTES.methodology} className="self-end text-label font-semibold text-accent hover:text-accent-hover">
-              Methodology ›
-            </Link>
-          </Card>
-          <p className="text-label font-normal text-tertiary">
-            Single-centre cohort (n = {ds?.n ?? 303}), not externally validated · decision support and education only, not a
-            diagnosis.
-          </p>
-        </div>
-      )}
+        )}
+      </div>
     </div>
   );
 }
