@@ -19,7 +19,7 @@
     "source_axes": "BodyParts3D +X patient-left, +Y posterior, +Z superior (mm)",
     "origin_part": "FMA7274"
   },
-  "triangle_budget_total": 400000,
+  "triangle_budget_total": 430000,
   "cleanup": {
     "min_component_fraction": 0.05,
     "min_component_faces": 24,
@@ -143,7 +143,7 @@
       "parts": [
         "FMA7163"
       ],
-      "budget": 12500,
+      "budget": 10000,
       "material": "Skin",
       "crop": {
         "type": "skin_outer_shell"
@@ -225,7 +225,7 @@
         "FMA8532",
         "FMA8534"
       ],
-      "budget": 15500,
+      "budget": 13000,
       "material": "Bone",
       "explode": [
         1.95,
@@ -254,7 +254,7 @@
         "FMA8531",
         "FMA8533"
       ],
-      "budget": 15500,
+      "budget": 13000,
       "material": "Bone",
       "explode": [
         -1.95,
@@ -372,7 +372,7 @@
         "FMA10059",
         "FMA10081"
       ],
-      "budget": 16000,
+      "budget": 12500,
       "material": "Bone",
       "explode": [
         0.0,
@@ -484,9 +484,9 @@
       "translate_mm": [
         0.0,
         0.0,
-        -4.0
+        -8.0
       ],
-      "_translate_comment": "BodyParts3D's diaphragm dome rises ~3-4 mm into the inferior heart wall: the whole sheet is lowered (rigid transform fix) instead of denting it."
+      "_translate_comment": "BodyParts3D's diaphragm dome rises ~6-7 mm into the inferior heart wall: the whole sheet is lowered 8 mm (rigid transform fix) instead of denting it."
     },
     {
       "node": "Heart_Wall_Anterior",
@@ -496,7 +496,7 @@
       "parts": [
         "SYN_HeartWall"
       ],
-      "budget": 51000,
+      "budget": 48000,
       "material": "Myocardium",
       "split": {
         "source": "Heart_Wall",
@@ -526,7 +526,7 @@
       "parts": [
         "SYN_HeartWall"
       ],
-      "budget": 51000,
+      "budget": 48000,
       "material": "Myocardium",
       "split": {
         "source": "Heart_Wall",
@@ -554,10 +554,10 @@
       "layer": "heart",
       "label": "Mitral valve",
       "parts": [
-        "FMA7235",
+        "SYN_MitralValve",
         "SYN_AortoMitralCurtain"
       ],
-      "budget": 5000,
+      "budget": 6600,
       "material": "Valve",
       "explode": [
         0.0,
@@ -565,7 +565,10 @@
         0.0
       ],
       "target": null,
-      "description": "Bicuspid valve between the left atrium and left ventricle; its leaflets are tethered to the LV papillary muscles by chordae tendineae."
+      "description": "Bicuspid valve between the left atrium and left ventricle: the anterior (aortic) leaflet, in fibrous continuity with the aortic root, and the scalloped posterior leaflet, tethered by chordae tendineae to the anterolateral and posteromedial papillary muscles (designed on the BodyParts3D hinge and papillary muscles).",
+      "source_parts": [
+        "FMA7235"
+      ]
     },
     {
       "node": "Valve_Tricuspid",
@@ -573,9 +576,9 @@
       "layer": "heart",
       "label": "Tricuspid valve",
       "parts": [
-        "FMA7234"
+        "SYN_TricuspidValve"
       ],
-      "budget": 5000,
+      "budget": 6000,
       "material": "Valve",
       "explode": [
         0.0,
@@ -583,7 +586,10 @@
         0.0
       ],
       "target": null,
-      "description": "Three-leaflet valve between the right atrium and right ventricle."
+      "description": "Three-leaflet valve between the right atrium and right ventricle (anterior, septal and posterior leaflets); the septal leaflet is hinged on the septum a little more apically than the anterior mitral leaflet.",
+      "source_parts": [
+        "FMA7234"
+      ]
     },
     {
       "node": "Valve_Pulmonary",
@@ -628,13 +634,9 @@
       "layer": "heart",
       "label": "Papillary muscles",
       "parts": [
-        "FMA7260",
-        "FMA7261",
-        "FMA7262",
-        "FMA7266",
-        "FMA9352nsn"
+        "SYN_PapillaryMuscles"
       ],
-      "budget": 6000,
+      "budget": 4000,
       "material": "Papillary",
       "explode": [
         0.0,
@@ -642,7 +644,14 @@
         0.0
       ],
       "target": null,
-      "description": "Right- and left-ventricular papillary muscles. The posteromedial LV papillary muscle usually has a single blood supply (RCA/PDA), which makes it vulnerable in inferior infarction."
+      "description": "Right- and left-ventricular papillary muscles. The posteromedial LV papillary muscle usually has a single blood supply (RCA/PDA), which makes it vulnerable in inferior infarction.",
+      "source_parts": [
+        "FMA7260",
+        "FMA7261",
+        "FMA7262",
+        "FMA7266",
+        "FMA9352nsn"
+      ]
     },
     {
       "node": "GreatVessel_Aorta",
@@ -729,7 +738,7 @@
       "layer": "heart",
       "label": "Pulmonary veins",
       "parts": [
-        "FMA66643"
+        "SYN_PulmonaryVeins"
       ],
       "budget": 7000,
       "material": "PulmonaryVein",
@@ -739,7 +748,10 @@
         0.0
       ],
       "target": null,
-      "description": "Pulmonary veins and their intrapulmonary tributaries, returning oxygenated blood from the lungs to the left atrium."
+      "description": "Pulmonary veins and their intrapulmonary tributaries, returning oxygenated blood from the lungs to the left atrium.",
+      "source_parts": [
+        "FMA66643"
+      ]
     },
     {
       "node": "GreatVessel_SVC",
@@ -747,7 +759,7 @@
       "layer": "heart",
       "label": "Superior vena cava",
       "parts": [
-        "FMA4720"
+        "SYN_SVC"
       ],
       "budget": 3000,
       "material": "Vein",
@@ -757,7 +769,10 @@
         0.0
       ],
       "target": null,
-      "description": "Superior vena cava draining the upper body into the right atrium."
+      "description": "Superior vena cava draining the upper body into the right atrium.",
+      "source_parts": [
+        "FMA4720"
+      ]
     },
     {
       "node": "GreatVessel_SVC_BrachiocephalicVeins",
@@ -814,7 +829,7 @@
       "parts": [
         "SYN_CardiacVeins"
       ],
-      "budget": 27000,
+      "budget": 24000,
       "material": "CardiacVein",
       "explode": [
         0.0,
@@ -841,7 +856,7 @@
       "generate": "epicardial_fat",
       "fat_side": "anterior",
       "rides_on": "anterior",
-      "budget": 9000,
+      "budget": 19000,
       "material": "Fat",
       "explode": [
         0.0,
@@ -860,7 +875,7 @@
       "generate": "epicardial_fat",
       "fat_side": "posterior",
       "rides_on": "posterior",
-      "budget": 9000,
+      "budget": 19000,
       "material": "Fat",
       "explode": [
         0.0,
@@ -1095,9 +1110,9 @@
     "atrial_landmarks": {
       "_comment": "Ventricular myocardium = thick wall (LV free wall, septum) or thin wall that is closer to the ventricular landmarks than to the inflow/outflow landmarks (RV free wall). Ventricular landmark points within av_groove_exclusion_mm of the atrioventricular-groove vessels (RCA trunk, LCX, coronary sinus) are ignored because branches there also run beside the atria. Everything else (atria, auricles, great-vessel roots) fades to neutral. The LAD is not a landmark: its proximal segment runs beneath the left atrial appendage.",
       "inflow_outflow_parts": [
-        "FMA4720",
+        "SYN_SVC",
         "FMA10951",
-        "FMA66643",
+        "SYN_PulmonaryVeins",
         "FMA3736",
         "FMA66326"
       ],
@@ -1152,8 +1167,8 @@
     "rv_free_wall": {
       "_comment": "Right-ventricular free wall = thin (< thin_mm) ventricular wall in the septal sector between the anterior and posterior interventricular grooves (seen from the LV axis), or ventricular wall outside the LV region: the LAD keeps only a strip within lad_strip_mm of its trunk; the remaining weight goes to the RCA (acute-marginal, RV and conus branches). RV infarction follows the RCA (REFERENCE.md 5.10).",
       "lad_strip_mm": [
-        8.0,
-        13.0
+        6.0,
+        10.0
       ],
       "pda_strip_mm": [
         10.0,
@@ -1185,13 +1200,21 @@
       "FMA76994",
       "FMA71669",
       "FMA7246",
-      "FMA4720"
+      "FMA4720",
+      "FMA66643",
+      "FMA7260",
+      "FMA7261",
+      "FMA7262",
+      "FMA7266",
+      "FMA9352nsn"
     ],
     "derived_parts": {
       "SYN_HeartWall": {
-        "what": "BodyParts3D heart wall; the tissue around the moved aortic root is pushed out of the root and proximal ascending aorta by a smooth field (1 mm clearance, 16 mm reach)",
+        "what": "BodyParts3D heart wall; the tissue around the moved aortic root is pushed out of the root and proximal ascending aorta (1 mm clearance, 16 mm reach), the posterolateral left atrium is stretched so the left pulmonary veins enter 25-37 mm from the mitral hinge, and the right-atrial roof round the SVC is lowered 10 mm",
         "from": [
-          "FMA7274"
+          "FMA7274",
+          "FMA66643",
+          "FMA4720"
         ]
       },
       "SYN_AortaAscending": {
@@ -1250,6 +1273,51 @@
           "FMA7235",
           "SYN_AorticRoot"
         ]
+      },
+      "SYN_PulmonaryVeins": {
+        "what": "Pulmonary veins: the left veins and their ostia moved 20 mm cranially and laterally with the stretched posterolateral left atrium (mitral isthmus 25-37 mm instead of 10-17 mm); the intrapulmonary tree stays",
+        "from": [
+          "FMA66643"
+        ]
+      },
+      "SYN_SVC": {
+        "what": "Superior vena cava lengthened 10 mm downwards with the lowered right-atrial roof (cavo-atrial junction at the right 3rd costal cartilage)",
+        "from": [
+          "FMA4720"
+        ]
+      },
+      "SYN_MitralValve": {
+        "what": "Mitral leaflets (anterior 22 mm, scalloped posterior 12.5 mm, 1.0-1.7 mm thick, half open) hinged on the fitted annulus, first- and second-order chordae fanning from both heads of each LV papillary muscle",
+        "from": [
+          "FMA7235",
+          "FMA7266",
+          "FMA9352nsn"
+        ]
+      },
+      "SYN_TricuspidValve": {
+        "what": "Tricuspid leaflets (anterior, septal, posterior; septal hinge 15 mm apical) and chordae from the three RV papillary muscles",
+        "from": [
+          "FMA7234",
+          "FMA7260",
+          "FMA7261",
+          "FMA7262"
+        ]
+      },
+      "SYN_PapillaryMuscles": {
+        "what": "Smooth conical papillary muscles (bifid heads in the LV) from the BodyParts3D muscles' roots to their heads",
+        "from": [
+          "FMA7260",
+          "FMA7261",
+          "FMA7262",
+          "FMA7266",
+          "FMA9352nsn"
+        ]
+      },
+      "SYN_TunnelCutter": {
+        "what": "Channels of the vessels that pass under the fused tip of the left auricle, carved out of the heart wall by the build",
+        "from": [
+          "FMA7274"
+        ]
       }
     }
   },
@@ -1271,7 +1339,7 @@
       "masters": [
         "GreatVessel_Aorta"
       ],
-      "margin_mm": 1.0
+      "margin_mm": 1.8
     },
     {
       "yielder": "Trachea_Bronchi",
@@ -1359,6 +1427,45 @@
         "Coronary_RCA_Septal"
       ],
       "margin_mm": 0.6
+    },
+    {
+      "yielder": "GreatVessel_PulmonaryVeins",
+      "masters": [
+        "Heart_Wall_Anterior",
+        "Heart_Wall_Posterior",
+        "EpicardialFat_Anterior",
+        "EpicardialFat_Posterior",
+        "CardiacVeins",
+        "Coronary_LAD",
+        "Coronary_LCX",
+        "Coronary_RCA",
+        "Coronary_RCA_Marginal"
+      ],
+      "margin_mm": 6.0,
+      "mask": "away_from_heart",
+      "mask_mm": 30.0,
+      "_comment": "Intrapulmonary pulmonary-vein branches (lingular and lower-lobe veins lie against the heart) keep 6 mm from the heart, its fat and the epicardial vessels; the ostia and extrapericardial trunks (within 30 mm of their contact with the atrium) stay put."
     }
-  ]
+  ],
+  "lung_carve": {
+    "_comment": "After the smooth push-out, the cardiac impression is carved into each lung (exact Boolean with every master inflated by margin_mm along its normals): build_anatomy.py carve_lung.",
+    "margin_mm": 2.2,
+    "masters": [
+      "Heart_Wall_Anterior",
+      "Heart_Wall_Posterior",
+      "EpicardialFat_Anterior",
+      "EpicardialFat_Posterior",
+      "CardiacVeins",
+      "GreatVessel_Aorta",
+      "GreatVessel_SVC",
+      "GreatVessel_IVC",
+      "Coronary_LM",
+      "Coronary_LAD",
+      "Coronary_LCX",
+      "Coronary_RCA",
+      "Coronary_RCA_Marginal",
+      "Coronary_RCA_PDA",
+      "Coronary_RCA_PL"
+    ]
+  }
 }
