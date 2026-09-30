@@ -10,7 +10,7 @@ export function IntendedUseCard() {
   const openDetails = useUiStore((s) => s.openDetails);
   return (
     <article className="flex flex-col gap-1.5 rounded-lg border border-hairline bg-panel px-5 py-4">
-      <h2 className="overline text-tertiary">Intended use</h2>
+      <h2 className="eyebrow text-tertiary">Intended use</h2>
       <p className="text-body-s text-secondary">
         Education and decision-support research only. <strong className="font-medium text-primary">Not a diagnosis</strong>;
         not a substitute for angiography, CTCA or other formal imaging. Single centre, n = 303, not externally validated.
@@ -26,7 +26,7 @@ export function IntendedUseCard() {
 export function DataAnatomyCard() {
   return (
     <article className="flex flex-col gap-1.5 rounded-lg border border-hairline bg-panel px-5 py-4">
-      <h2 className="overline text-tertiary">Data &amp; anatomy</h2>
+      <h2 className="eyebrow text-tertiary">Data &amp; anatomy</h2>
       <ul className="flex flex-col gap-0.5 text-body-s text-secondary">
         <li>Z-Alizadeh Sani extension, UCI #411 · CC BY 4.0</li>
         <li>BodyParts3D © DBCLS · CC BY-SA 2.1 JP</li>

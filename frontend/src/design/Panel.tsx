@@ -20,7 +20,7 @@ export interface SectionHeaderProps {
 export function SectionHeader({ title, aside, id, className }: SectionHeaderProps) {
   return (
     <div className={cn('flex min-h-6 items-center justify-between gap-2', className)}>
-      <h2 id={id} className="overline text-secondary">
+      <h2 id={id} className="eyebrow text-secondary">
         {title}
       </h2>
       {aside && <div className="flex items-center gap-1 text-label text-tertiary">{aside}</div>}

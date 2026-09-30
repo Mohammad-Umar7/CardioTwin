@@ -75,7 +75,7 @@ export function BandChip({ band, pending, size = 'md', showMeter = true, classNa
       style={{ borderLeftColor: rule }}
     >
       {showMeter && <RiskMeter level={pending || !style ? 0 : style.level} />}
-      <span className={cn('overline whitespace-nowrap', pending ? 'text-tertiary' : 'text-primary')}>{word}</span>
+      <span className={cn('eyebrow whitespace-nowrap', pending ? 'text-tertiary' : 'text-primary')}>{word}</span>
     </span>
   );
 }
@@ -213,7 +213,7 @@ export interface RiskLegendProps {
 export function RiskLegend({ threshold, width = 160, caption = 'P(stenosis)', className }: RiskLegendProps) {
   return (
     <div className={cn('flex items-center gap-2', className)} role="img" aria-label={`Risk colour scale from 0 to 100 percent${caption ? `, ${caption}` : ''}`}>
-      <span className="overline text-tertiary">Risk</span>
+      <span className="eyebrow text-tertiary">Risk</span>
       <div style={{ width }}>
         <div className="relative h-2 rounded-xs" style={{ backgroundImage: riskGradientCss() }}>
           {[25, 50, 75].map((t) => (

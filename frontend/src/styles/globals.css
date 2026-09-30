@@ -97,7 +97,9 @@
     font-family: var(--font-mono);
     font-variant-numeric: tabular-nums slashed-zero;
   }
-  .overline {
+  /* Overline type token (DESIGN_SYSTEM §3). Named "eyebrow" because Tailwind's `overline` utility is
+     text-decoration: overline. */
+  .eyebrow {
     font-size: 0.6875rem;
     line-height: 1rem;
     font-weight: 600;

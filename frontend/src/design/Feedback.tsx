@@ -107,7 +107,7 @@ export interface StatProps {
 export function Stat({ label, value, sub, className, loading }: StatProps) {
   return (
     <div className={cn('flex min-w-0 flex-col gap-1', className)}>
-      <div className="overline text-tertiary">{label}</div>
+      <div className="eyebrow text-tertiary">{label}</div>
       {loading ? (
         <Skeleton className="h-6 w-20" />
       ) : (

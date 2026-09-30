@@ -28,10 +28,10 @@ export default function LandingPage() {
   }, []);
 
   return (
-    <div className="mx-auto flex w-full max-w-[1248px] flex-col gap-6 px-6 pb-8 pt-8 min-[1440px]:pt-10">
+    <div className="mx-auto flex w-full max-w-[1248px] flex-col gap-5 px-6 pb-6 pt-6">
       <section className="grid grid-cols-1 items-stretch gap-6 lg:grid-cols-12" aria-labelledby="hero-title">
         <div className="flex flex-col justify-center gap-5 py-2 lg:col-span-5 animate-rise-in">
-          <p className="overline text-accent">Coronary risk, vessel by vessel</p>
+          <p className="eyebrow text-accent">Coronary risk, vessel by vessel</p>
           <h1 id="hero-title" className="font-display text-[2.5rem] font-semibold leading-[2.75rem] tracking-[-0.03em] text-primary min-[1440px]:text-display-1">
             An explainable coronary digital twin.
           </h1>
@@ -67,7 +67,7 @@ export default function LandingPage() {
 
         <CanvasSlot
           stage="hero"
-          className="h-[420px] rounded-lg border border-hairline lg:col-span-7 min-[1440px]:h-[440px]"
+          className="h-[380px] rounded-lg border border-hairline lg:col-span-7 min-[1440px]:h-[404px]"
           placeholder={<HeroPoster />}
         >
           <HeroHud />

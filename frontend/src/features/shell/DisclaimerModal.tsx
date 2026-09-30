@@ -7,7 +7,7 @@ import { useUiStore } from '@/state/uiStore';
 function Section({ title, children }: { title: string; children: React.ReactNode }) {
   return (
     <section className="flex flex-col gap-1.5 border-b border-line pb-4 last:border-b-0 last:pb-0">
-      <h3 className="overline text-tertiary">{title}</h3>
+      <h3 className="eyebrow text-tertiary">{title}</h3>
       <div className="flex flex-col gap-1.5 text-body-s text-secondary">{children}</div>
     </section>
   );

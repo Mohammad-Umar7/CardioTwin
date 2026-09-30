@@ -24,7 +24,7 @@ export function Pillars() {
         <article key={p.n} className="flex flex-col gap-1.5 bg-app px-5 py-4">
           <h2 className="flex items-baseline gap-3">
             <span className="mono text-mono-s text-accent">{p.n}</span>
-            <span className="overline text-primary">{p.title}</span>
+            <span className="eyebrow text-primary">{p.title}</span>
           </h2>
           <p className="text-body-s text-secondary">{p.body}</p>
         </article>
