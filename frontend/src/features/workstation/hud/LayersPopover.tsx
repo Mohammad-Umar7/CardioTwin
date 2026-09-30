@@ -38,7 +38,7 @@ export function LayersPopover({ iconOnly = false }: { iconOnly?: boolean }) {
 
   const layerLabel = (id: AnatomyLayerId, fallback: string) => manifest?.layers.find((l) => l.id === id)?.label ?? fallback;
   const changed =
-    ANATOMY_LAYERS.some((l) => !layerIsDefault(l.id, visibility, stage)) || !ghostLayers || showVeins || section;
+    ANATOMY_LAYERS.some((l) => !layerIsDefault(l.id, visibility, stage)) || !ghostLayers || !showVeins || section;
 
   return (
     <Popover

@@ -69,6 +69,32 @@ export function segmentTable(manifestSegments: unknown): Map<number, SegmentInfo
   return table;
 }
 
+/** A named cardiac vein (manifest `veins[]`, CONTRACTS §7.1 `_VEIN`): anatomy for inspection only. */
+export interface VeinInfo {
+  code: number;
+  /** Short label (CS, GCV, AIV, MCV…). */
+  label: string;
+  name: string;
+  definition?: string;
+}
+
+/** Manifest `veins[]` (untyped additive field) → VeinInfo by code. */
+export function veinTable(manifestVeins: unknown): Map<number, VeinInfo> {
+  const table = new Map<number, VeinInfo>();
+  if (!Array.isArray(manifestVeins)) return table;
+  for (const raw of manifestVeins as Record<string, unknown>[]) {
+    const code = typeof raw?.code === 'number' ? raw.code : NaN;
+    if (!Number.isInteger(code) || code <= 0 || typeof raw.name !== 'string') continue;
+    table.set(code, {
+      code,
+      label: typeof raw.label === 'string' ? raw.label : raw.name,
+      name: raw.name,
+      definition: typeof raw.definition === 'string' ? raw.definition : undefined,
+    });
+  }
+  return table;
+}
+
 type ScalarAttribute = Pick<BufferAttribute | InterleavedBufferAttribute, 'getX' | 'count'>;
 
 /** Vertex indices of triangle `face` (indexed or not). */

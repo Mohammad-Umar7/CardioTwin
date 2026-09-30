@@ -10,7 +10,7 @@
  */
 import { create } from 'zustand';
 import type { TargetId } from '@/types/contracts';
-import type { SegmentInfo } from '../anatomy/segments';
+import type { SegmentInfo, VeinInfo } from '../anatomy/segments';
 
 export interface PickInfo {
   /** Manifest structure id (e.g. "lad", "heart_wall_anterior"), or the node name when unlisted. */
@@ -27,6 +27,8 @@ export interface PickInfo {
   segment: SegmentInfo | null;
   /** Dominant supplied territory under the pointer (myocardium with COLOR_0), else null. */
   territory: 'LAD' | 'LCX' | 'RCA' | null;
+  /** Named cardiac vein under the pointer (CardiacVeins with `_VEIN`, manifest `veins[]`), else null. */
+  vein?: VeinInfo | null;
   /** World-space face point at the time of the pick. */
   point: [number, number, number];
 }
@@ -39,7 +41,8 @@ export interface PickState {
 }
 
 const same = (a: PickInfo | null, b: PickInfo | null) =>
-  a === b || (!!a && !!b && a.node === b.node && a.segment?.scct === b.segment?.scct && a.territory === b.territory);
+  a === b ||
+  (!!a && !!b && a.node === b.node && a.segment?.scct === b.segment?.scct && a.territory === b.territory && a.vein?.code === b.vein?.code);
 
 export const usePickStore = create<PickState>()((set, get) => ({
   hover: null,

@@ -26,12 +26,12 @@ export const layerVisible = (id: string, visibility: LayerVisibility, stage: Sta
 export const layerIsDefault = (id: string, visibility: LayerVisibility, stage: Stage): boolean =>
   layerVisible(id, visibility, stage) === layerDefault(id, stage);
 
-/** Reset layers: defaults for every layer, ghosting on, veins and section off. */
+/** Reset layers: defaults for every layer, ghosting on, cardiac veins on, section off. */
 export function resetLayers(): void {
   useViewerStore.setState({ layerVisibility: {} });
   const viewer = useViewerStore.getState();
   if (!viewer.ghostLayers) viewer.set('ghostLayers', true);
   const scene = useSceneControls.getState();
-  scene.setShowVeins(false);
+  scene.setShowVeins(true);
   scene.setSection(false);
 }

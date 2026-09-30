@@ -20,8 +20,9 @@ import {
 } from 'three';
 import { MeshBVH, acceleratedRaycast, type HitPointInfo } from 'three-mesh-bvh';
 import type { PickInfo } from '../stage/pickStore';
+import { PICKABLE_KINDS } from './classify';
 import type { RigEntry } from './rig';
-import { segmentAtFace, segmentTable, territoryAtFace, type SegmentInfo } from './segments';
+import { segmentAtFace, segmentTable, territoryAtFace, veinTable, type SegmentInfo, type VeinInfo } from './segments';
 
 /** Proxy tube radius = max(3 × lumen radius, floor) — LUMEN §10: "3D hit tubes are 3× vessel radius". */
 export const PROXY_SCALE = 3;
@@ -117,6 +118,7 @@ function idle(cb: () => void): IdleHandle {
 export class Picker {
   private readonly proxies: Mesh[] = [];
   private readonly segments: Map<number, SegmentInfo>;
+  private readonly veins: Map<number, VeinInfo>;
   private pending: IdleHandle | null = null;
   private disposed = false;
 
@@ -124,10 +126,12 @@ export class Picker {
     private readonly entries: readonly RigEntry[],
     manifestSegments: unknown,
     vessels: readonly CentrelineLike[] | null,
+    manifestVeins: unknown = null,
   ) {
     this.segments = segmentTable(manifestSegments);
+    this.veins = veinTable(manifestVeins);
     for (const entry of entries) {
-      if (!['coronary', 'leftMain', 'myocardium', 'valve', 'papillary', 'aorta', 'pulmonaryArtery', 'pulmonaryVeins', 'systemicVein'].includes(entry.kind)) continue;
+      if (!PICKABLE_KINDS.has(entry.kind)) continue;
       const mesh = entry.mesh;
       mesh.userData.ctEntry = entry.node;
       mesh.raycast = function raycast(this: Mesh, raycaster: Raycaster, hits: Intersection[]) {
@@ -195,8 +199,10 @@ export class Picker {
       }
     }
     let segment: SegmentInfo | null = null;
+    let vein: VeinInfo | null = null;
     const segAttr = geometry.getAttribute('_segment');
-    if (face !== null && segAttr) {
+    const veinAttr = geometry.getAttribute('_vein');
+    if (face !== null && (segAttr || veinAttr)) {
       const pos = geometry.getAttribute('position');
       const index = geometry.index;
       const ia = index ? index.getX(face * 3) : face * 3;
@@ -206,8 +212,15 @@ export class Picker {
       tmpTri.b.fromBufferAttribute(pos, ib);
       tmpTri.c.fromBufferAttribute(pos, ic);
       tmpTri.getBarycoord(tmpLocal, tmpBary);
-      const scct = segmentAtFace(geometry, segAttr, face, [tmpBary.x, tmpBary.y, tmpBary.z]);
-      segment = scct > 0 ? this.segments.get(scct) ?? null : null;
+      const bary = [tmpBary.x, tmpBary.y, tmpBary.z] as const;
+      if (segAttr) {
+        const scct = segmentAtFace(geometry, segAttr, face, bary);
+        segment = scct > 0 ? this.segments.get(scct) ?? null : null;
+      }
+      if (veinAttr) {
+        const code = segmentAtFace(geometry, veinAttr, face, bary);
+        vein = code > 0 ? this.veins.get(code) ?? null : null;
+      }
     }
     const colour = geometry.getAttribute('color');
     const territory = entry.kind === 'myocardium' && face !== null && colour ? territoryAtFace(geometry, colour, face) : null;
@@ -219,6 +232,7 @@ export class Picker {
       kind: entry.kind,
       segment,
       territory,
+      vein,
       point: [point.x, point.y, point.z],
     };
   }

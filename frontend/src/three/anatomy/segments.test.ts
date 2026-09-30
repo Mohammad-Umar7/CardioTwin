@@ -1,6 +1,6 @@
 import { BufferAttribute, BufferGeometry } from 'three';
 import { describe, expect, it } from 'vitest';
-import { SCCT_SEGMENTS, faceVertices, segmentAtFace, segmentTable, territoryAtFace } from './segments';
+import { SCCT_SEGMENTS, faceVertices, segmentAtFace, segmentTable, territoryAtFace, veinTable } from './segments';
 
 function indexed(indices: number[], vertexCount: number): BufferGeometry {
   const g = new BufferGeometry();
@@ -74,5 +74,19 @@ describe('supplied territory under the cursor', () => {
   it('reports the dominant territory, or none where the neutral weight dominates', () => {
     expect(territoryAtFace(geometry, weights, 0)).toBe('LAD');
     expect(territoryAtFace(geometry, weights, 1)).toBeNull();
+  });
+});
+
+describe('cardiac vein table', () => {
+  it('reads manifest veins[] by code and skips malformed rows', () => {
+    const t = veinTable([
+      { code: 2, label: 'GCV', name: 'Great cardiac vein', definition: 'Along the left AV groove.' },
+      { code: 'x', name: 'bad' },
+      { code: 4, name: 'Middle cardiac vein' },
+    ]);
+    expect(t.get(2)).toEqual({ code: 2, label: 'GCV', name: 'Great cardiac vein', definition: 'Along the left AV groove.' });
+    expect(t.get(4)?.label).toBe('Middle cardiac vein');
+    expect(t.size).toBe(2);
+    expect(veinTable(undefined).size).toBe(0);
   });
 });

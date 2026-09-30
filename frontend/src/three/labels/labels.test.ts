@@ -194,6 +194,15 @@ describe('hover tooltip content (V2 §9.3 D, CONTRACTS §7.1)', () => {
     expect(`${c.title} ${c.segment} ${c.definition} ${c.note}`).not.toMatch(/lesion|stenosis at|diagnos/i);
   });
 
+  it('names the cardiac vein under the pointer as venous anatomy, never as a model target', () => {
+    const vein = { code: 3, label: 'AIV', name: 'Anterior interventricular vein', definition: 'Beside the LAD in the anterior groove.' };
+    const c = hoverContent({ ...base, structureId: 'cardiac_veins', node: 'CardiacVeins', kind: 'cardiacVein', target: null, vein }, manifest);
+    expect(c.title).toBe('Anterior interventricular vein');
+    expect(c.segment).toBe('AIV · cardiac vein');
+    expect(c.definition).toBe('Beside the LAD in the anterior groove.');
+    expect(c.note).toMatch(/not predicted/);
+  });
+
   it('cuts long definitions at a clause, never mid-phrase', () => {
     const long = `${'The artery runs in the anterior groove to the apex'.padEnd(80, ' x')}; SCCT 6 is proximal (to D1), 7 mid (to D2) and 8 distal ${'y'.repeat(200)}`;
     const c = clip(long)!;

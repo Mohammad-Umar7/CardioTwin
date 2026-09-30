@@ -26,7 +26,7 @@ export interface SceneControlsState {
   territoryMode: TerritoryMode;
   isolate: boolean;
   ghostOthers: boolean;
-  /** Cardiac veins (hidden by default; "not modelled"). */
+  /** Cardiac veins: on by default (solid, greyed plum in Realistic; a faint overlay in Clinical). */
   showVeins: boolean;
   /** Bumped to replay the cold-load assembly. */
   assemblyNonce: number;
@@ -46,7 +46,7 @@ export const useSceneControls = create<SceneControlsState>()((set) => ({
   territoryMode: 'selected',
   isolate: false,
   ghostOthers: false,
-  showVeins: false,
+  showVeins: true,
   assemblyNonce: 0,
   setSection: (section) => set({ section }),
   setSectionDepth: (sectionDepth) => set({ sectionDepth: Math.max(-0.6, Math.min(0.6, sectionDepth)) }),

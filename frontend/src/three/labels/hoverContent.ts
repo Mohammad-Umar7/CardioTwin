@@ -47,6 +47,14 @@ export function hoverContent(info: PickInfo, manifest: AnatomyManifest | null | 
       note: s.target ? `Anatomical segment · risk is estimated for the whole ${s.target}` : 'Anatomical segment · not predicted by the model',
     };
   }
+  if (info.vein) {
+    return {
+      title: info.vein.name,
+      segment: `${info.vein.label} · cardiac vein`,
+      definition: clip(info.vein.definition ?? definition ?? structure?.description),
+      note: 'Venous anatomy · not predicted by the model',
+    };
+  }
   if (info.territory) {
     return {
       title: structure?.label ?? info.label,
@@ -59,7 +67,7 @@ export function hoverContent(info: PickInfo, manifest: AnatomyManifest | null | 
     title: structure?.label ?? info.label,
     segment: null,
     definition: clip(definition ?? structure?.description),
-    note: info.kind === 'leftMain' ? 'Left main · not predicted by the model' : null,
+    note: info.kind === 'leftMain' ? 'Left main · not predicted by the model' : info.kind === 'cardiacVein' ? 'Venous anatomy · not predicted by the model' : null,
   };
 }
 
