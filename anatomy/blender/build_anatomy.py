@@ -322,6 +322,25 @@ def finish_topology(ob: bpy.types.Object, *, merge_dist: float, recalc_normals: 
     ob.data.update()
 
 
+def remesh_seamless(ob: bpy.types.Object, voxel: float) -> None:
+    """Fuse touching parts into one watertight surface (voxel remesh) and relax voxel stair-steps.
+
+    Used for tubes that BodyParts3D splits into abutting segments (ascending aorta / arch /
+    descending aorta), whose coincident end caps otherwise show as hard seam rings.
+    """
+    mod = ob.modifiers.new("Remesh", "REMESH")
+    mod.mode = "VOXEL"
+    mod.voxel_size = voxel
+    mod.adaptivity = 0.0
+    smooth = ob.modifiers.new("Relax", "CORRECTIVE_SMOOTH")
+    smooth.smooth_type = "SIMPLE"
+    smooth.use_only_smooth = True
+    smooth.factor = 0.5
+    smooth.iterations = 6
+    smooth.use_pin_boundary = True
+    apply_modifiers(ob)
+
+
 def decimate_to(ob: bpy.types.Object, budget: int) -> None:
     n = tri_count(ob)
     if n <= budget:
@@ -477,8 +496,11 @@ def territory_colors(
     scale: float,
     inflow_outflow_V: np.ndarray,
     ventricular_V: np.ndarray,
-) -> tuple[np.ndarray, np.ndarray]:
-    """Per-vertex (LAD, LCX, RCA) weights and the ventricular mask.
+) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
+    """Per-vertex (LAD, LCX, RCA) weights, the ventricular mask and a QA array.
+
+    The QA array holds ``(landmark rule, thickness rule, final mask)`` per vertex and is stored as a
+    Blender-only colour attribute for inspection (``preview.py --views qa``); it is not exported.
 
     A vertex is ventricular myocardium when either
     * its wall is thick (``thickness >= ventricular_thickness_mm``: LV free wall and septum are
@@ -496,6 +518,7 @@ def territory_colors(
     t0, t1 = cfg["ventricular_thickness_mm"]
     by_thickness = mo.smoothstep(t0 * scale, t1 * scale, np.where(np.isfinite(thickness), thickness, 0.0))
     ventricular = mo.smooth_vertex_values(np.maximum(by_landmark, by_thickness), heart_F, iterations=cfg["smooth_iterations"])
+    qa = np.column_stack([by_landmark, by_thickness, ventricular])
     weights = mo.territory_weights(
         dist,
         sigma=cfg["sigma_mm"] * scale,
@@ -504,7 +527,7 @@ def territory_colors(
         extra_fade=ventricular,
     )
     weights = mo.smooth_vertex_values(weights, heart_F, iterations=cfg["smooth_iterations"])
-    return np.clip(weights, 0.0, 1.0), ventricular
+    return np.clip(weights, 0.0, 1.0), ventricular, qa
 
 
 def set_color_attribute(ob: bpy.types.Object, name: str, rgb: np.ndarray) -> None:
@@ -608,6 +631,8 @@ def build(args: argparse.Namespace) -> None:
         if not closed:
             orient_open_shell_outward(ob)
         before = tri_count(ob)
+        if spec.raw.get("remesh_mm"):
+            remesh_seamless(ob, spec.raw["remesh_mm"] * scale)
         decimate_to(ob, spec.budget)
         objects[spec.node] = ob
         node_stats[spec.node] = {"triangles_source": before}
@@ -647,12 +672,16 @@ def build(args: argparse.Namespace) -> None:
     lm_cfg = terr_cfg["atrial_landmarks"]
     inflow_V = np.concatenate([to_scene(cache.get(p)[0]) for p in lm_cfg["inflow_outflow_parts"]])
     vent_V = np.concatenate([to_scene(cache.get(p)[0]) for p in lm_cfg["ventricular_parts"]])
+    groove_V = np.concatenate([to_scene(cache.get(p)[0]) for p in lm_cfg["av_groove_parts"]])
+    near_groove = nearest_distance(vent_V, groove_V) < lm_cfg["av_groove_exclusion_mm"] * scale
+    log(f"  ventricular landmarks: {len(vent_V)} points, {int(near_groove.sum())} beside the AV groove ignored")
+    vent_V = vent_V[~near_groove]
     if lm_cfg.get("include_apex"):
         vent_V = np.concatenate([vent_V, apex[None]])
     for spec in heart_specs:
         ob = objects[spec.node]
         hV, hF = mesh_arrays(ob.data)
-        rgb, ventricular = territory_colors(
+        rgb, ventricular, qa_values = territory_colors(
             hV, hF, groups, order,
             thickness=wall_thick[nearest_index(hV, wall_V)],
             cfg=terr_cfg,
@@ -661,6 +690,12 @@ def build(args: argparse.Namespace) -> None:
             ventricular_V=vent_V,
         )
         set_color_attribute(ob, terr_cfg["attribute"], rgb)
+        # QA-only attribute (not exported): R = landmark rule, G = thickness rule, B = final mask.
+        qa = ob.data.color_attributes.new(name="QA_Ventricular", type="FLOAT_COLOR", domain="POINT")
+        rgba = np.ones((len(ob.data.vertices), 4), dtype=np.float32)
+        rgba[:, :3] = qa_values
+        qa.data.foreach_set("color", rgba.ravel())
+        ob.data.color_attributes.active_color = ob.data.color_attributes[terr_cfg["attribute"]]
         dominant = np.bincount(rgb.argmax(axis=1)[rgb.sum(axis=1) > 0.5], minlength=3)
         stats = {
             "territory_dominant_vertices": dict(zip(order, dominant.tolist())),

@@ -68,7 +68,7 @@
       "explode": [
         0.0,
         0.0,
-        1.9
+        1.45
       ],
       "description": "Pectoralis major (clavicular and sternocostal parts)."
     },
@@ -103,7 +103,7 @@
       "order": 4,
       "explode": [
         0.0,
-        -1.1,
+        -1.25,
         0.0
       ],
       "description": "Musculotendinous floor of the thoracic cavity."
@@ -167,8 +167,8 @@
       "budget": 7000,
       "material": "Muscle",
       "explode": [
+        1.65,
         0.35,
-        0.0,
         0.0
       ],
       "target": null,
@@ -189,8 +189,8 @@
       "budget": 7000,
       "material": "Muscle",
       "explode": [
-        -0.35,
-        0.0,
+        -1.65,
+        0.35,
         0.0
       ],
       "target": null,
@@ -221,7 +221,7 @@
       "budget": 22000,
       "material": "Bone",
       "explode": [
-        1.25,
+        1.35,
         0.0,
         0.15
       ],
@@ -250,7 +250,7 @@
       "budget": 22000,
       "material": "Bone",
       "explode": [
-        -1.25,
+        -1.35,
         0.0,
         0.15
       ],
@@ -284,7 +284,7 @@
       "material": "Cartilage",
       "explode": [
         0.0,
-        0.0,
+        -1.15,
         0.9
       ],
       "target": null,
@@ -304,8 +304,8 @@
       "material": "Bone",
       "explode": [
         0.0,
-        0.0,
-        1.1
+        1.35,
+        1.0
       ],
       "target": null,
       "description": "Manubrium, body and xiphoid process of the sternum; the heart lies directly behind its lower half."
@@ -321,9 +321,9 @@
       "budget": 3000,
       "material": "Bone",
       "explode": [
-        0.6,
-        0.45,
-        0.4
+        0.95,
+        0.95,
+        0.3
       ],
       "target": null,
       "description": "Left collarbone, strut between the sternum and the shoulder."
@@ -339,9 +339,9 @@
       "budget": 3000,
       "material": "Bone",
       "explode": [
-        -0.6,
-        0.45,
-        0.4
+        -0.95,
+        0.95,
+        0.3
       ],
       "target": null,
       "description": "Right collarbone, strut between the sternum and the shoulder."
@@ -387,9 +387,9 @@
       "budget": 18000,
       "material": "Lung",
       "explode": [
-        1.6,
+        1.95,
         0.0,
-        0.0
+        -0.25
       ],
       "target": null,
       "description": "Left lung (upper and lower lobes). Its cardiac notch accommodates the heart, which is why most of the heart lies left of the midline."
@@ -407,9 +407,9 @@
       "budget": 20000,
       "material": "Lung",
       "explode": [
-        -1.6,
+        -1.95,
         0.0,
-        0.0
+        -0.25
       ],
       "target": null,
       "description": "Right lung (upper, middle and lower lobes)."
@@ -427,8 +427,8 @@
       "material": "Airway",
       "explode": [
         0.0,
-        0.9,
-        -0.2
+        1.05,
+        -0.25
       ],
       "target": null,
       "description": "Trachea and bronchial tree; the tracheal bifurcation (carina) lies just above and behind the left atrium.",
@@ -595,7 +595,8 @@
         0.0
       ],
       "target": null,
-      "description": "Ascending aorta, aortic arch and thoracic descending aorta. Both coronary arteries arise from the aortic sinuses just above the aortic valve."
+      "description": "Ascending aorta, aortic arch and thoracic descending aorta. Both coronary arteries arise from the aortic sinuses just above the aortic valve.",
+      "remesh_mm": 0.6
     },
     {
       "node": "GreatVessel_PulmonaryArtery",
@@ -890,7 +891,7 @@
     "fade_start_mm": 20.0,
     "fade_tau_mm": 15.0,
     "atrial_landmarks": {
-      "_comment": "Ventricular myocardium = thick wall (LV free wall, septum) or thin wall that is closer to the ventricular landmarks than to the inflow/outflow landmarks (RV free wall). Everything else (atria, auricles, great-vessel roots) fades to neutral. The LAD is deliberately not a landmark: its proximal segment runs beneath the left atrial appendage.",
+      "_comment": "Ventricular myocardium = thick wall (LV free wall, septum) or thin wall that is closer to the ventricular landmarks than to the inflow/outflow landmarks (RV free wall). Ventricular landmark points within av_groove_exclusion_mm of the atrioventricular-groove vessels (RCA trunk, LCX, coronary sinus) are ignored because branches there also run beside the atria. Everything else (atria, auricles, great-vessel roots) fades to neutral. The LAD is not a landmark: its proximal segment runs beneath the left atrial appendage.",
       "inflow_outflow_parts": [
         "FMA4720",
         "FMA10951",
@@ -912,7 +913,13 @@
       ],
       "include_apex": true,
       "bias_mm": 2.0,
-      "width_mm": 5.0
+      "width_mm": 5.0,
+      "av_groove_parts": [
+        "FMA3802",
+        "FMA3895",
+        "FMA4706"
+      ],
+      "av_groove_exclusion_mm": 12.0
     },
     "ventricular_thickness_mm": [
       4.5,
