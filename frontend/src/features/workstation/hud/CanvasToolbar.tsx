@@ -1,35 +1,66 @@
-import { Heart, Home, Layers, Maximize2, Tags, Waves } from 'lucide-react';
-import { HairlineProgress, IconButton, StageCard, withShortcut } from '@/design';
+import { Heart, Home, Maximize2, Minimize2, Play, RotateCcw, Square, Waves } from 'lucide-react';
+import { IconButton, StageCard, withShortcut } from '@/design';
+import { useIsReducedMotion } from '@/hooks/useMediaQuery';
+import { cn } from '@/lib/cn';
 import { SHORTCUT } from '@/state/commandIds';
+import { usePatientStore } from '@/state/patientStore';
 import { useUiStore } from '@/state/uiStore';
 import { useViewerStore } from '@/state/viewerStore';
+import { clampHeartRate } from '@/three/anatomy/heartbeat';
+import { TOOLBAR_ICON, ToolbarSeparator } from './controls';
+import { LayersPopover } from './LayersPopover';
+import { MoreMenu } from './MoreMenu';
+import { OPEN_AT, usePeelPlayer } from './peel';
+import { PeelSlider } from './PeelSlider';
+import { useViewCommands } from './useViewCommands';
+import { ViewMenu } from './ViewMenu';
 
 /**
- * CanvasToolbar — WORKSTATION_V2 §5.11. Answers "How do I look at it?". Rendered in StageLayout's
- * `bottom` slot (bottom 12, centred on the free area; StageLayout counts its height in `stageInsets.bottom`).
+ * CanvasToolbar — WORKSTATION_V2 §5.11. Answers "How do I look at it?". Rendered in StageLayout's `bottom`
+ * slot (bottom 12, centred on the free area; StageLayout counts its height in `stageInsets.bottom`).
  *
- * STUB (agent A, Wave 0). Ownership transferred to agent D on creation; A never edits this file again.
+ *   View ▾ ⌂ │ Peel ○━━◆━━ ▶ │ Layers ▾ │ ♥ ≋ │ ⤢ ⋯
  *
- * Contract:
- *   export interface CanvasToolbarProps { className?: string }
- *   - StageCard `shape="bare"`, h var(--toolbar-h) (40 / 36), padding 4, `data-region="toolbar"`,
- *     groups: View menu (design `Menu`) + ⌂ · Peel slider + Dissect · Layers ▾ · Beat, Flow · Focus, ⋯.
- *   - Tooltips "Name · key" via `withShortcut(name, shortcut)`; shortcuts come from `state/commandIds`
- *     (register D's commands with the same ids at priority 0 to replace A's interim ones).
- *   - Focus mode: `uiStore.toggleFocusMode()`.
+ * Material: h 40 (36), r-lg, bg/panel, 1 px border/default, e-2, padding 4; groups split by 1 × 20
+ * hairlines; icon buttons 32 (28) with 16 px lucide at stroke 1.5; pressed = surface/2 + accent icon;
+ * every tooltip reads "Name · key". It also registers the view and layer commands (palette + keys).
  */
 export interface CanvasToolbarProps {
+  /** Compact stage (< 1100 px): icons only, no peel slider (▶ Dissect stays). */
+  compact?: boolean;
   className?: string;
 }
 
-export function CanvasToolbar({ className }: CanvasToolbarProps) {
+function DissectButton() {
+  const reduced = useIsReducedMotion();
+  const playing = usePeelPlayer((s) => s.playing);
+  const open = useViewerStore((s) => s.explode >= OPEN_AT);
+  const name = playing ? 'Stop' : open ? 'Assemble' : 'Dissect';
+  return (
+    <IconButton
+      label={name}
+      tooltip={withShortcut(playing ? 'Stop the peel' : open ? 'Assemble' : 'Dissect: peel to the open heart', SHORTCUT.peel)}
+      icon={playing ? <Square className="!size-3.5 fill-current" /> : open ? <RotateCcw /> : <Play className="fill-current" />}
+      size="md"
+      active={!!playing}
+      className={TOOLBAR_ICON}
+      aria-keyshortcuts={SHORTCUT.peel}
+      onClick={() => usePeelPlayer.getState().toggle(reduced)}
+    />
+  );
+}
+
+export function CanvasToolbar({ compact = false, className }: CanvasToolbarProps) {
+  useViewCommands();
   const heartbeat = useViewerStore((s) => s.heartbeat);
   const flow = useViewerStore((s) => s.bloodFlow);
-  const labels = useViewerStore((s) => s.labels);
-  const territoryMode = useViewerStore((s) => s.territoryMode);
-  const source = useViewerStore((s) => s.anatomySource);
-  const progress = useViewerStore((s) => s.anatomyProgress);
+  const calm = useViewerStore((s) => s.calm);
+  const chrome = useUiStore((s) => s.chrome);
+  const reduced = useIsReducedMotion();
+  const bpm = Math.round(clampHeartRate(usePatientStore((s) => s.features.PR)));
   const v = useViewerStore.getState;
+  const motionOff = reduced || calm;
+  const motionWhy = calm ? 'paused in Calm mode' : 'paused: reduced motion is on';
 
   return (
     <StageCard
@@ -39,62 +70,54 @@ export function CanvasToolbar({ className }: CanvasToolbarProps) {
       shape="bare"
       region="toolbar"
       enterDelay={120}
-      className={`flex h-[var(--toolbar-h)] items-center gap-0.5 p-1 ${className ?? ''}`}
+      className={cn('flex h-[var(--toolbar-h)] items-center gap-0.5 p-1', className)}
     >
-      <IconButton label="Home view" tooltip={withShortcut('Home view', SHORTCUT.home)} icon={<Home />} size="md" onClick={() => v().flyHome()} />
-      <span aria-hidden className="mx-1 h-5 w-px bg-hairline" />
+      <ViewMenu iconOnly={compact} />
       <IconButton
-        label="Territories"
-        tooltip={withShortcut(`Territories: ${territoryMode}`, SHORTCUT.territories)}
-        icon={<Layers />}
+        label="Home view"
+        tooltip={withShortcut('Home view', SHORTCUT.home)}
+        icon={<Home />}
         size="md"
-        active={territoryMode !== 'off'}
-        aria-pressed={territoryMode !== 'off'}
-        onClick={() => v().cycleTerritoryMode()}
+        className={TOOLBAR_ICON}
+        onClick={() => v().flyHome()}
       />
-      <IconButton
-        label="Labels"
-        tooltip={withShortcut('Labels', SHORTCUT.labels)}
-        icon={<Tags />}
-        size="md"
-        active={labels}
-        aria-pressed={labels}
-        onClick={() => v().toggle('labels')}
-      />
-      <span aria-hidden className="mx-1 h-5 w-px bg-hairline" />
+      <ToolbarSeparator />
+      {!compact && <PeelSlider />}
+      <DissectButton />
+      <ToolbarSeparator />
+      <LayersPopover iconOnly={compact} />
+      <ToolbarSeparator />
       <IconButton
         label="Heartbeat"
-        tooltip={withShortcut('Heartbeat', SHORTCUT.beat)}
+        tooltip={withShortcut(motionOff ? `Heartbeat · ${motionWhy}` : `Heartbeat · ${bpm} bpm from the patient's pulse`, SHORTCUT.beat)}
         icon={<Heart />}
         size="md"
-        active={heartbeat}
+        className={TOOLBAR_ICON}
+        active={heartbeat && !motionOff}
         aria-pressed={heartbeat}
         onClick={() => v().toggle('heartbeat')}
       />
       <IconButton
         label="Illustrative coronary flow"
-        tooltip={withShortcut('Illustrative coronary flow', SHORTCUT.flow)}
+        tooltip={withShortcut(motionOff ? `Illustrative coronary flow · ${motionWhy}` : 'Illustrative coronary flow', SHORTCUT.flow)}
         icon={<Waves />}
         size="md"
-        active={flow}
+        className={TOOLBAR_ICON}
+        active={flow && !motionOff}
         aria-pressed={flow}
         onClick={() => v().toggle('bloodFlow')}
       />
-      <span aria-hidden className="mx-1 h-5 w-px bg-hairline" />
+      <ToolbarSeparator />
       <IconButton
-        label="Focus mode"
-        tooltip={withShortcut('Focus mode', SHORTCUT.focusMode)}
-        icon={<Maximize2 />}
+        label={chrome === 'focus' ? 'Exit focus mode' : 'Focus mode'}
+        tooltip={withShortcut(chrome === 'focus' ? 'Exit focus mode' : 'Focus mode · hide the cards', SHORTCUT.focusMode)}
+        icon={chrome === 'focus' ? <Minimize2 /> : <Maximize2 />}
         size="md"
+        className={TOOLBAR_ICON}
+        aria-pressed={chrome === 'focus'}
         onClick={() => useUiStore.getState().toggleFocusMode()}
       />
-      {source === 'loading' && (
-        <HairlineProgress
-          value={progress ? progress.loaded / progress.total : null}
-          label="Loading anatomy"
-          className="absolute inset-x-2 bottom-0"
-        />
-      )}
+      <MoreMenu />
     </StageCard>
   );
 }
