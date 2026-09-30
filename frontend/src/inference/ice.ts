@@ -54,7 +54,8 @@ export async function computeIce(
   const strips: IceStrip[] = [];
   let offset = 0;
   for (const f of features) {
-    const probabilities: Record<TargetId, number[]> = {};
+    // Filled for every model target below (the contract types the map with the known target ids).
+    const probabilities = {} as Record<TargetId, number[]>;
     for (let i = 0; i < f.values.length; i++) {
       const score = scores[offset + i]!;
       for (const [target, prediction] of Object.entries(score.predictions)) {
