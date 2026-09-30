@@ -99,10 +99,15 @@ function StageLoader({ loading }: { loading: boolean }) {
   const bytes = useGlbBytes(glb);
   const shown = useSteadyFlag(loading, LOADER_DELAY_MS, LOADER_MIN_MS);
   if (!shown) return null;
-  const share = progress && progress.total > 0 ? Math.min(1, progress.loaded / progress.total) : null;
+  // The loader reports whole files, so 0 % until the GLB is in: show the size alone (indeterminate hairline)
+  // rather than a progress that looks stuck.
+  const raw = progress && progress.total > 0 ? Math.min(1, progress.loaded / progress.total) : 0;
+  const share = raw > 0 ? raw : null;
   const text =
     share === null
-      ? 'Loading anatomy…'
+      ? bytes
+        ? `Loading anatomy · ${mb(bytes)} MB`
+        : 'Loading anatomy…'
       : bytes
         ? `Loading anatomy ${mb(share * bytes)} / ${mb(bytes)} MB`
         : `Loading anatomy ${Math.round(share * 100)} %`;
