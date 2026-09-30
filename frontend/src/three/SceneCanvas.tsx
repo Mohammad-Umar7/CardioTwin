@@ -16,8 +16,12 @@ import { SceneFX } from './fx/SceneFX';
 import { QualityMonitor } from './stage/QualityMonitor';
 import { debugHandles } from './stage/debug';
 import { usePickStore } from './stage/pickStore';
-import { useSceneControls } from './stage/sceneControls';
+import { ensureRealisticDefault, useSceneControls } from './stage/sceneControls';
 import { probeWebGL } from './webgl';
+
+// Realistic is the default look (DESIGN_SYSTEM §7.9): switch the untouched store once, when the 3D stage
+// module loads — never during a render.
+ensureRealisticDefault();
 
 const DPR: Record<RenderTier, number | [number, number]> = { A: [1, 1.5], B: [1, 1.25], C: 1, D: 1 };
 /**

@@ -8,7 +8,7 @@ import { useViewerStore } from '@/state/viewerStore';
 import type { AnatomyManifest, TargetId, TargetSpec } from '@/types/contracts';
 import { debugHandles } from '../stage/debug';
 import { pickPointer, usePickStore } from '../stage/pickStore';
-import { ensureRealisticDefault, readScene, useSceneControls } from '../stage/sceneControls';
+import { readScene, useSceneControls } from '../stage/sceneControls';
 import { sceneRuntime } from '../stage/sceneRuntime';
 import { clearAnchors, setAnchors, toVector, type LabelAnchor } from './anchors';
 import { ASSEMBLY_IGNITE_AT } from './assembly';
@@ -115,7 +115,6 @@ export function GlbAnatomy({ url }: { url: string }) {
 
   const rig = useMemo(() => {
     if (!manifestSettled) return null;
-    ensureRealisticDefault();
     const viewer = useViewerStore.getState();
     const tier: QualityTier = viewer.tier === 'D' ? 'C' : viewer.tier;
     return new AnatomyRig(
