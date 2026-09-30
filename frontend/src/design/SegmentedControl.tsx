@@ -28,7 +28,7 @@ export interface SegmentedControlProps<V extends string | number> {
  * Segmented control (radiogroup) for binary and categorical inputs, projection presets and tabs-like
  * choices. Roving tabindex: Tab enters the group, arrow keys move and select.
  */
-export function SegmentedControl<V extends string | number>({
+export function SegmentedControl<const V extends string | number>({
   options,
   value,
   onChange,

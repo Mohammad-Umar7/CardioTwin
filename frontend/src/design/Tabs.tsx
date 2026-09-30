@@ -21,7 +21,7 @@ export interface TabsProps<V extends string> {
 
 
 /** Tabs (DESIGN_SYSTEM §5 TargetTabs / right-panel tabs): 2 px accent underline on the active tab. */
-export function Tabs<V extends string>({ items, value, onChange, label, idBase, size = 'sm', className }: TabsProps<V>) {
+export function Tabs<const V extends string>({ items, value, onChange, label, idBase, size = 'sm', className }: TabsProps<V>) {
   const refs = useRef<(HTMLButtonElement | null)[]>([]);
 
   const onKeyDown = (e: KeyboardEvent, index: number) => {
