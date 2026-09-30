@@ -18,7 +18,8 @@ import { useCohortPredictions } from './useCohortPredictions';
  * content spans edge to edge).
  *
  *   search       autofocused; ID, sex, age and a feature-based summary
- *   Curated      6 held-out TEST patients chosen for feature diversity (curated.ts), h 44
+ *   Curated      6 held-out TEST patients chosen for feature diversity (curated.ts), ≥ 44 px: the vignette
+ *                wraps to two lines instead of truncating
  *   Held-out test · 61 / Development · 20, h 36
  *   footer       New blank patient · Random test patient · Import…
  *
@@ -242,7 +243,7 @@ export function PatientSwitcher({ onClose, className }: PatientSwitcherProps) {
                       onClick={() => choose(e.patient)}
                       className={cn(
                         'mx-1 flex cursor-pointer items-center gap-3 rounded-sm px-2',
-                        curated ? 'h-11' : 'h-9',
+                        curated ? 'min-h-11 py-1.5' : 'h-9',
                         isActive ? 'bg-surface-2' : 'bg-transparent',
                       )}
                     >
@@ -250,8 +251,8 @@ export function PatientSwitcher({ onClose, className }: PatientSwitcherProps) {
                       <span className="flex min-w-0 flex-1 flex-col">
                         {curated ? (
                           <>
-                            <span className="truncate text-body-s text-primary">{e.title}</span>
-                            <span className="truncate text-label font-normal text-tertiary">{e.line}</span>
+                            <span className="line-clamp-2 text-body-s text-primary text-pretty">{e.title}</span>
+                            <span className="line-clamp-2 text-label font-normal text-tertiary text-pretty">{e.line}</span>
                           </>
                         ) : (
                           <span className="truncate text-label font-normal text-secondary">
