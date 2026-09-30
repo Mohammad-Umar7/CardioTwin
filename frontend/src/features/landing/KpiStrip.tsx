@@ -5,9 +5,10 @@ import { Skeleton, Tooltip } from '@/design';
 import { useSchemaIndex } from '@/hooks/useData';
 import { cn } from '@/lib/cn';
 import { EN_DASH, THIN_SPACE, formatCi, formatMetricValue } from '@/lib/format';
+import { featureName } from '@/lib/modelNames';
 import { TEST_SET } from '@/lib/testSetCopy';
 import { ROUTES } from '@/routes';
-import { formatCv, performanceFor, reconcileTestAndCv, useLandingMetrics, type LandingMetrics } from './landingMetrics';
+import { bedsideSentence, formatCv, performanceFor, reconcileTestAndCv, useLandingMetrics, type LandingMetrics } from './landingMetrics';
 
 function Tile({
   children,
@@ -122,6 +123,7 @@ export function KpiStrip({ className }: { className?: string }) {
   const mLoading = metrics.status === 'loading';
   const sLoading = !schema;
   const reconcile = reconcileTestAndCv(cad, lm?.nTest ?? null);
+  const bedside = bedsideSentence(cad, (k) => featureName(k, schema?.byKey));
 
   return (
     <section
@@ -159,6 +161,7 @@ export function KpiStrip({ className }: { className?: string }) {
             lm ? (
               <div className="flex flex-col gap-2">
                 {reconcile && <p>{reconcile}</p>}
+                {bedside && <p>{bedside}</p>}
                 <AucTable lm={lm} />
               </div>
             ) : (

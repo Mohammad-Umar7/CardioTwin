@@ -71,6 +71,11 @@ export interface TargetPerformance {
   sensitivity: number | null;
   specificity: number | null;
   threshold: number | null;
+  /**
+   * The pre-specified bedside baseline (5 inputs: age, sex, typical angina, diabetes, hypertension) on the
+   * same held-out patients, so the landing can say up front how much the full panel adds.
+   */
+  bedside: { features: string[]; testAuc: MetricCi | null } | null;
   /** Repeated random re-split distribution of held-out ROC-AUC, when the ML analysis produced it. */
   robustness: {
     median: number;
@@ -114,6 +119,16 @@ const toCv = (m: { mean: number; std: number } | undefined) =>
 
 const valueOf = (m: { value: number } | undefined): number | null => (m && isNum(m.value) ? m.value : null);
 
+/** `targets.<t>.baseline` in either artifact: summary (`test_roc_auc`) or full report (`test.roc_auc`). */
+function bedsideOf(raw: unknown): TargetPerformance['bedside'] {
+  if (!raw || typeof raw !== 'object') return null;
+  const b = raw as { features?: unknown; test_roc_auc?: SummaryValue; test?: { roc_auc?: SummaryValue } };
+  const testAuc = toCi(b.test_roc_auc ?? b.test?.roc_auc);
+  if (!testAuc) return null;
+  const features = Array.isArray(b.features) ? b.features.filter((f): f is string => typeof f === 'string') : [];
+  return { features, testAuc };
+}
+
 /**
  * Repairs UTF-8 text that a producer decoded as Windows-1252 and re-encoded ("Â±" for "±", "â€“" for
  * "–"), so prose from the artifacts never shows mojibake. Clean strings pass through unchanged.
@@ -147,6 +162,7 @@ export function fromSummary(s: MetricsSummaryFile, labels: Partial<Record<string
       sensitivity: valueOf(t.test?.recall),
       specificity: valueOf(t.test?.specificity),
       threshold: isNum(t.threshold) ? t.threshold : null,
+      bedside: bedsideOf(t.baseline),
       robustness:
         rob && isNum(rob.p50)
           ? {
@@ -189,6 +205,7 @@ export function fromMetricsReport(m: MetricsReport, labels: Partial<Record<strin
       sensitivity: valueOf(t.test.recall),
       specificity: valueOf(t.test.specificity),
       threshold: isNum(t.threshold) ? t.threshold : null,
+      bedside: bedsideOf((t as unknown as { baseline?: unknown }).baseline),
       robustness:
         rob?.roc_auc && isNum(rob.roc_auc.p50)
           ? {
@@ -231,6 +248,23 @@ const PM = '±';
 /** "0.94 ± 0.03" */
 export const formatCv = (cv: { mean: number; std: number } | null | undefined): string =>
   cv ? `${formatMetricValue(cv.mean)}${THIN_SPACE}${PM}${THIN_SPACE}${formatMetricValue(cv.std)}` : EN_DASH;
+
+/**
+ * How much the full panel adds over the bedside baseline, said before a judge finds it on Model performance:
+ * "A 5-input bedside baseline (age, sex, typical angina, diabetes, hypertension) scores 0.82 on the same
+ * held-out patients; ECG, laboratory and echocardiography take it to 0.86."
+ */
+export function bedsideSentence(t: TargetPerformance | null, nameOf: (key: string) => string): string | null {
+  const b = t?.bedside;
+  if (!b?.testAuc || !t?.testAuc) return null;
+  const names = b.features.map((k) => nameOf(k).toLowerCase());
+  const list = names.length > 1 ? `${names.slice(0, -1).join(', ')} and ${names.at(-1)}` : (names[0] ?? '');
+  return (
+    `A ${b.features.length || 'few'}-input bedside baseline${list ? ` (${list})` : ''} scores ` +
+    `${formatMetricValue(b.testAuc.value)} on the same held-out patients; ECG, laboratory and echocardiography ` +
+    `take it to ${formatMetricValue(t.testAuc.value)}.`
+  );
+}
 
 /**
  * One honest sentence reconciling test and CV (V2 §6.4 rule 2): the held-out value, its CI, the CV
