@@ -87,6 +87,33 @@ export function heartBox(manifest: AnatomyManifest | null | undefined): Box3 {
   return box;
 }
 
+/** Layers whose exploded extent the thorax view must show (skin and muscle are ghosts by then). */
+const THORAX_LAYERS = new Set(['skeleton', 'lungs', 'diaphragm', 'heart', 'coronary']);
+
+/**
+ * The thorax as the peel shows it SOLID: every structure of the skeleton, lungs, diaphragm and heart layers
+ * from rest to `k` of its explode (layer + structure vector). A peeled layer turns into a faint ghost at
+ * half its window (rig.ts), so k = 0.5 bounds everything opaque the thorax view shows while the chest opens
+ * or closes; the ghosts may drift past it. Null without a manifest.
+ */
+export function explodedThoraxBox(manifest: AnatomyManifest | null | undefined, k = 0.5): Box3 | null {
+  if (!manifest) return null;
+  const layers = new Map(manifest.layers.map((l) => [l.id, l]));
+  const box = new Box3();
+  const v = new Vector3();
+  for (const s of manifest.structures) {
+    const raw = s as unknown as { layer: string; explode?: number[]; bbox?: { min: number[]; max: number[] } };
+    if (!THORAX_LAYERS.has(raw.layer) || !raw.bbox || raw.bbox.min.length < 3 || raw.bbox.max.length < 3) continue;
+    const l = layers.get(raw.layer)?.explode ?? [0, 0, 0];
+    const e = raw.explode ?? [0, 0, 0];
+    v.set((l[0] ?? 0) + (e[0] ?? 0), (l[1] ?? 0) + (e[1] ?? 0), (l[2] ?? 0) + (e[2] ?? 0)).multiplyScalar(k);
+    const min = new Vector3(raw.bbox.min[0], raw.bbox.min[1], raw.bbox.min[2]);
+    const max = new Vector3(raw.bbox.max[0], raw.bbox.max[1], raw.bbox.max[2]);
+    box.expandByPoint(min).expandByPoint(max).expandByPoint(min.clone().add(v)).expandByPoint(max.clone().add(v));
+  }
+  return box.isEmpty() ? null : box;
+}
+
 export interface FramingInput {
   box: Box3;
   /**

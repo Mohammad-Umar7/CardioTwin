@@ -7,6 +7,7 @@ import { angleLabel, presetLabel, useCameraState } from './cameraState';
 import {
   WORKSTATION_HEART_SHARE,
   easeOutCubic,
+  explodedThoraxBox,
   framingDistance,
   freeArea,
   glide,
@@ -142,6 +143,19 @@ describe('heart framing (V2 §4.1: 62 % of the free-area height)', () => {
     const input = { box: new Box3(new Vector3(-1, -0.2, -0.2), new Vector3(1, 0.2, 0.2)), target, direction: new Vector3(0, 0, 1), fov: 30, width: 800, height: 800, freeWidth: 400, freeHeight: 800, share: 0.62 };
     const size = projectedSize(input, framingDistance(input));
     expect(size.width / 400).toBeLessThanOrEqual(0.861);
+  });
+});
+
+describe('thorax view of the peel', () => {
+  it('bounds the opaque thorax (half-exploded ribs, lungs, diaphragm) around the heart', () => {
+    const box = explodedThoraxBox(manifest)!;
+    expect(box).not.toBeNull();
+    // Contains the heart and the ribs swung half-way out; excludes the fully swung-out (ghosted) halves.
+    expect(box.containsBox(heartBox(manifest))).toBe(true);
+    expect(box.max.x).toBeGreaterThan(1.14 + 0.9);
+    expect(box.max.x).toBeLessThan(1.14 + 1.95);
+    expect(explodedThoraxBox(manifest, 1)!.max.x).toBeGreaterThan(box.max.x);
+    expect(explodedThoraxBox(null)).toBeNull();
   });
 });
 
