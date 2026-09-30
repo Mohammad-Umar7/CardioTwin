@@ -208,7 +208,13 @@ def bm_arrays(bm: bmesh.types.BMesh) -> mo.Mesh:
 
 
 def bm_bisect(bm, point, normal, *, clear_outer: bool = False, clear_inner: bool = False, cap: bool = False):
-    """Bisect with a plane; optionally delete one side and cap the opening. Returns the cap faces."""
+    """Bisect with a plane; optionally delete one side and cap the opening. Returns the cap faces.
+
+    Kept faces keep their source winding (BodyParts3D parts are closed and outward-facing) and every
+    cap face is oriented towards the removed side, so a closed outward input stays closed and
+    outward. Normals are deliberately *not* recalculated here: bmesh's heuristic picks outwardness
+    from one extreme face and turned the thin right pectoralis sheet inside out.
+    """
     geom = bm.verts[:] + bm.edges[:] + bm.faces[:]
     res = bmesh.ops.bisect_plane(
         bm, geom=geom, dist=1e-6, plane_co=Vector(point), plane_no=Vector(normal),
@@ -221,7 +227,16 @@ def bm_bisect(bm, point, normal, *, clear_outer: bool = False, clear_inner: bool
         return []
     filled = bmesh.ops.triangle_fill(bm, use_beauty=True, use_dissolve=False, edges=cut_edges, normal=Vector(normal))
     faces = [f for f in filled["geom"] if isinstance(f, bmesh.types.BMFace)]
-    bmesh.ops.recalc_face_normals(bm, faces=bm.faces[:])
+    # Loops that triangle_fill leaves open (self-touching or collinear cut loops) are closed as n-gons.
+    left_open = [e for e in cut_edges if e.is_valid and e.is_boundary]
+    if left_open:
+        holes = bmesh.ops.holes_fill(bm, edges=left_open, sides=0)
+        faces += [f for f in holes["faces"] if f.is_valid]
+    outward = Vector(normal) if clear_outer else -Vector(normal)
+    for f in faces:
+        f.normal_update()
+        if f.normal.dot(outward) < 0.0:
+            f.normal_flip()
     return faces
 
 
@@ -307,6 +322,24 @@ CROPS = {
 # ============================================================================================
 # Stage 2c — mesh finishing (scene frame)
 # ============================================================================================
+def orient_outward(bm: bmesh.types.BMesh) -> int:
+    """Make winding consistent, then turn every inside-out connected component the right way out.
+
+    ``recalc_face_normals`` only guarantees consistency; its outward guess can invert thin sheets,
+    so the orientation of each component is decided by the sign of its enclosed volume.
+    Returns the number of faces reversed by the volume test.
+    """
+    bmesh.ops.recalc_face_normals(bm, faces=bm.faces[:])
+    bm.verts.index_update()
+    bm.faces.ensure_lookup_table()
+    V = np.array([v.co[:] for v in bm.verts], dtype=np.float64)
+    F = np.array([[v.index for v in f.verts] for f in bm.faces], dtype=np.int64)
+    inverted = np.nonzero(mo.inverted_component_faces(V, F))[0]
+    if len(inverted):
+        bmesh.ops.reverse_faces(bm, faces=[bm.faces[i] for i in inverted.tolist()])
+    return int(len(inverted))
+
+
 def finish_topology(ob: bpy.types.Object, *, merge_dist: float, recalc_normals: bool) -> None:
     bm = bmesh.new()
     bm.from_mesh(ob.data)
@@ -316,7 +349,9 @@ def finish_topology(ob: bpy.types.Object, *, merge_dist: float, recalc_normals: 
     bmesh.ops.delete(bm, geom=loose, context="VERTS")
     bmesh.ops.triangulate(bm, faces=bm.faces[:])
     if recalc_normals:
-        bmesh.ops.recalc_face_normals(bm, faces=bm.faces[:])
+        flipped = orient_outward(bm)
+        if flipped:
+            log(f"  {ob.name}: {flipped} faces of inside-out components reversed")
     bm.to_mesh(ob.data)
     bm.free()
     ob.data.update()
@@ -350,6 +385,19 @@ def decimate_to(ob: bpy.types.Object, budget: int) -> None:
     mod.ratio = budget / n
     mod.use_collapse_triangulate = True
     apply_modifiers(ob)
+
+
+def reorient_after_decimation(ob: bpy.types.Object) -> None:
+    """Edge collapses on thin sheets can leave a few faces wound against their neighbours; restore
+    consistent, outward winding (see :func:`orient_outward`)."""
+    bm = bmesh.new()
+    bm.from_mesh(ob.data)
+    flipped = orient_outward(bm)
+    bm.to_mesh(ob.data)
+    bm.free()
+    ob.data.update()
+    if flipped:
+        log(f"  {ob.name}: {flipped} faces reversed after decimation")
 
 
 def smooth_normals(ob: bpy.types.Object, flat_faces: set[int] | None = None) -> None:
@@ -621,10 +669,12 @@ def build(args: argparse.Namespace) -> None:
         if spec.raw.get("split"):
             continue
         parts = [cache.get(pid) for pid in spec.parts]
-        V, F = mo.concat(parts)
         crop = spec.raw.get("crop")
         if crop:
-            V, F = CROPS[crop["type"]](V, F, crops)
+            # Crop each closed part on its own: a single cut loop per part caps cleanly, whereas the
+            # overlapping loops of touching parts (e.g. the two heads of pectoralis) do not.
+            parts = [CROPS[crop["type"]](V, F, crops) for V, F in parts]
+        V, F = mo.concat(parts)
         ob = new_object(spec.node, new_mesh(spec.node, to_scene(V), F))
         closed = crop is None or crop["type"] != "skin_outer_shell"
         finish_topology(ob, merge_dist=merge_dist, recalc_normals=closed)
@@ -634,6 +684,8 @@ def build(args: argparse.Namespace) -> None:
         if spec.raw.get("remesh_mm"):
             remesh_seamless(ob, spec.raw["remesh_mm"] * scale)
         decimate_to(ob, spec.budget)
+        if closed:
+            reorient_after_decimation(ob)
         objects[spec.node] = ob
         node_stats[spec.node] = {"triangles_source": before}
         log(f"{spec.node:28s} {before:8d} -> {tri_count(ob):7d} tris")

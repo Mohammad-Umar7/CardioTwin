@@ -115,6 +115,21 @@ def filter_components(
     return compact(V, F, keep), stats
 
 
+def inverted_component_faces(V: np.ndarray, F: np.ndarray) -> np.ndarray:
+    """Boolean mask of the faces whose connected component encloses a negative signed volume.
+
+    For a consistently wound component this is the robust "inside-out" test (bmesh's normal
+    recalculation guesses outwardness from a single extreme face and inverts thin sheets such as
+    pectoralis major). Open components with small holes still give the right sign.
+    """
+    labels = face_components(F, len(V))
+    a, b, c = V[F[:, 0]], V[F[:, 1]], V[F[:, 2]]
+    contrib = np.einsum("ij,ij->i", a - V.mean(axis=0), np.cross(b - a, c - a))
+    uniq, inv = np.unique(labels, return_inverse=True)
+    vol = np.bincount(inv, weights=contrib, minlength=len(uniq))
+    return vol[inv] < 0.0
+
+
 def largest_component(V: np.ndarray, F: np.ndarray) -> Mesh:
     labels = face_components(F, len(V))
     uniq, counts = np.unique(labels, return_counts=True)

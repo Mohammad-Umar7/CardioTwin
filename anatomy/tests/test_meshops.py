@@ -128,3 +128,14 @@ def test_read_stl_merges_shared_vertices(tmp_path):
     V2, F2 = mo.read_stl(path)
     assert len(V2) == 4 and F2.shape == (4, 3)
     assert mo.signed_volume(V2, F2) == pytest.approx(mo.signed_volume(V, F))
+
+
+def test_inverted_component_faces_flags_only_the_inside_out_piece():
+    # A far-away inside-out cube must be detected by its own volume, independent of the offset.
+    V1, F1 = cube()
+    V2, F2 = cube()
+    V, F = mo.concat([(V1, F1), (V2 + 40.0, F2[:, ::-1])])
+    mask = mo.inverted_component_faces(V, F)
+    assert not mask[: len(F1)].any()
+    assert mask[len(F1):].all()
+
