@@ -45,7 +45,7 @@ function Label({ target }: { target: string }) {
       )}
     >
       <RiskPip p={status === 'error' && !prediction ? null : p} />
-      <span className="overline text-primary">{target}</span>
+      <span className="eyebrow text-primary">{target}</span>
       <span className="font-numeral text-numeral-label text-primary">
         {f.qualifier}
         {f.value}
@@ -54,7 +54,7 @@ function Label({ target }: { target: string }) {
       {band && (
         <span className="flex items-center gap-1 group-data-[compact=true]:hidden">
           <RiskMeter level={band.level} />
-          <span className="overline text-secondary">{band.label}</span>
+          <span className="eyebrow text-secondary">{band.label}</span>
         </span>
       )}
       <span className="hidden text-label font-normal text-tertiary group-data-[posterior=true]:inline">(posterior)</span>

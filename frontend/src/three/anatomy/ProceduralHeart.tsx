@@ -87,7 +87,7 @@ export function ProceduralHeart() {
 
   const materials = useMemo(() => {
     const vessels = new Map<string, VesselMaterial>();
-    for (const v of PROCEDURAL_VESSELS) if (v.target && !vessels.has(v.target)) vessels.set(v.target, createVesselMaterial());
+    for (const v of PROCEDURAL_VESSELS) if (v.target && !vessels.has(v.target)) vessels.set(v.target, createVesselMaterial(0));
     return {
       myocardium: createMyocardiumMaterial('clay', 'aTerritory'),
       vessels,

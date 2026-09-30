@@ -13,7 +13,9 @@ const DEG = Math.PI / 180;
 /** Landing turntable: 6°/s, stops on pointer-down, resumes after 8 s idle (DESIGN_SYSTEM §6). */
 const TURNTABLE_RAD_PER_S = 6 * DEG;
 const TURNTABLE_RESUME_MS = 8000;
-const HERO_DISTANCE = 6.6;
+const HERO_DISTANCE = 5.4;
+/** Camera field of view (DESIGN_SYSTEM §7.1). */
+export const CAMERA_FOV = 30;
 
 /**
  * Camera (DESIGN_SYSTEM §7.1, §7.5): drei CameraControls with distance 2.2–9, polar 20°–160°, pan only
@@ -32,11 +34,22 @@ export function CameraRig() {
   const lastReadout = useRef({ t: 0, az: NaN, el: NaN });
 
   // Workstation home frames the heart (manifest `camera.heart`, additive) so the heart is the largest
-  // element; the landing hero uses the wider `camera.home` pose that shows the ghosted torso.
-  const pose = stage === 'hero' ? manifest?.camera.home : (manifest?.camera.heart ?? manifest?.camera.home);
-  const home = pose;
-  const homeTarget = new Vector3(...((pose?.target as number[] | undefined) ?? [0, 0, 0]));
-  const homePosition = new Vector3(...((pose?.position as number[] | undefined) ?? [0, 0.3, HOME_DISTANCE]));
+  // element. The landing hero looks at the heart from the direction of the manifest's torso `home` pose,
+  // a little further back, so the ghosted chest frames it while it turns.
+  const heartPose = manifest?.camera.heart ?? manifest?.camera.home;
+  const home = heartPose;
+  const homeTarget = new Vector3(...((heartPose?.target as number[] | undefined) ?? [0, 0, 0]));
+  const homePosition = new Vector3(...((heartPose?.position as number[] | undefined) ?? [0, 0.3, HOME_DISTANCE]));
+  // Poses authored for another field of view keep their framing at our fixed 30° (§7.1).
+  const poseFov = heartPose?.fov ?? manifest?.camera.fov;
+  if (poseFov && poseFov !== CAMERA_FOV) {
+    const k = Math.tan(((poseFov / 2) * Math.PI) / 180) / Math.tan(((CAMERA_FOV / 2) * Math.PI) / 180);
+    homePosition.sub(homeTarget).multiplyScalar(k).add(homeTarget);
+  }
+  const torso = manifest?.camera.home;
+  const heroDirection = torso
+    ? new Vector3(...(torso.position as number[])).sub(new Vector3(...(torso.target as number[]))).normalize()
+    : new Vector3(0, 0.05, 1).normalize();
 
   // Expose controls; Shift-drag pans (truck), otherwise left-drag rotates.
   useEffect(() => {
@@ -64,13 +77,14 @@ export function CameraRig() {
     };
   }, []);
 
-  // Stage poses: the hero sits slightly further back; both look at the heart centre.
+  // Stage poses: both look at the heart centre; the hero sits further back on the torso axis.
   useEffect(() => {
     const controls = ref.current;
     if (!controls) return;
-    const distance = stage === 'hero' && !manifest ? HERO_DISTANCE : homePosition.distanceTo(homeTarget);
-    const dir = homePosition.clone().sub(homeTarget).normalize().multiplyScalar(distance);
-    const pos = homeTarget.clone().add(dir);
+    const pos =
+      stage === 'hero'
+        ? homeTarget.clone().addScaledVector(heroDirection, HERO_DISTANCE)
+        : homePosition.clone();
     void controls.setLookAt(pos.x, pos.y, pos.z, homeTarget.x, homeTarget.y, homeTarget.z, !reduced && stage !== 'hidden');
     invalidate();
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -114,7 +128,8 @@ export function CameraRig() {
     const now = performance.now();
     if (now - lastReadout.current.t > 120) {
       const { azimuth, elevation } = fromControlsAngles(controls.azimuthAngle, controls.polarAngle);
-      if (Math.abs(azimuth - lastReadout.current.az) >= 0.5 || Math.abs(elevation - lastReadout.current.el) >= 0.5) {
+      const last = lastReadout.current;
+      if (!Number.isFinite(last.az) || Math.abs(azimuth - last.az) >= 0.5 || Math.abs(elevation - last.el) >= 0.5) {
         lastReadout.current = { t: now, az: azimuth, el: elevation };
         useViewerStore.getState().setCarm({ azimuth, elevation });
       }

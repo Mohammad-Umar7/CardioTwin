@@ -47,7 +47,7 @@ export type MyocardiumMaterial = MeshStandardMaterial & { userData: { uniforms: 
 
 /**
  * Clay (default) or anatomical myocardium with the supplied-territory tint (§7.4):
- *   w = normalize(pow(weights, 2)); tint = Σ wᵢ·LUT(pᵢ); strength = 0.10 + 0.40·Σ wᵢpᵢ (×0.25 for
+ *   w = normalize(pow(weights, 2)); tint = Σ wᵢ·LUT(pᵢ); strength = 0.08 + 0.30·Σ wᵢpᵢ (×0.25 for
  *   non-selected territories); albedo = mix(clay, tint, strength); no emissive, so a vessel always
  *   outshines its own territory. `territoryAttribute` is `aTerritory` (procedural) or `color` (GLB COLOR_0).
  */
@@ -64,7 +64,8 @@ export function createMyocardiumMaterial(look: 'clay' | 'anat' = 'clay', territo
     color: look === 'clay' ? ANATOMY.clay : ANATOMY.flesh,
     roughness: 0.62,
     metalness: 0,
-    envMapIntensity: LIGHTS.envMapIntensity,
+    // Slightly less image-based light than the vessels so the wall stays darker than a p = 0 vessel (§7.3).
+    envMapIntensity: 0.25,
   }) as MyocardiumMaterial;
   material.userData.uniforms = uniforms;
   material.onBeforeCompile = (shader) => {
@@ -92,7 +93,7 @@ export function createMyocardiumMaterial(look: 'clay' | 'anat' = 'clay', territo
           vec3 ctTint = ctW.x * texture2D(uRiskLUT, vec2(uP.x, 0.5)).rgb
                       + ctW.y * texture2D(uRiskLUT, vec2(uP.y, 0.5)).rgb
                       + ctW.z * texture2D(uRiskLUT, vec2(uP.z, 0.5)).rgb;
-          float ctStrength = (0.10 + 0.40 * dot(ctW, uP)) * dot(ctW, uSelMask) * uTerritoryOn;
+          float ctStrength = (0.08 + 0.30 * dot(ctW, uP)) * dot(ctW, uSelMask) * uTerritoryOn;
           diffuseColor.rgb = mix(diffuseColor.rgb, ctTint, ctStrength);
         }`,
       );
@@ -104,14 +105,28 @@ export function createMyocardiumMaterial(look: 'clay' | 'anat' = 'clay', territo
 
 // ---------------------------------------------------------------------------------- vessels
 
-export type VesselMaterial = MeshStandardMaterial & { userData: { uniforms: { uRimColor: IUniform<Color>; uRimStrength: IUniform<number> } } };
+export type VesselMaterial = MeshStandardMaterial & {
+  userData: { uniforms: { uRimColor: IUniform<Color>; uRimStrength: IUniform<number>; uInflate: IUniform<number> } };
+};
+
+/**
+ * Absolute outward offset applied to coronary vertices (scene units; 1 unit = 10 cm). BodyParts3D
+ * coronaries are ~1.5–2 mm in radius, so 0.5 mm ≈ the spec's documented 1.3× display inflation (§7.3),
+ * which keeps thin distal branches legible at workstation zoom. Purely visual; not anatomy.
+ */
+export const VESSEL_INFLATE = 0.005;
 
 /**
  * Coronary target material: color = emissive = ramp(p) (set per frame by useRiskAnimation), roughness
- * 0.30, fresnel rim #E8ECF1 × 0.25. One uniform colour per target, root to tip.
+ * 0.30, fresnel rim #E8ECF1 × 0.25, display inflation along normals. One uniform colour per target, root
+ * to tip.
  */
-export function createVesselMaterial(): VesselMaterial {
-  const uniforms = { uRimColor: { value: new Color(ANATOMY.vesselRim) }, uRimStrength: { value: 0.25 } };
+export function createVesselMaterial(inflate = VESSEL_INFLATE): VesselMaterial {
+  const uniforms = {
+    uRimColor: { value: new Color(ANATOMY.vesselRim) },
+    uRimStrength: { value: 0.25 },
+    uInflate: { value: inflate },
+  };
   const material = new MeshStandardMaterial({
     color: ANATOMY.vesselPending,
     emissive: ANATOMY.vesselPending,
@@ -121,7 +136,13 @@ export function createVesselMaterial(): VesselMaterial {
     envMapIntensity: LIGHTS.envMapIntensity,
   }) as VesselMaterial;
   material.userData.uniforms = uniforms;
-  material.onBeforeCompile = (shader) => addFresnelRim(shader, uniforms);
+  material.onBeforeCompile = (shader) => {
+    shader.uniforms.uInflate = uniforms.uInflate;
+    shader.vertexShader = shader.vertexShader
+      .replace('#include <common>', '#include <common>\nuniform float uInflate;')
+      .replace('#include <begin_vertex>', '#include <begin_vertex>\ntransformed += normalize(objectNormal) * uInflate;');
+    addFresnelRim(shader, uniforms);
+  };
   material.customProgramCacheKey = () => 'ct-vessel';
   return material;
 }
@@ -138,6 +159,14 @@ export const createLeftMainMaterial = () =>
 
 export const createGreatVesselMaterial = () =>
   new MeshStandardMaterial({ color: ANATOMY.greatVessel, roughness: 0.45, metalness: 0, envMapIntensity: LIGHTS.envMapIntensity });
+
+/**
+ * Pulmonary artery / veins: the same achromatic family as the great vessels but a step darker and
+ * rougher, because their branches fan out across the lung field and would otherwise out-shine the
+ * coronary tree (the only data-coloured structure).
+ */
+export const createPulmonaryVesselMaterial = () =>
+  new MeshStandardMaterial({ color: ANATOMY.vein, roughness: 0.65, metalness: 0, envMapIntensity: 0.2 });
 
 export const createValveMaterial = () =>
   new MeshStandardMaterial({ color: ANATOMY.valvePapillary, roughness: 0.5, metalness: 0, envMapIntensity: LIGHTS.envMapIntensity });
