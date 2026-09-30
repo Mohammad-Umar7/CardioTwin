@@ -98,9 +98,10 @@ def fit_estimator(
     overrides: dict[str, Any] | None = None,
     select_k: int | None = None,
     inner_repeats: int = 1,
+    columns: list[str] | None = None,
 ) -> tuple[Pipeline, dict[str, Any]]:
     """Fit one model; tuned models run a RandomizedSearchCV on (X, y) and refit the winner."""
-    pipe = spec.build(seed, overrides)
+    pipe = spec.build(seed, overrides, columns)
     if select_k:
         pipe = with_selector(pipe, min(select_k, X.shape[1]))
     if tuning is None or not spec.tuned:
@@ -134,9 +135,10 @@ def _fold_task(
     tuning: dict[str, Any] | None,
     overrides: dict[str, Any] | None,
     select_k: int | None,
+    columns: list[str] | None = None,
 ) -> FoldOutput:
     model, params = fit_estimator(
-        spec, X[fold.train], y[fold.train], seed, tuning, seed + 1000 + fold.fold_id, overrides, select_k
+        spec, X[fold.train], y[fold.train], seed, tuning, seed + 1000 + fold.fold_id, overrides, select_k, columns=columns
     )
     Xt = X[fold.test]
     proba = positive_proba(model, Xt)
@@ -172,6 +174,7 @@ class CVJob:
     nested: bool = True
     overrides: dict[str, Any] | None = None
     select_k: int | None = None
+    columns: list[str] | None = None
 
 
 def run_cv_jobs(jobs: Sequence[CVJob], seed: int, tuning: dict[str, Any], n_jobs: int = -1) -> dict[str, CVResult]:
@@ -182,7 +185,8 @@ def run_cv_jobs(jobs: Sequence[CVJob], seed: int, tuning: dict[str, Any], n_jobs
         for fold in job.folds:
             tasks.append(
                 delayed(_fold_task)(
-                    job.spec, job.X, job.y, fold, seed, tuning if job.nested else None, job.overrides, job.select_k
+                    job.spec, job.X, job.y, fold, seed, tuning if job.nested else None, job.overrides, job.select_k,
+                    job.columns,
                 )
             )
             index.append(j)

@@ -21,7 +21,8 @@ final_tuning:              # hyper-parameters of the deployed components, search
   inner_repeats: 3
 
 ensemble:
-  logistic_candidates: [lr_l2, lr_l1, lr_elasticnet]   # best nested-CV ROC-AUC per target is used
+  # Logistic component = the candidate with the best nested-CV ROC-AUC for that target.
+  logistic_candidates: [lr_l2, lr_l1, lr_elasticnet, lr_core]
   tree_component: xgboost
   weight_grid_step: 0.05   # w in {0, 0.05, ..., 1}; chosen by pooled out-of-fold log-loss after Platt
 
@@ -43,9 +44,9 @@ explain:
   beeswarm_top: 15
 
 # Clinically meaningful baseline: what a clinician knows before any test (pre-test probability style).
+# It is the `lr_core` model below (its feature subset is declared there).
 baseline:
-  model: lr_l2
-  features: [Age, Sex, Typical Chest Pain, DM, HTN]
+  model: lr_core
 
 # Evidence-driven extras, each adopted only if it improves development-set CV ROC-AUC by >= min_gain
 # (mean over the affected targets, same folds, fixed hyper-parameters -> paired comparison).
@@ -60,6 +61,7 @@ ablations:
 
 # Model zoo. kind -> estimator factory in models.py; params fixed; search = RandomizedSearchCV space.
 # Distributions: {loguniform: [lo, hi]}, {uniform: [lo, hi]}, {int: [lo, hi]} (inclusive), {choice: [...]}
+# Optional `features:` restricts a model to a pre-specified subset of raw features.
 models:
   dummy_prior:
     kind: dummy
@@ -68,25 +70,32 @@ models:
     kind: logistic
     label: Logistic regression (L2)
     params: { l1_ratio: 0.0, solver: lbfgs, max_iter: 5000 }
-    n_iter: 16
+    n_iter: 12
+    search: { C: { loguniform: [0.001, 10.0] } }
+  lr_core:
+    kind: logistic
+    label: Logistic regression (clinical core)
+    features: [Age, Sex, Typical Chest Pain, DM, HTN]
+    params: { l1_ratio: 0.0, solver: lbfgs, max_iter: 5000 }
+    n_iter: 10
     search: { C: { loguniform: [0.001, 10.0] } }
   lr_l1:
     kind: logistic
     label: Logistic regression (L1)
     params: { l1_ratio: 1.0, solver: liblinear, max_iter: 5000 }
-    n_iter: 16
+    n_iter: 12
     search: { C: { loguniform: [0.01, 10.0] } }
   lr_elasticnet:
     kind: logistic
     label: Logistic regression (elastic net)
     params: { solver: saga, max_iter: 20000, tol: 0.0001 }
-    n_iter: 16
+    n_iter: 12
     search: { C: { loguniform: [0.005, 5.0] }, l1_ratio: { uniform: [0.05, 0.95] } }
   svm_rbf:
     kind: svm
     label: SVM (RBF kernel)
     params: { kernel: rbf, probability: true }
-    n_iter: 16
+    n_iter: 12
     search: { C: { loguniform: [0.1, 100.0] }, gamma: { loguniform: [0.0001, 0.1] } }
   knn:
     kind: knn
@@ -96,11 +105,11 @@ models:
   random_forest:
     kind: random_forest
     label: Random forest
-    params: { n_estimators: 500, min_samples_leaf: 2, max_features: sqrt }
+    params: { n_estimators: 300, min_samples_leaf: 2, max_features: sqrt }
   extra_trees:
     kind: extra_trees
     label: Extra trees
-    params: { n_estimators: 500, min_samples_leaf: 2, max_features: sqrt }
+    params: { n_estimators: 300, min_samples_leaf: 2, max_features: sqrt }
   hist_gb:
     kind: hist_gb
     label: Histogram gradient boosting
@@ -109,7 +118,7 @@ models:
     kind: xgboost
     label: XGBoost
     params: { tree_method: hist, max_bin: 256 }
-    n_iter: 16
+    n_iter: 14
     search:
       n_estimators: { int: [100, 400] }
       max_depth: { int: [2, 4] }

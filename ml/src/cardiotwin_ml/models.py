@@ -13,7 +13,7 @@ from typing import Any
 
 import numpy as np
 from scipy import stats
-from sklearn.base import BaseEstimator
+from sklearn.base import BaseEstimator, TransformerMixin
 from sklearn.dummy import DummyClassifier
 from sklearn.ensemble import ExtraTreesClassifier, HistGradientBoostingClassifier, RandomForestClassifier
 from sklearn.impute import SimpleImputer
@@ -25,6 +25,29 @@ from sklearn.svm import SVC
 from xgboost import XGBClassifier
 
 STEP = "model"  # name of the final estimator step in every pipeline
+SUBSET = "subset"  # optional first step restricting a model to a pre-specified feature subset
+
+
+class ColumnSubset(TransformerMixin, BaseEstimator):
+    """Keep a fixed list of encoded columns (knowledge-driven subsets; no fitted state)."""
+
+    def __init__(self, indices: tuple[int, ...] = ()):
+        self.indices = indices
+
+    def fit(self, X: np.ndarray, y: np.ndarray | None = None) -> ColumnSubset:  # noqa: ARG002
+        return self
+
+    def transform(self, X: np.ndarray) -> np.ndarray:
+        return np.asarray(X)[:, list(self.indices)]
+
+
+def subset_indices(columns: list[str], features: tuple[str, ...]) -> tuple[int, ...]:
+    """Encoded column indices belonging to the given raw features (one-hot columns included)."""
+    idx = tuple(i for i, c in enumerate(columns) if c.split("=")[0] in features)
+    missing = set(features) - {columns[i].split("=")[0] for i in idx}
+    if missing:
+        raise ValueError(f"feature subset refers to unknown/dropped features: {sorted(missing)}")
+    return idx
 
 
 def _scaled(model: BaseEstimator) -> Pipeline:
@@ -86,16 +109,23 @@ class ModelSpec:
     params: dict[str, Any]
     search: dict[str, Any]
     n_iter: int
+    features: tuple[str, ...] | None = None
 
     @property
     def tuned(self) -> bool:
         return bool(self.search)
 
-    def build(self, seed: int, overrides: dict[str, Any] | None = None) -> Pipeline:
+    def build(self, seed: int, overrides: dict[str, Any] | None = None, columns: list[str] | None = None) -> Pipeline:
+        """Fresh pipeline; ``columns`` (encoded column names) is required for feature-subset models."""
         params = dict(self.params)
         if overrides:
             params.update({k.removeprefix(f"{STEP}__"): v for k, v in overrides.items()})
-        return FACTORIES[self.kind](params, seed)
+        pipe = FACTORIES[self.kind](params, seed)
+        if self.features:
+            if columns is None:
+                raise ValueError(f"model {self.name} uses a feature subset; pass the encoded column names")
+            pipe = Pipeline([(SUBSET, ColumnSubset(subset_indices(columns, self.features))), *pipe.steps])
+        return pipe
 
     def param_distributions(self) -> dict[str, Any]:
         return {f"{STEP}__{k}": _distribution(v) for k, v in self.search.items()}
@@ -113,6 +143,7 @@ def model_specs(training_cfg: dict[str, Any]) -> dict[str, ModelSpec]:
             params=dict(m.get("params") or {}),
             search=dict(m.get("search") or {}),
             n_iter=int(m.get("n_iter", 0)),
+            features=tuple(m["features"]) if m.get("features") else None,
         )
     return specs
 
