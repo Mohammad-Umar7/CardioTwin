@@ -24,15 +24,51 @@ import { commandScore, paletteSuggestions, searchCommands, type PaletteSection }
 export default function CommandPalette() {
   const open = useUiStore((s) => s.paletteOpen);
   const reduced = useIsReducedMotion();
+  const prewarm = usePrewarm(open);
   if (typeof document === 'undefined') return null;
   return createPortal(
-    <AnimatePresence>{open && <PalettePanel key="palette" reduced={reduced} />}</AnimatePresence>,
+    <>
+      <AnimatePresence>{open && <PalettePanel key="palette" reduced={reduced} />}</AnimatePresence>
+      {prewarm && (
+        <div hidden aria-hidden>
+          <PalettePanel reduced prewarm />
+        </div>
+      )}
+    </>,
     document.body,
   );
 }
 
+/** Delay after load before the one-off hidden render that warms the palette's code paths. */
+const PREWARM_AFTER_MS = 2500;
 
-function PalettePanel({ reduced }: { reduced: boolean }) {
+/**
+ * The first open pays for React creating the panel, the motion nodes and the row icons for the first
+ * time. One hidden, inert render at idle (never focused, no Esc layer, removed right after it commits)
+ * warms those paths, so even the first Ctrl K opens within the 50 ms budget (V2 §9.3 A accept).
+ */
+function usePrewarm(open: boolean): boolean {
+  const [phase, setPhase] = useState<'idle' | 'render' | 'done'>('idle');
+  useEffect(() => {
+    if (phase !== 'idle') return;
+    const ric = window.requestIdleCallback?.bind(window);
+    const t = window.setTimeout(() => {
+      if (ric) ric(() => setPhase('render'), { timeout: 2000 });
+      else setPhase('render');
+    }, PREWARM_AFTER_MS);
+    return () => window.clearTimeout(t);
+  }, [phase]);
+  useEffect(() => {
+    if (phase === 'render') setPhase('done');
+  }, [phase]);
+  useEffect(() => {
+    if (open && phase === 'idle') setPhase('done');
+  }, [open, phase]);
+  return phase === 'render' && !open;
+}
+
+
+function PalettePanel({ reduced, prewarm = false }: { reduced: boolean; prewarm?: boolean }) {
   const listId = useId();
   const input = useRef<HTMLInputElement>(null);
   const opener = useRef<Element | null>(null);
@@ -49,10 +85,11 @@ function PalettePanel({ reduced }: { reduced: boolean }) {
   const close = () => useUiStore.getState().setPaletteOpen(false);
   // Only while open: during its 110 ms exit the panel must not swallow the next Esc (the layer below's).
   const open = useUiStore((s) => s.paletteOpen);
-  useEscapeLayer(open, () => (level ? back() : close()), ESCAPE_PRIORITY.palette);
+  useEscapeLayer(open && !prewarm, () => (level ? back() : close()), ESCAPE_PRIORITY.palette);
 
   // Remember what had focus; give it back when the palette closes (unless a command moved focus on).
   useEffect(() => {
+    if (prewarm) return;
     opener.current = document.activeElement;
     input.current?.focus({ preventScroll: true });
     return () => {
@@ -61,7 +98,7 @@ function PalettePanel({ reduced }: { reduced: boolean }) {
         el.focus({ preventScroll: true });
       }
     };
-  }, []);
+  }, [prewarm]);
 
   const sections: PaletteSection[] = useMemo(() => {
     if (level) {

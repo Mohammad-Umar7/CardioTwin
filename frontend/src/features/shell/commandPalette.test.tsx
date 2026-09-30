@@ -182,4 +182,20 @@ describe('CommandPalette', () => {
     await userEvent.keyboard('{Backspace}');
     expect(screen.queryByRole('option', { name: /Apply and keep/ })).toBeNull();
   });
+
+  it('warms up once at idle without taking focus or leaving anything behind', () => {
+    vi.useFakeTimers();
+    const outside = document.createElement('button');
+    document.body.appendChild(outside);
+    outside.focus();
+    render(<CommandPalette />);
+    act(() => {
+      vi.advanceTimersByTime(5000);
+    });
+    expect(document.activeElement).toBe(outside);
+    expect(document.querySelector('[data-region="palette"]')).toBeNull();
+    expect(useUiStore.getState().paletteOpen).toBe(false);
+    outside.remove();
+    vi.useRealTimers();
+  });
 });
