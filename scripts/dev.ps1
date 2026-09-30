@@ -299,7 +299,7 @@ function Invoke-Lint {
     Push-Location (Join-Path $Root 'ml'); try { Invoke-Native $VenvPython @('-m', 'ruff', 'check', '.') } finally { Pop-Location }
     Write-Step 'mypy'
     Push-Location (Join-Path $Root 'backend'); try { Invoke-Native $VenvPython @('-m', 'mypy', 'app') } finally { Pop-Location }
-    Invoke-Native $VenvPython @('-m', 'mypy', '--strict', '--ignore-missing-imports', 'scripts\e2e_check.py')
+    Invoke-Native $VenvPython @('-m', 'mypy', '--strict', '--ignore-missing-imports', 'scripts\e2e_check.py', 'scripts\probe.py')
     Write-Step 'eslint'
     Invoke-Native 'npm.cmd' @('--prefix', 'frontend', 'run', 'lint')
     Write-Ok 'lint clean'

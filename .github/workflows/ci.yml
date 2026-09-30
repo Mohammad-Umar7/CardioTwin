@@ -76,7 +76,7 @@ jobs:
       - name: Types (mypy --strict)
         run: |
           (cd backend && python -m mypy app)
-          python -m mypy --strict --ignore-missing-imports scripts/e2e_check.py
+          python -m mypy --strict --ignore-missing-imports scripts/e2e_check.py scripts/probe.py
       - name: Unit, contract and real-model integration tests
         run: python -m pytest backend -q -ra
 
