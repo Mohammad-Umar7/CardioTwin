@@ -59,9 +59,9 @@ class FeatureSpec(_Open):
     group: str
     type: Literal["numeric", "binary", "categorical"]
     unit: str | None = None
-    min: float | None = None
-    max: float | None = None
-    step: float | None = None
+    min: int | float | None = None
+    max: int | float | None = None
+    step: int | float | None = None
     default: float | int | str | None = None
     normal: NormalRange | None = None
     description: str | None = None
