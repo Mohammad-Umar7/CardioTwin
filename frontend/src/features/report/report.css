@@ -79,7 +79,7 @@
   gap: 10px;
   /* --fit (set by fitToPage.ts) scales an overflowing sheet onto one page; width/height compensate so
      the scaled sheet still measures exactly one page. */
-  zoom: var(--fit, 1);
+  zoom: calc(var(--fit, 1) * var(--preview, 1));
   width: calc(var(--sheet-w) / var(--fit, 1));
   max-width: 100%;
   min-height: calc(var(--sheet-h) / var(--fit, 1));
@@ -99,7 +99,19 @@
   print-color-adjust: exact;
 }
 .rp-sheet.rp-measure {
+  --preview: 1;
   min-height: 0 !important;
+}
+/* On wide screens the preview is enlarged for reading; print and page-fit measurement use 1. */
+@media screen and (min-width: 1200px) {
+  .ct-report {
+    --preview: 1.08;
+  }
+}
+@media screen and (min-width: 1400px) {
+  .ct-report {
+    --preview: 1.16;
+  }
 }
 /* Screen-only page caption above each sheet, like a print preview. */
 .rp-sheet[data-label]::before {
@@ -1007,6 +1019,7 @@
     padding: 0;
   }
   .rp-sheet {
+    --preview: 1;
     width: calc(var(--sheet-w) / var(--fit, 1));
     max-width: none;
     /* A hair under the page height so rounding never spills an empty page (PAGE_SLACK_MM). */

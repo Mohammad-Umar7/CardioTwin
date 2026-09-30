@@ -60,6 +60,9 @@ const PAPER = {
   ink3: '#58626F',
 };
 
+/** White halo behind label text so it stays legible where it crosses anatomy. */
+const HALO = { stroke: '#FFFFFF', strokeWidth: 3.5, strokeLinejoin: 'round', paintOrder: 'stroke' } as const;
+
 export function CoronarySchematic({ vessels, className }: { vessels: SchematicVessel[]; className?: string }) {
   const gid = useId().replace(/:/g, '');
   const byId = new Map(vessels.map((v) => [v.id, v]));
@@ -138,13 +141,13 @@ export function CoronarySchematic({ vessels, className }: { vessels: SchematicVe
           <g key={`label-${id}`}>
             <path d={`M${from[0]} ${from[1]} L ${to[0]} ${to[1]}`} stroke={PAPER.ink3} strokeWidth="1" fill="none" />
             <circle cx={from[0]} cy={from[1]} r="2.2" fill={PAPER.ink} stroke="#fff" strokeWidth="0.8" />
-            <text x={tx} y={to[1] + 5.5} textAnchor={anchor} fill={PAPER.ink} fontSize="16" fontWeight="700" fontFamily="var(--font-ui)">
+            <text x={tx} y={to[1] + 5.5} textAnchor={anchor} fill={PAPER.ink} fontSize="16" fontWeight="700" fontFamily="var(--font-ui)" {...HALO}>
               {id}
             </text>
           </g>
         );
       })}
-      <text x="117" y="89" textAnchor="end" fill={PAPER.ink3} fontSize="14.5" fontFamily="var(--font-ui)">
+      <text x="117" y="89" textAnchor="end" fill={PAPER.ink3} fontSize="14.5" fontFamily="var(--font-ui)" {...HALO}>
         LM
       </text>
     </svg>
