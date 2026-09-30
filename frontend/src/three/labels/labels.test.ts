@@ -43,7 +43,7 @@ describe('dynamic label anchors (V2 §5.14, P0-2)', () => {
       const scores = track.candidates.map((c) => facing(c.rest, c.normal, eye));
       const best = bestCandidate(scores);
       expect(scores[best]!).toBeGreaterThan(0.3);
-      expect(trunkVisibility(track.candidates, view)).toBeGreaterThanOrEqual(VISIBLE_FACING);
+      expect(trunkVisibility(track.candidates, view).score).toBeGreaterThanOrEqual(VISIBLE_FACING);
       expect(Math.abs(view.elevation)).toBeLessThanOrEqual(30);
     });
   }

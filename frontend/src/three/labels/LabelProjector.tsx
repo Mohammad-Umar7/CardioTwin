@@ -1,6 +1,6 @@
 import { useFrame, useThree } from '@react-three/fiber';
 import { useMemo, useRef } from 'react';
-import { Matrix4, Vector3, type Object3D } from 'three';
+import { Matrix4, Vector3, type Mesh, type Object3D } from 'three';
 import { useManifest, useSchemaIndex, useVessels } from '@/hooks/useData';
 import { useUiStore, type Chrome } from '@/state/uiStore';
 import { useViewerStore } from '@/state/viewerStore';
@@ -8,6 +8,7 @@ import { anchorsVersion, getAnchors } from '../anatomy/anchors';
 import { BEAT_UNIFORMS } from '../anatomy/beatDeform';
 import { BEATS_WITH_HEART, type TissueKind } from '../anatomy/classify';
 import { useCameraState } from '../camera/cameraState';
+import { collectOccluders, isOccluded } from '../camera/occlusion';
 import { freeArea, heartBox } from '../camera/framing';
 import { sceneRuntime } from '../stage/sceneRuntime';
 import { buildTracks, restToDisplayed, type AnchorTrack } from './anchorTracks';
@@ -95,7 +96,19 @@ export function LabelProjector() {
     shown: new Map<string, Vector3>(),
     revealAt: 0,
     lastChrome: '' as Chrome | '',
+    occluders: [] as Mesh[],
+    occludersAt: -Infinity,
   });
+
+  /** Occluders with a ready BVH, refreshed once a second (hidden layers drop out). */
+  const occludersFor = (now: number): Mesh[] => {
+    const s = state.current;
+    if (now - s.occludersAt > 1000) {
+      s.occluders = collectOccluders(scene);
+      s.occludersAt = now;
+    }
+    return s.occluders;
+  };
 
   const meshFor = (track: AnchorTrack, now: number): Object3D | null => {
     const s = state.current;
@@ -142,16 +155,22 @@ export function LabelProjector() {
       if (track && track.centre && mesh) {
         const kind = mesh.userData.ctKind as TissueKind;
         restToDisplayed(mesh, track.centre, BEATS_WITH_HEART.has(kind) ? BEAT_UNIFORMS.uBeatMatrix.value : null, displayed);
-        const pick = track.chooser.update(now, () =>
-          track.candidates.map((c) => {
+        const pick = track.chooser.update(now, () => {
+          // Facing the camera first; a facing point hidden behind an atrium or a great vessel ranks below
+          // every unobstructed one (P0-2: the label points at something the viewer can see).
+          const occluders = occludersFor(now);
+          return track.candidates.map((c) => {
             tmpPos.copy(c.rest).applyMatrix4(displayed);
             tmpNormal.copy(c.normal).transformDirection(displayed);
-            return facing(tmpPos, tmpNormal, eye);
-          }),
-        );
+            const f = facing(tmpPos, tmpNormal, eye);
+            return f > 0 && isOccluded(eye, tmpPos, occluders) ? f - 1.5 : f;
+          });
+        });
         const c = track.candidates[Math.max(0, pick)]!;
         anchor = tmpPos.copy(c.rest).applyMatrix4(displayed).clone();
         face = facing(anchor, tmpNormal.copy(c.normal).transformDirection(displayed), eye);
+        // Hidden by another structure at the last evaluation counts as "behind".
+        if ((track.chooser.scores[pick] ?? 0) < -0.5) face = Math.min(face, -0.01);
       } else {
         const a = statics.get(id);
         if (a) {

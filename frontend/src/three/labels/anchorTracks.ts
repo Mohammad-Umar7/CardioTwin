@@ -34,6 +34,8 @@ export function buildTracks(
   manifest: AnatomyManifest | null | undefined,
   vessels: VesselsFile | null | undefined,
   targets: readonly string[],
+  window?: readonly [number, number],
+  count?: number,
 ): AnchorTrack[] {
   if (!vessels?.vessels?.length) return [];
   const frame = heartAxisFrame(manifest);
@@ -46,7 +48,7 @@ export function buildTracks(
       vessels.vessels.find((v) => v.id === target) ??
       vessels.vessels.find((v) => v.target === target && (!structure || v.node === structure.node));
     if (!vessel) continue;
-    const candidates = buildCandidates(mainTrunk(vessel.segments as never), frame);
+    const candidates = buildCandidates(mainTrunk(vessel.segments as never), frame, window, count);
     if (candidates.length === 0) continue;
     const node = vessel.node;
     const centreStructure = manifest?.structures.find((s) => s.node === node);

@@ -120,6 +120,8 @@ export function bestCandidate(scores: readonly number[]): number {
  */
 export class AnchorChooser {
   current = -1;
+  /** Scores of the last evaluation (for "is the chosen anchor hidden?"). */
+  scores: readonly number[] = [];
   private pending = -1;
   private pendingSince = 0;
   private lastEval = -Infinity;
@@ -134,6 +136,7 @@ export class AnchorChooser {
     if (this.current >= 0 && now - this.lastEval < this.period) return this.current;
     this.lastEval = now;
     const s = scores();
+    this.scores = s;
     const best = bestCandidate(s);
     if (best < 0) return this.current;
     if (this.current < 0 || this.current >= s.length) {

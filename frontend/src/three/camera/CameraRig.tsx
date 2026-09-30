@@ -4,12 +4,13 @@ import CameraControlsImpl from 'camera-controls';
 import { useEffect, useMemo, useRef } from 'react';
 import { Vector3, type PerspectiveCamera } from 'three';
 import { useManifest, useVessels } from '@/hooks/useData';
-import { useReducedMotion } from '@/hooks/useMediaQuery';
+import { useIsReducedMotion } from '@/hooks/useMediaQuery';
 import { useUiStore } from '@/state/uiStore';
 import { useViewerStore, type Stage } from '@/state/viewerStore';
-import type { CameraPose } from '@/types/contracts';
+import type { BestView, CameraPose } from '@/types/contracts';
 import { buildTracks } from '../labels/anchorTracks';
 import { visibleBestView } from './bestView';
+import { collectOccluders, isOccluded } from './occlusion';
 import { angleLabel, useCameraState } from './cameraState';
 import { cameraRigApi } from './controlsApi';
 import {
@@ -34,6 +35,8 @@ const TURNTABLE_RAD_PER_S = 6 * DEG;
 const TURNTABLE_RESUME_MS = 8000;
 /** Camera field of view (DESIGN_SYSTEM §7.1). */
 export const CAMERA_FOV = 30;
+/** Share of the trunk a best view must show (proximal 5–80 %). */
+const VIEW_WINDOW: readonly [number, number] = [0.05, 0.8];
 /** A vessel's best view sits a touch closer than home so the selection reads as "going to it". */
 const FOCUS_ZOOM = 0.9;
 
@@ -83,9 +86,10 @@ export function CameraRig() {
   const command = useViewerStore((s) => s.cameraCommand);
   const freeOrbit = useCameraState((s) => s.freeOrbit);
   const request = useCameraState((s) => s.request);
-  const reduced = useReducedMotion();
+  const reduced = useIsReducedMotion();
   const camera = useThree((s) => s.camera) as PerspectiveCamera;
   const size = useThree((s) => s.size);
+  const scene = useThree((s) => s.scene);
   const invalidate = useThree((s) => s.invalidate);
 
   const lastInteraction = useRef(0);
@@ -95,6 +99,8 @@ export function CameraRig() {
   const history = useRef(new CameraHistory());
   const replaying = useRef(false);
   const readyFrames = useRef(0);
+  /** Visible best view per vessel (the search raycasts, so it runs once per anatomy). */
+  const bestViews = useRef(new Map<string, BestView>());
   const offset = useRef<{ from: Offset; to: Offset; current: Offset; t0: number; applied: string }>({
     from: ZERO_OFFSET,
     to: ZERO_OFFSET,
@@ -123,8 +129,12 @@ export function CameraRig() {
     return { box, target, direction, heroDirection };
   }, [manifest]);
 
-  // Trunk candidates per vessel, to make sure a best view really shows its vessel (P0-2).
-  const tracks = useMemo(() => buildTracks(manifest, vessels, ['LAD', 'LCX', 'RCA']), [manifest, vessels]);
+  // Trunk samples per vessel, to make sure a best view really shows its vessel (P0-2). The view search
+  // looks at the proximal 80 % of the trunk (the labels anchor on the proximal–mid 60 %).
+  const tracks = useMemo(() => {
+    bestViews.current.clear();
+    return buildTracks(manifest, vessels, ['LAD', 'LCX', 'RCA'], VIEW_WINDOW, 14);
+  }, [manifest, vessels]);
 
   const limits = freeOrbit ? ORBIT_LIMITS.free : ORBIT_LIMITS.clamped;
 
@@ -264,7 +274,19 @@ export function CameraRig() {
       const structure = manifest?.structures.find((s) => s.target === command.target && s.bestView);
       const conventional = bestViewFor(command.target, structure?.bestView);
       const candidates = tracks.find((t) => t.target === command.target)?.candidates ?? [];
-      const view = visibleBestView(conventional, candidates, geo.target);
+      // Occlusion-aware once the BVHs exist and the heart is closed (the candidates are rest positions).
+      const closed = useViewerStore.getState().explode < 0.7;
+      const occluders = closed ? collectOccluders(scene) : [];
+      const key = `${command.target}:${occluders.length > 0}`;
+      let view = bestViews.current.get(key);
+      if (!view) {
+        view = visibleBestView(conventional, candidates, {
+          target: geo.target,
+          visible: occluders.length > 0 ? (eye, p) => !isOccluded(eye, p, occluders) : undefined,
+          step: occluders.length > 0 ? 15 : 5,
+        });
+        if (closed && candidates.length > 0) bestViews.current.set(key, view);
+      }
       const { azimuth, polar } = toControlsAngles(view.azimuth, view.elevation);
       const direction = new Vector3().setFromSphericalCoords(1, polar, azimuth);
       flyTo(direction, distanceFor(direction) * FOCUS_ZOOM, animate);
