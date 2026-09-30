@@ -29,6 +29,7 @@ import {
 import { ANATOMY, LIGHTS } from '@/theme/tokens';
 import { BEAT_UNIFORMS } from './beatDeform';
 import type { TissueKind } from './classify';
+import { getNoiseTexture } from './noiseTexture';
 import { GHOST, REAL } from './palette';
 import { FRAME_UNIFORMS, IGN, NO_PATCH, patchKey, patchTissueShader, type PatchFlags } from './shaders';
 
@@ -292,7 +293,7 @@ const REALISTIC: Partial<Record<TissueKind, Look>> = {
   },
 };
 
-const TIER_OCTAVES: Record<QualityTier, number> = { A: 4, B: 3, C: 2, D: 1 };
+const TIER_OCTAVES: Record<QualityTier, number> = { A: 3, B: 2, C: 2, D: 1 };
 
 function lookFor(kind: TissueKind, look: SceneLookId): Look {
   const table = look === 'realistic' ? REALISTIC : CLINICAL;
@@ -386,6 +387,7 @@ export function createTissueMaterial(o: TissueOptions): TissueMaterial {
   if (L.detail) {
     const fibre = L.detail.fibre;
     Object.assign(uniforms, {
+      uNoise3D: { value: getNoiseTexture() },
       uDetailFreq: { value: L.detail.freq },
       uBump: { value: L.detail.bump * (maps?.normalMap ? 0.35 : 1) },
       uColorVar: { value: L.detail.colorVar * (maps?.map ? 0.4 : 1) },
