@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "cardiotwin-ml"
-version = "1.0.0"
+version = "1.1.0"
 description = "CardioTwin prediction pipeline: CAD and vessel-level (LAD/LCX/RCA) stenosis models with exact SHAP explanations and a portable browser model."
 readme = "README.md"
 requires-python = ">=3.11"

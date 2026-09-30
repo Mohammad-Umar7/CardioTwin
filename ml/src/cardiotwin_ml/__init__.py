@@ -11,7 +11,7 @@ Entry points
 * ``cardiotwin_ml.portable``               - dependency-free reference evaluator for ``model.json``
 """
 
-__version__ = "1.0.0"
-MODEL_VERSION = "1.0.0"
+__version__ = "1.1.0"
+MODEL_VERSION = "1.1.0"
 
 __all__ = ["__version__", "MODEL_VERSION"]
