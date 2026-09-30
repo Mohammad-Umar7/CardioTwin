@@ -1,5 +1,5 @@
 import { useEffect, type CSSProperties } from 'react';
-import { useParams, useSearchParams } from 'react-router-dom';
+import { useParams } from 'react-router-dom';
 import { DrawerPresentation, Tabs } from '@/design';
 import { tabPanelId } from '@/design/tabIds';
 import { useCohort } from '@/hooks/useData';
@@ -7,6 +7,8 @@ import { useLayoutMode } from '@/hooks/useMediaQuery';
 import { ExplainDrawer } from '@/features/explain/ExplainDrawer';
 import { InputsDrawer } from '@/features/patient/InputsDrawer';
 import { PatientCard } from '@/features/patient/PatientCard';
+import { usePatientCommands } from '@/features/patient/usePatientCommands';
+import { useShareLinkRestore } from '@/features/patient/useShareLinkRestore';
 import { WhatIfPill } from '@/features/patient/WhatIfPill';
 import { AnswerPill } from '@/features/risk/AnswerPill';
 import { RiskSummaryCard } from '@/features/risk/RiskSummaryCard';
@@ -14,13 +16,10 @@ import { VesselInspector } from '@/features/risk/VesselInspector';
 import { selectEditCount, usePatientStore } from '@/state/patientStore';
 import { useUiStore, type MobileTab } from '@/state/uiStore';
 import { CanvasSlot } from '@/three/CanvasSlot';
-import { CanvasHud } from './CanvasHud';
-import { GroupRail } from './GroupRail';
 import { CanvasToolbar } from './hud/CanvasToolbar';
 import { FirstRunHint } from './hud/FirstRunHint';
 import { LegendChip } from './hud/LegendChip';
 import { SelectionChip } from './hud/SelectionChip';
-import { LeftPanel, RightPanel, TabbedRightPanel } from './panels';
 import { ChromeGate, StageLayout } from './StageLayout';
 import { useWorkstationCommands } from './useWorkstationCommands';
 import { useWorkstationUrlState } from './useWorkstationUrlState';
@@ -155,7 +154,7 @@ function CompactWorkstation() {
               <WhatIfPill />
             </>
           }
-          bottom={<CanvasToolbar />}
+          bottom={<CanvasToolbar compact />}
           overlay={<FirstRunHint />}
           frame={edits > 0}
         />
@@ -197,50 +196,20 @@ function CompactWorkstation() {
   );
 }
 
-// ------------------------------------------------------------------------------------------ legacy
-// The phase-1 layouts stay reachable at #/workstation?layout=legacy (and below 1100 px) until B–D replace
-// the panels; then GroupRail, panels.tsx and CanvasHud are deleted (V2 §9.3).
-
-function LegacyCanvasStage({ className }: { className?: string }) {
-  return (
-    <CanvasSlot stage="workstation" className={className}>
-      <CanvasHud />
-    </CanvasSlot>
-  );
-}
-
-function LegacyWorkstation({ wide }: { wide: boolean }) {
-  return (
-    <div
-      className="relative grid min-h-0 overflow-clip"
-      style={{
-        height: 'calc(100vh - var(--topbar-h) - var(--status-h))',
-        gridTemplateColumns: wide
-          ? 'var(--left-w) minmax(0, 1fr) var(--right-w)'
-          : 'var(--group-rail-w) minmax(0, 1fr) var(--right-w)',
-      }}
-    >
-      <PageTitle />
-      {wide ? <LeftPanel /> : <GroupRail />}
-      <LegacyCanvasStage className="min-h-0" />
-      {wide ? <RightPanel /> : <TabbedRightPanel />}
-    </div>
-  );
-}
-
 /**
  * Workstation route: the V2 stage at every desktop width (≥ 1100), the V2 compact layout below 1100.
- * `?layout=legacy` still shows the phase-1 3-column grid until its parts are deleted.
+ * Page-level hooks live here, not in a card, so they survive the card being collapsed, hidden by focus
+ * mode or swapped out by the compact tabs: the palette's patient and input commands, the share-link
+ * restore, the URL state and the chrome preset.
  */
 export default function WorkstationPage() {
   const mode = useLayoutMode();
-  const [params] = useSearchParams();
   useWorkstationCommands();
+  usePatientCommands();
+  useShareLinkRestore();
   usePatientFromRoute();
   useWorkstationUrlState();
   useWorkstationChrome();
 
-  if (mode === 'compact') return <CompactWorkstation />;
-  if (params.get('layout') === 'legacy') return <LegacyWorkstation wide={mode === 'wide'} />;
-  return <StageWorkstation />;
+  return mode === 'compact' ? <CompactWorkstation /> : <StageWorkstation />;
 }

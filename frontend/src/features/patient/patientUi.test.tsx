@@ -14,6 +14,7 @@ import type { CohortResponse, FeatureSchema, PredictResponse, TargetId } from '@
 import { InputsDrawer } from './InputsDrawer';
 import { PatientCard } from './PatientCard';
 import { PatientSwitcher } from './PatientSwitcher';
+import { usePatientCommands } from './usePatientCommands';
 import { WhatIfPill } from './WhatIfPill';
 import type * as WhatIfEngine from './lib/whatIfEngine';
 
@@ -129,8 +130,12 @@ describe('PatientCard', () => {
     expect(useUiStore.getState().patientCardOpen).toBe(true);
   });
 
-  it('registers palette commands for every patient, every input and the patient actions', () => {
-    renderIn(<PatientCard />);
+  it('registers palette commands for every patient, every input and the patient actions (page-level hook)', () => {
+    function PatientCommands() {
+      usePatientCommands();
+      return null;
+    }
+    renderIn(<PatientCommands />);
     const ids = Object.values(useCommandStore.getState().sources).flatMap((s) => s.commands.map((c) => c.id));
     expect(ids).toEqual(expect.arrayContaining(['patient.open.P-003', 'input.EF-TTE', 'input.Typical Chest Pain', 'inputs.reset', 'patient.blank', 'patient.random-test', 'patient.share-link', 'patient.export', 'patient.import']));
     expect(ids.filter((id) => /^input\.[^.]+$/.test(id) || /^input\.[^.]+ [^.]+$/.test(id)).length).toBeGreaterThan(0);

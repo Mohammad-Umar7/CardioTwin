@@ -17,9 +17,7 @@ import { identityLine, identityOf } from './lib/describe';
 import { keyInputAriaLabel, type KeyInput } from './lib/keyInputs';
 import { abnormalKeys } from './lib/sections';
 import { cardLabel, displayParts, displayValue, rangeGlyph, sameValue, spokenValue } from './lib/values';
-import { usePatientCommands } from './usePatientCommands';
 import { useKeyInputs } from './useKeyInputs';
-import { useShareLinkRestore } from './useShareLinkRestore';
 
 /**
  * PatientCard — WORKSTATION_V2 §5.5. Answers "What did the model see, and which inputs matter most for
@@ -230,8 +228,6 @@ export function PatientCard({ className }: PatientCardProps) {
   useEffect(() => {
     mounted.current = true;
   }, []);
-  usePatientCommands();
-  useShareLinkRestore();
 
   const exit = reduced ? { opacity: 0, transition: { duration: 0.12 } } : { opacity: 0, x: -12, transition: { duration: 0.17, ease: EASE.exit } };
 

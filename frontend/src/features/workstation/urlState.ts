@@ -5,7 +5,7 @@
  *
  * restores the exact view: the patient (path), the selected vessel `t`, the C-arm projection `view`, the
  * open drawer `panel` and its `tab`, and focus mode `focus`. Unknown parameters are kept untouched, e.g.
- * the patient owner's what-if payload `w` and `layout=legacy`. Pure functions; `useWorkstationUrlState`
+ * the patient owner's what-if payload `w`. Pure functions; `useWorkstationUrlState`
  * wires them to the stores and the router.
  */
 import type { Chrome, DrawerId, ExplainTab } from '@/state/uiStore';
