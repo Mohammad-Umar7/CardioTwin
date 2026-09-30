@@ -255,3 +255,9 @@ target: `{ "n_splits", "roc_auc": {"mean","sd","p05","p50","p95"}, "f1": {…}, 
 `modality_ablation` (per target, CV ROC-AUC when using cumulative feature groups
 demographics → +risk_factors → +symptoms → +exam → +ecg → +labs → +echo, and leave-one-group-out),
 `subgroups` (per target, test/OOF metrics by sex, age band, diabetes).
+
+### 7.3 Calibrated-space explanations (ml v1.1.0, additive to §3.2)
+Each `explanations.<target>` object also carries `calibrated_base_value`, `calibrated_output_value`
+(== `predictions.<target>.probability`) and, per contribution, `shap_calibrated` — attributions rescaled so that
+`calibrated_base_value + Σ shap_calibrated == probability` exactly. The log-odds fields remain the primary SHAP
+values; the calibrated fields let the UI speak in percentage points. The edge engine must reproduce them.
