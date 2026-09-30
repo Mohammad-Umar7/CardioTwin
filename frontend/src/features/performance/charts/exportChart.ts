@@ -21,11 +21,17 @@ const HEAD = 40;
 const FOOT = 32;
 
 function escapeXml(s: string): string {
-  return s.replace(/[<>&"']/g, (c) => ({ '<': '&lt;', '>': '&gt;', '&': '&amp;', '"': '&quot;', "'": '&apos;' })[c]!);
+  return s.replace(
+    /[<>&"']/g,
+    (c) => ({ '<': '&lt;', '>': '&gt;', '&': '&amp;', '"': '&quot;', "'": '&apos;' })[c]!,
+  );
 }
 
 /** Build the standalone, watermarked SVG document for a chart root. */
-export function buildExportSvg(chart: SVGSVGElement, opts: Omit<ExportOptions, 'format' | 'filename'>): string {
+export function buildExportSvg(
+  chart: SVGSVGElement,
+  opts: Omit<ExportOptions, 'format' | 'filename'>,
+): string {
   const w = Number(chart.getAttribute('width')) || chart.getBoundingClientRect().width || 520;
   const h = Number(chart.getAttribute('height')) || chart.getBoundingClientRect().height || 240;
   const W = w + PAD * 2;

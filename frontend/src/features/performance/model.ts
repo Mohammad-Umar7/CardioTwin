@@ -17,7 +17,13 @@ import {
   targetClassNames,
 } from '@/lib/modelNames';
 import type { FeatureSpec, MetricsReport, TargetMetrics } from '@/types/contracts';
-import type { CalibrationSummary, ModalityAblation, RobustnessResult, SubgroupSource, Subgroups } from './extras';
+import type {
+  CalibrationSummary,
+  ModalityAblation,
+  RobustnessResult,
+  SubgroupSource,
+  Subgroups,
+} from './extras';
 
 export type Split = 'test' | 'cv';
 
@@ -60,7 +66,11 @@ export function splitFacts(report: MetricsReport | undefined): SplitFacts {
 }
 
 /** Test-set prevalence when published (`dataset.prevalence_test`), else the whole-cohort one. */
-export function testPrevalence(report: MetricsReport | undefined, target: string, m?: TargetMetrics): number | null {
+export function testPrevalence(
+  report: MetricsReport | undefined,
+  target: string,
+  m?: TargetMetrics,
+): number | null {
   if (m) {
     const { tp, fn, tn, fp } = m.confusion_matrix;
     const n = tp + fn + tn + fp;
@@ -123,7 +133,8 @@ export function reconcileSentence(
       : null;
   if (split === 'test') {
     const cvText = `cross-validation (${f2(cv.mean)} ± ${f2(cv.std)})`;
-    if (Math.abs(diff) < 0.015) return `Held-out ROC-AUC matches ${cvText}: the model generalised as estimated.`;
+    if (Math.abs(diff) < 0.015)
+      return `Held-out ROC-AUC matches ${cvText}: the model generalised as estimated.`;
     if (resplits && draw) {
       const dir = diff < 0 ? 'below' : 'above';
       const explained = (diff < 0 && pct! < 25) || (diff > 0 && pct! > 75);
@@ -141,7 +152,8 @@ export function reconcileSentence(
     return `Held-out ROC-AUC is above ${cvText}. ${small.charAt(0).toUpperCase()}${small.slice(1)} that is chance variation: the test interval includes the CV value.`;
   }
   const testText = `the held-out test (${f2(test.value)}, n = ${facts.nTest})`;
-  if (Math.abs(diff) < 0.015) return `Cross-validation matches ${testText}: the estimate held on unseen patients.`;
+  if (Math.abs(diff) < 0.015)
+    return `Cross-validation matches ${testText}: the estimate held on unseen patients.`;
   if (resplits && draw)
     return `Cross-validation is ${diff < 0 ? 'above' : 'below'} ${testText}; the locked split is ${draw}: ${resplits}.`;
   if (diff < 0)
@@ -171,7 +183,13 @@ export interface Kpi {
   higherIsBetter: boolean;
 }
 
-export function kpis(m: TargetMetrics, split: Split, target: string, facts: SplitFacts, prevalence: number | null): Kpi[] {
+export function kpis(
+  m: TargetMetrics,
+  split: Split,
+  target: string,
+  facts: SplitFacts,
+  prevalence: number | null,
+): Kpi[] {
   const { tp, fn, tn, fp } = m.confusion_matrix;
   const noun = target === 'CAD' ? 'CAD' : `${target} stenosis`;
   const folds = facts.nFolds ? `mean ± sd over ${facts.nFolds} folds` : 'mean ± sd over folds';
@@ -311,7 +329,14 @@ export function operatingPoints(m: TargetMetrics): OperatingPoint[] {
     const fp = Math.round((roc.fpr[i] ?? 0) * N);
     out.push({ threshold: Math.min(1, Math.max(0, t)), tp, fp, fn: P - tp, tn: N - fp, deployed: false });
   }
-  const dep: OperatingPoint = { threshold: m.threshold, tp: cm.tp, fp: cm.fp, tn: cm.tn, fn: cm.fn, deployed: true };
+  const dep: OperatingPoint = {
+    threshold: m.threshold,
+    tp: cm.tp,
+    fp: cm.fp,
+    tn: cm.tn,
+    fn: cm.fn,
+    deployed: true,
+  };
   const same = out.findIndex((p) => p.tp === dep.tp && p.fp === dep.fp);
   if (same >= 0) out.splice(same, 1);
   out.push(dep);
@@ -348,7 +373,8 @@ export function deployedIndex(points: OperatingPoint[]): number {
 export function rocFinding(target: string, auc: number | null | undefined): string {
   const { positive, negative } = targetClassNames(target);
   if (auc === null || auc === undefined) return `How well estimates rank ${positive} above ${negative}`;
-  const sub = target === 'CAD' ? 'a patient with CAD above one without' : `${positive} above a non-stenotic one`;
+  const sub =
+    target === 'CAD' ? 'a patient with CAD above one without' : `${positive} above a non-stenotic one`;
   return `Ranks ${sub} in ${formatPercent(auc)} of pairs`;
 }
 
@@ -401,7 +427,11 @@ export function confusionFinding(target: string, m: TargetMetrics): string {
   return `Flags ${tp} of ${tp + fn} patients with ${noun}, with ${fp} false alarms among ${fp + tn}`;
 }
 
-export function driversFinding(target: string, m: TargetMetrics, byKey?: ReadonlyMap<string, FeatureSpec>): string {
+export function driversFinding(
+  target: string,
+  m: TargetMetrics,
+  byKey?: ReadonlyMap<string, FeatureSpec>,
+): string {
   const top = m.global_importance.slice(0, 3).map((g) => featureName(g.feature, byKey));
   if (top.length === 0) return `What drives ${target} estimates`;
   const [a, ...rest] = top;
@@ -427,7 +457,10 @@ export interface LeaderRow {
   tuned: boolean | null;
 }
 
-export function leaderboard(m: TargetMetrics, logisticId: string | null): { rows: LeaderRow[]; reference: LeaderRow | null } {
+export function leaderboard(
+  m: TargetMetrics,
+  logisticId: string | null,
+): { rows: LeaderRow[]; reference: LeaderRow | null } {
   const toRow = (r: TargetMetrics['leaderboard'][number]): LeaderRow => {
     const info = modelInfo(r.model);
     const n = (v: unknown) => (typeof v === 'number' && Number.isFinite(v) ? v : null);
@@ -469,9 +502,13 @@ export function challengerNote(rows: LeaderRow[], logisticId: string | null): st
   if (challenger.id === logisticId) {
     parts.push('The ensemble already contains this model as its linear part.');
   } else if (dep.logLoss !== null && challenger.logLoss !== null && dep.logLoss < challenger.logLoss) {
-    parts.push(`The ensemble's probabilities are better calibrated (log-loss ${f2(dep.logLoss)} vs ${f2(challenger.logLoss)}).`);
+    parts.push(
+      `The ensemble's probabilities are better calibrated (log-loss ${f2(dep.logLoss)} vs ${f2(challenger.logLoss)}).`,
+    );
   }
-  parts.push('One recipe serves all four targets and was fixed before the test set was scored, so small per-target gaps do not swap the model.');
+  parts.push(
+    'One recipe serves all four targets and was fixed before the test set was scored, so small per-target gaps do not swap the model.',
+  );
   return parts.join(' ');
 }
 
@@ -481,7 +518,8 @@ export function leaderboardFinding(rows: LeaderRow[]): string {
   const dep = rows[idx]!;
   const best = rows[0]!;
   if (idx === 0) return `The deployed ensemble ranks first of ${rows.length} models`;
-  if (round2(best.mean) === round2(dep.mean)) return `The deployed ensemble ties the best of ${rows.length} models`;
+  if (round2(best.mean) === round2(dep.mean))
+    return `The deployed ensemble ties the best of ${rows.length} models`;
   return `The deployed ensemble is within ${f2(best.mean - dep.mean)} of the best of ${rows.length} models`;
 }
 
@@ -512,7 +550,11 @@ export interface AcrossTargetRow {
 }
 
 /** One row per target that has a published Monte-Carlo analysis, in contract order. */
-export function robustnessAcross(report: MetricsReport | undefined, targets: readonly string[], read: (r: MetricsReport | undefined, t: string) => RobustnessResult | null): AcrossTargetRow[] {
+export function robustnessAcross(
+  report: MetricsReport | undefined,
+  targets: readonly string[],
+  read: (r: MetricsReport | undefined, t: string) => RobustnessResult | null,
+): AcrossTargetRow[] {
   return targets.flatMap((t) => {
     const r = read(report, t);
     if (!r) return [];
@@ -527,13 +569,17 @@ export function robustnessAcross(report: MetricsReport | undefined, targets: rea
         p95: d.p95,
         fixed: d.fixed,
         fixedPercentile: r.fixedPercentile,
-        cv: report?.targets[t as keyof MetricsReport['targets']]?.cv.roc_auc?.mean ?? r.cvEstimate?.rocAuc ?? null,
+        cv:
+          report?.targets[t as keyof MetricsReport['targets']]?.cv.roc_auc?.mean ??
+          r.cvEstimate?.rocAuc ??
+          null,
       },
     ];
   });
 }
 
-const listAnd = (xs: string[]) => (xs.length > 1 ? `${xs.slice(0, -1).join(', ')} and ${xs.at(-1)}` : (xs[0] ?? ''));
+const listAnd = (xs: string[]) =>
+  xs.length > 1 ? `${xs.slice(0, -1).join(', ')} and ${xs.at(-1)}` : (xs[0] ?? '');
 
 /** "Cross-validation lands inside the re-split range for every target; the locked split was a hard draw for CAD and LAD." */
 export function acrossFinding(rows: AcrossTargetRow[]): string {
@@ -549,7 +595,9 @@ export function acrossFinding(rows: AcrossTargetRow[]): string {
     hard.length ? `a hard draw for ${listAnd(hard)}` : null,
     easy.length ? `an easy one for ${listAnd(easy)}` : null,
   ].filter(Boolean);
-  return parts.length ? `${lead}; the locked split was ${parts.join(' and ')}` : `${lead}; the locked split was a typical draw`;
+  return parts.length
+    ? `${lead}; the locked split was ${parts.join(' and ')}`
+    : `${lead}; the locked split was a typical draw`;
 }
 
 /** Modality name mid-sentence: "labs", "echo", but "ECG". */
@@ -562,7 +610,10 @@ export function modalityFinding(a: ModalityAblation): string {
   const inst = a.instrumental;
   if (inst) {
     const added = inst.addedGroups.map((g) => modalityInSentence(g));
-    const joined = added.length > 1 ? `${added.slice(0, -1).join(', ')} and ${added.at(-1)}` : (added[0] ?? 'instrumental data');
+    const joined =
+      added.length > 1
+        ? `${added.slice(0, -1).join(', ')} and ${added.at(-1)}`
+        : (added[0] ?? 'instrumental data');
     const list = joined.charAt(0).toUpperCase() + joined.slice(1);
     const clear = inst.delta?.ci ? inst.delta.ci[0] > 0 : false;
     return clear
@@ -583,11 +634,13 @@ export function subgroupFinding(s: Subgroups, source: SubgroupSource): string {
     for (const l of f.levels) {
       const b = l[source];
       const d = b?.deltaVsReference;
-      if (d?.ci && (d.ci[1] < 0 || d.ci[0] > 0) && !b?.smallN) flagged.push(`${l.label.toLowerCase()} (${d.value > 0 ? '+' : '−'}${f2(Math.abs(d.value))})`);
+      if (d?.ci && (d.ci[1] < 0 || d.ci[0] > 0) && !b?.smallN)
+        flagged.push(`${l.label.toLowerCase()} (${d.value > 0 ? '+' : '−'}${f2(Math.abs(d.value))})`);
     }
   }
   const names = s.factors.map((f) => f.label.toLowerCase());
-  const list = names.length > 1 ? `${names.slice(0, -1).join(', ')} and ${names.at(-1)}` : (names[0] ?? 'subgroups');
+  const list =
+    names.length > 1 ? `${names.slice(0, -1).join(', ')} and ${names.at(-1)}` : (names[0] ?? 'subgroups');
   if (flagged.length === 0) return `No clear difference in discrimination across ${list}`;
   return `Discrimination differs for ${flagged.join(', ')}`;
 }
@@ -606,7 +659,9 @@ export function protocolItems(report: MetricsReport, facts: SplitFacts): string[
       ? `Nested cross-validation: ${facts.cvSplits}-fold × ${facts.cvRepeats} repeats outside, tuning inside, identical folds for every model`
       : 'Nested cross-validation with identical folds for every model',
     'Ensemble weight, Platt calibration and thresholds fitted on out-of-fold predictions only',
-    facts.nBootstrap ? `${facts.nBootstrap.toLocaleString('en-US')} stratified bootstrap resamples behind every test interval` : 'Bootstrap intervals on every test metric',
+    facts.nBootstrap
+      ? `${facts.nBootstrap.toLocaleString('en-US')} stratified bootstrap resamples behind every test interval`
+      : 'Bootstrap intervals on every test metric',
     'Browser (edge) engine matches the server within 10⁻⁶ on every parity fixture',
   ];
   if (history > 1)

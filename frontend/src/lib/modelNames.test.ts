@@ -54,14 +54,18 @@ describe('model names', () => {
   });
 
   it('names the deployed ensemble after its linear part', () => {
-    expect(deployedModelName('lr_elasticnet')).toBe('Ensemble: elastic-net logistic regression + gradient-boosted trees');
+    expect(deployedModelName('lr_elasticnet')).toBe(
+      'Ensemble: elastic-net logistic regression + gradient-boosted trees',
+    );
     expect(deployedModelName('lr_core')).toContain('bedside');
     expect(deployedModelName(undefined)).toBe(modelName('ensemble'));
     expect(deployedModelName('something_new')).toBe(modelName('ensemble'));
   });
 
   it('phrases the deployed ensemble for running prose', () => {
-    expect(deployedModelPhrase('lr_elasticnet')).toBe('an ensemble of elastic-net logistic regression and gradient-boosted trees');
+    expect(deployedModelPhrase('lr_elasticnet')).toBe(
+      'an ensemble of elastic-net logistic regression and gradient-boosted trees',
+    );
     expect(deployedModelPhrase(null)).toBe('an ensemble of logistic regression and gradient-boosted trees');
     expect(DEPLOYED_SHORT_NAME).not.toMatch(/_/);
     expect(deployedModelShort('lr_elasticnet')).toBe('Elastic-net logistic + boosted trees');
@@ -74,7 +78,8 @@ describe('model names', () => {
   });
 
   it('replaces internal ids in protocol prose, longest first and on token boundaries', () => {
-    const text = 'Nested CV for lr_l2, lr_core, lr_l1, lr_elasticnet, svm_rbf, knn, xgboost: RandomizedSearchCV';
+    const text =
+      'Nested CV for lr_l2, lr_core, lr_l1, lr_elasticnet, svm_rbf, knn, xgboost: RandomizedSearchCV';
     const out = humanizeModelIds(text);
     for (const id of KNOWN_MODEL_IDS.filter((id) => id !== 'ensemble')) expect(out).not.toContain(id);
     expect(out).toContain('Logistic (elastic net)');
@@ -107,7 +112,15 @@ describe('feature names', () => {
 
 describe('modalities and targets', () => {
   it('orders the seven modalities from bedside to instrumental', () => {
-    expect(MODALITY_ORDER).toEqual(['demographics', 'risk_factors', 'symptoms', 'exam', 'ecg', 'labs', 'echo']);
+    expect(MODALITY_ORDER).toEqual([
+      'demographics',
+      'risk_factors',
+      'symptoms',
+      'exam',
+      'ecg',
+      'labs',
+      'echo',
+    ]);
     expect(modalityName('ecg', 'short')).toBe('ECG');
     expect(modalityName('unknown_group')).toBe('Unknown group');
   });

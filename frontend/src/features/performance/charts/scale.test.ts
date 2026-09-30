@@ -29,7 +29,12 @@ describe('niceAxis', () => {
   });
 
   it('prefers four or five ticks', () => {
-    for (const [lo, hi] of [[0, 1], [0.5, 1], [-0.1, 0.7], [0, 0.25]] as [number, number][]) {
+    for (const [lo, hi] of [
+      [0, 1],
+      [0.5, 1],
+      [-0.1, 0.7],
+      [0, 0.25],
+    ] as [number, number][]) {
       const n = niceAxis(lo, hi).ticks.length;
       expect(n === 4 || n === 5).toBe(true);
     }

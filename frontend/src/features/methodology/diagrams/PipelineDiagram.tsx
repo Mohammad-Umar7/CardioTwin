@@ -33,22 +33,33 @@ export function PipelineDiagram({ phases, nTest, onJump }: PipelineDiagramProps)
             <li key={phase.id} className="relative flex min-w-0 flex-col">
               {/* Phase header on the horizontal rail */}
               <div className="relative flex h-10 items-center gap-2 pr-6">
-                <span aria-hidden className="relative z-[1] size-2.5 shrink-0 rounded-full border-2 border-secondary bg-panel" />
+                <span
+                  aria-hidden
+                  className="relative z-[1] size-2.5 shrink-0 rounded-full border-2 border-secondary bg-panel"
+                />
                 <span className="flex min-w-0 flex-col">
                   <span className="eyebrow truncate text-secondary">{phase.label}</span>
                 </span>
                 {!last && (
-                  <span aria-hidden className="absolute left-4 right-2 top-1/2 hidden h-px bg-line-strong min-[1100px]:block">
+                  <span
+                    aria-hidden
+                    className="absolute left-4 right-2 top-1/2 hidden h-px bg-line-strong min-[1100px]:block"
+                  >
                     <span className="absolute -right-px -top-[3px] size-[7px] rotate-45 border-r border-t border-line-strong" />
                   </span>
                 )}
               </div>
-              <p className="-mt-1 mb-1 h-4 pl-[18px] text-label font-normal text-tertiary">{phase.note ?? ''}</p>
+              <p className="-mt-1 mb-1 h-4 pl-[18px] text-label font-normal text-tertiary">
+                {phase.note ?? ''}
+              </p>
               {/* Vertical branch with the numbered steps */}
               <ol className="relative ml-[4.5px] flex flex-col gap-1 border-l border-line pb-1 pl-3 min-[1100px]:mr-4">
                 {phase.steps.map((s) => (
                   <li key={s.n} className="relative">
-                    <span aria-hidden className="absolute -left-[15.5px] top-[13px] size-[6px] rounded-full bg-tertiary" />
+                    <span
+                      aria-hidden
+                      className="absolute -left-[15.5px] top-[13px] size-[6px] rounded-full bg-tertiary"
+                    />
                     <a
                       href={`#${s.anchor}`}
                       onClick={(e) => {
@@ -61,10 +72,14 @@ export function PipelineDiagram({ phases, nTest, onJump }: PipelineDiagramProps)
                       )}
                     >
                       <span className="flex items-baseline gap-2">
-                        <span className="font-mono text-mono-s text-tertiary group-hover:text-accent">{pad(s.n)}</span>
+                        <span className="font-mono text-mono-s text-tertiary group-hover:text-accent">
+                          {pad(s.n)}
+                        </span>
                         <span className="text-body-s font-semibold text-primary">{s.title}</span>
                       </span>
-                      <span className="pl-[26px] text-label font-normal text-tertiary text-pretty">{s.detail}</span>
+                      <span className="pl-[26px] text-label font-normal text-tertiary text-pretty">
+                        {s.detail}
+                      </span>
                     </a>
                   </li>
                 ))}
@@ -82,8 +97,11 @@ export function PipelineDiagram({ phases, nTest, onJump }: PipelineDiagramProps)
         <div className="col-span-1 flex items-center gap-3 rounded-md border border-dashed border-line-strong px-3 py-2.5 min-[1100px]:col-span-2">
           <Lock aria-hidden className="size-4 shrink-0 stroke-[1.5] text-secondary" />
           <p className="text-label font-normal text-secondary text-pretty">
-            <span className="font-semibold text-primary">Locked test split{nTest !== null ? ` · ${nTest} patients` : ''}.</span> Untouched while
-            steps {stepRange(['develop', 'explain'])} are made, then scored once with the frozen model.
+            <span className="font-semibold text-primary">
+              Locked test split{nTest !== null ? ` · ${nTest} patients` : ''}.
+            </span>{' '}
+            Untouched while steps {stepRange(['develop', 'explain'])} are made, then scored once with the
+            frozen model.
           </p>
         </div>
         <div className="relative hidden items-center gap-2 pl-0 min-[1100px]:flex">

@@ -103,7 +103,8 @@ const MODELS: Record<string, ModelInfo> = {
     name: 'No-skill reference (predicts prevalence)',
     short: 'No-skill reference',
     family: 'reference',
-    description: 'Always predicts the development-set prevalence; it ranks no patient above another (ROC-AUC 0.5).',
+    description:
+      'Always predicts the development-set prevalence; it ranks no patient above another (ROC-AUC 0.5).',
   },
 };
 
@@ -177,7 +178,10 @@ export function humanizeModelIds(text: string): string {
   let out = text;
   for (const id of KNOWN_MODEL_IDS) {
     if (id === DEPLOYED_MODEL_ID) continue; // "ensemble" is an ordinary English word in prose
-    const re = new RegExp(`(?<![A-Za-z0-9_])${id.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}(?![A-Za-z0-9_])`, 'g');
+    const re = new RegExp(
+      `(?<![A-Za-z0-9_])${id.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}(?![A-Za-z0-9_])`,
+      'g',
+    );
     out = out.replace(re, modelShortName(id));
   }
   return out;
@@ -292,5 +296,9 @@ export function modalityName(id: string, variant: 'name' | 'short' = 'name'): st
 /** How each target's positive / negative class reads in a sentence. */
 export function targetClassNames(target: string): { positive: string; negative: string; noun: string } {
   if (target === 'CAD') return { positive: 'CAD', negative: 'no CAD', noun: 'coronary artery disease' };
-  return { positive: `a stenotic ${target}`, negative: `a non-stenotic ${target}`, noun: `${target} stenosis` };
+  return {
+    positive: `a stenotic ${target}`,
+    negative: `a non-stenotic ${target}`,
+    noun: `${target} stenosis`,
+  };
 }

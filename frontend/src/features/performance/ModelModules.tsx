@@ -27,7 +27,10 @@ export function LeaderboardModule({ target, m, logisticId, height, nFolds, prove
   const lo = Math.min(...rows.map((r) => r.mean - r.sd));
   const hi = Math.max(...rows.map((r) => r.mean + r.sd));
   const axis = niceAxis(lo, Math.min(1, hi), [0, 1]);
-  const pos = (v: number) => ((Math.min(axis.domain[1], Math.max(axis.domain[0], v)) - axis.domain[0]) / (axis.domain[1] - axis.domain[0])) * 100;
+  const pos = (v: number) =>
+    ((Math.min(axis.domain[1], Math.max(axis.domain[0], v)) - axis.domain[0]) /
+      (axis.domain[1] - axis.domain[0])) *
+    100;
   return (
     <ChartModule
       id="chart-leaderboard"
@@ -51,7 +54,10 @@ export function LeaderboardModule({ target, m, logisticId, height, nFolds, prove
       footer={note ? <p className="text-label font-normal text-secondary text-pretty">{note}</p> : null}
     >
       <div className="flex h-full flex-col">
-        <ol className="flex flex-1 flex-col justify-between" aria-label="Models ranked by cross-validated ROC-AUC">
+        <ol
+          className="flex flex-1 flex-col justify-between"
+          aria-label="Models ranked by cross-validated ROC-AUC"
+        >
           {rows.map((r) => (
             <li
               key={r.id}
@@ -60,19 +66,39 @@ export function LeaderboardModule({ target, m, logisticId, height, nFolds, prove
                 r.deployed ? 'bg-surface-2 text-primary' : 'text-secondary',
               )}
             >
-              {r.deployed && <span aria-hidden className="absolute inset-y-0 left-0 w-0.5 rounded-full bg-accent" />}
+              {r.deployed && (
+                <span aria-hidden className="absolute inset-y-0 left-0 w-0.5 rounded-full bg-accent" />
+              )}
               <Tooltip content={`${r.name}. ${r.description}`} placement="top">
                 <span
                   tabIndex={0}
                   aria-label={`${r.name}${r.deployed ? ', deployed' : ''}`}
-                  className={cn('min-w-0 truncate rounded-xs outline-none focus-visible:shadow-focus', r.deployed && 'font-semibold')}
+                  className={cn(
+                    'min-w-0 truncate rounded-xs outline-none focus-visible:shadow-focus',
+                    r.deployed && 'font-semibold',
+                  )}
                 >
                   {r.short}
                 </span>
               </Tooltip>
               <svg className="h-3 w-full overflow-visible" aria-hidden>
-                <line x1={`${pos(r.mean - r.sd)}%`} x2={`${pos(r.mean + r.sd)}%`} y1="6" y2="6" stroke={r.deployed ? UI.textPrimary : UI.textTertiary} strokeWidth="1.5" strokeLinecap="round" />
-                <circle cx={`${pos(r.mean)}%`} cy="6" r="4" fill={r.deployed ? UI.accent : UI.textPrimary} stroke={UI.bgPanel} strokeWidth="2" />
+                <line
+                  x1={`${pos(r.mean - r.sd)}%`}
+                  x2={`${pos(r.mean + r.sd)}%`}
+                  y1="6"
+                  y2="6"
+                  stroke={r.deployed ? UI.textPrimary : UI.textTertiary}
+                  strokeWidth="1.5"
+                  strokeLinecap="round"
+                />
+                <circle
+                  cx={`${pos(r.mean)}%`}
+                  cy="6"
+                  r="4"
+                  fill={r.deployed ? UI.accent : UI.textPrimary}
+                  stroke={UI.bgPanel}
+                  strokeWidth="2"
+                />
               </svg>
               <span className="num whitespace-nowrap text-right">
                 <span className={r.deployed ? 'text-primary' : 'text-secondary'}>{f2(r.mean)}</span>
@@ -81,7 +107,10 @@ export function LeaderboardModule({ target, m, logisticId, height, nFolds, prove
             </li>
           ))}
         </ol>
-        <div className="grid grid-cols-[minmax(0,1fr)_minmax(96px,44%)_84px] gap-3 pl-2.5 pr-1 pt-1.5 text-label font-normal text-tertiary" aria-hidden>
+        <div
+          className="grid grid-cols-[minmax(0,1fr)_minmax(96px,44%)_84px] gap-3 pl-2.5 pr-1 pt-1.5 text-label font-normal text-tertiary"
+          aria-hidden
+        >
           <span>ROC-AUC</span>
           <span className="relative h-4">
             {axis.ticks.map((t) => (
@@ -117,7 +146,10 @@ export function DriversModule({ target, m, byKey, height, provenance }: ModelMod
         rows: m.global_importance.map((g) => [featureName(g.feature, byKey), f2(g.mean_abs_shap)]),
       }}
     >
-      <ul className="flex h-full flex-col justify-between" aria-label={`Inputs that move ${target} estimates most`}>
+      <ul
+        className="flex h-full flex-col justify-between"
+        aria-label={`Inputs that move ${target} estimates most`}
+      >
         {rows.map((g) => {
           const name = featureName(g.feature, byKey);
           return (
@@ -128,7 +160,9 @@ export function DriversModule({ target, m, byKey, height, provenance }: ModelMod
                   aria-label={`${name}, mean absolute SHAP ${f2(g.mean_abs_shap)} log-odds`}
                   className="group grid grid-cols-[minmax(0,40%)_minmax(0,1fr)] items-center gap-3 rounded-sm px-1 py-0.5 outline-none hover:bg-surface-1 focus-visible:shadow-focus"
                 >
-                  <span className="truncate text-label font-normal text-secondary group-hover:text-primary">{name}</span>
+                  <span className="truncate text-label font-normal text-secondary group-hover:text-primary">
+                    {name}
+                  </span>
                   <span className="relative h-2.5">
                     <span
                       className="absolute inset-y-0 left-0 rounded-r-sm bg-[rgba(255,255,255,0.55)] group-hover:bg-[rgba(255,255,255,0.8)]"

@@ -51,7 +51,8 @@ const TARGET_NAMES: Record<KnownTargetId, string> = {
   RCA: 'Right coronary artery',
 };
 
-const isTarget = (v: string | null): v is KnownTargetId => !!v && (TARGET_ORDER as readonly string[]).includes(v);
+const isTarget = (v: string | null): v is KnownTargetId =>
+  !!v && (TARGET_ORDER as readonly string[]).includes(v);
 
 interface SectionProps {
   id: string;
@@ -63,7 +64,11 @@ interface SectionProps {
 /** Section rhythm (§6.4 rule 9): overline name, one plain lede, then a 12-column grid of modules. */
 function Section({ id, title, lede, children }: SectionProps) {
   return (
-    <section id={id} aria-labelledby={`${id}-title`} className="flex scroll-mt-[calc(var(--topbar-h)+72px)] flex-col gap-4">
+    <section
+      id={id}
+      aria-labelledby={`${id}-title`}
+      className="flex scroll-mt-[calc(var(--topbar-h)+72px)] flex-col gap-4"
+    >
       <div className="flex flex-col gap-1">
         <h2 id={`${id}-title`} className="eyebrow text-secondary">
           {title}
@@ -103,7 +108,9 @@ function SectionNav({ ids }: { ids: readonly (readonly [string, string])[] }) {
           )}
         >
           {label}
-          {active === id && <span aria-hidden className="absolute inset-x-2 -bottom-[11px] h-0.5 rounded-full bg-accent" />}
+          {active === id && (
+            <span aria-hidden className="absolute inset-x-2 -bottom-[11px] h-0.5 rounded-full bg-accent" />
+          )}
         </button>
       ))}
     </nav>
@@ -182,7 +189,8 @@ export default function PerformancePage() {
 
   const across = useMemo(() => robustnessAcross(report, TARGET_ORDER, readRobustness), [report]);
 
-  const modelVersion = (report as { model_version?: string } | undefined)?.model_version ?? report?.version ?? '';
+  const modelVersion =
+    (report as { model_version?: string } | undefined)?.model_version ?? report?.version ?? '';
   const provenance = `CardioTwin model ${modelVersion} · ${target} · held-out test (n = ${facts.nTest})`;
   const provenanceCv = `CardioTwin model ${modelVersion} · ${target} · development cross-validation (n = ${facts.nDev})`;
   const prevalence = testPrevalence(report, target, m);
@@ -191,7 +199,8 @@ export default function PerformancePage() {
   const visibleSections = SECTIONS.filter(([id]) => {
     if (id === 'robustness') return !!extras.robustness;
     if (id === 'subgroups') return !!extras.subgroups;
-    if (id === 'multimodal') return !!(extras.modality || extras.baseline || extras.robustness?.deltaVsBaseline);
+    if (id === 'multimodal')
+      return !!(extras.modality || extras.baseline || extras.robustness?.deltaVsBaseline);
     return true;
   });
 
@@ -213,8 +222,16 @@ export default function PerformancePage() {
             value={split}
             onChange={(v) => setView({ split: v as Split })}
             options={[
-              { value: 'test', label: 'Held-out test', title: 'Patients never seen during development; scored once' },
-              { value: 'cv', label: 'Cross-validation', title: 'Repeated nested cross-validation on the development set' },
+              {
+                value: 'test',
+                label: 'Held-out test',
+                title: 'Patients never seen during development; scored once',
+              },
+              {
+                value: 'cv',
+                label: 'Cross-validation',
+                title: 'Repeated nested cross-validation on the development set',
+              },
             ]}
           />
           {m && <SectionNav ids={visibleSections} />}
@@ -225,28 +242,45 @@ export default function PerformancePage() {
         {metrics.status === 'loading' && <PageSkeleton height={H} />}
         {(metrics.status === 'missing' || metrics.status === 'error') && (
           <EmptyState title="Evaluation report not published yet">
-            The ML pipeline writes the evaluation report next to the model. Run the training pipeline or start the API to see
-            the numbers here.
+            The ML pipeline writes the evaluation report next to the model. Run the training pipeline or start
+            the API to see the numbers here.
           </EmptyState>
         )}
 
         {report && m && (
-          <div id={tabPanelId('perf-target', target)} role="tabpanel" aria-labelledby={`perf-target-tab-${target}`} className="flex flex-col gap-8">
-            <section id="summary" aria-labelledby="summary-title" className="flex scroll-mt-[calc(var(--topbar-h)+72px)] flex-col gap-5">
+          <div
+            id={tabPanelId('perf-target', target)}
+            role="tabpanel"
+            aria-labelledby={`perf-target-tab-${target}`}
+            className="flex flex-col gap-8"
+          >
+            <section
+              id="summary"
+              aria-labelledby="summary-title"
+              className="flex scroll-mt-[calc(var(--topbar-h)+72px)] flex-col gap-5"
+            >
               <header className="flex flex-col gap-2">
-                <p className="eyebrow text-accent">
-                  Model performance · {TARGET_NAMES[target]}
-                </p>
-                <h1 id="summary-title" className="max-w-[30ch] font-display text-display-2 text-primary text-balance">
+                <p className="eyebrow text-accent">Model performance · {TARGET_NAMES[target]}</p>
+                <h1
+                  id="summary-title"
+                  className="max-w-[30ch] font-display text-display-2 text-primary text-balance"
+                >
                   {pageTakeaway(target, m, split)}
                 </h1>
-                <p className="max-w-[92ch] text-body text-secondary text-pretty">{reconcileSentence(m, split, facts, extras.robustness)}</p>
+                <p className="max-w-[92ch] text-body text-secondary text-pretty">
+                  {reconcileSentence(m, split, facts, extras.robustness)}
+                </p>
                 <p className="text-label font-normal text-tertiary">
                   Deployed: {deployedModelPhrase(logisticId)}, Platt-calibrated, with a decision threshold of{' '}
-                  <span className="num text-secondary">{formatMetricValue(m.threshold)}</span> chosen on development folds.
+                  <span className="num text-secondary">{formatMetricValue(m.threshold)}</span> chosen on
+                  development folds.
                 </p>
               </header>
-              <SummaryTiles tiles={kpis(m, split, target, facts, prevalence)} split={split} more={moreMetrics(m)} />
+              <SummaryTiles
+                tiles={kpis(m, split, target, facts, prevalence)}
+                split={split}
+                more={moreMetrics(m)}
+              />
             </section>
 
             {visibleSections.some(([id]) => id === 'multimodal') && (
@@ -266,37 +300,115 @@ export default function PerformancePage() {
                 {extras.modality && (
                   <div className="grid grid-cols-1 gap-6 lg:grid-cols-12">
                     <div className="lg:col-span-7">
-                      <CumulativeModule target={target} a={extras.modality} height={H + 24} provenance={provenanceCv} />
+                      <CumulativeModule
+                        target={target}
+                        a={extras.modality}
+                        height={H + 24}
+                        provenance={provenanceCv}
+                      />
                     </div>
                     <div className="lg:col-span-5">
-                      <LeaveOneOutModule target={target} a={extras.modality} height={H + 24} provenance={provenanceCv} />
+                      <LeaveOneOutModule
+                        target={target}
+                        a={extras.modality}
+                        height={H + 24}
+                        provenance={provenanceCv}
+                      />
                     </div>
                   </div>
                 )}
               </Section>
             )}
 
-            <Section id="discrimination" title="Discrimination" lede="Can it tell who has the disease from who does not? Curves are drawn on the held-out test set.">
+            <Section
+              id="discrimination"
+              title="Discrimination"
+              lede="Can it tell who has the disease from who does not? Curves are drawn on the held-out test set."
+            >
               <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
-                <RocModule target={target} m={m} points={points} deployed={deployed} explore={explore} onExplore={onExplore} height={H} provenance={provenance} nTest={facts.nTest} />
-                <PrModule target={target} m={m} points={points} deployed={deployed} explore={explore} onExplore={onExplore} height={H} provenance={provenance} nTest={facts.nTest} prevalence={prevalence} />
+                <RocModule
+                  target={target}
+                  m={m}
+                  points={points}
+                  deployed={deployed}
+                  explore={explore}
+                  onExplore={onExplore}
+                  height={H}
+                  provenance={provenance}
+                  nTest={facts.nTest}
+                />
+                <PrModule
+                  target={target}
+                  m={m}
+                  points={points}
+                  deployed={deployed}
+                  explore={explore}
+                  onExplore={onExplore}
+                  height={H}
+                  provenance={provenance}
+                  nTest={facts.nTest}
+                  prevalence={prevalence}
+                />
               </div>
             </Section>
 
-            <Section id="calibration" title="Calibration and clinical usefulness" lede="Can the percentages be taken at face value, and would acting on them help?">
+            <Section
+              id="calibration"
+              title="Calibration and clinical usefulness"
+              lede="Can the percentages be taken at face value, and would acting on them help?"
+            >
               <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
-                <CalibrationModule target={target} m={m} height={H} provenance={provenance} nTest={facts.nTest} summary={extras.calibration} />
-                <DecisionCurveModule target={target} m={m} points={points} deployed={deployed} explore={explore} onExplore={onExplore} height={H} provenance={provenance} nTest={facts.nTest} />
+                <CalibrationModule
+                  target={target}
+                  m={m}
+                  height={H}
+                  provenance={provenance}
+                  nTest={facts.nTest}
+                  summary={extras.calibration}
+                />
+                <DecisionCurveModule
+                  target={target}
+                  m={m}
+                  points={points}
+                  deployed={deployed}
+                  explore={explore}
+                  onExplore={onExplore}
+                  height={H}
+                  provenance={provenance}
+                  nTest={facts.nTest}
+                />
               </div>
             </Section>
 
-            <Section id="decisions" title="Decisions" lede="What happens at the threshold, and what would change if it moved. Exploring never changes the deployed model.">
+            <Section
+              id="decisions"
+              title="Decisions"
+              lede="What happens at the threshold, and what would change if it moved. Exploring never changes the deployed model."
+            >
               <div className="grid grid-cols-1 gap-6 lg:grid-cols-12">
                 <div className="lg:col-span-5">
-                  <ConfusionModule target={target} m={m} points={points} deployed={deployed} explore={explore} height={H} nTest={facts.nTest} provenance={provenance} />
+                  <ConfusionModule
+                    target={target}
+                    m={m}
+                    points={points}
+                    deployed={deployed}
+                    explore={explore}
+                    height={H}
+                    nTest={facts.nTest}
+                    provenance={provenance}
+                  />
                 </div>
                 <div className="lg:col-span-7">
-                  <ThresholdExplorer target={target} points={points} deployed={deployed} explore={explore} onExplore={onExplore} height={H} nTest={facts.nTest} provenance={provenance} />
+                  <ThresholdExplorer
+                    target={target}
+                    points={points}
+                    deployed={deployed}
+                    explore={explore}
+                    onExplore={onExplore}
+                    height={H}
+                    nTest={facts.nTest}
+                    provenance={provenance}
+                  />
                 </div>
               </div>
             </Section>
@@ -309,7 +421,12 @@ export default function PerformancePage() {
               >
                 <div className="grid grid-cols-1 gap-6 lg:grid-cols-12">
                   <div className="lg:col-span-7">
-                    <RobustnessModule target={target} r={extras.robustness} height={H} provenance={provenance} />
+                    <RobustnessModule
+                      target={target}
+                      r={extras.robustness}
+                      height={H}
+                      provenance={provenance}
+                    />
                   </div>
                   <div className="lg:col-span-5">
                     <RobustnessStatsModule target={target} r={extras.robustness} height={H} />
@@ -329,18 +446,48 @@ export default function PerformancePage() {
             )}
 
             {extras.subgroups && (
-              <Section id="subgroups" title="Subgroups" lede={`Does it work equally well for women and men, across ages, and with or without diabetes? Follows the split selector above: on the ${facts.nTest}-patient test split most subgroups are small, so the cross-validation view is the steadier read.`}>
-                <SubgroupsModule target={target} s={extras.subgroups} source={split === 'test' ? 'test' : 'oof'} height={H + 40} provenance={split === 'test' ? provenance : provenanceCv} />
+              <Section
+                id="subgroups"
+                title="Subgroups"
+                lede={`Does it work equally well for women and men, across ages, and with or without diabetes? Follows the split selector above: on the ${facts.nTest}-patient test split most subgroups are small, so the cross-validation view is the steadier read.`}
+              >
+                <SubgroupsModule
+                  target={target}
+                  s={extras.subgroups}
+                  source={split === 'test' ? 'test' : 'oof'}
+                  height={H + 40}
+                  provenance={split === 'test' ? provenance : provenanceCv}
+                />
               </Section>
             )}
 
-            <Section id="models" title="Model comparison" lede="Every candidate was cross-validated on identical folds; the deployed ensemble is highlighted.">
+            <Section
+              id="models"
+              title="Model comparison"
+              lede="Every candidate was cross-validated on identical folds; the deployed ensemble is highlighted."
+            >
               <div className="grid grid-cols-1 gap-6 lg:grid-cols-12">
                 <div className="lg:col-span-7">
-                  <LeaderboardModule target={target} m={m} logisticId={logisticId} byKey={schema?.byKey} height={H + 24} nFolds={facts.nFolds} provenance={provenanceCv} />
+                  <LeaderboardModule
+                    target={target}
+                    m={m}
+                    logisticId={logisticId}
+                    byKey={schema?.byKey}
+                    height={H + 24}
+                    nFolds={facts.nFolds}
+                    provenance={provenanceCv}
+                  />
                 </div>
                 <div className="lg:col-span-5">
-                  <DriversModule target={target} m={m} logisticId={logisticId} byKey={schema?.byKey} height={H + 24} nFolds={facts.nFolds} provenance={provenanceCv} />
+                  <DriversModule
+                    target={target}
+                    m={m}
+                    logisticId={logisticId}
+                    byKey={schema?.byKey}
+                    height={H + 24}
+                    nFolds={facts.nFolds}
+                    provenance={provenanceCv}
+                  />
                 </div>
               </div>
             </Section>

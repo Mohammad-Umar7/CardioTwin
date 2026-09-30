@@ -18,10 +18,13 @@ export function ProtocolStrip({ report, facts }: { report: MetricsReport; facts:
       </ul>
       <div className="flex flex-wrap items-center justify-between gap-3 border-t border-hairline pt-3">
         <p className="text-label font-normal text-tertiary">
-          Single-centre cohort (n = {report.dataset.n}), not externally validated · decision support and education only,{' '}
-          <span className="font-medium text-secondary">not a diagnosis</span>.
+          Single-centre cohort (n = {report.dataset.n}), not externally validated · decision support and
+          education only, <span className="font-medium text-secondary">not a diagnosis</span>.
         </p>
-        <Link to={ROUTES.methodology} className="text-label font-semibold text-accent hover:text-accent-hover">
+        <Link
+          to={ROUTES.methodology}
+          className="text-label font-semibold text-accent hover:text-accent-hover"
+        >
           Full methodology ›
         </Link>
       </div>

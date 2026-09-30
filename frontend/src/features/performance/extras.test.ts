@@ -11,7 +11,13 @@ import {
 } from './extras';
 import { cadMetrics, sampleReport } from './fixtures.test-data';
 
-const bare = { ...sampleReport, robustness: undefined, modality_ablation: undefined, subgroups: undefined, analysis: undefined } as unknown as MetricsReport;
+const bare = {
+  ...sampleReport,
+  robustness: undefined,
+  modality_ablation: undefined,
+  subgroups: undefined,
+  analysis: undefined,
+} as unknown as MetricsReport;
 
 describe('additive metrics readers', () => {
   it('return null when the ML pipeline has not published the analysis yet', () => {
@@ -24,7 +30,11 @@ describe('additive metrics readers', () => {
   });
 
   it('ignore malformed blocks instead of throwing', () => {
-    const broken = { ...sampleReport, robustness: { CAD: { roc_auc: { mean: 'x' } } }, subgroups: { CAD: { factors: 3 } } } as unknown as MetricsReport;
+    const broken = {
+      ...sampleReport,
+      robustness: { CAD: { roc_auc: { mean: 'x' } } },
+      subgroups: { CAD: { factors: 3 } },
+    } as unknown as MetricsReport;
     expect(readRobustness(broken, 'CAD')).toBeNull();
     expect(readSubgroups(broken, 'CAD')).toBeNull();
   });
@@ -59,8 +69,15 @@ describe('additive metrics readers', () => {
 
   it('read the per-target v1.1 extras', () => {
     expect(readCalibrationSummary(cadMetrics)).toEqual({ ece: 0.079, inTheLarge: -0.016, slope: 0.62 });
-    expect(readComponents(cadMetrics)).toMatchObject({ logisticId: 'lr_elasticnet', logisticWeight: 0.4, nTrees: 108 });
-    expect(readBaseline(cadMetrics)).toMatchObject({ features: ['Age', 'Sex', 'Typical Chest Pain', 'DM', 'HTN'], testAuc: { value: 0.8215 } });
+    expect(readComponents(cadMetrics)).toMatchObject({
+      logisticId: 'lr_elasticnet',
+      logisticWeight: 0.4,
+      nTrees: 108,
+    });
+    expect(readBaseline(cadMetrics)).toMatchObject({
+      features: ['Age', 'Sex', 'Typical Chest Pain', 'DM', 'HTN'],
+      testAuc: { value: 0.8215 },
+    });
     expect(readAnalysisNote(sampleReport, 'robustness')).toBe('Monte-Carlo repeated hold-out');
   });
 });

@@ -22,7 +22,14 @@ function IntervalTrack({ kpi, split }: { kpi: Kpi; split: Split }) {
       <line x1="0%" x2="100%" y1="8" y2="8" stroke={UI.borderStrong} strokeWidth="1" />
       <line x1="0%" x2="0%" y1="5" y2="11" stroke={UI.borderStrong} />
       <line x1="100%" x2="100%" y1="5" y2="11" stroke={UI.borderStrong} />
-      <rect x={`${lo}%`} y="6" width={`${Math.max(0.5, hi - lo)}%`} height="4" rx="2" fill="rgba(255,255,255,0.28)" />
+      <rect
+        x={`${lo}%`}
+        y="6"
+        width={`${Math.max(0.5, hi - lo)}%`}
+        height="4"
+        rx="2"
+        fill="rgba(255,255,255,0.28)"
+      />
       {other !== null && (
         <svg x={`${other}%`} y="0" width="1" height="16" overflow="visible">
           <rect
@@ -37,7 +44,14 @@ function IntervalTrack({ kpi, split }: { kpi: Kpi; split: Split }) {
           />
         </svg>
       )}
-      <circle cx={`${pos(kpi.value)}%`} cy="8" r="4.5" fill={UI.textPrimary} stroke={UI.bgPanel} strokeWidth="2" />
+      <circle
+        cx={`${pos(kpi.value)}%`}
+        cy="8"
+        r="4.5"
+        fill={UI.textPrimary}
+        stroke={UI.bgPanel}
+        strokeWidth="2"
+      />
       <title>
         {`${kpi.domainLabels[0]} (left) to ${kpi.domainLabels[1]} (right). Dot: ${split === 'test' ? 'held-out estimate' : 'cross-validation mean'}; bar: ${split === 'test' ? '95 % bootstrap interval' : '± 1 sd'}; diamond: ${split === 'test' ? 'cross-validation mean' : 'held-out estimate'}.`}
       </title>
@@ -111,7 +125,16 @@ export function SummaryTiles({ tiles, split, more }: SummaryTilesProps) {
           </span>
           <span className="inline-flex items-center gap-1.5">
             <svg width="10" height="10" aria-hidden>
-              <rect x="2" y="2" width="6" height="6" transform="rotate(45 5 5)" fill="none" stroke={UI.textSecondary} strokeWidth="1.25" />
+              <rect
+                x="2"
+                y="2"
+                width="6"
+                height="6"
+                transform="rotate(45 5 5)"
+                fill="none"
+                stroke={UI.textSecondary}
+                strokeWidth="1.25"
+              />
             </svg>
             {split === 'test' ? 'cross-validation mean' : 'held-out estimate'}
           </span>
@@ -125,7 +148,10 @@ export function SummaryTiles({ tiles, split, more }: SummaryTilesProps) {
             className="inline-flex h-7 items-center gap-1 rounded-sm px-2 text-label text-secondary hover:bg-surface-2 hover:text-primary"
           >
             More metrics
-            <ChevronDown aria-hidden className={cn('size-4 stroke-[1.5] transition-transform duration-fast', open && 'rotate-180')} />
+            <ChevronDown
+              aria-hidden
+              className={cn('size-4 stroke-[1.5] transition-transform duration-fast', open && 'rotate-180')}
+            />
           </button>
         )}
       </div>

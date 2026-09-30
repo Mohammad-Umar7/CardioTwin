@@ -19,7 +19,8 @@ const pair = (v: unknown): [number, number] | null => {
   const b = num(v[1]);
   return a === null || b === null ? null : [a, b];
 };
-const nums = (v: unknown): number[] => (Array.isArray(v) ? v.map(num).filter((x): x is number => x !== null) : []);
+const nums = (v: unknown): number[] =>
+  Array.isArray(v) ? v.map(num).filter((x): x is number => x !== null) : [];
 const bool = (v: unknown): boolean => v === true;
 
 // ------------------------------------------------------------------------ per-target v1.1 extras
@@ -35,7 +36,11 @@ export interface CalibrationSummary {
 export function readCalibrationSummary(m: TargetMetrics | undefined): CalibrationSummary | null {
   const raw = (m as unknown as Rec | undefined)?.calibration_summary;
   if (!isRec(raw)) return null;
-  const out = { ece: num(raw.ece), inTheLarge: num(raw.calibration_in_the_large), slope: num(raw.calibration_slope) };
+  const out = {
+    ece: num(raw.ece),
+    inTheLarge: num(raw.calibration_in_the_large),
+    slope: num(raw.calibration_slope),
+  };
   return out.ece === null && out.inTheLarge === null && out.slope === null ? null : out;
 }
 
@@ -84,7 +89,9 @@ export function readBaseline(m: TargetMetrics | undefined): BaselineResult | nul
   const testValue = num(test?.value);
   const cvMean = num(cv?.mean);
   const cvStd = num(cv?.std);
-  const features = Array.isArray(raw.features) ? raw.features.filter((f): f is string => typeof f === 'string') : [];
+  const features = Array.isArray(raw.features)
+    ? raw.features.filter((f): f is string => typeof f === 'string')
+    : [];
   if (testValue === null && cvMean === null) return null;
   return {
     features,
@@ -224,7 +231,12 @@ function readDelta(v: unknown): DeltaInterval | null {
   if (!isRec(v)) return null;
   const mean = num(v.mean);
   if (mean === null) return null;
-  return { mean, ci: pair(v.ci), p: num(v.p_holm) ?? num(v.p_value), shareFoldsImproved: num(v.share_folds_improved) };
+  return {
+    mean,
+    ci: pair(v.ci),
+    p: num(v.p_holm) ?? num(v.p_value),
+    shareFoldsImproved: num(v.share_folds_improved),
+  };
 }
 
 function readModalityRows(v: unknown, deltaKey: 'delta_vs_previous' | 'delta_vs_full' | null): ModalityRow[] {
@@ -246,7 +258,10 @@ function readModalityRows(v: unknown, deltaKey: 'delta_vs_previous' | 'delta_vs_
   return rows;
 }
 
-export function readModalityAblation(report: MetricsReport | undefined, target: string): ModalityAblation | null {
+export function readModalityAblation(
+  report: MetricsReport | undefined,
+  target: string,
+): ModalityAblation | null {
   const all = (report as unknown as Rec | undefined)?.modality_ablation;
   if (!isRec(all) || !isRec(all[target])) return null;
   const t = all[target] as Rec;
@@ -347,7 +362,8 @@ export function readSubgroups(report: MetricsReport | undefined, target: string)
         if (!lid || !label) continue;
         levels.push({ id: lid, label, test: readBlock(l.test), oof: readBlock(l.oof) });
       }
-      if (levels.length > 0) factors.push({ id, label: str(f.label) ?? id, reference: str(f.reference), levels });
+      if (levels.length > 0)
+        factors.push({ id, label: str(f.label) ?? id, reference: str(f.reference), levels });
     }
   }
   if (factors.length === 0) return null;
@@ -358,13 +374,21 @@ export function readSubgroups(report: MetricsReport | undefined, target: string)
 // ----------------------------------------------------------------------------------- analysis meta
 
 /** `metrics.json → analysis.<key>.method` etc.: plain-text protocol of each descriptive analysis. */
-export function readAnalysisNote(report: MetricsReport | undefined, key: string, field = 'method'): string | null {
+export function readAnalysisNote(
+  report: MetricsReport | undefined,
+  key: string,
+  field = 'method',
+): string | null {
   const meta = (report as unknown as Rec | undefined)?.analysis;
   if (!isRec(meta) || !isRec(meta[key])) return null;
   return str((meta[key] as Rec)[field]);
 }
 
-export function readAnalysisNumber(report: MetricsReport | undefined, key: string, field: string): number | null {
+export function readAnalysisNumber(
+  report: MetricsReport | undefined,
+  key: string,
+  field: string,
+): number | null {
   const meta = (report as unknown as Rec | undefined)?.analysis;
   if (!isRec(meta) || !isRec(meta[key])) return null;
   return num((meta[key] as Rec)[field]);

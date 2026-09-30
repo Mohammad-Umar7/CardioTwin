@@ -11,9 +11,15 @@ export function AnatomyPipeline({ steps }: { steps: AnatomyStep[] }) {
         {steps.map((s, i) => (
           <li key={s.title} className="relative flex min-w-0 flex-col gap-1.5 min-[1100px]:pr-5">
             <div className="relative flex h-5 items-center">
-              <span aria-hidden className="relative z-[1] size-2.5 rounded-full border-2 border-secondary bg-panel" />
+              <span
+                aria-hidden
+                className="relative z-[1] size-2.5 rounded-full border-2 border-secondary bg-panel"
+              />
               {i < steps.length - 1 && (
-                <span aria-hidden className="absolute left-4 right-2 top-1/2 hidden h-px bg-line-strong min-[1100px]:block">
+                <span
+                  aria-hidden
+                  className="absolute left-4 right-2 top-1/2 hidden h-px bg-line-strong min-[1100px]:block"
+                >
                   <span className="absolute -right-px -top-[3px] size-[7px] rotate-45 border-r border-t border-line-strong" />
                 </span>
               )}

@@ -95,7 +95,10 @@ export function ChartModule({
     <section
       id={id}
       aria-labelledby={titleId}
-      className={cn('flex min-w-0 flex-col gap-3 rounded-lg border border-line bg-panel p-4 min-[1440px]:p-5', className)}
+      className={cn(
+        'flex min-w-0 flex-col gap-3 rounded-lg border border-line bg-panel p-4 min-[1440px]:p-5',
+        className,
+      )}
     >
       <header className="flex items-start justify-between gap-3">
         <div className="flex min-w-0 flex-col gap-1">
@@ -147,7 +150,10 @@ export function ChartModule({
         </div>
       </header>
       {legend && legend.length > 0 && status === 'ready' && !asTable && (
-        <ul className="flex flex-wrap items-center gap-x-4 gap-y-1 text-label font-normal text-tertiary" aria-label="Legend">
+        <ul
+          className="flex flex-wrap items-center gap-x-4 gap-y-1 text-label font-normal text-tertiary"
+          aria-label="Legend"
+        >
           {legend.map((l) => (
             <li key={l.label} className="flex items-center gap-1.5">
               <SeriesKey kind={l.kind} />
@@ -174,7 +180,10 @@ export function ChartModule({
                     <th
                       key={c}
                       scope="col"
-                      className={cn('px-3 py-1.5 font-medium text-tertiary', table.numeric?.[i] ? 'text-right' : 'text-left')}
+                      className={cn(
+                        'px-3 py-1.5 font-medium text-tertiary',
+                        table.numeric?.[i] ? 'text-right' : 'text-left',
+                      )}
                     >
                       {c}
                     </th>
@@ -187,7 +196,10 @@ export function ChartModule({
                     {r.map((cell, ci) => (
                       <td
                         key={ci}
-                        className={cn('px-3 py-1 text-secondary', table.numeric?.[ci] && 'num text-right text-primary')}
+                        className={cn(
+                          'px-3 py-1 text-secondary',
+                          table.numeric?.[ci] && 'num text-right text-primary',
+                        )}
                       >
                         {cell}
                       </td>

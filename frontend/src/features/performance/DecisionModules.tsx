@@ -22,7 +22,16 @@ export interface DecisionProps {
 }
 
 /** 2 × 2 confusion matrix at the current threshold: correct cells tinted, errors hatched, never red. */
-export function ConfusionModule({ target, m, points, deployed, explore, height, nTest, provenance }: Omit<DecisionProps, 'onExplore'>) {
+export function ConfusionModule({
+  target,
+  m,
+  points,
+  deployed,
+  explore,
+  height,
+  nTest,
+  provenance,
+}: Omit<DecisionProps, 'onExplore'>) {
   const p = points[explore ?? deployed] ?? points[deployed];
   const noun = target === 'CAD' ? 'CAD' : `${target} stenosis`;
   if (!p) return null;
@@ -45,7 +54,11 @@ export function ConfusionModule({ target, m, points, deployed, explore, height, 
       exportName={`cardiotwin-${target.toLowerCase()}-confusion-matrix`}
       exportImage={false}
       provenance={provenance}
-      title={exploring ? `At threshold ${f2(p.threshold)}: ${p.tp} of ${p.tp + p.fn} flagged, ${p.fp} false alarms` : confusionFinding(target, m)}
+      title={
+        exploring
+          ? `At threshold ${f2(p.threshold)}: ${p.tp} of ${p.tp + p.fn} flagged, ${p.fp} false alarms`
+          : confusionFinding(target, m)
+      }
       howTo={`How to read: rows are the angiography result, columns the model's call ${exploring ? `at the explored threshold ${f2(p.threshold)}` : `at the deployed threshold ${f2(p.threshold)}`}. Correct cells are tinted, errors hatched. Held-out test, ${nTest} patients.`}
       height={height}
       table={{
@@ -108,7 +121,19 @@ function Delta({ now, base }: { now: number | null; base: number | null }) {
   );
 }
 
-function Metric({ label, now, base, hint, exploring }: { label: string; now: number | null; base: number | null; hint: string; exploring: boolean }) {
+function Metric({
+  label,
+  now,
+  base,
+  hint,
+  exploring,
+}: {
+  label: string;
+  now: number | null;
+  base: number | null;
+  hint: string;
+  exploring: boolean;
+}) {
   return (
     <div className="flex min-w-0 flex-col gap-0.5 rounded-md bg-surface-1 px-3 py-2.5">
       <span className="text-label text-tertiary">{label}</span>
@@ -126,7 +151,16 @@ function Metric({ label, now, base, hint, exploring }: { label: string; now: num
  * points. Moving it updates the confusion matrix and the ROC, PR and decision-curve markers; the
  * deployed threshold never changes, and "Back to deployed" snaps back.
  */
-export function ThresholdExplorer({ target, points, deployed, explore, onExplore, height, nTest, provenance }: Omit<DecisionProps, 'm'>) {
+export function ThresholdExplorer({
+  target,
+  points,
+  deployed,
+  explore,
+  onExplore,
+  height,
+  nTest,
+  provenance,
+}: Omit<DecisionProps, 'm'>) {
   const sliderId = useId();
   const idx = explore ?? deployed;
   const p = points[idx];
@@ -143,8 +177,14 @@ export function ThresholdExplorer({ target, points, deployed, explore, onExplore
   if (exploring) {
     const dCaught = p.tp - dep.tp;
     const dAlarms = p.fp - dep.fp;
-    const caught = dCaught === 0 ? 'the same patients caught' : `${Math.abs(dCaught)} ${dCaught > 0 ? 'more' : 'fewer'} with ${noun} caught`;
-    const alarms = dAlarms === 0 ? 'no change in false alarms' : `${Math.abs(dAlarms)} ${dAlarms > 0 ? 'more' : 'fewer'} false alarm${Math.abs(dAlarms) === 1 ? '' : 's'}`;
+    const caught =
+      dCaught === 0
+        ? 'the same patients caught'
+        : `${Math.abs(dCaught)} ${dCaught > 0 ? 'more' : 'fewer'} with ${noun} caught`;
+    const alarms =
+      dAlarms === 0
+        ? 'no change in false alarms'
+        : `${Math.abs(dAlarms)} ${dAlarms > 0 ? 'more' : 'fewer'} false alarm${Math.abs(dAlarms) === 1 ? '' : 's'}`;
     title = `At ${f2(p.threshold)}: ${caught}, ${alarms}`;
   }
 
@@ -191,7 +231,10 @@ export function ThresholdExplorer({ target, points, deployed, explore, onExplore
           <div className="flex items-center justify-between text-label font-normal text-tertiary">
             <label htmlFor={sliderId} className="text-secondary">
               Decision threshold <span className="num text-primary">{f2(p.threshold)}</span>
-              <span className="text-tertiary"> · flags {formatPercent(now.n ? now.flagged / now.n : null)} of patients</span>
+              <span className="text-tertiary">
+                {' '}
+                · flags {formatPercent(now.n ? now.flagged / now.n : null)} of patients
+              </span>
             </label>
             {p.deployed && <span className="text-accent">Deployed</span>}
           </div>
@@ -213,9 +256,27 @@ export function ThresholdExplorer({ target, points, deployed, explore, onExplore
           </div>
         </div>
         <div className="grid grid-cols-2 gap-2 xl:grid-cols-4">
-          <Metric label="Sensitivity" now={now.sensitivity} base={base.sensitivity} exploring={exploring} hint={`${p.tp} of ${p.tp + p.fn} caught`} />
-          <Metric label="Specificity" now={now.specificity} base={base.specificity} exploring={exploring} hint={`${p.tn} of ${p.tn + p.fp} cleared`} />
-          <Metric label="PPV" now={now.ppv} base={base.ppv} exploring={exploring} hint="flagged who have it" />
+          <Metric
+            label="Sensitivity"
+            now={now.sensitivity}
+            base={base.sensitivity}
+            exploring={exploring}
+            hint={`${p.tp} of ${p.tp + p.fn} caught`}
+          />
+          <Metric
+            label="Specificity"
+            now={now.specificity}
+            base={base.specificity}
+            exploring={exploring}
+            hint={`${p.tn} of ${p.tn + p.fp} cleared`}
+          />
+          <Metric
+            label="PPV"
+            now={now.ppv}
+            base={base.ppv}
+            exploring={exploring}
+            hint="flagged who have it"
+          />
           <Metric label="NPV" now={now.npv} base={base.npv} exploring={exploring} hint="cleared who do not" />
         </div>
       </div>

@@ -28,7 +28,11 @@ beforeAll(async () => {
           : url.includes('manifest.json')
             ? read('anatomy/manifest.json')
             : null;
-      return Promise.resolve(body ? new Response(body, { status: 200, headers: { 'Content-Type': 'application/json' } }) : new Response('', { status: 404 }));
+      return Promise.resolve(
+        body
+          ? new Response(body, { status: 200, headers: { 'Content-Type': 'application/json' } })
+          : new Response('', { status: 404 }),
+      );
     }),
   );
   await Promise.all([metricsResource.get(), schemaResource.get(), manifestResource.get()]);
@@ -66,13 +70,17 @@ function leaks(text: string): string[] {
 
 /** Visible text plus accessible names and tooltips that a reader can reach. */
 function reachableText(root: HTMLElement): string {
-  const attrs = [...root.querySelectorAll('[aria-label],[title]')].map((e) => `${e.getAttribute('aria-label') ?? ''} ${e.getAttribute('title') ?? ''}`);
+  const attrs = [...root.querySelectorAll('[aria-label],[title]')].map(
+    (e) => `${e.getAttribute('aria-label') ?? ''} ${e.getAttribute('title') ?? ''}`,
+  );
   return `${root.textContent ?? ''}\n${attrs.join('\n')}`;
 }
 
 describe('human names only (§6.4 rule 3)', () => {
   it('the probe itself catches raw keys and model ids', () => {
-    expect(leaks('Region RWMA and EF-TTE, lr_elasticnet')).toEqual(expect.arrayContaining(['key:Region RWMA', 'key:EF-TTE', 'model:lr_elasticnet']));
+    expect(leaks('Region RWMA and EF-TTE, lr_elasticnet')).toEqual(
+      expect.arrayContaining(['key:Region RWMA', 'key:EF-TTE', 'model:lr_elasticnet']),
+    );
     expect(leaks('PR-AUC · LDL cholesterol · XGBoost · the ensemble')).toEqual([]);
   });
 
@@ -100,12 +108,26 @@ describe('human names only (§6.4 rule 3)', () => {
     );
     await waitFor(() => expect(container.querySelector('#models table')).not.toBeNull());
     expect(leaks(reachableText(container))).toEqual([]);
-    for (const id of ['pipeline', 'data', 'leakage', 'validation', 'models', 'engines', 'explainability', 'anatomy', 'extensibility', 'model-card', 'limitations', 'references']) {
+    for (const id of [
+      'pipeline',
+      'data',
+      'leakage',
+      'validation',
+      'models',
+      'engines',
+      'explainability',
+      'anatomy',
+      'extensibility',
+      'model-card',
+      'limitations',
+      'references',
+    ]) {
       expect(container.querySelector(`#${id}`), id).not.toBeNull();
     }
     // Three diagrams: pipeline, validation protocol, anatomy build (+ the SHAP margin schematic).
     expect(container.querySelectorAll('figure').length).toBeGreaterThanOrEqual(3);
     // Every external reference opens safely.
-    for (const a of container.querySelectorAll<HTMLAnchorElement>('a[target="_blank"]')) expect(a.rel).toContain('noreferrer');
+    for (const a of container.querySelectorAll<HTMLAnchorElement>('a[target="_blank"]'))
+      expect(a.rel).toContain('noreferrer');
   });
 });

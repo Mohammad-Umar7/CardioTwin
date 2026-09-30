@@ -9,7 +9,13 @@
  * ever rendered. All functions are total: a missing artifact yields shorter copy, never a throw.
  */
 import { formatMetricValue, formatPercent } from '@/lib/format';
-import { deployedModelName, deployedModelShort, featureName, modalityName, MODALITY_ORDER } from '@/lib/modelNames';
+import {
+  deployedModelName,
+  deployedModelShort,
+  featureName,
+  modalityName,
+  MODALITY_ORDER,
+} from '@/lib/modelNames';
 import {
   TARGET_ORDER,
   type AnatomyManifest,
@@ -26,7 +32,19 @@ const str = (v: unknown): string | null => (typeof v === 'string' && v.length > 
 const f2 = (v: number | null | undefined) => formatMetricValue(v);
 
 /** Superscript digits for "10⁻⁶"-style exponents. */
-const SUPER: Record<string, string> = { '-': '⁻', '0': '⁰', '1': '¹', '2': '²', '3': '³', '4': '⁴', '5': '⁵', '6': '⁶', '7': '⁷', '8': '⁸', '9': '⁹' };
+const SUPER: Record<string, string> = {
+  '-': '⁻',
+  '0': '⁰',
+  '1': '¹',
+  '2': '²',
+  '3': '³',
+  '4': '⁴',
+  '5': '⁵',
+  '6': '⁶',
+  '7': '⁷',
+  '8': '⁸',
+  '9': '⁹',
+};
 export function powerOfTen(exp: number): string {
   return `10${String(exp)
     .split('')
@@ -72,7 +90,8 @@ export function keyFacts(report?: MetricsReport | null, schema?: FeatureSchema |
   const robustness = (report as unknown as Rec | undefined)?.robustness;
   let nResplits: number | null = null;
   if (isRec(robustness)) {
-    for (const t of Object.values(robustness)) if (isRec(t) && num(t.n_splits) !== null) nResplits = num(t.n_splits);
+    for (const t of Object.values(robustness))
+      if (isRec(t) && num(t.n_splits) !== null) nResplits = num(t.n_splits);
   }
   const groups = schema ? new Set(schema.features.map((f) => f.group)) : null;
   return {
@@ -87,7 +106,11 @@ export function keyFacts(report?: MetricsReport | null, schema?: FeatureSchema |
     cvRepeats: num(p.cv_repeats),
     nBootstrap: num(p.n_bootstrap),
     nResplits,
-    modelVersion: str((report as unknown as Rec | undefined)?.model_version) ?? schema?.model_version ?? report?.version ?? null,
+    modelVersion:
+      str((report as unknown as Rec | undefined)?.model_version) ??
+      schema?.model_version ??
+      report?.version ??
+      null,
     additivity,
   };
 }
@@ -116,7 +139,9 @@ type PhaseDraft = Omit<PipelinePhase, 'steps'> & { steps: Omit<PipelineStep, 'n'
 export function pipelinePhases(k: KeyFacts): PipelinePhase[] {
   const count = (v: number | null, noun: string) => (v === null ? noun : `${v} ${noun}`);
   const folds =
-    k.cvSplits !== null && k.cvRepeats !== null ? `${k.cvSplits}-fold × ${k.cvRepeats} outside, tuning inside` : 'repeated folds outside, tuning inside';
+    k.cvSplits !== null && k.cvRepeats !== null
+      ? `${k.cvSplits}-fold × ${k.cvRepeats} outside, tuning inside`
+      : 'repeated folds outside, tuning inside';
   const phases: PhaseDraft[] = [
     {
       id: 'data',
@@ -124,13 +149,20 @@ export function pipelinePhases(k: KeyFacts): PipelinePhase[] {
       steps: [
         {
           title: 'Clinical record',
-          detail: [count(k.n, 'patients'), count(k.nInputs, 'inputs'), count(k.nModalities, 'modalities')].join(' · '),
+          detail: [
+            count(k.n, 'patients'),
+            count(k.nInputs, 'inputs'),
+            count(k.nModalities, 'modalities'),
+          ].join(' · '),
           anchor: 'data',
         },
         { title: 'Leakage guard', detail: 'Angiography results never enter the inputs', anchor: 'leakage' },
         {
           title: 'Locked split',
-          detail: k.nDev !== null && k.nTest !== null ? `${k.nDev} development · ${k.nTest} test, stratified` : 'Development and test, stratified',
+          detail:
+            k.nDev !== null && k.nTest !== null
+              ? `${k.nDev} development · ${k.nTest} test, stratified`
+              : 'Development and test, stratified',
           anchor: 'validation',
         },
       ],
@@ -141,7 +173,11 @@ export function pipelinePhases(k: KeyFacts): PipelinePhase[] {
       note: 'development set only',
       steps: [
         { title: 'Nested repeated CV', detail: folds, anchor: 'validation' },
-        { title: 'Ensemble', detail: 'Logistic regression + boosted trees, blended in log-odds', anchor: 'models' },
+        {
+          title: 'Ensemble',
+          detail: 'Logistic regression + boosted trees, blended in log-odds',
+          anchor: 'models',
+        },
         { title: 'Platt calibration', detail: 'Fitted on out-of-fold predictions', anchor: 'models' },
         { title: 'Decision threshold', detail: "Youden's J, per target", anchor: 'models' },
       ],
@@ -152,7 +188,10 @@ export function pipelinePhases(k: KeyFacts): PipelinePhase[] {
       steps: [
         {
           title: 'Exact SHAP',
-          detail: k.additivity !== null ? `Additive to < ${boundAbove(k.additivity)}` : 'Linear + tree SHAP, additive',
+          detail:
+            k.additivity !== null
+              ? `Additive to < ${boundAbove(k.additivity)}`
+              : 'Linear + tree SHAP, additive',
           anchor: 'explainability',
         },
         { title: 'Portable model', detail: 'One JSON: encoders, trees, calibration', anchor: 'engines' },
@@ -161,7 +200,13 @@ export function pipelinePhases(k: KeyFacts): PipelinePhase[] {
     {
       id: 'serve',
       label: 'Serve',
-      steps: [{ title: 'Server + edge engines', detail: `Python API and browser agree to < ${powerOfTen(-6)}`, anchor: 'engines' }],
+      steps: [
+        {
+          title: 'Server + edge engines',
+          detail: `Python API and browser agree to < ${powerOfTen(-6)}`,
+          anchor: 'engines',
+        },
+      ],
     },
     {
       id: 'show',
@@ -206,7 +251,11 @@ export function datasetCard(report?: MetricsReport | null, schema?: FeatureSchem
   const ds = (report?.dataset ?? {}) as Rec;
   const rows: CardRow[] = [];
   const source = str(ds.source);
-  rows.push({ label: 'Source', value: `${str(ds.name) ?? 'Extension of Z-Alizadeh Sani'} · UCI Machine Learning Repository`, href: source ?? undefined });
+  rows.push({
+    label: 'Source',
+    value: `${str(ds.name) ?? 'Extension of Z-Alizadeh Sani'} · UCI Machine Learning Repository`,
+    href: source ?? undefined,
+  });
   const doi = str(ds.doi);
   if (doi) rows.push({ label: 'DOI', value: doi, href: `https://doi.org/${doi}`, mono: true });
   rows.push({ label: 'Licence', value: 'CC BY 4.0 (de-identified, public)' });
@@ -216,9 +265,9 @@ export function datasetCard(report?: MetricsReport | null, schema?: FeatureSchem
     value: `${n !== null ? `${n} adults` : 'Adults'} referred for coronary angiography at one tertiary centre`,
   });
   const nInputs = schema?.features.length ?? num(ds.n_features_used);
-  const dropped = (schema?.dropped_features ?? (Array.isArray(ds.dropped_constant) ? (ds.dropped_constant as string[]) : [])).map((k) =>
-    featureName(k).toLowerCase(),
-  );
+  const dropped = (
+    schema?.dropped_features ?? (Array.isArray(ds.dropped_constant) ? (ds.dropped_constant as string[]) : [])
+  ).map((k) => featureName(k).toLowerCase());
   const nGroups = schema ? new Set(schema.features.map((f) => f.group)).size : null;
   rows.push({
     label: 'Inputs',
@@ -240,7 +289,10 @@ export function datasetCard(report?: MetricsReport | null, schema?: FeatureSchem
   const nDev = num(ds.n_dev);
   const nTest = num(ds.n_test);
   if (nDev !== null && nTest !== null) {
-    rows.push({ label: 'Split', value: `${nDev} development · ${nTest} locked test, stratified on the joint four-label pattern` });
+    rows.push({
+      label: 'Split',
+      value: `${nDev} development · ${nTest} locked test, stratified on the joint four-label pattern`,
+    });
   }
   const sha = str(ds.sha256);
   if (sha) rows.push({ label: 'Fingerprint', value: `SHA-256 ${sha.slice(0, 16)}…`, mono: true });
@@ -397,14 +449,23 @@ export function anatomySteps(manifest?: AnatomyManifest | null): AnatomyStep[] {
   const segments = Array.isArray(m.segments) ? m.segments.length : null;
   return [
     { title: 'BodyParts3D', detail: 'Open anatomy meshes named by the FMA, pinned by checksum' },
-    { title: 'Blender', detail: `Scripted, headless build${layers !== null ? ` into ${layers} peelable layers` : ''}` },
+    {
+      title: 'Blender',
+      detail: `Scripted, headless build${layers !== null ? ` into ${layers} peelable layers` : ''}`,
+    },
     {
       title: 'Territories',
       detail: `Soft nearest-artery weights${sigma ? ` (σ = ${Number(sigma)} mm)` : ''} baked as vertex colours`,
     },
     { title: 'Centrelines', detail: 'Proximal → distal with lumen radius, for flow' },
-    { title: 'SCCT segments', detail: segments ? `${segments} named coronary segments` : 'Coronary segment names from SCCT 2014' },
-    { title: 'glTF', detail: `${structures !== null ? `${structures} named structures, ` : ''}compressed for the web` },
+    {
+      title: 'SCCT segments',
+      detail: segments ? `${segments} named coronary segments` : 'Coronary segment names from SCCT 2014',
+    },
+    {
+      title: 'glTF',
+      detail: `${structures !== null ? `${structures} named structures, ` : ''}compressed for the web`,
+    },
   ];
 }
 

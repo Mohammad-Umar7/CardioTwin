@@ -22,33 +22,79 @@ export function ShapAdditivity() {
   const H = rows.length * RH + 34;
   return (
     <figure className="flex flex-col gap-2" aria-labelledby="shap-caption">
-      <svg viewBox={`0 0 ${W} ${H}`} width="100%" role="img" aria-label="Schematic SHAP waterfall: baseline plus contributions equals the patient's log-odds">
+      <svg
+        viewBox={`0 0 ${W} ${H}`}
+        width="100%"
+        role="img"
+        aria-label="Schematic SHAP waterfall: baseline plus contributions equals the patient's log-odds"
+      >
         {rows.map((r, i) => {
           const y = i * RH + 4;
           const x0 = x(Math.min(r.from, r.to));
           const w = Math.abs(x(r.to) - x(r.from));
-          const fill = r.kind === 'up' ? SHAP_RAISES : r.kind === 'down' ? SHAP_LOWERS : r.kind === 'out' ? UI.textPrimary : 'rgba(255,255,255,0.28)';
+          const fill =
+            r.kind === 'up'
+              ? SHAP_RAISES
+              : r.kind === 'down'
+                ? SHAP_LOWERS
+                : r.kind === 'out'
+                  ? UI.textPrimary
+                  : 'rgba(255,255,255,0.28)';
           return (
             <g key={r.label}>
-              <text x={0} y={y + 11} fontSize={12} fill={r.kind === 'out' ? UI.textPrimary : UI.textSecondary} fontWeight={r.kind === 'out' ? 600 : 400}>
+              <text
+                x={0}
+                y={y + 11}
+                fontSize={12}
+                fill={r.kind === 'out' ? UI.textPrimary : UI.textSecondary}
+                fontWeight={r.kind === 'out' ? 600 : 400}
+              >
                 {r.label}
               </text>
-              <rect x={x0} y={y + 2} width={Math.max(2, w)} height={r.kind === 'out' ? 10 : 8} rx={2} fill={fill} opacity={r.kind === 'out' ? 0.9 : 1} />
+              <rect
+                x={x0}
+                y={y + 2}
+                width={Math.max(2, w)}
+                height={r.kind === 'out' ? 10 : 8}
+                rx={2}
+                fill={fill}
+                opacity={r.kind === 'out' ? 0.9 : 1}
+              />
               {i > 0 && i < rows.length - 1 && (
-                <line x1={x(r.from)} x2={x(r.from)} y1={y - 8} y2={y + 2} stroke={UI.textTertiary} strokeDasharray="2 2" />
+                <line
+                  x1={x(r.from)}
+                  x2={x(r.from)}
+                  y1={y - 8}
+                  y2={y + 2}
+                  stroke={UI.textTertiary}
+                  strokeDasharray="2 2"
+                />
               )}
             </g>
           );
         })}
-        <line x1={x(0.6)} x2={x(0.6)} y1={(rows.length - 2) * RH + 14} y2={(rows.length - 1) * RH + 6} stroke={UI.textTertiary} strokeDasharray="2 2" />
-        <line x1={L} x2={L + plot} y1={rows.length * RH + 8} y2={rows.length * RH + 8} stroke={UI.borderStrong} />
+        <line
+          x1={x(0.6)}
+          x2={x(0.6)}
+          y1={(rows.length - 2) * RH + 14}
+          y2={(rows.length - 1) * RH + 6}
+          stroke={UI.textTertiary}
+          strokeDasharray="2 2"
+        />
+        <line
+          x1={L}
+          x2={L + plot}
+          y1={rows.length * RH + 8}
+          y2={rows.length * RH + 8}
+          stroke={UI.borderStrong}
+        />
         <text x={L} y={rows.length * RH + 24} fontSize={12} fill={UI.textTertiary}>
           log-odds → Platt → probability
         </text>
       </svg>
       <figcaption id="shap-caption" className="text-label font-normal text-tertiary text-pretty">
-        Schematic. Contributions start at the cohort baseline and add up exactly to the patient&apos;s log-odds; the Platt map then gives the
-        probability on screen.
+        Schematic. Contributions start at the cohort baseline and add up exactly to the patient&apos;s
+        log-odds; the Platt map then gives the probability on screen.
       </figcaption>
     </figure>
   );

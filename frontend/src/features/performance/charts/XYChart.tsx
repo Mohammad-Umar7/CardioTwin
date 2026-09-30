@@ -1,6 +1,15 @@
 import { scaleLinear } from 'd3-scale';
 import { area, curveStepAfter, line } from 'd3-shape';
-import { useCallback, useId, useMemo, useRef, useState, type KeyboardEvent, type PointerEvent, type ReactNode } from 'react';
+import {
+  useCallback,
+  useId,
+  useMemo,
+  useRef,
+  useState,
+  type KeyboardEvent,
+  type PointerEvent,
+  type ReactNode,
+} from 'react';
 import { UI } from '@/theme/tokens';
 import { formatTick, labelWidth, niceAxis } from './scale';
 import { useElementWidth } from './useElementWidth';
@@ -115,7 +124,15 @@ export function SeriesKey({ kind }: { kind: SeriesKind | 'band' | 'operating' })
   const s = stroke(kind);
   return (
     <svg width="18" height="6" aria-hidden>
-      <line x1="0" x2="18" y1="3" y2="3" stroke={s.color} strokeWidth={Math.max(1.5, s.width)} strokeDasharray={s.dash} />
+      <line
+        x1="0"
+        x2="18"
+        y1="3"
+        y2="3"
+        stroke={s.color}
+        strokeWidth={Math.max(1.5, s.width)}
+        strokeDasharray={s.dash}
+      />
     </svg>
   );
 }
@@ -151,10 +168,11 @@ export function XYChart({
       if (spec.domain) return spec.domain;
       let lo = Infinity;
       let hi = -Infinity;
-      for (const s of series) for (const p of s.points) {
-        lo = Math.min(lo, p[axis]);
-        hi = Math.max(hi, p[axis]);
-      }
+      for (const s of series)
+        for (const p of s.points) {
+          lo = Math.min(lo, p[axis]);
+          hi = Math.max(hi, p[axis]);
+        }
       return Number.isFinite(lo) ? [lo, hi] : [0, 1];
     },
     [series],
@@ -177,8 +195,20 @@ export function XYChart({
   const plotW = Math.max(40, width - left - right);
   const plotH = Math.max(40, height - TOP - bottom);
 
-  const xs = useMemo(() => scaleLinear().domain(xAxis.domain).range([left, left + plotW]), [xAxis, left, plotW]);
-  const ys = useMemo(() => scaleLinear().domain(yAxis.domain).range([TOP + plotH, TOP]), [yAxis, plotH]);
+  const xs = useMemo(
+    () =>
+      scaleLinear()
+        .domain(xAxis.domain)
+        .range([left, left + plotW]),
+    [xAxis, left, plotW],
+  );
+  const ys = useMemo(
+    () =>
+      scaleLinear()
+        .domain(yAxis.domain)
+        .range([TOP + plotH, TOP]),
+    [yAxis, plotH],
+  );
   const clampY = (v: number) => Math.min(TOP + plotH, Math.max(TOP, ys(v)));
 
   const hoverable = useMemo(
@@ -188,7 +218,8 @@ export function XYChart({
   /** Flat list of hoverable points in x order (keyboard walking order). */
   const flat = useMemo(() => {
     const pts: HoverPoint[] = [];
-    for (const s of hoverable) s.points.forEach((p, index) => pts.push({ series: s, index, x: p[0], y: p[1] }));
+    for (const s of hoverable)
+      s.points.forEach((p, index) => pts.push({ series: s, index, x: p[0], y: p[1] }));
     return pts.sort((a, b) => a.x - b.x || a.y - b.y);
   }, [hoverable]);
 
@@ -258,7 +289,13 @@ export function XYChart({
     return (
       <g>
         <rect x={x0} y={cy - 9} width={w} height={18} rx={3} fill={UI.surface3} />
-        <text x={anchor === 'middle' ? cx : cx - 4} y={cy + 4} textAnchor={anchor} fill={UI.textPrimary} fontSize={FONT}>
+        <text
+          x={anchor === 'middle' ? cx : cx - 4}
+          y={cy + 4}
+          textAnchor={anchor}
+          fill={UI.textPrimary}
+          fontSize={FONT}
+        >
           {text}
         </text>
       </g>
@@ -301,10 +338,26 @@ export function XYChart({
             </text>
           )}
           {yAxis.ticks.map((t) => (
-            <line key={`gy${t}`} x1={left} x2={left + plotW} y1={ys(t)} y2={ys(t)} stroke={GRID} shapeRendering="crispEdges" />
+            <line
+              key={`gy${t}`}
+              x1={left}
+              x2={left + plotW}
+              y1={ys(t)}
+              y2={ys(t)}
+              stroke={GRID}
+              shapeRendering="crispEdges"
+            />
           ))}
           {xAxis.ticks.map((t) => (
-            <line key={`gx${t}`} x1={xs(t)} x2={xs(t)} y1={TOP} y2={plotBottom} stroke={GRID} shapeRendering="crispEdges" />
+            <line
+              key={`gx${t}`}
+              x1={xs(t)}
+              x2={xs(t)}
+              y1={TOP}
+              y2={plotBottom}
+              stroke={GRID}
+              shapeRendering="crispEdges"
+            />
           ))}
           <g clipPath={`url(#${clipId})`}>
             {band && (
@@ -386,7 +439,15 @@ export function XYChart({
                 {mk.kind === 'operating' ? (
                   <circle cx={cx} cy={cy} r={4.5} fill={UI.accent} stroke={UI.bgPanel} strokeWidth={2} />
                 ) : (
-                  <circle cx={cx} cy={cy} r={6} fill="none" stroke={UI.accent} strokeWidth={1.5} strokeDasharray="2 2" />
+                  <circle
+                    cx={cx}
+                    cy={cy}
+                    r={6}
+                    fill="none"
+                    stroke={UI.accent}
+                    strokeWidth={1.5}
+                    strokeDasharray="2 2"
+                  />
                 )}
                 {mk.label && (
                   <text
@@ -427,16 +488,36 @@ export function XYChart({
               );
             })}
           {yAxis.ticks.map((t, i) => (
-            <text key={`y${t}`} x={left - TICK_GAP} y={ys(t) + 4} textAnchor="end" fill={UI.textTertiary} fontSize={FONT}>
+            <text
+              key={`y${t}`}
+              x={left - TICK_GAP}
+              y={ys(t) + 4}
+              textAnchor="end"
+              fill={UI.textTertiary}
+              fontSize={FONT}
+            >
               {yLabels[i]}
             </text>
           ))}
           {xAxis.ticks.map((t, i) => (
-            <text key={`x${t}`} x={xs(t)} y={plotBottom + TICK_GAP + 11} textAnchor="middle" fill={UI.textTertiary} fontSize={FONT}>
+            <text
+              key={`x${t}`}
+              x={xs(t)}
+              y={plotBottom + TICK_GAP + 11}
+              textAnchor="middle"
+              fill={UI.textTertiary}
+              fontSize={FONT}
+            >
               {xLabels[i]}
             </text>
           ))}
-          <text x={left + plotW / 2} y={height - 4} textAnchor="middle" fill={UI.textSecondary} fontSize={FONT}>
+          <text
+            x={left + plotW / 2}
+            y={height - 4}
+            textAnchor="middle"
+            fill={UI.textSecondary}
+            fontSize={FONT}
+          >
             {xSpec.title}
           </text>
           {hover && (

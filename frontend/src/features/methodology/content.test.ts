@@ -18,7 +18,8 @@ import {
   rejectedIdeas,
 } from './content';
 
-const pub = (p: string) => JSON.parse(readFileSync(resolve(__dirname, '../../../public', p), 'utf8')) as unknown;
+const pub = (p: string) =>
+  JSON.parse(readFileSync(resolve(__dirname, '../../../public', p), 'utf8')) as unknown;
 const report = pub('model/metrics.json') as MetricsReport;
 const schema = pub('model/schema.json') as FeatureSchema;
 const manifest = pub('anatomy/manifest.json') as AnatomyManifest;
@@ -26,14 +27,26 @@ const manifest = pub('anatomy/manifest.json') as AnatomyManifest;
 describe('key facts', () => {
   it('reads the dataset, protocol and parity facts from the shipped artifacts', () => {
     const k = keyFacts(report, schema);
-    expect(k).toMatchObject({ n: 303, nDev: 242, nTest: 61, nInputs: schema.features.length, nModalities: 7, nTargets: 4 });
+    expect(k).toMatchObject({
+      n: 303,
+      nDev: 242,
+      nTest: 61,
+      nInputs: schema.features.length,
+      nModalities: 7,
+      nTargets: 4,
+    });
     expect(k.cvSplits! * k.cvRepeats!).toBe(50);
     expect(k.additivity).toBeGreaterThan(0);
     expect(k.additivity).toBeLessThan(1e-6);
   });
 
   it('degrades to nulls, never throws, without artifacts', () => {
-    expect(keyFacts(undefined, undefined)).toMatchObject({ n: null, nInputs: null, nTargets: 4, additivity: null });
+    expect(keyFacts(undefined, undefined)).toMatchObject({
+      n: null,
+      nInputs: null,
+      nTargets: 4,
+      additivity: null,
+    });
     expect(pipelinePhases(keyFacts(null, null)).flatMap((p) => p.steps)).toHaveLength(11);
     expect(datasetCard(null, null).length).toBeGreaterThan(0);
     expect(modelRows(null)).toEqual([]);
@@ -87,10 +100,23 @@ describe('dataset card', () => {
 
   it('orders modalities from bedside to instrumental with human examples', () => {
     const m = modalityCounts(schema);
-    expect(m.map((x) => x.id)).toEqual(['demographics', 'risk_factors', 'symptoms', 'exam', 'ecg', 'labs', 'echo']);
+    expect(m.map((x) => x.id)).toEqual([
+      'demographics',
+      'risk_factors',
+      'symptoms',
+      'exam',
+      'ecg',
+      'labs',
+      'echo',
+    ]);
     expect(m.reduce((a, x) => a + x.count, 0)).toBe(schema.features.length);
     expect(m.find((x) => x.id === 'echo')!.examples).toContain('Ejection fraction');
-    expect(m.filter((x) => x.bedside).map((x) => x.id)).toEqual(['demographics', 'risk_factors', 'symptoms', 'exam']);
+    expect(m.filter((x) => x.bedside).map((x) => x.id)).toEqual([
+      'demographics',
+      'risk_factors',
+      'symptoms',
+      'exam',
+    ]);
   });
 });
 
@@ -105,7 +131,12 @@ describe('policy, models and anatomy', () => {
   it('names every deployed model in words, never by id', () => {
     const rows = modelRows(report);
     expect(rows.map((r) => r.target)).toEqual(['CAD', 'LAD', 'LCX', 'RCA']);
-    expect(rows[0]).toMatchObject({ model: 'Elastic-net logistic + boosted trees', threshold: '0.75', testAuc: '0.86', testCi: '0.74–0.95' });
+    expect(rows[0]).toMatchObject({
+      model: 'Elastic-net logistic + boosted trees',
+      threshold: '0.75',
+      testAuc: '0.86',
+      testCi: '0.74–0.95',
+    });
     for (const r of rows) expect(`${r.model} ${r.modelFull}`).not.toMatch(/lr_|xgboost|_/);
   });
 
@@ -118,7 +149,14 @@ describe('policy, models and anatomy', () => {
 
   it('describes the anatomy build from the manifest', () => {
     const steps = anatomySteps(manifest);
-    expect(steps.map((s) => s.title)).toEqual(['BodyParts3D', 'Blender', 'Territories', 'Centrelines', 'SCCT segments', 'glTF']);
+    expect(steps.map((s) => s.title)).toEqual([
+      'BodyParts3D',
+      'Blender',
+      'Territories',
+      'Centrelines',
+      'SCCT segments',
+      'glTF',
+    ]);
     expect(steps[2]!.detail).toContain('σ = 7 mm');
     expect(anatomySteps(null)).toHaveLength(6);
   });

@@ -32,6 +32,7 @@ export function useActiveSection(ids: readonly string[], rootMargin = '-140px 0p
 export function scrollToSection(id: string): void {
   const el = document.getElementById(id);
   if (!el) return;
-  const reduce = typeof window.matchMedia === 'function' && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+  const reduce =
+    typeof window.matchMedia === 'function' && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
   el.scrollIntoView({ behavior: reduce ? 'auto' : 'smooth', block: 'start' });
 }

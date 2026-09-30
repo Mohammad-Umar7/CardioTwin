@@ -93,8 +93,14 @@ interface SectionProps {
  */
 function Section({ id, index, name, title, lede, aside, wide, children }: SectionProps) {
   return (
-    <section id={id} aria-labelledby={`${id}-title`} className="flex scroll-mt-[calc(var(--topbar-h)+24px)] flex-col gap-6 border-t border-hairline pt-8">
-      <div className={cn('grid grid-cols-1 gap-x-10 gap-y-6', aside && 'xl:grid-cols-[minmax(0,680px)_280px]')}>
+    <section
+      id={id}
+      aria-labelledby={`${id}-title`}
+      className="flex scroll-mt-[calc(var(--topbar-h)+24px)] flex-col gap-6 border-t border-hairline pt-8"
+    >
+      <div
+        className={cn('grid grid-cols-1 gap-x-10 gap-y-6', aside && 'xl:grid-cols-[minmax(0,680px)_280px]')}
+      >
         <div className="flex min-w-0 max-w-[680px] flex-col gap-4">
           <div className="flex flex-col gap-2">
             <p className="eyebrow text-tertiary">
@@ -154,7 +160,9 @@ function Toc() {
             const on = active === id;
             return (
               <li key={id} className="relative">
-                {on && <span aria-hidden className="absolute -left-px inset-y-1 w-0.5 rounded-full bg-accent" />}
+                {on && (
+                  <span aria-hidden className="absolute -left-px inset-y-1 w-0.5 rounded-full bg-accent" />
+                )}
                 <a
                   href={`#${ROUTES.methodology}#${id}`}
                   aria-current={on ? 'location' : undefined}
@@ -225,9 +233,17 @@ export default function MethodologyPage() {
 
   const cad = report?.targets.CAD;
   const maxModality = Math.max(1, ...modalities.map((m) => m.count));
-  const checks = (report as unknown as { explainability_checks?: Record<string, Record<string, number>> } | undefined)?.explainability_checks;
+  const checks = (
+    report as unknown as { explainability_checks?: Record<string, Record<string, number>> } | undefined
+  )?.explainability_checks;
   const libraryGap = checks
-    ? Math.max(0, ...Object.values(checks).flatMap((c) => [c.xgboost_pred_contribs_max_abs_diff ?? 0, c.shap_library_max_abs_diff ?? 0]))
+    ? Math.max(
+        0,
+        ...Object.values(checks).flatMap((c) => [
+          c.xgboost_pred_contribs_max_abs_diff ?? 0,
+          c.shap_library_max_abs_diff ?? 0,
+        ]),
+      )
     : null;
   const loading = metrics.status === 'loading';
 
@@ -238,11 +254,14 @@ export default function MethodologyPage() {
         <header className="flex flex-col gap-5">
           <div className="flex max-w-[800px] flex-col gap-3">
             <p className="eyebrow text-accent">Methodology</p>
-            <h1 className="font-display text-display-2 text-primary text-balance">How CardioTwin is built, validated and explained.</h1>
+            <h1 className="font-display text-display-2 text-primary text-balance">
+              How CardioTwin is built, validated and explained.
+            </h1>
             <p className="max-w-[68ch] text-body text-secondary text-pretty">
-              From routine clinical data to vessel-level risk on a real 3D heart. Every number on this page is read from the evaluation report
-              shipped with {facts.modelVersion ? `model ${facts.modelVersion}` : 'the model'}, so the page cannot drift from the model you are
-              using.
+              From routine clinical data to vessel-level risk on a real 3D heart. Every number on this page is
+              read from the evaluation report shipped with{' '}
+              {facts.modelVersion ? `model ${facts.modelVersion}` : 'the model'}, so the page cannot drift
+              from the model you are using.
             </p>
           </div>
           {loading ? (
@@ -258,7 +277,9 @@ export default function MethodologyPage() {
               ].map(([label, value, sub]) => (
                 <div key={label as string} className="flex flex-col gap-1 bg-panel px-4 py-3">
                   <dt className="eyebrow text-tertiary">{label}</dt>
-                  <dd className="num font-display text-[1.75rem] font-semibold leading-8 tracking-[-0.03em] text-primary">{value ?? '–'}</dd>
+                  <dd className="num font-display text-[1.75rem] font-semibold leading-8 tracking-[-0.03em] text-primary">
+                    {value ?? '–'}
+                  </dd>
                   <dd className="text-label font-normal text-tertiary">{sub}</dd>
                 </div>
               ))}
@@ -287,9 +308,10 @@ export default function MethodologyPage() {
           lede={
             <>
               The Extension of the Z-Alizadeh Sani dataset
-              <Cite ids={['dataset', 'alizadehsani2013']} />: consecutive adults referred for coronary angiography at one tertiary centre, each with
-              a complete routine work-up and the angiographic result for every major artery. This is a multimodal record: history, symptoms and
-              examination sit next to the resting ECG, laboratory tests and echocardiography.
+              <Cite ids={['dataset', 'alizadehsani2013']} />: consecutive adults referred for coronary
+              angiography at one tertiary centre, each with a complete routine work-up and the angiographic
+              result for every major artery. This is a multimodal record: history, symptoms and examination
+              sit next to the resting ECG, laboratory tests and echocardiography.
             </>
           }
           aside={
@@ -300,7 +322,9 @@ export default function MethodologyPage() {
                   {modalities.map((m, i) => (
                     <li key={m.id} className="flex flex-col gap-1">
                       {i > 0 && modalities[i - 1]!.bedside && !m.bedside && (
-                        <span className="mt-1 border-t border-dashed border-line pt-1 text-label font-normal text-tertiary">Instrumental</span>
+                        <span className="mt-1 border-t border-dashed border-line pt-1 text-label font-normal text-tertiary">
+                          Instrumental
+                        </span>
                       )}
                       <span className="grid grid-cols-[minmax(0,1fr)_24px] items-center gap-2 text-label font-normal">
                         <span className="flex min-w-0 flex-col gap-1">
@@ -308,7 +332,10 @@ export default function MethodologyPage() {
                             {m.name}
                           </span>
                           <span aria-hidden className="h-1 rounded-full bg-[rgba(255,255,255,0.08)]">
-                            <span className="block h-full rounded-full bg-[rgba(255,255,255,0.5)]" style={{ width: `${(m.count / maxModality) * 100}%` }} />
+                            <span
+                              className="block h-full rounded-full bg-[rgba(255,255,255,0.5)]"
+                              style={{ width: `${(m.count / maxModality) * 100}%` }}
+                            />
                           </span>
                         </span>
                         <span className="num text-right text-primary">{m.count}</span>
@@ -317,7 +344,10 @@ export default function MethodologyPage() {
                   ))}
                 </ul>
               </div>
-              <Note term="Stenosis">At least 50 % narrowing of the vessel diameter at invasive angiography: the label every target is trained on.</Note>
+              <Note term="Stenosis">
+                At least 50 % narrowing of the vessel diameter at invasive angiography: the label every target
+                is trained on.
+              </Note>
             </>
           }
         >
@@ -327,8 +357,16 @@ export default function MethodologyPage() {
             <dl className="grid grid-cols-[112px_minmax(0,1fr)] overflow-clip rounded-lg border border-line bg-panel text-body-s">
               {card.map((r, i) => (
                 <Fragment key={r.label}>
-                  <dt className={cn('px-4 py-2.5 text-tertiary', i > 0 && 'border-t border-hairline')}>{r.label}</dt>
-                  <dd className={cn('min-w-0 py-2.5 pr-4 text-secondary', i > 0 && 'border-t border-hairline', r.mono && 'font-mono text-mono-s leading-[18px]')}>
+                  <dt className={cn('px-4 py-2.5 text-tertiary', i > 0 && 'border-t border-hairline')}>
+                    {r.label}
+                  </dt>
+                  <dd
+                    className={cn(
+                      'min-w-0 py-2.5 pr-4 text-secondary',
+                      i > 0 && 'border-t border-hairline',
+                      r.mono && 'font-mono text-mono-s leading-[18px]',
+                    )}
+                  >
                     {r.href ? <ExternalLink href={r.href}>{r.value}</ExternalLink> : r.value}
                   </dd>
                 </Fragment>
@@ -338,8 +376,8 @@ export default function MethodologyPage() {
           {report && (
             <Prose>
               Prevalence is high, as expected in a referral population:{' '}
-              {TARGET_ORDER.map((t) => `${t} ${formatPercent(report.dataset.prevalence[t])}`).join(', ')}. The probabilities are calibrated to this
-              population and would overstate risk in a screening setting.
+              {TARGET_ORDER.map((t) => `${t} ${formatPercent(report.dataset.prevalence[t])}`).join(', ')}. The
+              probabilities are calibrated to this population and would overstate risk in a screening setting.
             </Prose>
           )}
         </Section>
@@ -351,20 +389,20 @@ export default function MethodologyPage() {
           title="Nothing about the outcome or the test patients reaches the model"
           lede={
             <>
-              Leakage is any path by which the outcome, or the patients used for testing, influence the model during development. It inflates the
-              reported performance without making the model any better
+              Leakage is any path by which the outcome, or the patients used for testing, influence the model
+              during development. It inflates the reported performance without making the model any better
               <Cite ids={['kaufman']} />. Six rules close every path we know of:
             </>
           }
           aside={
             <>
               <Note term="Enforced in code, not by convention">
-                A unit test on the feature list, request validation in the API, preprocessing inside scikit-learn pipelines, and a test-set history
-                written into the evaluation report.
+                A unit test on the feature list, request validation in the API, preprocessing inside
+                scikit-learn pipelines, and a test-set history written into the evaluation report.
               </Note>
               <Note term="Cross-fitting">
-                A choice made on out-of-fold predictions (weight, calibration, threshold) is re-made for each outer fold without that fold, so the
-                fold that scores it never helped make it.
+                A choice made on out-of-fold predictions (weight, calibration, threshold) is re-made for each
+                outer fold without that fold, so the fold that scores it never helped make it.
               </Note>
             </>
           }
@@ -394,7 +432,8 @@ export default function MethodologyPage() {
                 <Cite ids={['varma']} />; the inner loop keeps selection away from the outer fold.
               </Note>
               <Note term="Intervals">
-                Test metrics: stratified bootstrap with the threshold held fixed. Modality comparisons: corrected resampled intervals
+                Test metrics: stratified bootstrap with the threshold held fixed. Modality comparisons:
+                corrected resampled intervals
                 <Cite ids={['nadeau']} /> with Holm adjustment
                 <Cite ids={['holm']} />.
               </Note>
@@ -408,11 +447,15 @@ export default function MethodologyPage() {
         >
           <ValidationDiagram facts={facts} />
           <Prose>
-            Reported for every target: discrimination (ROC-AUC, PR-AUC), decisions at the deployed threshold (sensitivity, specificity, predictive
-            values, F1, MCC), probabilistic accuracy (Brier score, log-loss), calibration (reliability, slope, calibration-in-the-large)
+            Reported for every target: discrimination (ROC-AUC, PR-AUC), decisions at the deployed threshold
+            (sensitivity, specificity, predictive values, F1, MCC), probabilistic accuracy (Brier score,
+            log-loss), calibration (reliability, slope, calibration-in-the-large)
             <Cite ids={['calibration']} /> and clinical usefulness (decision curves)
             <Cite ids={['dca']} />.{' '}
-            <Link to={ROUTES.performance} className="rounded-xs font-medium text-accent hover:text-accent-hover focus-visible:shadow-focus focus-visible:outline-none">
+            <Link
+              to={ROUTES.performance}
+              className="rounded-xs font-medium text-accent hover:text-accent-hover focus-visible:shadow-focus focus-visible:outline-none"
+            >
               See every number on Model performance ›
             </Link>
           </Prose>
@@ -428,7 +471,8 @@ export default function MethodologyPage() {
               Each target gets the same recipe: a regularised logistic regression and gradient-boosted trees
               <Cite ids={['xgboost']} />, blended in log-odds space, Platt-calibrated
               <Cite ids={['platt']} /> and cut at the threshold that maximises Youden&apos;s J
-              <Cite ids={['youden']} /> on out-of-fold predictions. The logistic variant is chosen per target by nested cross-validation.
+              <Cite ids={['youden']} /> on out-of-fold predictions. The logistic variant is chosen per target
+              by nested cross-validation.
             </>
           }
           aside={
@@ -445,14 +489,18 @@ export default function MethodologyPage() {
                 <br />
                 maps the blended log-odds to a probability; a and b fitted on out-of-fold predictions.
               </Note>
-              <Note term="Threshold">Maximises sensitivity + specificity − 1 on out-of-fold probabilities, one per target.</Note>
+              <Note term="Threshold">
+                Maximises sensitivity + specificity − 1 on out-of-fold probabilities, one per target.
+              </Note>
             </>
           }
         >
           {rows.length > 0 && (
             <div className="overflow-x-auto rounded-lg border border-line bg-panel">
               <table className="w-full border-collapse text-body-s">
-                <caption className="sr-only">Deployed model per target with held-out and cross-validated ROC-AUC</caption>
+                <caption className="sr-only">
+                  Deployed model per target with held-out and cross-validated ROC-AUC
+                </caption>
                 <thead>
                   <tr className="text-label text-tertiary">
                     <th scope="col" className="px-4 py-2 text-left font-medium">
@@ -495,11 +543,17 @@ export default function MethodologyPage() {
           {rejected.items.length > 0 && (
             <div className="flex flex-col gap-2 rounded-lg border border-dashed border-line px-4 py-3">
               <p className="text-label font-semibold text-primary">
-                Tried and rejected{rejected.bar !== null ? ` (adoption bar: +${rejected.bar.toFixed(4)} mean ROC-AUC on paired folds)` : ''}
+                Tried and rejected
+                {rejected.bar !== null
+                  ? ` (adoption bar: +${rejected.bar.toFixed(4)} mean ROC-AUC on paired folds)`
+                  : ''}
               </p>
               <ul className="flex flex-col gap-1">
                 {rejected.items.map((r) => (
-                  <li key={r.name} className="grid grid-cols-[minmax(0,1fr)_64px] gap-3 text-label font-normal text-secondary">
+                  <li
+                    key={r.name}
+                    className="grid grid-cols-[minmax(0,1fr)_64px] gap-3 text-label font-normal text-secondary"
+                  >
                     <span className="text-pretty">{r.name}</span>
                     <span className="num text-right text-tertiary">{r.delta}</span>
                   </li>
@@ -511,10 +565,11 @@ export default function MethodologyPage() {
             Two engines, one model
           </h3>
           <Prose>
-            The trained model is exported as one portable file: the input encoders, the logistic coefficients, every tree with its node covers, the
-            Platt parameters and the thresholds. The Python API and the in-browser engine evaluate that same file and agree to within{' '}
-            {powerOfTen(-6)} in probability and {powerOfTen(-5)} in every SHAP value on the parity fixtures. When the API is unreachable the browser
-            answers on its own; when both are up, they cross-check each patient in the background.
+            The trained model is exported as one portable file: the input encoders, the logistic coefficients,
+            every tree with its node covers, the Platt parameters and the thresholds. The Python API and the
+            in-browser engine evaluate that same file and agree to within {powerOfTen(-6)} in probability and{' '}
+            {powerOfTen(-5)} in every SHAP value on the parity fixtures. When the API is unreachable the
+            browser answers on its own; when both are up, they cross-check each patient in the background.
           </Prose>
         </Section>
 
@@ -526,8 +581,9 @@ export default function MethodologyPage() {
           lede={
             <>
               Explanations are exact SHAP values
-              <Cite ids={['shap', 'treeshap']} />: closed-form linear SHAP for the logistic part and path-dependent TreeSHAP for the trees, combined
-              with the ensemble weight. One-hot columns are summed back to their clinical input, so every row is one thing a clinician recorded.
+              <Cite ids={['shap', 'treeshap']} />: closed-form linear SHAP for the logistic part and
+              path-dependent TreeSHAP for the trees, combined with the ensemble weight. One-hot columns are
+              summed back to their clinical input, so every row is one thing a clinician recorded.
             </>
           }
           aside={<ShapAdditivity />}
@@ -538,11 +594,12 @@ export default function MethodologyPage() {
             {libraryGap !== null && libraryGap > 0
               ? `, and the tree part matches both XGBoost's own contributions and the reference SHAP library to within ${boundAbove(libraryGap)} (single-precision rounding)`
               : ''}
-            . A rescaled copy of each contribution adds up to the displayed probability, so sentences can speak in percentage points.
+            . A rescaled copy of each contribution adds up to the displayed probability, so sentences can
+            speak in percentage points.
           </Prose>
           <Prose>
-            SHAP describes the model, not the patient&apos;s physiology: a large contribution means the model relies on that input for this estimate,
-            not that the input causes disease.
+            SHAP describes the model, not the patient&apos;s physiology: a large contribution means the model
+            relies on that input for this estimate, not that the input causes disease.
           </Prose>
         </Section>
 
@@ -554,23 +611,26 @@ export default function MethodologyPage() {
           lede={
             <>
               The thorax, heart and coronary tree come from BodyParts3D
-              <Cite ids={['bodyparts3d']} />, the open 3D anatomy database of the Database Center for Life Science, rebuilt by a scripted Blender
-              pipeline into a model light enough for any laptop.
+              <Cite ids={['bodyparts3d']} />, the open 3D anatomy database of the Database Center for Life
+              Science, rebuilt by a scripted Blender pipeline into a model light enough for any laptop.
             </>
           }
           wide={<AnatomyPipeline steps={anatomy} />}
           aside={
             <>
               <Note term="Vessel-level risk">
-                Each artery is coloured by its own model&apos;s probability, uniformly from root to tip. The model never localises a lesion.
+                Each artery is coloured by its own model&apos;s probability, uniformly from root to tip. The
+                model never localises a lesion.
               </Note>
-              <Note term="Credits">BodyParts3D, © The Database Center for Life Science, licensed under CC BY-SA 2.1 Japan.</Note>
+              <Note term="Credits">
+                BodyParts3D, © The Database Center for Life Science, licensed under CC BY-SA 2.1 Japan.
+              </Note>
             </>
           }
         >
           <Prose>
-            The left main is not predicted and stays neutral. Myocardial territories are soft nearest-artery weights, an approximation of supply in
-            the spirit of the standard segment model
+            The left main is not predicted and stays neutral. Myocardial territories are soft nearest-artery
+            weights, an approximation of supply in the spirit of the standard segment model
             <Cite ids={['aha17']} />, not a perfusion measurement. Coronary segment names follow SCCT 2014
             <Cite ids={['scct']} /> and are anatomical labels for inspection, never lesion locations.
           </Prose>
@@ -584,8 +644,8 @@ export default function MethodologyPage() {
           lede="Every layer talks through versioned contracts: the feature schema, the portable model, the evaluation report and the anatomy manifest. New fields are additive, so extensions do not break what is already there."
           aside={
             <Note term="Contracts">
-              Feature schema · portable model · evaluation report · anatomy manifest · centrelines. Each is versioned; consumers ignore fields they do
-              not know.
+              Feature schema · portable model · evaluation report · anatomy manifest · centrelines. Each is
+              versioned; consumers ignore fields they do not know.
             </Note>
           }
         >
@@ -652,13 +712,20 @@ export default function MethodologyPage() {
           </p>
         </Section>
 
-        <Section id="limitations" index={10} name="Limitations and ethics" title="What this model cannot tell you">
+        <Section
+          id="limitations"
+          index={10}
+          name="Limitations and ethics"
+          title="What this model cannot tell you"
+        >
           <ul className="flex flex-col gap-3">
             {[
               [
                 'Small, single-centre data.',
                 `${facts.n ?? 'Few'} patients from one centre, ${facts.nTest ?? 'few'} of them in the test split${
-                  cad?.test.roc_auc?.ci ? `: the CAD test ROC-AUC interval alone spans ${cad.test.roc_auc.ci.map((v) => v.toFixed(2)).join('–')}` : ''
+                  cad?.test.roc_auc?.ci
+                    ? `: the CAD test ROC-AUC interval alone spans ${cad.test.roc_auc.ci.map((v) => v.toFixed(2)).join('–')}`
+                    : ''
                 }. There is no external validation yet.`,
               ],
               [
@@ -688,7 +755,8 @@ export default function MethodologyPage() {
             ))}
           </ul>
           <p className="rounded-lg border border-line bg-panel px-4 py-3 text-body-s text-secondary">
-            Decision support and education only: <span className="font-semibold text-primary">not a diagnosis</span>, and not a substitute for
+            Decision support and education only:{' '}
+            <span className="font-semibold text-primary">not a diagnosis</span>, and not a substitute for
             angiography, CT coronary angiography, functional testing or clinical judgement.
           </p>
         </Section>
@@ -696,11 +764,22 @@ export default function MethodologyPage() {
         <Section id="references" index={11} name="References" title="Sources">
           <ol className="flex flex-col gap-2">
             {REFERENCES.map((r, i) => (
-              <li key={r.id} id={`ref-${i + 1}`} className="grid scroll-mt-[calc(var(--topbar-h)+96px)] grid-cols-[28px_minmax(0,1fr)] gap-2 text-body-s">
+              <li
+                key={r.id}
+                id={`ref-${i + 1}`}
+                className="grid scroll-mt-[calc(var(--topbar-h)+96px)] grid-cols-[28px_minmax(0,1fr)] gap-2 text-body-s"
+              >
                 <span className="num text-tertiary">{i + 1}.</span>
                 <span className="text-secondary text-pretty">
                   {r.text}{' '}
-                  {r.href && <ExternalLink href={r.href}>{r.href.replace(/^https?:\/\//, '').replace(/%3C/g, '<').replace(/%3E/g, '>')}</ExternalLink>}
+                  {r.href && (
+                    <ExternalLink href={r.href}>
+                      {r.href
+                        .replace(/^https?:\/\//, '')
+                        .replace(/%3C/g, '<')
+                        .replace(/%3E/g, '>')}
+                    </ExternalLink>
+                  )}
                 </span>
               </li>
             ))}

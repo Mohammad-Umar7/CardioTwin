@@ -25,7 +25,8 @@ function snap(v: number, step: number): number {
  * `clamp` keeps the niced domain inside natural bounds (e.g. probabilities stay in [0, 1]).
  */
 export function niceAxis(lo: number, hi: number, clamp?: [number, number]): NiceAxis {
-  if (!Number.isFinite(lo) || !Number.isFinite(hi)) return { domain: [0, 1], ticks: [0, 0.25, 0.5, 0.75, 1], step: 0.25 };
+  if (!Number.isFinite(lo) || !Number.isFinite(hi))
+    return { domain: [0, 1], ticks: [0, 0.25, 0.5, 0.75, 1], step: 0.25 };
   if (hi < lo) [lo, hi] = [hi, lo];
   if (hi === lo) {
     const pad = lo === 0 ? 1 : Math.abs(lo) * 0.1;

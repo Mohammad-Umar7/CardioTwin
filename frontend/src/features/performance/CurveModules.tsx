@@ -39,16 +39,39 @@ function markersFor(
   const dep = points[deployed];
   const depXY = dep ? map(dep) : null;
   if (dep && depXY)
-    out.push({ x: depXY[0], y: depXY[1], kind: 'operating', label: `deployed thr ${f2(dep.threshold)}`, placement: placement?.deployed });
+    out.push({
+      x: depXY[0],
+      y: depXY[1],
+      kind: 'operating',
+      label: `deployed thr ${f2(dep.threshold)}`,
+      placement: placement?.deployed,
+    });
   const ex = explore !== null && explore !== deployed ? points[explore] : undefined;
   const exXY = ex ? map(ex) : null;
-  if (ex && exXY) out.push({ x: exXY[0], y: exXY[1], kind: 'explore', label: `exploring ${f2(ex.threshold)}`, placement: placement?.explore });
+  if (ex && exXY)
+    out.push({
+      x: exXY[0],
+      y: exXY[1],
+      kind: 'explore',
+      label: `exploring ${f2(ex.threshold)}`,
+      placement: placement?.explore,
+    });
   return out;
 }
 
 const heldOut = (n: number) => `Held-out test, ${n} patients.`;
 
-export function RocModule({ target, m, points, deployed, explore, onExplore, height, provenance, nTest }: CurveProps) {
+export function RocModule({
+  target,
+  m,
+  points,
+  deployed,
+  explore,
+  onExplore,
+  height,
+  provenance,
+  nTest,
+}: CurveProps) {
   const P = m.confusion_matrix.tp + m.confusion_matrix.fn;
   const N = m.confusion_matrix.tn + m.confusion_matrix.fp;
   const roc = m.curves.roc;
@@ -82,13 +105,15 @@ export function RocModule({ target, m, points, deployed, explore, onExplore, hei
         caption: `ROC operating points for ${target}`,
         columns: ['Threshold', 'False-positive rate', 'True-positive rate', 'TP', 'FP'],
         numeric: [true, true, true, true, true],
-        rows: [...points].reverse().map((p) => [
-          `${f2(p.threshold)}${p.deployed ? ' (deployed)' : ''}`,
-          f2(N ? p.fp / N : 0),
-          f2(P ? p.tp / P : 0),
-          p.tp,
-          p.fp,
-        ]),
+        rows: [...points]
+          .reverse()
+          .map((p) => [
+            `${f2(p.threshold)}${p.deployed ? ' (deployed)' : ''}`,
+            f2(N ? p.fp / N : 0),
+            f2(P ? p.tp / P : 0),
+            p.tp,
+            p.fp,
+          ]),
       }}
     >
       <XYChart
@@ -99,12 +124,31 @@ export function RocModule({ target, m, points, deployed, explore, onExplore, hei
         y={{ title: 'True-positive rate (sensitivity)', domain: [0, 1], clamp: [0, 1] }}
         band={
           m.curves.roc_band
-            ? { label: 'Bootstrap band', x: m.curves.roc_band.fpr, low: m.curves.roc_band.tpr_low, high: m.curves.roc_band.tpr_high }
+            ? {
+                label: 'Bootstrap band',
+                x: m.curves.roc_band.fpr,
+                low: m.curves.roc_band.tpr_low,
+                high: m.curves.roc_band.tpr_high,
+              }
             : null
         }
         series={[
-          { id: 'chance', label: 'Chance', kind: 'reference', points: [[0, 0], [1, 1]] },
-          { id: 'roc', label: 'Model', kind: 'main', hover: false, points: roc.fpr.map((x, i) => [x, roc.tpr[i] ?? 0] as const) },
+          {
+            id: 'chance',
+            label: 'Chance',
+            kind: 'reference',
+            points: [
+              [0, 0],
+              [1, 1],
+            ],
+          },
+          {
+            id: 'roc',
+            label: 'Model',
+            kind: 'main',
+            hover: false,
+            points: roc.fpr.map((x, i) => [x, roc.tpr[i] ?? 0] as const),
+          },
           opsSeries,
         ]}
         // A concave ROC leaves the area below-right and above-left of each point empty.
@@ -119,7 +163,17 @@ export function RocModule({ target, m, points, deployed, explore, onExplore, hei
   );
 }
 
-export function PrModule({ target, m, points, deployed, explore, height, provenance, nTest, prevalence }: CurveProps & { prevalence: number | null }) {
+export function PrModule({
+  target,
+  m,
+  points,
+  deployed,
+  explore,
+  height,
+  provenance,
+  nTest,
+  prevalence,
+}: CurveProps & { prevalence: number | null }) {
   const pr = m.curves.pr;
   return (
     <ChartModule
@@ -149,9 +203,26 @@ export function PrModule({ target, m, points, deployed, explore, height, provena
         y={{ title: 'Precision (PPV)', domain: [0, 1], clamp: [0, 1] }}
         series={[
           ...(prevalence !== null
-            ? [{ id: 'base', label: 'Base rate', kind: 'reference' as const, hover: false, points: [[0, prevalence], [1, prevalence]] as const }]
+            ? [
+                {
+                  id: 'base',
+                  label: 'Base rate',
+                  kind: 'reference' as const,
+                  hover: false,
+                  points: [
+                    [0, prevalence],
+                    [1, prevalence],
+                  ] as const,
+                },
+              ]
             : []),
-          { id: 'pr', label: 'Model', kind: 'main', curve: 'step', points: pr.recall.map((r, i) => [r, pr.precision[i] ?? 0] as const) },
+          {
+            id: 'pr',
+            label: 'Model',
+            kind: 'main',
+            curve: 'step',
+            points: pr.recall.map((r, i) => [r, pr.precision[i] ?? 0] as const),
+          },
         ]}
         markers={markersFor(points, deployed, explore, (p) => {
           const pm = pointMetrics(p);
@@ -163,11 +234,24 @@ export function PrModule({ target, m, points, deployed, explore, height, provena
   );
 }
 
-export function CalibrationModule({ target, m, height, provenance, nTest, summary }: Omit<CurveProps, 'points' | 'deployed' | 'explore' | 'onExplore'> & { summary: CalibrationSummary | null }) {
+export function CalibrationModule({
+  target,
+  m,
+  height,
+  provenance,
+  nTest,
+  summary,
+}: Omit<CurveProps, 'points' | 'deployed' | 'explore' | 'onExplore'> & {
+  summary: CalibrationSummary | null;
+}) {
   const c = m.curves.calibration;
   const facts = [
-    summary?.slope !== null && summary?.slope !== undefined ? `calibration slope ${f2(summary.slope)} (1 = ideal)` : null,
-    summary?.ece !== null && summary?.ece !== undefined ? `expected calibration error ${f2(summary.ece)}` : null,
+    summary?.slope !== null && summary?.slope !== undefined
+      ? `calibration slope ${f2(summary.slope)} (1 = ideal)`
+      : null,
+    summary?.ece !== null && summary?.ece !== undefined
+      ? `expected calibration error ${f2(summary.ece)}`
+      : null,
   ].filter(Boolean);
   return (
     <ChartModule
@@ -195,7 +279,16 @@ export function CalibrationModule({ target, m, height, provenance, nTest, summar
         x={{ title: 'Estimated probability', domain: [0, 1], clamp: [0, 1] }}
         y={{ title: 'Observed rate', domain: [0, 1], clamp: [0, 1] }}
         series={[
-          { id: 'perfect', label: 'Perfect calibration', kind: 'reference', hover: false, points: [[0, 0], [1, 1]] },
+          {
+            id: 'perfect',
+            label: 'Perfect calibration',
+            kind: 'reference',
+            hover: false,
+            points: [
+              [0, 0],
+              [1, 1],
+            ],
+          },
           {
             id: 'bins',
             label: 'Quantile bins',
@@ -210,13 +303,20 @@ export function CalibrationModule({ target, m, height, provenance, nTest, summar
   );
 }
 
-export function DecisionCurveModule({ target, m, points, deployed, explore, height, provenance, nTest }: CurveProps) {
+export function DecisionCurveModule({
+  target,
+  m,
+  points,
+  deployed,
+  explore,
+  height,
+  provenance,
+  nTest,
+}: CurveProps) {
   const d = m.curves.dca;
   // Net benefit below zero is never useful; show a sliver under zero and clip the rest (Vickers' convention).
   const floor = -0.05;
-  const allPts = d.thresholds
-    .map((t, i) => [t, d.treat_all[i] ?? 0] as const)
-    .filter(([, v]) => v >= floor);
+  const allPts = d.thresholds.map((t, i) => [t, d.treat_all[i] ?? 0] as const).filter(([, v]) => v >= floor);
   const rules: XYRule[] = [];
   const dep = points[deployed];
   if (dep) rules.push({ x: dep.threshold, kind: 'operating', label: `deployed thr ${f2(dep.threshold)}` });
@@ -253,9 +353,20 @@ export function DecisionCurveModule({ target, m, points, deployed, explore, heig
         x={{ title: 'Threshold probability', domain: [0, 1], clamp: [0, 1] }}
         y={{ title: 'Net benefit', domain: [floor, yMax], clamp: [floor, 1] }}
         series={[
-          { id: 'none', label: 'Treat none', kind: 'reference', hover: false, points: d.thresholds.map((t, i) => [t, d.treat_none[i] ?? 0] as const) },
+          {
+            id: 'none',
+            label: 'Treat none',
+            kind: 'reference',
+            hover: false,
+            points: d.thresholds.map((t, i) => [t, d.treat_none[i] ?? 0] as const),
+          },
           { id: 'all', label: 'Treat all', kind: 'secondary', hover: false, points: allPts },
-          { id: 'model', label: 'Model', kind: 'main', points: d.thresholds.map((t, i) => [t, d.model[i] ?? 0] as const) },
+          {
+            id: 'model',
+            label: 'Model',
+            kind: 'main',
+            points: d.thresholds.map((t, i) => [t, d.model[i] ?? 0] as const),
+          },
         ]}
         rules={rules}
         readout={(h) => {
