@@ -1,0 +1,22 @@
+{
+  "name": "cardiotwin-anatomy-tools",
+  "version": "1.0.0",
+  "private": true,
+  "description": "glTF optimisation and inspection tooling for the CardioTwin anatomy pipeline",
+  "type": "module",
+  "license": "MIT",
+  "scripts": {
+    "optimize": "node scripts/optimize_glb.mjs",
+    "inspect": "gltf-transform inspect ../frontend/public/anatomy/cardiotwin_anatomy.glb"
+  },
+  "engines": {
+    "node": ">=18"
+  },
+  "devDependencies": {
+    "@gltf-transform/cli": "^4.5.1",
+    "@gltf-transform/core": "^4.5.1",
+    "@gltf-transform/extensions": "^4.5.1",
+    "@gltf-transform/functions": "^4.5.1",
+    "meshoptimizer": "^1.3.0"
+  }
+}
