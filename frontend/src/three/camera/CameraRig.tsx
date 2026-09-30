@@ -3,11 +3,13 @@ import { useFrame, useThree } from '@react-three/fiber';
 import CameraControlsImpl from 'camera-controls';
 import { useEffect, useMemo, useRef } from 'react';
 import { Vector3, type PerspectiveCamera } from 'three';
-import { useManifest } from '@/hooks/useData';
+import { useManifest, useVessels } from '@/hooks/useData';
 import { useReducedMotion } from '@/hooks/useMediaQuery';
 import { useUiStore } from '@/state/uiStore';
 import { useViewerStore, type Stage } from '@/state/viewerStore';
 import type { CameraPose } from '@/types/contracts';
+import { buildTracks } from '../labels/anchorTracks';
+import { visibleBestView } from './bestView';
 import { angleLabel, useCameraState } from './cameraState';
 import { cameraRigApi } from './controlsApi';
 import {
@@ -76,6 +78,7 @@ function insetsFor(stage: Stage): Insets {
 export function CameraRig() {
   const ref = useRef<CameraControlsImpl>(null);
   const manifest = useManifest().data;
+  const vessels = useVessels().data;
   const stage = useViewerStore((s) => s.stage);
   const command = useViewerStore((s) => s.cameraCommand);
   const freeOrbit = useCameraState((s) => s.freeOrbit);
@@ -119,6 +122,9 @@ export function CameraRig() {
       : new Vector3(0, 0.05, 1).normalize();
     return { box, target, direction, heroDirection };
   }, [manifest]);
+
+  // Trunk candidates per vessel, to make sure a best view really shows its vessel (P0-2).
+  const tracks = useMemo(() => buildTracks(manifest, vessels, ['LAD', 'LCX', 'RCA']), [manifest, vessels]);
 
   const limits = freeOrbit ? ORBIT_LIMITS.free : ORBIT_LIMITS.clamped;
 
@@ -256,7 +262,9 @@ export function CameraRig() {
       }
     } else if (command.kind === 'focus' && command.target) {
       const structure = manifest?.structures.find((s) => s.target === command.target && s.bestView);
-      const view = bestViewFor(command.target, structure?.bestView);
+      const conventional = bestViewFor(command.target, structure?.bestView);
+      const candidates = tracks.find((t) => t.target === command.target)?.candidates ?? [];
+      const view = visibleBestView(conventional, candidates, geo.target);
       const { azimuth, polar } = toControlsAngles(view.azimuth, view.elevation);
       const direction = new Vector3().setFromSphericalCoords(1, polar, azimuth);
       flyTo(direction, distanceFor(direction) * FOCUS_ZOOM, animate);
