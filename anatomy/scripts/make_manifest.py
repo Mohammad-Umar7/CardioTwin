@@ -52,7 +52,9 @@ ATTRIBUTES = {
     "_SEGMENT": {"nodes": "Coronary_*", "type": "SCALAR float (integer values)",
                  "meaning": "SCCT 2014 segment number of the nearest labelled centreline point (1-18; 0 = named but unnumbered branch). See segments[]. Anatomical label only - never a lesion location."},
     "_VEIN": {"nodes": ["CardiacVeins"], "type": "SCALAR float (integer values)",
-              "meaning": "cardiac-vein code of the nearest labelled vein centreline point, see veins[] (1 CS, 2 GCV, 3 AIV, 4 MCV, 5 PVLV, 6 ACV, 7 LMV, 8 SCV; 7-8 added in v1.1)"},
+              "meaning": "cardiac-vein code of the nearest labelled vein centreline point, see veins[] (1 CS, 2 GCV, 3 AIV, 4 MCV, 5 PVLV, 6 ACV, 7 LMV, 8 SCV, 9 RMV; 7-8 added in v1.1, 9 in round 3)"},
+    "_RADIUS": {"nodes": "Coronary_* and CardiacVeins", "type": "SCALAR float, scene units",
+                "meaning": "lumen radius of the nearest labelled centreline point (vessels.json radius): inflate a vessel in proportion to its calibre (e.g. r' = max(1.15 r, minimum pixel width)) and fade sub-pixel tips instead of adding a fixed offset"},
     "_TERRITORY": {"nodes": ["Heart_Wall_Anterior", "Heart_Wall_Posterior"], "type": "VEC3 unorm8 (normalized)",
                    "meaning": "copy of the COLOR_0 perfusion-territory weights (r = LAD, g = LCX, b = RCA) under a custom name. Read this one: glTF viewers multiply COLOR_0 into the base colour, so a later contract version will set COLOR_0 to white."},
     "_DIST_HEART": {"nodes": ["GreatVessel_PulmonaryArtery", "GreatVessel_PulmonaryVeins"], "type": "SCALAR float, scene units",
@@ -126,12 +128,72 @@ def label_anchor(vessel: dict, fraction: float, heart_center: np.ndarray) -> tup
     return _r(p), _r(_unit(p - heart_center))
 
 
-def definition_fields(node: str, definitions: dict) -> dict:
+SYNTH_REPORT = ANATOMY_DIR / "build" / "synth" / "synth_report.json"
+
+
+def geometry_facts(vessels: dict | None, report: dict, synth: dict | None) -> dict:
+    """Numbers quoted in the definitions ({LM_MM} ...), measured on the built model."""
+
+    def length_mm(points) -> float:
+        P = np.array(points, dtype=float)
+        return float(np.linalg.norm(np.diff(P, axis=0), axis=1).sum() * 100.0)
+
+    facts: dict[str, str] = {}
+    if vessels:
+        lm = next(v for v in vessels["vessels"] if v["node"] == "Coronary_LM")
+        facts["LM_MM"] = f"{length_mm(lm['segments'][0]['points']):.0f}"
+        segs = vessels.get("veins", {}).get("segments", [])
+        for lab in ("CS", "GCV", "AIV", "SCV", "RMV", "MCV"):
+            main = next((sg for sg in segs if sg["label"] == lab and not sg.get("side")), None)
+            if main is not None:
+                facts[f"{lab}_MM"] = f"{length_mm(main['points']):.0f}"
+        cs = next((sg for sg in segs if sg["label"] == "CS"), None)
+        mcv = next((sg for sg in segs if sg["label"] == "MCV" and not sg.get("side")), None)
+        if cs is not None and mcv is not None:
+            P = np.array(cs["points"], dtype=float)
+            k = int(np.argmin(np.linalg.norm(P - np.array(mcv["points"][0]), axis=1)))
+            facts["MCV_JOIN_MM"] = f"{length_mm(cs['points'][:k + 1]) if k else 0.0:.0f}"
+        facts["N_ACV"] = str(sum(1 for sg in segs if sg["label"] == "ACV" and sg.get("parent") is None))
+        gcv = next((sg for sg in segs if sg["label"] == "GCV" and not sg.get("side")), None)
+        pvlv = next((sg for sg in segs if sg["label"] == "PVLV" and not sg.get("side")), None)
+        if cs is not None and gcv is not None and pvlv is not None:
+            path = np.vstack([np.array(cs["points"], dtype=float), np.array(gcv["points"], dtype=float)[1:]])
+            k = int(np.argmin(np.linalg.norm(path - np.array(pvlv["points"][0]), axis=1)))
+            facts["PVLV_JOIN_MM"] = f"{length_mm(path[:k + 1]) if k else 0.0:.0f}"
+            facts["PVLV_HOST"] = "coronary sinus" if k < len(cs["points"]) else "great cardiac vein"
+    nodes = {n["node"]: n for n in report["nodes"]}
+    if "GreatVessel_SVC" in nodes:
+        n = nodes["GreatVessel_SVC"]
+        facts["SVC_MM"] = f"{(n['bbox_max'][1] - n['bbox_min'][1]) * 100.0:.0f}"
+    if synth:
+        v = synth.get("valves", {})
+        if v:
+            facts["TV_OFFSET_MM"] = f"{v['tricuspid']['septal_hinge_apical_offset_mm']:.0f}"
+            facts["MV_AML_MM"] = f"{v['mitral']['aml_height_mm']:.0f}"
+            facts["MV_PML_MM"] = f"{v['mitral']['pml_height_mm']:.1f}".rstrip("0").rstrip(".")
+        iso = synth.get("mitral_isthmus", {}).get("left_pv_ring_dist_mm_min_median")
+        if iso:
+            facts["ISTHMUS_MIN_MM"] = f"{iso[1][0]:.0f}"
+            facts["ISTHMUS_MED_MM"] = f"{iso[1][1]:.0f}"
+    facts["FAT_EMBED"] = "0.35"
+    return facts
+
+
+def fill(text: str, facts: dict) -> str:
+    """Substitute the {KEY} numbers of a definition; a key the geometry did not provide is an error."""
+    try:
+        return text.format_map(facts)
+    except KeyError as exc:  # pragma: no cover - a configuration error
+        raise SystemExit(f"definition needs geometry fact {exc} (make_manifest.geometry_facts)") from exc
+
+
+def definition_fields(node: str, definitions: dict, facts: dict | None = None) -> dict:
     d = definitions.get("nodes", {}).get(node)
     if not d:
         return {}
+    facts = facts or {}
     out = {"fma_id": d.get("fma_id"), "provenance": d.get("provenance", "BodyParts3D"),
-           "definition": d["definition"], "clinical_relevance": d["clinical_relevance"]}
+           "definition": fill(d["definition"], facts), "clinical_relevance": d["clinical_relevance"]}
     if d.get("fma_ids"):
         out["fma_ids"] = d["fma_ids"]
     if d.get("accompanies"):
@@ -186,8 +248,9 @@ def segment_table(vessels: dict | None) -> list[dict]:
 
 
 def build_manifest(cfg: dict, report: dict, vessels: dict | None = None, definitions: dict | None = None,
-                   texture_report: dict | None = None, optimize_report: dict | None = None) -> dict:
+                   texture_report: dict | None = None, optimize_report: dict | None = None, synth: dict | None = None) -> dict:
     definitions = definitions or {}
+    facts = geometry_facts(vessels, report, synth)
     layers_cfg = layer_by_id(cfg)
     nodes = {n["node"]: n for n in report["nodes"]}
     cut_normal = _unit(np.array(report["heart"]["cut_plane"]["normal"], dtype=float))  # glTF, anterior-facing
@@ -234,7 +297,7 @@ def build_manifest(cfg: dict, report: dict, vessels: dict | None = None, definit
             "category": spec["material"],
             "material": info["material"],
             "fma": [p for p in spec["parts"] if not p.startswith("SYN_")] + list(spec.get("source_parts", [])),
-            **definition_fields(spec["node"], definitions),
+            **definition_fields(spec["node"], definitions, facts),
             "center": _r(center),
             "bbox": {"min": _r(lo), "max": _r(hi)},
             "triangles": info["triangles"],
@@ -371,7 +434,9 @@ def build_manifest(cfg: dict, report: dict, vessels: dict | None = None, definit
         "layers": layers,
         "structures": structures,
         "segments": segment_table(vessels),
-        "veins": [{"code": int(k), **v} for k, v in sorted(definitions.get("veins", {}).items(), key=lambda kv: int(kv[0]))],
+        "veins": [{"code": int(k), **{kk: (fill(vv, facts) if kk == "definition" else vv) for kk, vv in v.items()}}
+                  for k, v in sorted(definitions.get("veins", {}).items(), key=lambda kv: int(kv[0]))],
+        "facts": facts,
         "attributes": ATTRIBUTES,
         "camera": {"fov": FOV_DEG, "home": home, "heart": heart_view, "exploded": exploded, "focus": focus},
     }
@@ -387,7 +452,8 @@ def main() -> int:
     opt_path = ANATOMY_DIR / "build" / "optimize_report.json"
     manifest = build_manifest(cfg, report, vessels, definitions,
                               read_json(tex_path) if tex_path.exists() else None,
-                              read_json(opt_path) if opt_path.exists() else None)
+                              read_json(opt_path) if opt_path.exists() else None,
+                              read_json(SYNTH_REPORT) if SYNTH_REPORT.exists() else None)
     write_json(MANIFEST, manifest)
     print(f"[manifest] wrote {MANIFEST} ({len(manifest['structures'])} structures, {len(manifest['layers'])} layers)")
     return 0
