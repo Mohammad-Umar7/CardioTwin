@@ -8,9 +8,12 @@ import type { TargetSpec } from '@/types/contracts';
 import { useCohortPatient, useRiskView } from './useRiskView';
 import { cathComparison, spokenVerdict, verdictFor } from './verdict';
 
-/** Column template shared by the rows and their skeletons (V2 §5.8 VesselRow v2). */
-const GRID = 'grid-cols-[8px_32px_52px_minmax(56px,1fr)_80px]';
-const GRID_DELTA = 'grid-cols-[8px_32px_52px_34px_minmax(40px,1fr)_80px]';
+/**
+ * Column template shared by the rows and their skeletons (V2 §5.8 VesselRow v2). The Δ column is always
+ * reserved (empty until the first edit), so the first what-if never narrows the tracks and slides the dots
+ * and threshold ticks sideways (no layout shift, V2 §8.6).
+ */
+const GRID = 'grid-cols-[8px_32px_52px_34px_minmax(40px,1fr)_80px]';
 
 export interface VesselRowProps {
   spec: TargetSpec;
@@ -19,7 +22,7 @@ export interface VesselRowProps {
 }
 
 /**
- * VesselRow v2 (WORKSTATION_V2 §5.8): pip · code · % (`data-prob`) · Δ (edits only) · track with the
+ * VesselRow v2 (WORKSTATION_V2 §5.8): pip · code · % (`data-prob`) · Δ (reserved; filled while edited) · track with the
  * vessel's own threshold tick · verdict ("● Flagged" / "○ Not flagged"). The whole row is one toggle button:
  * hover lights the 3D vessel, click selects it (camera, inspector and drawer follow from `select`).
  * The band word lives in the inspector, never on the row (§3.1).
@@ -57,7 +60,7 @@ export function VesselRow({ spec, covered = false }: VesselRowProps) {
           'group relative grid w-full items-center gap-x-1.5 rounded-sm px-2 text-left outline-none transition-colors duration-instant ease-instant',
           'focus-visible:shadow-focus',
           truth ? 'h-[52px] content-center gap-y-0.5' : 'h-9',
-          showDelta ? GRID_DELTA : GRID,
+          GRID,
           selected ? 'bg-surface-2' : hovered ? 'bg-surface-1' : 'hover:bg-surface-1',
         )}
       >
@@ -83,11 +86,9 @@ export function VesselRow({ spec, covered = false }: VesselRowProps) {
         ) : (
           <Skeleton className="ml-auto h-5 w-10" />
         )}
-        {showDelta && (
-          <span className="num whitespace-nowrap text-right text-label font-normal text-secondary" aria-hidden>
-            {delta && delta.direction !== 'none' ? `${delta.glyph}${delta.text.replace(/[^\d≥]/g, '')}` : '·'}
-          </span>
-        )}
+        <span className="num whitespace-nowrap text-right text-label font-normal text-secondary" aria-hidden>
+          {showDelta ? (delta && delta.direction !== 'none' ? `${delta.glyph}${delta.text.replace(/[^\d≥]/g, '')}` : '·') : null}
+        </span>
         <RiskTrack
           p={p?.probability}
           threshold={p?.threshold}
@@ -141,6 +142,7 @@ export function VesselRows({ covered = false, className }: { covered?: boolean; 
               <Skeleton className="size-2 rounded-full" />
               <Skeleton className="h-4 w-8" />
               <Skeleton className="ml-auto h-5 w-10" />
+              <span />
               <Skeleton className="h-1" />
               <Skeleton className="h-4 w-16" />
             </li>
