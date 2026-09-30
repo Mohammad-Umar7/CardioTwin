@@ -68,8 +68,8 @@ function PatientCaption() {
 }
 
 /**
- * Attract-mode caption (P3): the highlighted hotspot as a context chip at the top of the free area, the
- * same place the workstation shows its selection chip. Colour is backed by the code here and by the %
+ * Attract-mode caption (P3): the highlighted hotspot as a context chip in the free stage space at the top
+ * right, clear of the heart and its great vessels. Colour is backed by the code here and by the %
  * on the vessel's 3D label.
  */
 function AttractCaption({ target, index }: { target: TargetId; index: number }) {
@@ -125,8 +125,12 @@ export function HeroHud({ attract, vessels, leaving }: HeroHudProps) {
           leaving ? 'opacity-0 ease-exit' : 'ease-out',
         )}
       >
-        {/* Free-area centre (published with the stage insets); the middle when the landing stacks. */}
-        <div className="absolute left-1/2 top-6 flex -translate-x-1/2 justify-center min-[1100px]:left-[var(--landing-free-cx,66%)]" aria-live="off">
+        {/* Top-right, in the empty stage beside the great vessels (centred over the aortic root it covered
+            the heart); the middle when the landing stacks. */}
+        <div
+          className="absolute left-1/2 top-6 flex -translate-x-1/2 justify-center min-[1100px]:left-auto min-[1100px]:right-4 min-[1100px]:translate-x-0 min-[1100px]:justify-end"
+          aria-live="off"
+        >
           {attract && <AttractCaption target={attract} index={Math.max(0, vessels.indexOf(attract))} />}
         </div>
         {anatomySource === 'procedural' && (
