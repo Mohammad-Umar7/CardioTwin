@@ -1,7 +1,7 @@
 import { useGLTF } from '@react-three/drei';
 import { useFrame, useThree, type ThreeEvent } from '@react-three/fiber';
 import { useCallback, useEffect, useMemo, useRef } from 'react';
-import { Box3, Mesh, Vector3, type Object3D } from 'three';
+import { Box3, Mesh, Vector3, type Object3D, type Texture } from 'three';
 import { useManifest, useSchemaIndex, useVessels } from '@/hooks/useData';
 import { useReducedMotion } from '@/hooks/useMediaQuery';
 import { useUiStore } from '@/state/uiStore';
@@ -178,6 +178,17 @@ export function GlbAnatomy({ url }: { url: string }) {
     };
   }, [raycaster]);
 
+  // Baked maps are seen at grazing angles on the walls, the fat and the great vessels: tiers A and B filter
+  // them anisotropically (up to 8×), tier C keeps plain trilinear filtering.
+  const upload = useCallback(
+    (t: Texture) => {
+      const tier = useViewerStore.getState().tier;
+      t.anisotropy = tier === 'A' || tier === 'B' ? Math.min(8, gl.capabilities.getMaxAnisotropy()) : 1;
+      gl.initTexture(t);
+    },
+    [gl],
+  );
+
   // Lazy texture upgrade (CONTRACTS §7.1): upload one mesh's baked maps per idle slice, then switch its
   // Realistic material to the textured variant. Until then the procedural detail carries the look.
   useEffect(() => {
@@ -190,7 +201,7 @@ export function GlbAnatomy({ url }: { url: string }) {
       if (cancelled) return;
       const item = queue.shift();
       if (!item) return;
-      for (const t of item.textures) gl.initTexture(t);
+      for (const t of item.textures) upload(t);
       rig.markMapsReady(item.entry);
       invalidate();
       handle = setTimeout(next, 120);
@@ -200,7 +211,7 @@ export function GlbAnatomy({ url }: { url: string }) {
       cancelled = true;
       if (handle) clearTimeout(handle);
     };
-  }, [rig, gl, invalidate]);
+  }, [rig, upload, invalidate]);
 
   // Label anchors: manifest `labelAnchor` first; else the target node's most anterior vertex. The anchor
   // objects are updated in place every frame so labels follow the exploded wall (never the beat).
@@ -316,7 +327,7 @@ export function GlbAnatomy({ url }: { url: string }) {
     // An outer layer turning solid (the peel closing the chest) gets its baked maps now, one mesh a frame.
     const lazy = rig.nextSolidWithoutMaps();
     if (lazy) {
-      for (const t of lazy.textures) gl.initTexture(t);
+      for (const t of lazy.textures) upload(t);
       rig.markMapsReady(lazy.entry);
     }
     // Landing hero: ghosts (the fresnel lungs) fade out over the copy column, so the headline keeps its
