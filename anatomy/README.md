@@ -17,7 +17,7 @@ CardioTwin's 3D viewer:
 ```bash
 ./.venv/Scripts/python anatomy/build.py             # fetch → blender → optimise → verify → centrelines → manifest (~1.5 min)
 ./.venv/Scripts/python anatomy/build.py --renders   # … plus the Cycles renders (GPU recommended)
-./.venv/Scripts/python -m pytest anatomy            # 27 tests: geometry utilities, centreline graphs, asset contracts
+./.venv/Scripts/python -m pytest anatomy            # 37 tests: geometry utilities, centreline graphs, asset contracts, mesh QA
 ```
 
 Prerequisites
@@ -44,6 +44,7 @@ the committed GLB, manifest and centrelines unchanged; `anatomy/SOURCES.md` pins
 | 5 | Centrelines | `./.venv/Scripts/python anatomy/scripts/extract_centerlines.py` | `vessels.json`, `anatomy/build/centerline_report.json` |
 | 6 | Manifest | `./.venv/Scripts/python anatomy/scripts/make_manifest.py` | `manifest.json` |
 | 7 | Renders | `blender --background --factory-startup --python anatomy/blender/render_heroes.py -- [--shots …] [--save-scene]` | `docs/media/renders/` |
+| QA | Decode for QA | `node anatomy/scripts/decode_glb.mjs [glb] OUT_DIR` | plain per-node arrays (used by `tests/test_mesh_quality.py`) |
 | QA | Previews | `blender --background --factory-startup --python anatomy/blender/preview.py -- --views torso,heart,open,territory,qa` | `anatomy/build/preview/*.png` |
 
 `build.py --only manifest,verify` runs a subset; `--skip fetch` skips stages.
