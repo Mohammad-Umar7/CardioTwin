@@ -57,7 +57,7 @@ function Cite({ ids }: { ids: string[] }) {
         <Fragment key={n}>
           {i > 0 && ', '}
           <a
-            href={`#ref-${n}`}
+            href={`#${ROUTES.methodology}#ref-${n}`}
             onClick={(e) => {
               e.preventDefault();
               scrollToSection(`ref-${n}`);

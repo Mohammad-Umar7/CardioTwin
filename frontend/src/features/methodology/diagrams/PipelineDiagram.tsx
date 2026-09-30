@@ -61,7 +61,7 @@ export function PipelineDiagram({ phases, nTest, onJump }: PipelineDiagramProps)
                       className="absolute -left-[15.5px] top-[13px] size-[6px] rounded-full bg-tertiary"
                     />
                     <a
-                      href={`#${s.anchor}`}
+                      href={`#${ROUTES.methodology}#${s.anchor}`}
                       onClick={(e) => {
                         e.preventDefault();
                         onJump(s.anchor);
