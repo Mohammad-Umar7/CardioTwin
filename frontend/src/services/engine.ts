@@ -20,11 +20,13 @@ import type { ModelInfo } from '@/inference/protocol';
 import {
   LEAKAGE_KEYS,
   type EngineKind,
+  type FeatureSchema,
   type FeatureVector,
   type HealthResponse,
   type PredictResponse,
 } from '@/types/contracts';
 import { ApiError, NetworkError, api, isAbortError, type ApiClient } from './api';
+import { schemaResource } from './staticData';
 
 export interface PredictOptions {
   signal?: AbortSignal;
@@ -165,6 +167,45 @@ export interface EdgeEngineOptions {
    * has no model and is honestly unavailable. `createEdgeEngine()` wires the app-wide shared client.
    */
   client?: InferenceClient | null;
+  /**
+   * Feature schema whose numeric `min`/`max` (the training-cohort range) the engine enforces like the
+   * server's default `out_of_range = "reject"` policy: out-of-range values answer 422 instead of an
+   * unvalidated extrapolation. Without it (or if it fails to load) values are not range-checked.
+   */
+  schema?: () => Promise<FeatureSchema>;
+}
+
+/** `%g`-style rendering, as the server's messages use (18.1154, 400, 0.5). */
+function formatBound(x: number): string {
+  return Number.isInteger(x) ? String(x) : String(Number(x.toPrecision(6)));
+}
+
+/**
+ * Numeric values outside the schema range, worded like the server's `out_of_range` issues
+ * (`backend/app/validation.py`). Values that are not numbers are left to the model's own validation.
+ */
+export function outOfRangeIssues(schema: FeatureSchema, features: FeatureVector): string[] {
+  const issues: string[] = [];
+  const specs = new Map(schema.features.map((f) => [f.key, f]));
+  for (const [key, raw] of Object.entries(features)) {
+    // Request key order, like the server's issue list.
+    const spec = specs.get(key);
+    if (!spec || spec.type !== 'numeric') continue;
+    const value = typeof raw === 'number' ? raw : typeof raw === 'string' && raw.trim() !== '' ? Number(raw) : Number.NaN;
+    if (!Number.isFinite(value)) continue;
+    const lo = spec.min ?? null;
+    const hi = spec.max ?? null;
+    if ((lo !== null && value < lo) || (hi !== null && value > hi)) {
+      const unit = spec.unit ? ` ${spec.unit}` : '';
+      const range =
+        lo !== null && hi !== null ? `${formatBound(lo)}–${formatBound(hi)}${unit}` : lo !== null ? `>= ${formatBound(lo)}${unit}` : `<= ${formatBound(hi!)}${unit}`;
+      issues.push(
+        `features.${spec.key}: ${spec.key}=${formatBound(value)} is outside the allowed range ${range} ` +
+          '(the range of the training cohort; predictions are not validated beyond it)',
+      );
+    }
+  }
+  return issues;
 }
 
 /** absent = constructed without a model · loading · ready · failed = the model could not be loaded. */
@@ -181,9 +222,12 @@ export class EdgeEngine implements PredictionEngine {
   private info: ModelInfo | null = null;
   private failure: string | null = null;
   private readonly readyPromise: Promise<boolean>;
+  private readonly schema: Promise<FeatureSchema | null>;
 
   constructor(options: EdgeEngineOptions = {}) {
     this.client = options.client ?? null;
+    const loadSchema = options.schema;
+    this.schema = loadSchema ? loadSchema().catch(() => null) : Promise.resolve(null);
     if (!this.client) {
       this.state = 'absent';
       this.readyPromise = Promise.resolve(false);
@@ -251,8 +295,15 @@ export class EdgeEngine implements PredictionEngine {
     if (!(await this.readyPromise)) {
       throw new EngineUnavailableError('edge', `The in-browser engine could not load the portable model (${this.failure ?? 'unknown error'}).`);
     }
+    const clean = sanitizeFeatures(features);
+    const schema = await this.schema;
+    const issues = schema ? outOfRangeIssues(schema, clean) : [];
+    if (issues.length > 0) {
+      // Worded like the server's summary: the first issue, then "(+N more)".
+      throw new ApiError(422, 'validation_error', `${issues[0]!}${issues.length > 1 ? ` (+${issues.length - 1} more)` : ''}`);
+    }
     try {
-      const response = await this.client.predict(sanitizeFeatures(features), { signal: options.signal });
+      const response = await this.client.predict(clean, { signal: options.signal });
       assertPredictResponse(response);
       return response;
     } catch (error) {
@@ -271,7 +322,7 @@ let sharedEdge: EdgeEngine | null = null;
  */
 export function createEdgeEngine(): EdgeEngine {
   if (!sharedEdge || sharedEdge.status === 'failed') {
-    sharedEdge = new EdgeEngine({ client: getSharedInferenceClient() });
+    sharedEdge = new EdgeEngine({ client: getSharedInferenceClient(), schema: () => schemaResource.get() });
   }
   return sharedEdge;
 }
