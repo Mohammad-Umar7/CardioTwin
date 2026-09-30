@@ -452,6 +452,7 @@ export type GhostMaterial = MeshBasicMaterial & { userData: { ct: { uniforms: Gh
 
 /** Ghost opacity curves per kind (LUMEN §7.3): α = (base + rim·F^power) · fade. */
 const GHOST_CURVES: Partial<Record<TissueKind, [number, number, number]>> = {
+  cardiacVein: [0.14, 0.3, 1.5],
   skin: [0.02, 0.2, 3],
   lung: [0.02, 0.2, 2.5],
   airway: [0.02, 0.16, 2.5],
@@ -479,6 +480,8 @@ function ghostTint(kind: TissueKind, look: SceneLookId): string {
     case 'coronary':
     case 'leftMain':
       return g.vessel;
+    case 'cardiacVein':
+      return g.vein;
     default:
       return g.heart;
   }

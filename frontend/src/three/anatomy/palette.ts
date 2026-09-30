@@ -48,6 +48,7 @@ export const GHOST = {
     diaphragm: '#6B5F5A',
     heart: '#9FB4C8',
     vessel: '#B7C3D0',
+    vein: '#7F93B8',
   },
   realistic: {
     skin: '#E7B9A2',
@@ -57,5 +58,6 @@ export const GHOST = {
     diaphragm: '#A0625A',
     heart: '#E09A8E',
     vessel: '#D8C8C0',
+    vein: '#5E7BC0',
   },
 } as const;

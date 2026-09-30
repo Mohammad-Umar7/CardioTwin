@@ -518,6 +518,11 @@ export class AnatomyRig {
       const inner = (entry.kind === 'valve' || entry.kind === 'papillary') && heartOpen < 0.02 && !inp.section;
       if (!layerVisible || inner || (inp.isolate && sel && !isolateMember) || (entry.kind === 'cardiacVein' && !inp.showVeins)) {
         solidT = 0;
+      } else if (entry.kind === 'cardiacVein') {
+        // Shown on request only, as a translucent atlas-blue overlay: visibly "not modelled", never a
+        // solid tube that could be mistaken for a low-risk (blue) artery (LUMEN §7.3: 20 % opacity).
+        solidT = 0;
+        ghostT = 1;
       } else if (entry.kind === 'skin') {
         solidT = 0;
         ghostT = inp.ghostLayers || kPeel < 0.5 ? (1 - 0.85 * kPeel) * (inp.stage === 'workstation' ? WORKSTATION_GHOST : 1) : 0;
