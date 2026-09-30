@@ -1,5 +1,5 @@
 import { AnimatePresence, motion } from 'framer-motion';
-import { ChevronRight, Download, FileUp, Link2, MoreHorizontal, RotateCcw, Search, X } from 'lucide-react';
+import { ChevronRight, Download, FileText, FileUp, Link2, MoreHorizontal, RotateCcw, Search, X } from 'lucide-react';
 import { useCallback, useEffect, useId, useLayoutEffect, useMemo, useRef, useState, type DragEvent, type KeyboardEvent, type ReactNode } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Button, Drawer, IconButton, Kbd, Menu, MenuItem, MenuSeparator, Skeleton, withShortcut } from '@/design';
@@ -7,6 +7,7 @@ import { useSchemaIndex, type SchemaIndex } from '@/hooks/useData';
 import { useIsReducedMotion } from '@/hooks/useMediaQuery';
 import { useRegisterCommands } from '@/hooks/useRegisterCommands';
 import { cn } from '@/lib/cn';
+import { ROUTES } from '@/routes';
 import { CMD } from '@/state/commandIds';
 import { editedKeys, selectEditCount, usePatientStore } from '@/state/patientStore';
 import { useUiStore, type InputsSection } from '@/state/uiStore';
@@ -451,6 +452,9 @@ function DrawerContent({ titleId, onClose }: { titleId: string; onClose(): void 
           </MenuItem>
           <MenuItem icon={<FileUp />} onSelect={() => pickProfileFile(navigate)} hint=".json">
             Import profile…
+          </MenuItem>
+          <MenuItem icon={<FileText />} onSelect={() => navigate(ROUTES.report)} hint="PDF">
+            Printable report
           </MenuItem>
           {edits > 0 && (
             <>
