@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { FLOW_CAPTION, FLOW_CAPTION_DETAIL, captionPlacement, captionVisible } from './caption';
+import { CAPTION_HOLD_MS, FLOW_CAPTION, FLOW_CAPTION_DETAIL, captionPlacement, captionShown, captionVisible } from './caption';
 
 describe('illustrative-flow caption', () => {
   it('says the flow is illustrative and not a haemodynamic simulation', () => {
@@ -27,5 +27,13 @@ describe('illustrative-flow caption', () => {
     expect(captionVisible({ ...on, ignited: false })).toBe(false);
     expect(captionVisible({ ...on, coronarySolid: 0 })).toBe(false);
     expect(captionVisible({ ...on, peel: 0.2 })).toBe(false);
+  });
+
+  it('is a notice, not chrome: up for a few seconds each time flow comes on screen, then gone', () => {
+    expect(captionShown(true, 1000, 1000 + CAPTION_HOLD_MS - 1)).toBe(true);
+    expect(captionShown(true, 1000, 1000 + CAPTION_HOLD_MS + 1)).toBe(false);
+    expect(captionShown(false, 1000, 1001)).toBe(false);
+    expect(captionShown(true, null, 1001)).toBe(false);
+    expect(CAPTION_HOLD_MS).toBeGreaterThanOrEqual(4000);
   });
 });

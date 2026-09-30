@@ -4,7 +4,7 @@ import { useReducedMotion } from '@/hooks/useMediaQuery';
 import { useUiStore } from '@/state/uiStore';
 import { useViewerStore } from '@/state/viewerStore';
 import { sceneRuntime } from '../stage/sceneRuntime';
-import { FLOW_CAPTION, FLOW_CAPTION_DETAIL, captionPlacement, captionVisible } from './caption';
+import { FLOW_CAPTION, FLOW_CAPTION_DETAIL, captionPlacement, captionShown, captionVisible } from './caption';
 import { IGNITE_DONE, fxFrame } from './fxState';
 
 /**
@@ -15,7 +15,9 @@ import { IGNITE_DONE, fxFrame } from './fxState';
  *     between rest, focus mode and open drawers;
  *   - sits on a dark scrim, so its text keeps ≥ 4.5 : 1 contrast over any tissue behind it;
  *   - shows only while flow is really on screen: the Flow toggle, Calm / reduced motion and the tier, but
- *     also the lit coronary tree (not during the assembly, not under a closed chest: `captionVisible`);
+ *     also the lit coronary tree (not during the assembly, not under a closed chest: `captionVisible`) —
+ *     and only for CAPTION_HOLD_MS each time flow comes on screen (then it fades: the legend popover and the
+ *     Flow toggle's tooltip keep the note, V2 §5.13);
  *   - stays out of the way of the one-time first-run hint (same row) and carries the full explanation as
  *     its accessible description and hover title.
  */
@@ -27,6 +29,9 @@ export function FlowCaption() {
   const tour = useUiStore((s) => s.chrome === 'tour');
   const chip = useRef<HTMLDivElement | null>(null);
   const shown = useRef<boolean | null>(null);
+  /** When flow last came on screen (null while it is off screen). */
+  const since = useRef<number | null>(null);
+  const hideTimer = useRef(0);
 
   useEffect(() => {
     const host = gl.domElement.parentElement?.parentElement ?? gl.domElement.parentElement;
@@ -52,6 +57,7 @@ export function FlowCaption() {
     chip.current = el;
     shown.current = null;
     return () => {
+      window.clearTimeout(hideTimer.current);
       el.remove();
       chip.current = null;
     };
@@ -67,14 +73,28 @@ export function FlowCaption() {
     if (!el) return;
     let solid = 0;
     for (const [node, v] of Object.entries(sceneRuntime.nodes)) if (node.startsWith('Coronary_')) solid = Math.max(solid, v.solid);
-    const visible =
+    const onScreen =
       enabled &&
       !reduced &&
       !hintPending &&
       captionVisible({ flowOpacity: fxFrame.flowOpacity, ignited: fxFrame.ignite >= IGNITE_DONE, coronarySolid: solid, peel: sceneRuntime.peel.e });
+    const now = performance.now();
+    if (!onScreen) since.current = null;
+    else since.current ??= now;
+    const visible = captionShown(onScreen, since.current, now);
     if (visible === shown.current) return;
     shown.current = visible;
-    el.style.display = visible ? '' : 'none';
+    window.clearTimeout(hideTimer.current);
+    if (visible) {
+      el.style.display = '';
+      el.style.opacity = '1';
+    } else {
+      // Fade, then leave the layout (the canvas keeps rendering on demand: no frame is needed for this).
+      el.style.opacity = '0';
+      hideTimer.current = window.setTimeout(() => {
+        if (!shown.current) el.style.display = 'none';
+      }, 240);
+    }
   });
 
   return null;

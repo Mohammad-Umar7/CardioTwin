@@ -31,3 +31,19 @@ export function captionVisible(o: { flowOpacity: number; ignited: boolean; coron
 
 /** Below "Ribs open" the thorax still covers the heart: no visible flow, so no caption. */
 export const CAPTION_MIN_PEEL = 0.45;
+
+/**
+ * The caption is a notice, not chrome (V2 §5.13 keeps "Flow is illustrative" in the legend popover and the
+ * Flow toggle's tooltip): it shows for this long each time flow comes on screen (the first ignition, Flow
+ * switched on, the heart uncovered again), then fades, so the stage at rest carries only its four overlay
+ * groups.
+ */
+export const CAPTION_HOLD_MS = 5000;
+
+/**
+ * Whether the caption is up at `now`: flow must be on screen, and it must have come on screen less than
+ * `hold` ms ago (`since` = when it last appeared, null while flow is off screen).
+ */
+export function captionShown(onScreen: boolean, since: number | null, now: number, hold = CAPTION_HOLD_MS): boolean {
+  return onScreen && since !== null && now - since < hold;
+}
