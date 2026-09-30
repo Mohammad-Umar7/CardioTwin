@@ -131,6 +131,7 @@ def main() -> None:
             if n in obs:
                 bisect_keep(obs[n], (0, 0, top + 0.10), (0, 0, 1))
                 rh.sphere_clip(obs[n], (arch.x - 0.05, arch.y, top - 0.1), 0.62)
+                rh.keep_largest_island(obs[n].data, min_fraction=0.2)
     # glTF COLOR_0 on the heart walls is territory DATA (LAD/LCX/RCA weights), not a tint: the viewer never
     # multiplies it into the albedo, so neither does the preview
     for o in obs.values():

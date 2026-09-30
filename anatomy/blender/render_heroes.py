@@ -466,7 +466,8 @@ class Anatomy:
         arch = self.objects["GreatVessel_Aorta"].matrix_world.translation
         for n in ("GreatVessel_Aorta_ArchBranches", "GreatVessel_SVC_BrachiocephalicVeins"):
             if n in self.objects:
-                self.cropped_copy(n, z_max=top + 0.10, radius=0.62, center=(arch.x - 0.05, arch.y, top - 0.1), keep_largest=False)
+                ob = self.cropped_copy(n, z_max=top + 0.10, radius=0.62, center=(arch.x - 0.05, arch.y, top - 0.1), keep_largest=False)
+                keep_largest_island(ob.data, min_fraction=0.2)
 
 
 def sphere_clip(ob: bpy.types.Object, center, radius: float) -> None:
@@ -494,12 +495,13 @@ def sphere_clip(ob: bpy.types.Object, center, radius: float) -> None:
     bm.free()
 
 
-def keep_largest_island(me: bpy.types.Mesh) -> None:
-    """Delete every connected piece of a mesh except the largest (drops clipped-off fragments)."""
+def keep_largest_island(me: bpy.types.Mesh, min_fraction: float = 1.0) -> None:
+    """Delete connected pieces smaller than ``min_fraction`` of the largest (1.0: keep only the largest)."""
     bm = bmesh.new()
     bm.from_mesh(me)
     seen: set = set()
     best: list = []
+    islands: list = []
     for face in bm.faces:
         if face in seen:
             continue
@@ -513,9 +515,10 @@ def keep_largest_island(me: bpy.types.Mesh) -> None:
                     if g not in seen:
                         seen.add(g)
                         stack.append(g)
+        islands.append(island)
         if len(island) > len(best):
             best = island
-    keep = set(best)
+    keep = {f for isl in islands if len(isl) >= min_fraction * len(best) for f in isl}
     bmesh.ops.delete(bm, geom=[f for f in bm.faces if f not in keep], context="FACES")
     bm.to_mesh(me)
     bm.free()

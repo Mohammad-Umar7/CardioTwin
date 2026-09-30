@@ -252,10 +252,10 @@ def vessel(name, hexes, *, rough=(0.30, 0.46), stria=0.08, sss=0.25, coat=0.35, 
     """Vessel wall: atlas colour with adventitial fibre striations along the vessel and fine mottling."""
     g = G(name)
     p = g.obj()
-    mott = g.noise(p, 22.0, detail=4.0)
-    fine = g.noise(p, scale_long, detail=2.0, rough=0.7, distortion=0.4)
-    base = g.ramp(mott, [(0.25, srgb(hexes[0])), (0.55, srgb(hexes[1])), (0.85, srgb(hexes[2]))])
-    base = g.mixc(g.maprange(fine, 0.4, 0.8, 0.0, stria), base, srgb("#f0e0d8"))
+    mott = g.noise(p, 9.0, detail=3.0)
+    fine = g.noise(p, scale_long, detail=2.0, rough=0.6, distortion=0.4)
+    base = g.ramp(mott, [(0.3, srgb(hexes[0])), (0.5, srgb(hexes[1])), (0.72, srgb(hexes[2]))])
+    base = g.mixc(g.maprange(fine, 0.45, 0.8, 0.0, stria * 0.6), base, srgb("#f0e0d8"))
     rough_s = g.maprange(fine, 0.2, 0.8, *rough)
     nrm = g.bump(g.math("ADD", fine, g.math("MULTIPLY", mott, 0.4)), 0.2, 0.002)
     g.set(Subsurface_Weight=sss, Subsurface_Radius=(1.0, 0.35, 0.25), Subsurface_Scale=0.006,
