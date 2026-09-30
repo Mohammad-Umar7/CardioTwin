@@ -1,67 +1,59 @@
 import { Modal, Shortcut } from '@/design';
 import { useCommands } from '@/hooks/useRegisterCommands';
-import { CMD } from '@/state/commandIds';
-import type { Command, CommandGroup } from '@/state/commandStore';
 import { useUiStore } from '@/state/uiStore';
+import { SHEET_COLUMNS, sheetRows, type SheetRow } from './shortcutSections';
 
-/** Keys that act on the focused canvas or a layer, not through a registered command. */
-const STATIC: Record<'navigate' | 'view', { shortcut: string; action: string }[]> = {
-  navigate: [{ shortcut: 'Esc', action: 'Close the top layer: palette, menu, drawer, isolate, selection, focus' }],
-  view: [
-    { shortcut: 'ArrowLeft', action: 'Orbit 15° (canvas focused; also ↑ ↓ →)' },
-    { shortcut: '+', action: 'Zoom in (canvas focused; − zooms out)' },
-  ],
-};
-
-const COLUMNS: { id: 'navigate' | 'view'; title: string; groups: CommandGroup[] }[] = [
-  { id: 'navigate', title: 'Navigate & inspect', groups: ['suggested', 'vessels', 'patients', 'pages'] },
-  { id: 'view', title: 'Edit & view', groups: ['inputs', 'views', 'actions'] },
-];
-
-function Row({ shortcut, action }: { shortcut: string; action: string }) {
+function Row({ row }: { row: SheetRow }) {
   return (
     <div className="flex min-h-7 items-center justify-between gap-4">
-      <dt className="min-w-0 text-body-s text-secondary">{action}</dt>
-      <dd className="shrink-0">
-        <Shortcut shortcut={shortcut} all />
+      <dt className="min-w-0 truncate text-body-s text-secondary" title={row.action}>
+        {row.action}
+      </dt>
+      <dd className="flex shrink-0 items-center gap-1">
+        {row.shortcuts.map((s) => (
+          <Shortcut key={s} shortcut={s} all />
+        ))}
       </dd>
     </div>
   );
 }
 
 /**
- * Shortcut sheet v2 (WORKSTATION_V2 §5.19), opened with "?": two columns generated from the same command
- * registry as the palette, so the two can never drift apart.
+ * Shortcut sheet v2 (WORKSTATION_V2 §5.19), opened with "?" or the top bar's help button: a 560 px modal
+ * with two columns, Navigate · Inspect and Edit · View, generated from the same command registry as the
+ * palette (`shortcutSections.ts`), so the two can never drift apart.
  */
 export default function ShortcutSheet() {
   const open = useUiStore((s) => s.shortcutsOpen);
   const setOpen = useUiStore((s) => s.setShortcutsOpen);
-  const commands = useCommands().filter((c): c is Command & { shortcut: string } => !!c.shortcut && c.id !== CMD.shortcuts);
+  const commands = useCommands();
+  const rows = sheetRows(commands);
 
   return (
     <Modal open={open} onClose={() => setOpen(false)} title="Keyboard shortcuts" width={560}>
-      <div className="grid grid-cols-1 gap-6 sm:grid-cols-2">
-        {COLUMNS.map((col) => (
-          <section key={col.id} aria-labelledby={`keys-${col.id}`}>
-            <h3 id={`keys-${col.id}`} className="eyebrow mb-2 text-tertiary">
-              {col.title}
-            </h3>
-            <dl className="flex flex-col gap-1">
-              {commands
-                .filter((c) => col.groups.includes(c.group))
-                .map((c) => (
-                  <Row key={c.id} shortcut={c.shortcut} action={c.title} />
-                ))}
-              {STATIC[col.id].map((s) => (
-                <Row key={s.action} shortcut={s.shortcut} action={s.action} />
-              ))}
-            </dl>
-          </section>
+      <div className="grid grid-cols-1 gap-x-8 gap-y-5 sm:grid-cols-2">
+        {SHEET_COLUMNS.map((col) => (
+          <div key={col.sections[0]!.id} className="flex flex-col gap-5">
+            {col.sections.map((section) =>
+              rows[section.id].length ? (
+                <section key={section.id} aria-labelledby={`keys-${section.id}`} data-region={`keys-${section.id}`}>
+                  <h3 id={`keys-${section.id}`} className="eyebrow mb-1.5 text-tertiary">
+                    {section.title}
+                  </h3>
+                  <dl className="flex flex-col">
+                    {rows[section.id].map((row) => (
+                      <Row key={row.key} row={row} />
+                    ))}
+                  </dl>
+                </section>
+              ) : null,
+            )}
+          </div>
         ))}
       </div>
-      <p className="mt-4 text-label font-normal text-tertiary">
-        Single-key shortcuts pause while you type in a field. <Shortcut shortcut="?" className="align-middle" /> opens
-        this sheet.
+      <p className="mt-5 border-t border-hairline pt-3 text-label font-normal text-tertiary">
+        Single-key shortcuts pause while you type in a field. Every command is also in the palette:{' '}
+        <Shortcut shortcut="Mod+K" className="align-middle" />
       </p>
     </Modal>
   );
