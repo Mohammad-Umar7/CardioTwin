@@ -821,7 +821,7 @@ The owner asked for anatomy that "looks real, super close to real human anatomy"
 
 ### 7.9.3 Materials (`three/anatomy/tissue.ts`, palette in `palette.ts`)
 
-- **Material model.** One material instance per mesh (its rest offset, dissolve and baked maps differ) and a handful of shader programs, keyed by patch flags. Clinical = `MeshStandardMaterial` exactly as §7.3. Realistic = `MeshPhysicalMaterial` at tiers A/B and `MeshStandardMaterial` at tier C.
+- **Material model.** One material instance per mesh (its rest offset, dissolve and baked maps differ) and a handful of shader programs, keyed by patch flags. Clinical = `MeshStandardMaterial` exactly as §7.3. Realistic = `MeshPhysicalMaterial` at tiers A–C (the wet clearcoat is the strongest realism cue, so it survives down to C).
 
 | Tissue | Realistic parameters |
 |---|---|
@@ -834,7 +834,7 @@ The owner asked for anatomy that "looks real, super close to real human anatomy"
 | Skin, muscle, diaphragm | Skin is always a warm fresnel ghost. Muscle and diaphragm are striated wet muscle `#6E2622`. |
 
 - **Procedural detail.** All detail is computed in the heart's rest frame, so it sticks to the tissue while nodes explode, hinge and beat. No UVs are needed.
-  - Detail comes from one baked, tileable 32³ RGBA8 volume holding value and gradient (`noiseTexture.ts`). There is one trilinear fetch per octave: 3 octaves at tier A, 2 at B and C.
+  - Detail comes from one baked, tileable 32³ RGBA8 volume holding value and gradient (`noiseTexture.ts`). There is one trilinear fetch per octave: 3 octaves at tier A, 2 at B, 1 at C.
   - It drives the bump (the tangential gradient), albedo mottling, roughness variation and the myocardial fibre direction (detail stretched across the long axis).
   - Octaves fade as they approach the pixel footprint, so distant tissue never shimmers.
 - **Cavity attribute** (`cavity.ts`). `aCavity` is computed once per heart wall in idle time, with three channels:
@@ -888,7 +888,7 @@ three-mesh-bvh raycasts against the heart walls, valves, great vessels and invis
 
 ### 7.9.8 Performance
 
-- Tiers are unchanged. Realistic uses clearcoat at A/B and sheen at A only, and falls back to `MeshStandardMaterial` with 2 octaves at C.
+- Tiers are unchanged. Realistic keeps clearcoat at A–C, uses sheen at A only, and drops to 1 noise octave at C. On an integrated GPU, tier B renders at DPR 1.0 (V2 §9.3 D).
 - The noise volume replaces about 120 ALU operations per octave with one texture fetch.
 - Switching patients only moves uniforms: geometries, textures and programs stay constant (verified over repeated switches).
 
@@ -897,6 +897,6 @@ three-mesh-bvh raycasts against the heart walls, valves, great vessels and invis
 | § | Was | Now |
 |---|---|---|
 | §2.3 | `anat/vein`: "hidden by default, never blue" | Clinical unchanged. Realistic uses a muted atlas blue for the SVC, IVC and (when shown) cardiac veins, darker and greyer than the ramp's low end and never emissive. |
-| §7.3 | "MeshStandardMaterial … No transmission and no physical sheen" | Clinical unchanged. Realistic uses MeshPhysicalMaterial with clearcoat (tiers A/B) and sheen (tier A). There is still no transmission. |
+| §7.3 | "MeshStandardMaterial … No transmission and no physical sheen" | Clinical unchanged. Realistic uses MeshPhysicalMaterial with clearcoat (tiers A–C) and sheen (tier A). There is still no transmission. |
 | §7.7 | "Zero image textures: only the LUT and the blue-noise texture" | The shared 128 KB noise volume is also generated in code. Baked GLB textures are allowed (CONTRACTS §7.1) and uploaded lazily. |
 | §6 Peel | Layer vectors, rib hinge "phase 2" | Layer and structure vectors, the anterior-half hinge, riders, a critically damped spring and the cold-load assembly (§7.9.5). |

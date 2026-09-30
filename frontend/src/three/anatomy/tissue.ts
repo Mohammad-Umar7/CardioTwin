@@ -295,7 +295,7 @@ const REALISTIC: Partial<Record<TissueKind, Look>> = {
   },
 };
 
-const TIER_OCTAVES: Record<QualityTier, number> = { A: 3, B: 2, C: 2, D: 1 };
+const TIER_OCTAVES: Record<QualityTier, number> = { A: 3, B: 2, C: 1, D: 1 };
 
 function lookFor(kind: TissueKind, look: SceneLookId): Look {
   const table = look === 'realistic' ? REALISTIC : CLINICAL;
@@ -332,7 +332,9 @@ export function createSharedUniforms(lut: Texture | null): SharedUniforms {
 export function createTissueMaterial(o: TissueOptions): TissueMaterial {
   const L = lookFor(o.kind, o.look);
   const realistic = o.look === 'realistic';
-  const physical = realistic && o.tier !== 'C' && o.tier !== 'D';
+  // The wet clearcoat is the single strongest realism cue, so it survives down to tier C; tier C instead
+  // drops to one noise octave (and sheen is tier A only).
+  const physical = realistic && o.tier !== 'D';
   const maps = realistic ? o.maps ?? null : null;
   const params = {
     color: L.color,
