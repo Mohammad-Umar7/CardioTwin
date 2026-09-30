@@ -1,77 +1,237 @@
 import { useFrame, useThree } from '@react-three/fiber';
-import { useRef } from 'react';
-import { Vector3 } from 'three';
+import { useMemo, useRef } from 'react';
+import { Matrix4, Vector3, type Object3D } from 'three';
+import { useManifest, useSchemaIndex, useVessels } from '@/hooks/useData';
+import { useUiStore, type Chrome } from '@/state/uiStore';
 import { useViewerStore } from '@/state/viewerStore';
-import { getAnchors } from '../anatomy/anchors';
-import { LABEL_MIN_GAP, LANE_MARGIN, defaultLane, labelEls, lineEls, stackLane } from './labelRegistry';
+import { anchorsVersion, getAnchors } from '../anatomy/anchors';
+import { BEAT_UNIFORMS } from '../anatomy/beatDeform';
+import { BEATS_WITH_HEART, type TissueKind } from '../anatomy/classify';
+import { useCameraState } from '../camera/cameraState';
+import { freeArea, heartBox } from '../camera/framing';
+import { sceneRuntime } from '../stage/sceneRuntime';
+import { buildTracks, restToDisplayed, type AnchorTrack } from './anchorTracks';
+import { facing } from './dynamicAnchor';
+import { labelEls, labelSizes, laneFor, layoutLanes, lineEls, type LaneItem } from './labelRegistry';
+
+const DEFAULT_TARGETS = ['LAD', 'LCX', 'RCA'];
+/** Labels fade in LAD → LCX → RCA, 60 ms apart, once the coronaries ignite (V2 §5.14). */
+const REVEAL_STAGGER_MS = 60;
+/** Room kept free for the context slot (selection chip / what-if pill) above the lanes. */
+const CONTEXT_SLOT_ROOM = 44;
+/** Anchor glide when the chosen candidate changes (per-second rate of an exponential approach). */
+const ANCHOR_GLIDE = 14;
 
 const projected = new Vector3();
-const toCamera = new Vector3();
+const eye = new Vector3();
+const tmpPos = new Vector3();
+const tmpNormal = new Vector3();
+const displayed = new Matrix4();
+
+/** Writes a style / attribute only when it changed (the projector runs every frame). */
+const cache = new WeakMap<Element, Record<string, string>>();
+function put(el: Element, key: string, value: string, write: () => void) {
+  let c = cache.get(el);
+  if (!c) cache.set(el, (c = {}));
+  if (c[key] === value) return;
+  c[key] = value;
+  write();
+}
+const setStyle = (el: HTMLElement | SVGElement, prop: 'transform' | 'opacity' | 'transitionDelay', value: string) =>
+  put(el, prop, value, () => {
+    el.style[prop] = value;
+  });
+const setData = (el: HTMLElement, key: string, value: string) =>
+  put(el, `data-${key}`, value, () => {
+    el.dataset[key] = value;
+  });
+const setAttr = (el: Element, key: string, value: string) =>
+  put(el, `@${key}`, value, () => {
+    if (value === '') el.removeAttribute(key);
+    else el.setAttribute(key, value);
+  });
+
+interface Resolved {
+  id: string;
+  anchor: Vector3;
+  /** Facing of the anchor point toward the camera (> 0 = front side). */
+  facing: number;
+}
 
 /**
- * Canvas-side half of the vessel labels: projects each anchor, assigns radiological lanes, stacks labels
- * without crossings, dims far-side labels to 25 % with a dashed leader and "(posterior)", and writes the
- * result straight into the overlay's DOM nodes.
+ * Canvas-side half of the vessel labels (WORKSTATION_V2 §5.14). Every frame it
+ *   - resolves each vessel's anchor: a dynamic, camera-facing point of the proximal–mid trunk (re-chosen
+ *     at most every 200 ms, with hysteresis), carried through the peel and the assembly but not the beat;
+ *     the anatomy's static anchors are the fallback (procedural heart, missing centrelines);
+ *   - lays the labels out in radiological lanes just outside the heart, inside `uiStore.stageInsets`
+ *     (never under a card, never clipped), ≥ 28 px apart, leaders never crossing;
+ *   - applies the states: the selected label at full strength with a solid leader (never "behind"), the
+ *     others at 40 % with dashed leaders, far-side unselected labels marked "(behind)";
+ *   - writes straight into the overlay's DOM nodes (no React state).
  */
 export function LabelProjector() {
   const camera = useThree((s) => s.camera);
   const size = useThree((s) => s.size);
-  const lastKey = useRef('');
+  const scene = useThree((s) => s.scene);
+  const manifest = useManifest().data;
+  const vessels = useVessels().data;
+  const schema = useSchemaIndex();
+  const targets = useMemo(() => schema?.vessels.map((t) => t.id) ?? DEFAULT_TARGETS, [schema]);
+  const tracks = useMemo(() => buildTracks(manifest, vessels, targets), [manifest, vessels, targets]);
+  const box = useMemo(() => heartBox(manifest), [manifest]);
+  const corners = useMemo(() => {
+    const { min, max } = box;
+    const out: Vector3[] = [];
+    for (const x of [min.x, max.x]) for (const y of [min.y, max.y]) for (const z of [min.z, max.z]) out.push(new Vector3(x, y, z));
+    return out;
+  }, [box]);
 
-  useFrame(() => {
+  const state = useRef({
+    meshes: new Map<string, Object3D | null>(),
+    meshVersion: -1,
+    meshCheckedAt: 0,
+    shown: new Map<string, Vector3>(),
+    revealAt: 0,
+    lastChrome: '' as Chrome | '',
+  });
+
+  const meshFor = (track: AnchorTrack, now: number): Object3D | null => {
+    const s = state.current;
+    const version = anchorsVersion();
+    if (version !== s.meshVersion || (now - s.meshCheckedAt > 1000 && [...s.meshes.values()].some((m) => !m))) {
+      s.meshVersion = version;
+      s.meshCheckedAt = now;
+      s.meshes.clear();
+    }
+    if (!s.meshes.has(track.node)) {
+      let found: Object3D | null = null;
+      scene.traverse((o) => {
+        if (!found && o.name === track.node && typeof o.userData.ctKind === 'string' && !o.userData.ctGhost) found = o;
+      });
+      s.meshes.set(track.node, found);
+    }
+    return s.meshes.get(track.node) ?? null;
+  };
+
+  useFrame((_, delta) => {
+    const now = performance.now();
     const viewer = useViewerStore.getState();
-    const anchors = getAnchors();
-    const visible = viewer.labels && anchors.size > 0;
+    const ui = useUiStore.getState();
+    const s = state.current;
     const { width, height } = size;
-    const compact = width < 640;
-    const swap = Math.abs(viewer.carm?.azimuth ?? 0) > 90;
+    eye.copy(camera.position);
 
-    const lanes: Record<'left' | 'right', { id: string; y: number; x: number; posterior: boolean }[]> = { left: [], right: [] };
-    for (const [id, anchor] of anchors) {
-      if (!labelEls.has(id) || !lineEls.has(id)) continue;
-      projected.copy(anchor.position).project(camera);
-      const x = ((projected.x + 1) / 2) * width;
-      const y = ((1 - projected.y) / 2) * height;
-      toCamera.copy(camera.position).sub(anchor.position).normalize();
-      const posterior = anchor.normal.dot(toCamera) < 0;
-      let lane = defaultLane(id);
-      if (swap) lane = lane === 'left' ? 'right' : 'left';
-      lanes[lane].push({ id, x, y, posterior });
-    }
+    // Reveal after the first anatomy frame and the coronary ignition (never before there is a heart).
+    const assembly = sceneRuntime.assembly;
+    const ignited = assembly.done || assembly.t >= assembly.igniteAt;
+    const ready = useCameraState.getState().firstFrame && viewer.stage !== 'hidden' && (ignited || !sceneRuntime.anatomyReady);
+    if (!ready) s.revealAt = 0;
+    else if (s.revealAt === 0) s.revealAt = now;
+    const visible = viewer.labels && ready;
 
-    for (const lane of ['left', 'right'] as const) {
-      const items = lanes[lane];
-      const stacked = stackLane(items, LABEL_MIN_GAP, 40, height - 72);
-      for (const item of items) {
-        const label = labelEls.get(item.id)!;
-        const line = lineEls.get(item.id)!;
-        const ly = stacked.get(item.id) ?? item.y;
-        const labelWidth = label.offsetWidth || 120;
-        const lx = lane === 'left' ? LANE_MARGIN : width - LANE_MARGIN - labelWidth;
-        const edgeX = lane === 'left' ? lx + labelWidth : lx;
-        label.style.transform = `translate3d(${lx.toFixed(1)}px, ${(ly - 14).toFixed(1)}px, 0)`;
-        label.style.opacity = visible ? (item.posterior ? '0.25' : '1') : '0';
-        label.dataset.posterior = item.posterior ? 'true' : 'false';
-        label.dataset.compact = compact ? 'true' : 'false';
-        line.setAttribute('x1', edgeX.toFixed(1));
-        line.setAttribute('y1', ly.toFixed(1));
-        line.setAttribute('x2', item.x.toFixed(1));
-        line.setAttribute('y2', item.y.toFixed(1));
-        line.style.opacity = visible ? (item.posterior ? '0.35' : '0.7') : '0';
-        line.setAttribute('stroke-dasharray', item.posterior ? '3 3' : '');
-      }
-    }
-    // Hide labels whose anchor disappeared (e.g. anatomy switched).
-    const key = [...anchors.keys()].join(',');
-    if (key !== lastKey.current) {
-      lastKey.current = key;
-      for (const [id, label] of labelEls) {
-        if (!anchors.has(id)) {
-          label.style.opacity = '0';
-          const line = lineEls.get(id);
-          if (line) line.style.opacity = '0';
+    // 1. Anchors: dynamic camera-facing trunk points, else the anatomy's static anchors.
+    const resolved: Resolved[] = [];
+    const statics = getAnchors();
+    for (const id of targets) {
+      const track = tracks.find((t) => t.target === id);
+      const mesh = track?.centre ? meshFor(track, now) : null;
+      let anchor: Vector3 | null = null;
+      let face = 1;
+      if (track && track.centre && mesh) {
+        const kind = mesh.userData.ctKind as TissueKind;
+        restToDisplayed(mesh, track.centre, BEATS_WITH_HEART.has(kind) ? BEAT_UNIFORMS.uBeatMatrix.value : null, displayed);
+        const pick = track.chooser.update(now, () =>
+          track.candidates.map((c) => {
+            tmpPos.copy(c.rest).applyMatrix4(displayed);
+            tmpNormal.copy(c.normal).transformDirection(displayed);
+            return facing(tmpPos, tmpNormal, eye);
+          }),
+        );
+        const c = track.candidates[Math.max(0, pick)]!;
+        anchor = tmpPos.copy(c.rest).applyMatrix4(displayed).clone();
+        face = facing(anchor, tmpNormal.copy(c.normal).transformDirection(displayed), eye);
+      } else {
+        const a = statics.get(id);
+        if (a) {
+          anchor = a.position.clone();
+          face = facing(a.position, a.normal, eye);
         }
       }
+      if (!anchor) continue;
+      // Glide to a newly chosen anchor instead of jumping.
+      const shown = s.shown.get(id);
+      if (!shown || !visible) s.shown.set(id, anchor);
+      else shown.lerp(anchor, 1 - Math.exp(-ANCHOR_GLIDE * Math.min(0.1, delta)));
+      resolved.push({ id, anchor: s.shown.get(id)!, facing: face });
+    }
+
+    // 2. Free area (stage insets) and the heart's silhouette on screen.
+    const insets = viewer.stage === 'hidden' ? { left: 0, right: 0, top: 0, bottom: 0 } : ui.stageInsets;
+    const free = freeArea(width, height, insets);
+    const topRoom = ui.chrome === 'workstation' || ui.chrome === 'tour' ? CONTEXT_SLOT_ROOM : 0;
+    const bounds = { left: free.x, right: free.x + free.width, top: free.y + topRoom, bottom: free.y + free.height };
+    let minX = Infinity;
+    let maxX = -Infinity;
+    for (const c of corners) {
+      projected.copy(c).project(camera);
+      const x = ((projected.x + 1) / 2) * width;
+      minX = Math.min(minX, x);
+      maxX = Math.max(maxX, x);
+    }
+    const heart = Number.isFinite(minX) && maxX > minX ? { minX, maxX } : null;
+    const compact = width < 640;
+
+    // 3. Lanes.
+    const items: LaneItem[] = [];
+    const screen = new Map<string, { x: number; y: number }>();
+    for (const r of resolved) {
+      projected.copy(r.anchor).project(camera);
+      const x = ((projected.x + 1) / 2) * width;
+      const y = ((1 - projected.y) / 2) * height;
+      screen.set(r.id, { x, y });
+      const box = labelSizes.get(r.id) ?? { width: 72, height: 24 };
+      items.push({ id: r.id, lane: laneFor(r.id, viewer.carm?.azimuth), x, y, width: box.width, height: box.height });
+    }
+    const placed = layoutLanes(items, bounds, heart);
+
+    // 4. States and DOM writes.
+    const selected = viewer.selectedStructure;
+    resolved.forEach((r) => {
+      const label = labelEls.get(r.id);
+      const line = lineEls.get(r.id);
+      const at = placed.get(r.id);
+      const p = screen.get(r.id);
+      if (!label || !line || !at || !p) return;
+      const order = targets.indexOf(r.id);
+      const revealed = visible && now - s.revealAt >= order * REVEAL_STAGGER_MS;
+      const isSelected = selected === r.id;
+      const dimmed = selected !== null && !isSelected;
+      const behind = !isSelected && r.facing < 0;
+      const opacity = !revealed ? 0 : isSelected ? 1 : dimmed ? 0.4 : behind ? 0.55 : 1;
+
+      setStyle(label, 'transform', `translate3d(${at.left.toFixed(1)}px, ${at.top.toFixed(1)}px, 0)`);
+      setStyle(label, 'opacity', String(opacity));
+      setData(label, 'selected', String(isSelected));
+      setData(label, 'dimmed', String(dimmed));
+      setData(label, 'behind', String(behind));
+      setData(label, 'compact', String(compact));
+      setData(label, 'lane', items.find((i) => i.id === r.id)?.lane ?? 'right');
+
+      setAttr(line, 'x1', at.edgeX.toFixed(1));
+      setAttr(line, 'y1', at.edgeY.toFixed(1));
+      setAttr(line, 'x2', p.x.toFixed(1));
+      setAttr(line, 'y2', p.y.toFixed(1));
+      setAttr(line, 'stroke-dasharray', dimmed || behind ? '3 3' : '');
+      setAttr(line, 'data-selected', String(isSelected));
+      setStyle(line, 'opacity', !revealed ? '0' : isSelected ? '0.9' : dimmed || behind ? '0.35' : '0.6');
+    });
+
+    // Hide labels whose vessel has no anchor (anatomy switched, target missing).
+    for (const [id, label] of labelEls) {
+      if (resolved.some((r) => r.id === id)) continue;
+      setStyle(label, 'opacity', '0');
+      const line = lineEls.get(id);
+      if (line) setStyle(line, 'opacity', '0');
     }
   });
 

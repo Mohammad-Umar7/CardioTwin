@@ -1,24 +1,53 @@
-import { useCallback } from 'react';
-import { RiskMeter, RiskPip } from '@/design';
+import { useCallback, useEffect, useRef, useState } from 'react';
+import { RiskPip } from '@/design';
 import { useSchemaIndex } from '@/hooks/useData';
+import { useDelayedFlag, useReducedMotion } from '@/hooks/useMediaQuery';
 import { cn } from '@/lib/cn';
 import { formatProbability } from '@/lib/format';
-import { bandStyle } from '@/lib/riskColor';
-import { usePatientStore } from '@/state/patientStore';
+import { selectDisplayedPrediction, usePatientStore } from '@/state/patientStore';
+import { useUiStore } from '@/state/uiStore';
 import { useViewerStore } from '@/state/viewerStore';
-import { labelEls, lineEls } from './labelRegistry';
+import { RISK_PENDING } from '@/theme/risk';
+import { labelEls, labelShowsProbability, labelSizes, lineEls } from './labelRegistry';
 
 const DEFAULT_VESSELS = ['LAD', 'LCX', 'RCA'];
+/** The band-change ring plays at most once per 1.2 s per label (V2 §8.3). */
+const RING_THROTTLE_MS = 1200;
+const RING_MS = 260;
+/** Stale after 150 ms of loading: achromatic pip, dimmed numeral (V2 §8.3.6). */
+const STALE_AFTER_MS = 150;
+
+function useBandRing(target: string, band: string | null): boolean {
+  const reduced = useReducedMotion();
+  const last = useRef<{ band: string | null; at: number }>({ band, at: 0 });
+  const [ringing, setRinging] = useState(false);
+  useEffect(() => {
+    const prev = last.current;
+    if (band === prev.band) return;
+    last.current = { band, at: prev.at };
+    // No ring for the first value, a patient switch to/from "no estimate", or under reduced motion.
+    if (prev.band === null || band === null || reduced) return;
+    const now = performance.now();
+    if (now - prev.at < RING_THROTTLE_MS) return;
+    last.current.at = now;
+    setRinging(true);
+    const t = window.setTimeout(() => setRinging(false), RING_MS + 40);
+    return () => window.clearTimeout(t);
+  }, [band, reduced, target]);
+  return ringing;
+}
 
 function Label({ target }: { target: string }) {
-  const prediction = usePatientStore((s) => s.prediction?.predictions[target]);
+  const prediction = usePatientStore((s) => selectDisplayedPrediction(s)?.predictions[target]);
   const status = usePatientStore((s) => s.status);
-  const selected = useViewerStore((s) => s.selectedStructure === target);
+  const chrome = useUiStore((s) => s.chrome);
   const hovered = useViewerStore((s) => s.hoveredStructure === target);
-  const dimmed = useViewerStore((s) => s.selectedStructure !== null && s.selectedStructure !== target);
+  const stale = useDelayedFlag(status === 'loading', STALE_AFTER_MS);
   const p = prediction?.probability;
-  const band = prediction ? bandStyle(prediction.risk_band) : null;
+  const pending = stale || (status === 'error' && !prediction);
   const f = formatProbability(p);
+  const showPct = labelShowsProbability(chrome);
+  const ringing = useBandRing(target, prediction?.risk_band ?? null);
 
   const register = useCallback(
     (el: HTMLButtonElement | null) => {
@@ -34,30 +63,50 @@ function Label({ target }: { target: string }) {
       type="button"
       tabIndex={-1}
       aria-hidden
-      onClick={() => useViewerStore.getState().select(selected ? null : target)}
+      data-target={target}
+      data-hovered={hovered}
+      onClick={() => {
+        const v = useViewerStore.getState();
+        v.select(v.selectedStructure === target ? null : target);
+      }}
       onPointerEnter={() => useViewerStore.getState().hover(target)}
-      onPointerLeave={() => useViewerStore.getState().hover(null)}
+      onPointerLeave={() => {
+        if (useViewerStore.getState().hoveredStructure === target) useViewerStore.getState().hover(null);
+      }}
       style={{ opacity: 0 }}
       className={cn(
-        'group pointer-events-auto absolute left-0 top-0 flex h-7 items-center gap-1.5 rounded-sm border bg-surface-3/[0.88] px-2 shadow-hud transition-[opacity,border-color] duration-fast will-change-transform',
-        selected ? 'border-accent' : hovered ? 'border-line-strong' : 'border-line',
-        dimmed && 'saturate-50',
+        'group pointer-events-auto absolute left-0 top-0 flex items-center whitespace-nowrap rounded-sm border bg-surface-3/[0.88] pl-2 pr-2 shadow-hud outline-none will-change-transform',
+        'transition-[opacity,border-color,height] duration-fast ease-out',
+        showPct ? 'h-7' : 'h-6',
+        'border-line data-[hovered=true]:border-line-strong',
+        'data-[selected=true]:border-accent data-[selected=true]:shadow-[0_0_0_1px_rgb(var(--c-accent)/0.35),var(--e-hud)]',
+        'data-[dimmed=true]:saturate-50',
       )}
     >
-      <RiskPip p={status === 'error' && !prediction ? null : p} />
-      <span className="eyebrow text-primary">{target}</span>
-      <span className="font-numeral text-numeral-label text-primary">
+      <span className="relative inline-flex">
+        <RiskPip p={pending ? null : p} />
+        {ringing && (
+          <span
+            aria-hidden
+            className="absolute inset-0 animate-pip-ring rounded-full [animation-fill-mode:both]"
+            style={{ boxShadow: `0 0 0 1.5px ${pending || p == null ? RISK_PENDING : 'rgb(var(--c-text-primary))'}` }}
+          />
+        )}
+      </span>
+      <span className="eyebrow ml-1.5 text-primary">{target}</span>
+      <span
+        data-prob={showPct ? target : undefined}
+        className={cn(
+          'overflow-hidden font-numeral text-numeral-label tabular-nums text-primary transition-[max-width,opacity,margin] duration-fast ease-out group-data-[compact=true]:hidden',
+          showPct ? 'ml-1.5 max-w-[56px] opacity-100' : 'ml-0 max-w-0 opacity-0',
+          pending && 'opacity-50',
+        )}
+      >
         {f.qualifier}
         {f.value}
         {f.value !== '–' && <span className="pct-sign">%</span>}
       </span>
-      {band && (
-        <span className="flex items-center gap-1 group-data-[compact=true]:hidden">
-          <RiskMeter level={band.level} />
-          <span className="eyebrow text-secondary">{band.label}</span>
-        </span>
-      )}
-      <span className="hidden text-label font-normal text-tertiary group-data-[posterior=true]:inline">(posterior)</span>
+      <span className="ml-1.5 hidden text-label font-normal text-tertiary group-data-[behind=true]:inline">(behind)</span>
     </button>
   );
 }
@@ -70,18 +119,51 @@ function Leader({ target }: { target: string }) {
     },
     [target],
   );
-  return <line ref={register} stroke="#EDF1F5" strokeWidth={1} style={{ opacity: 0 }} x1={0} y1={0} x2={0} y2={0} />;
+  return (
+    <line
+      ref={register}
+      className="stroke-primary transition-opacity duration-fast data-[selected=true]:stroke-accent"
+      strokeWidth={1}
+      style={{ opacity: 0 }}
+      x1={0}
+      y1={0}
+      x2={0}
+      y2={0}
+    />
+  );
 }
 
 /**
- * DOM half of the vessel labels (DESIGN_SYSTEM §7.6): pip, code, "72 %", band meter + word on
- * surface/3 at 88 %. Positions are written by <LabelProjector/> inside the canvas. Labels are decorative
- * duplicates for sighted users (aria-hidden); the accessible equivalent is the scene summary and the
- * vessel rows in the risk panel.
+ * DOM half of the vessel labels v2 (WORKSTATION_V2 §5.14): an 8 px pip + the code (overline) on a
+ * surface/3 chip at 88 % with a 1 px border, h 24; with chrome focus / landing the % joins (h 28,
+ * `data-prob`), crossfading over `fast`. No band word and no meter. The selected label carries an accent
+ * ring; hover strengthens the border; far-side unselected labels read "(behind)"; the pip rings once when
+ * the band changes. Positions and states are written by <LabelProjector/> inside the canvas. Labels are
+ * decorative duplicates for sighted users (aria-hidden); the accessible equivalent is the scene summary
+ * and the vessel rows in the risk card.
  */
 export function VesselLabelsOverlay() {
   const schema = useSchemaIndex();
   const targets = schema?.vessels.map((t) => t.id) ?? DEFAULT_VESSELS;
+
+  // Keep label sizes current for the lane layout without forcing layout in the render loop.
+  useEffect(() => {
+    if (typeof ResizeObserver === 'undefined') return;
+    const ro = new ResizeObserver((entries) => {
+      for (const e of entries) {
+        const el = e.target as HTMLElement;
+        const id = el.dataset.target;
+        if (id) labelSizes.set(id, { width: el.offsetWidth, height: el.offsetHeight });
+      }
+    });
+    for (const [id, el] of labelEls) {
+      if (!targets.includes(id)) continue;
+      labelSizes.set(id, { width: el.offsetWidth, height: el.offsetHeight });
+      ro.observe(el);
+    }
+    return () => ro.disconnect();
+  }, [targets]);
+
   return (
     <div aria-hidden className="pointer-events-none absolute inset-0 z-labels overflow-hidden">
       <svg className="absolute inset-0 h-full w-full">
