@@ -18,12 +18,15 @@ export interface HoverContent {
   note: string | null;
 }
 
-const clip = (text: string | null | undefined, max = 220): string | null => {
+/** Shorten to `max` characters, preferring a sentence or clause boundary over a mid-phrase cut. */
+export const clip = (text: string | null | undefined, max = 220): string | null => {
   if (!text) return null;
   const t = text.trim();
   if (t.length <= max) return t;
-  const cut = t.slice(0, max);
-  return `${cut.slice(0, Math.max(cut.lastIndexOf(' '), max - 20))}…`;
+  const head = t.slice(0, max);
+  const clause = Math.max(head.lastIndexOf('. '), head.lastIndexOf('; '));
+  if (clause >= 60) return `${head.slice(0, clause)}.`;
+  return `${head.slice(0, Math.max(head.lastIndexOf(' '), max - 20))}…`;
 };
 
 /**

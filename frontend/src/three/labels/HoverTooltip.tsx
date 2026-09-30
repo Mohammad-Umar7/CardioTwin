@@ -82,17 +82,19 @@ export function HoverTooltip() {
 
   if (!shown) return null;
   const c = hoverContent(shown, manifest);
+  // The outer box is placed by a transform every frame; the enter animation runs on the inner card so
+  // its keyframed transform never overrides the position.
   return (
-    <div
-      ref={ref}
-      role="tooltip"
-      data-region="hover-tooltip"
-      className="pointer-events-none absolute left-0 top-0 z-popover w-max max-w-[280px] rounded-md bg-surface-3 px-2.5 py-2 text-label font-normal text-secondary shadow-e2 motion-safe:animate-rise-in"
-    >
-      <p className="text-body-s font-semibold text-primary">{c.title}</p>
-      {c.segment && <p className="mt-0.5 text-label font-medium text-primary">{c.segment}</p>}
-      {c.definition && <p className="mt-1">{c.definition}</p>}
-      {c.note && <p className="mt-1 text-tertiary">{c.note}</p>}
+    <div ref={ref} data-region="hover-tooltip" className="pointer-events-none absolute left-0 top-0 z-popover w-max max-w-[280px]">
+      <div
+        role="tooltip"
+        className="rounded-md bg-surface-3 px-2.5 py-2 text-label font-normal text-secondary shadow-e2 motion-safe:animate-rise-in"
+      >
+        <p className="text-body-s font-semibold text-primary">{c.title}</p>
+        {c.segment && <p className="mt-0.5 text-label font-medium text-primary">{c.segment}</p>}
+        {c.definition && <p className="mt-1">{c.definition}</p>}
+        {c.note && <p className="mt-1 text-tertiary">{c.note}</p>}
+      </div>
     </div>
   );
 }

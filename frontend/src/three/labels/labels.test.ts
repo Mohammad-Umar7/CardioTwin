@@ -6,7 +6,7 @@ import type { AnatomyManifest, VesselsFile } from '@/types/contracts';
 import { VISIBLE_FACING, trunkVisibility, visibleBestView } from '../camera/bestView';
 import { bestViewFor, toControlsAngles } from '../camera/presets';
 import { buildTracks, heartAxisFrame, restToDisplayed } from './anchorTracks';
-import { hoverContent } from './hoverContent';
+import { clip, hoverContent } from './hoverContent';
 import { ANCHOR_PERIOD_MS, AnchorChooser, bestCandidate, buildCandidates, facing, mainTrunk } from './dynamicAnchor';
 import { LABEL_MIN_GAP, labelShowsProbability, laneFor, layoutLanes, stackLane, type LaneItem } from './labelRegistry';
 
@@ -183,6 +183,14 @@ describe('hover tooltip content (V2 §9.3 D, CONTRACTS §7.1)', () => {
     expect(c.definition).toBe('From D1 to D2');
     expect(c.note).toMatch(/risk is estimated for the whole LAD/);
     expect(`${c.title} ${c.segment} ${c.definition} ${c.note}`).not.toMatch(/lesion|stenosis at|diagnos/i);
+  });
+
+  it('cuts long definitions at a clause, never mid-phrase', () => {
+    const long = `${'The artery runs in the anterior groove to the apex'.padEnd(80, ' x')}; SCCT 6 is proximal (to D1), 7 mid (to D2) and 8 distal ${'y'.repeat(200)}`;
+    const c = clip(long)!;
+    expect(c.endsWith('.')).toBe(true);
+    expect(c.length).toBeLessThanOrEqual(221);
+    expect(clip('short')).toBe('short');
   });
 
   it('falls back to the structure description, and explains territories', () => {
