@@ -126,7 +126,8 @@ export interface HeroHudProps {
 
 /**
  * Hero overlays inside the canvas slot (V2 §6.1): the copy-contrast gradient (chrome, not glass), the
- * attract caption, the patient caption under the heart and the "Interactive 3D" tag with credits.
+ * attract caption, the patient caption under the heart and the "Interactive 3D" tag. The anatomy credit
+ * lives in the status line on every anatomy route (V2 §5.17).
  * Everything that is not a control lets pointer events through to the canvas.
  */
 export function HeroHud({ attract, vessels, leaving }: HeroHudProps) {
@@ -171,7 +172,6 @@ export function HeroHud({ attract, vessels, leaving }: HeroHudProps) {
             <Rotate3d aria-hidden className="size-3.5 stroke-[1.5]" />
             Interactive 3D · drag to rotate
           </span>
-          <Credits />
         </div>
       </div>
     </>

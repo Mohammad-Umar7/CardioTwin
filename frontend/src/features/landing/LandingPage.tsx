@@ -68,14 +68,14 @@ export default function LandingPage() {
       >
         <CanvasSlot
           stage="hero"
-          className="h-[56svh] min-h-[340px] min-[1100px]:!absolute min-[1100px]:inset-0 min-[1100px]:h-auto min-[1100px]:min-h-0"
+          className="order-2 h-[52svh] min-h-[320px] min-[1100px]:!absolute min-[1100px]:inset-0 min-[1100px]:h-auto min-[1100px]:min-h-0"
           placeholder={<HeroPoster />}
         >
           <HeroHud attract={attract} vessels={vessels} leaving={leaving} />
         </CanvasSlot>
 
         <div
-          className="relative z-panels px-6 pb-8 pt-8 min-[1100px]:pointer-events-none min-[1100px]:absolute min-[1100px]:inset-x-0 min-[1100px]:top-0 min-[1100px]:flex min-[1100px]:items-center min-[1100px]:py-0 min-[1100px]:pl-[clamp(24px,5.4vw,88px)]"
+          className="relative z-panels order-1 px-6 pb-8 pt-8 min-[1100px]:pointer-events-none min-[1100px]:absolute min-[1100px]:inset-x-0 min-[1100px]:top-0 min-[1100px]:flex min-[1100px]:items-center min-[1100px]:py-0 min-[1100px]:pl-[clamp(24px,5.4vw,88px)]"
           style={{ bottom: 'var(--landing-bands-h, 0px)' }}
         >
           <HeroCopy
@@ -90,7 +90,7 @@ export default function LandingPage() {
           ref={bandsRef}
           data-region="landing-bands"
           className={cn(
-            'relative z-panels border-t border-hairline bg-app transition-[opacity,transform] duration-base min-[1100px]:absolute min-[1100px]:inset-x-0 min-[1100px]:bottom-0',
+            'relative z-panels order-3 border-t border-hairline bg-app transition-[opacity,transform] duration-base min-[1100px]:absolute min-[1100px]:inset-x-0 min-[1100px]:bottom-0',
             // Soft edge: the stage melts into the bands instead of ending on a hard line.
             'min-[1100px]:before:pointer-events-none min-[1100px]:before:absolute min-[1100px]:before:inset-x-0 min-[1100px]:before:bottom-full min-[1100px]:before:h-16 min-[1100px]:before:bg-gradient-to-t min-[1100px]:before:from-app min-[1100px]:before:to-transparent',
             leaving ? 'translate-y-2 opacity-0 ease-exit' : 'ease-out',

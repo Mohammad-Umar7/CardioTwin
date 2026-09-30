@@ -53,7 +53,7 @@ function AucTable({ lm }: { lm: LandingMetrics }) {
   const resplits = lm.targets.some((t) => t.robustness);
   return (
     <div className="flex flex-col gap-2">
-      <table className="num text-label font-normal">
+      <table className="num w-full whitespace-nowrap text-label font-normal">
         <thead className="text-tertiary">
           <tr>
             <th className="pb-1 pr-3 text-left font-medium">Target</th>
@@ -153,9 +153,10 @@ export function KpiStrip({ className }: { className?: string }) {
       </Tile>
       <div className="col-span-2 flex min-w-0 flex-col justify-center gap-1 px-5 py-3 min-[1100px]:col-span-1 min-[1440px]:px-6">
         <Tooltip
+          className="max-w-[420px]"
           content={
             lm ? (
-              <div className="flex max-w-[380px] flex-col gap-2">
+              <div className="flex flex-col gap-2">
                 {reconcile && <p>{reconcile}</p>}
                 <AucTable lm={lm} />
               </div>
