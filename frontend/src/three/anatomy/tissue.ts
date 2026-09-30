@@ -137,6 +137,14 @@ interface Look {
   baked?: { tint?: string; saturation?: number; linear?: readonly [number, number, number] };
   /** Depth bias toward the camera (epicardial fat lying on the wall it covers). */
   polygonOffset?: boolean;
+  /**
+   * Depth bias AWAY from the camera (scene units, view space): where this surface lies within that distance
+   * of the one under it, the one under it wins — the Realistic fat's paper-thin edges and ripples then sink
+   * into the wall instead of drawing dark hairline "cracks" across the muscle.
+   */
+  recede?: number;
+  /** Strength of the baked normal map (1 = as baked). */
+  normalScale?: number;
   /** Pull the surface in along its normals (scene units): thinner fat, sitting flush in its groove. */
   deflate?: number;
   /** Dark grazing-angle outline strength (coronaries against the fat and the wall). */
@@ -144,10 +152,10 @@ interface Look {
 }
 
 /**
- * Epicardial fat pulled 1.4 mm in along its normals: the synthetic lumps read as flush, lobulated fat in the
+ * Epicardial fat pulled 1.8 mm in along its normals: the synthetic lumps read as flush, lobulated fat in the
  * grooves with the arteries partly embedded, not as raised piping the coronaries sit on.
  */
-export const FAT_DEFLATE = 0.014;
+export const FAT_DEFLATE = 0.018;
 
 /**
  * The pulmonary trunk fades along its own wall (`_dist_heart`, from the pulmonary valve) — opaque from the
@@ -185,40 +193,43 @@ const CLINICAL: Partial<Record<TissueKind, Look>> = {
  */
 const REALISTIC: Partial<Record<TissueKind, Look>> = {
   myocardium: {
+    // A specimen's epicardium is a moist maroon-brown with a soft, velvety sheen: a thin, rough clearcoat (no
+    // sharp white streaks on the muscle) and a warm sheen at tiers A and B carry the wetness, and the bake is
+    // pulled from tomato red toward maroon (linear multiplier, a little desaturated).
     color: REAL.myocardium,
-    roughness: 0.55,
-    env: 0.5,
-    clearcoat: 0.3,
-    clearcoatRoughness: 0.38,
-    sheen: 0.2,
-    sheenColor: '#8E3A34',
-    sheenRoughness: 0.6,
+    roughness: 0.6,
+    env: 0.45,
+    clearcoat: 0.1,
+    clearcoatRoughness: 0.6,
+    sheen: 0.32,
+    sheenColor: '#B85A4A',
+    sheenRoughness: 0.55,
     detail: { freq: 5.5, bump: 0.0035, colorVar: 0.22, roughVar: 0.12, deep: REAL.myocardiumDeep, fibre: { axis: 'heart', stretch: 2.2 } },
-    sss: { wrap: 0.55, tint: REAL.wrapTint, color: REAL.sss, strength: 0.28 },
+    sss: { wrap: 0.55, tint: REAL.wrapTint, color: REAL.sss, strength: 0.24 },
     interior: REAL.interior,
     fat: 0.5,
-    baked: { tint: '#FFFFFF', saturation: 0.94 },
+    baked: { saturation: 0.74, linear: [0.82, 0.73, 0.73] },
   },
   fat: {
     // Epicardial adipose tissue: warm golden-yellow lobules lying flush in the grooves, softly translucent
     // (wrap + back-scatter), with a velvety sheen instead of a lacquer — and darker than the coronaries, so the
     // risk-coloured arteries stay the brightest, most saturated thing on the stage (V2 §5.15).
     color: REAL.fatMesh,
-    roughness: 0.45,
+    roughness: 0.55,
     env: 0.3,
-    clearcoat: 0.1,
-    clearcoatRoughness: 0.5,
+    clearcoat: 0.08,
+    clearcoatRoughness: 0.55,
     sheen: 0.35,
-    sheenColor: '#DCD0A4',
+    sheenColor: '#E8D8A8',
     sheenRoughness: 0.45,
-    // Lobules: a coarser, deeper bump than the bake's fine grain.
+    // Lobules: a coarser, deeper bump than the bake's fine grain, and the bake's own normals at 1.5×.
     detail: { freq: 24, bump: 0.02, colorVar: 0.2, roughVar: 0.12, deep: REAL.fatDeep },
-    sss: { wrap: 0.5, tint: '#F0E8D0', color: '#625A38', strength: 0.16 },
-    // The bake (anatomy 1.1.0) is a pale butter yellow: keep its hue at under half its chroma and take its
-    // luminance down, so on screen the fat is darker AND less chromatic than the coronaries (measured with
-    // `__ct.stats` at P-011, home: fat luminance 0.53 / chroma 0.30 against the coronaries' 0.57 / 0.33).
-    baked: { tint: '#C2B696', saturation: 0.45 },
-    polygonOffset: true,
+    sss: { wrap: 0.5, tint: '#F4ECD4', color: '#6E6038', strength: 0.18 },
+    // The bake (anatomy 1.1.0) is a golden butter yellow: a near-white multiplier keeps its gold (a flat khaki
+    // decal otherwise), clearly lighter than the maroon wall it lies on.
+    baked: { tint: '#F2ECE0', saturation: 0.78 },
+    normalScale: 1.5,
+    recede: 0.008,
     deflate: FAT_DEFLATE,
   },
   papillary: {
@@ -267,7 +278,8 @@ const REALISTIC: Partial<Record<TissueKind, Look>> = {
     edgeShade: 0.42,
   },
   aorta: {
-    // Pale adventitia (a real specimen's cream-pink), greyed so its chroma stays under the coronary ramp.
+    // Pale adventitia (a real specimen's cream-pink), greyed so its chroma stays under the coronary ramp; the
+    // bake is a dark red, so a linear factor above 1 lifts it to the pulmonary trunk's pale tone.
     color: REAL.adventitia,
     roughness: 0.6,
     env: 0.45,
@@ -276,7 +288,7 @@ const REALISTIC: Partial<Record<TissueKind, Look>> = {
     detail: { freq: 14, bump: 0.004, colorVar: 0.14, roughVar: 0.12, deep: REAL.adventitiaDeep },
     sss: { wrap: 0.35, tint: '#FFC2B0', color: '#9A4C3E', strength: 0.12 },
     interior: '#4A2322',
-    baked: { tint: '#EADCD4', saturation: 0.3 },
+    baked: { tint: '#EADCD4', saturation: 0.12, linear: [1.8, 1.48, 1.28] },
   },
   pulmonaryArtery: {
     color: REAL.adventitia,
@@ -314,13 +326,15 @@ const REALISTIC: Partial<Record<TissueKind, Look>> = {
     baked: { tint: '#B8A8B2', saturation: 0.22 },
   },
   cardiacVein: {
+    // Neutral dark plum-grey (chroma < 0.1 on screen): the bake's atlas blue would sit on the risk ramp's low
+    // (blue) end right beside a low-risk LAD in the AIV groove and read as an artery.
     color: REAL.cardiacVein,
     roughness: 0.5,
-    env: 0.4,
-    clearcoat: 0.3,
-    clearcoatRoughness: 0.38,
-    detail: { freq: 30, bump: 0.002, colorVar: 0.1, roughVar: 0.08, deep: REAL.atlasVeinDeep },
-    baked: { tint: '#F2DCE8', saturation: 0.3 },
+    env: 0.35,
+    clearcoat: 0.2,
+    clearcoatRoughness: 0.45,
+    detail: { freq: 30, bump: 0.002, colorVar: 0.1, roughVar: 0.08, deep: REAL.cardiacVeinDeep },
+    baked: { saturation: 0, linear: [1.35, 1.18, 1.24] },
   },
   bone: {
     color: REAL.bone,
@@ -455,7 +469,7 @@ export function createTissueMaterial(o: TissueOptions): TissueMaterial {
           ...params,
           clearcoat: L.clearcoat ?? 0,
           clearcoatRoughness: L.clearcoatRoughness ?? 0.2,
-          sheen: o.tier === 'A' ? L.sheen ?? 0 : 0,
+          sheen: L.sheen ?? 0,
           sheenColor: new Color(L.sheenColor ?? '#000000'),
           sheenRoughness: L.sheenRoughness ?? 0.5,
         })
@@ -463,7 +477,10 @@ export function createTissueMaterial(o: TissueOptions): TissueMaterial {
   ) as TissueMaterial;
   if (baked && L.baked?.linear) material.color.setRGB(...L.baked.linear);
   if (maps?.map) material.map = maps.map;
-  if (maps?.normalMap) material.normalMap = maps.normalMap;
+  if (maps?.normalMap) {
+    material.normalMap = maps.normalMap;
+    if (L.normalScale) material.normalScale.setScalar(L.normalScale);
+  }
   if (maps?.roughnessMap) material.roughnessMap = maps.roughnessMap;
   if (maps?.aoMap) material.aoMap = maps.aoMap;
   if (o.clippingPlanes) material.clippingPlanes = o.clippingPlanes;
@@ -549,12 +566,26 @@ export function createTissueMaterial(o: TissueOptions): TissueMaterial {
   material.userData.ct = { uniforms, kind: o.kind, look: o.look, flags, floorScale: realistic ? 0.45 : 1 };
   const inflate = (o.inflate ?? 0) > 0;
   const deflate = !inflate && !!L.deflate;
+  const recede = !inflate ? L.recede ?? 0 : 0;
   material.onBeforeCompile = (shader) => {
     patchTissueShader(shader, uniforms, flags);
     if (deflate) {
       shader.vertexShader = shader.vertexShader
         .replace('#include <common>', '#include <common>\nuniform float uInflate;')
         .replace('vCtRest = transformed + uRestOffset;', 'vCtRest = transformed + uRestOffset;\ntransformed += normalize(objectNormal) * uInflate;');
+    }
+    if (recede > 0) {
+      // Push the DEPTH (not the screen position) away from the camera, like the coronaries' pull toward it.
+      shader.vertexShader = shader.vertexShader
+        .replace('#include <common>', `#include <common>\nconst float CT_DEPTH_PUSH = ${recede.toFixed(4)};`)
+        .replace(
+          '#include <project_vertex>',
+          `#include <project_vertex>
+{
+  vec4 ctPushed = projectionMatrix * vec4(mvPosition.xy, mvPosition.z - CT_DEPTH_PUSH, 1.0);
+  gl_Position.z = ctPushed.z / ctPushed.w * gl_Position.w;
+}`,
+        );
     }
     if (inflate) {
       // Coronaries lie in their grooves under the epicardial fat: pull their DEPTH (not their screen
@@ -573,7 +604,7 @@ export function createTissueMaterial(o: TissueOptions): TissueMaterial {
         );
     }
   };
-  const key = `ct-tissue-${physical ? 'P' : 'S'}-${patchKey(flags)}-${inflate ? 'inf' : deflate ? 'def' : ''}`;
+  const key = `ct-tissue-${physical ? 'P' : 'S'}-${patchKey(flags)}-${inflate ? 'inf' : deflate ? 'def' : ''}${recede > 0 ? `-rec${recede}` : ''}`;
   material.customProgramCacheKey = () => key;
   return material;
 }

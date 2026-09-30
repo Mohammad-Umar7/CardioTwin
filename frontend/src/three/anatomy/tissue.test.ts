@@ -15,19 +15,24 @@ function make(kind: TissueKind, maps: BakedMaps | null, look: SceneLookId = 'rea
 }
 
 describe('tissue materials (Realistic look)', () => {
-  it('lets a baked albedo carry the colour: white factor, roughness from the ORM map, no desaturation', () => {
+  it('lets a baked albedo carry the colour: a light maroon multiplier, roughness from the ORM map', () => {
     const m = make('myocardium', baked()) as MeshPhysicalMaterial;
-    expect(m.color.getHexString()).toBe('ffffff');
+    // The bake is pulled from tomato red toward maroon-brown (a light, red-leaning multiplier, never the dark
+    // procedural base colour multiplied into it again).
+    expect(m.color.r).toBeGreaterThan(0.75);
+    expect(m.color.r).toBeGreaterThan(m.color.g);
+    expect(m.color.g).toBeGreaterThan(0.65);
     expect(m.roughness).toBe(1);
     expect(m.metalness).toBe(0);
-    expect(m.userData.ct.uniforms.uSaturation?.value ?? 1).toBeGreaterThan(0.9);
+    expect(m.userData.ct.uniforms.uSaturation?.value ?? 1).toBeGreaterThan(0.6);
   });
 
-  it('keeps the myocardium a soft wet sheen, never lacquer', () => {
+  it('keeps the myocardium a soft wet sheen, never lacquer (no white clearcoat streaks)', () => {
     const m = make('myocardium', baked()) as MeshPhysicalMaterial;
     expect(m).toBeInstanceOf(MeshPhysicalMaterial);
-    expect(m.clearcoat).toBeLessThanOrEqual(0.3);
-    expect(m.clearcoatRoughness).toBeGreaterThanOrEqual(0.35);
+    expect(m.clearcoat).toBeLessThanOrEqual(0.12);
+    expect(m.clearcoatRoughness).toBeGreaterThanOrEqual(0.55);
+    expect(m.sheen).toBeGreaterThan(0.2);
     expect(m.envMapIntensity).toBeLessThanOrEqual(0.55);
   });
 
@@ -36,11 +41,13 @@ describe('tissue materials (Realistic look)', () => {
     expect(`#${m.color.getHexString()}`.toUpperCase()).toBe(REAL.myocardium.toUpperCase());
   });
 
-  it('shades epicardial fat as fat (no territory, biased over the wall it covers)', () => {
+  it('shades epicardial fat as fat (no territory; its thin edges recede into the wall, never drawn over it)', () => {
     const m = make('fat', baked());
     expect(m.userData.ct.flags.territory).toBeNull();
-    expect(m.polygonOffset).toBe(true);
-    expect(m.polygonOffsetFactor).toBeLessThan(0);
+    // Never pulled toward the camera (its thin edges drew dark hairlines over the wall): its depth recedes,
+    // so where fat and wall nearly coincide the wall wins.
+    expect(m.polygonOffset).toBe(false);
+    expect(m.customProgramCacheKey()).toMatch(/rec/);
     // The ochre bake is greyed toward cream, never shown as the dark myocardium colour.
     expect(m.color.getHexString()).not.toBe(REAL.myocardium.slice(1).toLowerCase());
   });
