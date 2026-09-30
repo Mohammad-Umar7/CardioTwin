@@ -13,7 +13,7 @@
  * running batch between time slices.
  */
 import { FeatureInputError, ModelFormatError } from './errors';
-import { createInferenceHandler } from './handler';
+import type { InferenceHandler } from './handler';
 import type { InferenceRequest, InferenceResponse, InferenceResult, ModelInfo, ModelSourceMessage, SerializedError } from './protocol';
 import type { EdgeFeatureInput, EdgePredictResponse, EdgeScore, PortableModelSpec } from './types';
 
@@ -230,18 +230,28 @@ export class InferenceClient {
     else pending.reject(deserializeError(response.error));
   };
 
+  /**
+   * The same handler on the main thread. It is imported on first use, so the evaluator (which the worker
+   * bundles separately) stays out of the app's entry chunk; requests posted meanwhile keep their order.
+   */
   private inProcess(): Transport {
-    const handler = createInferenceHandler();
+    const handler: Promise<InferenceHandler> = import('./handler').then((m) => m.createInferenceHandler());
     let alive = true;
     return {
       runtime: 'main-thread',
       post: (request) => {
         // Asynchronous like a worker, so callers never observe re-entrancy.
-        queueMicrotask(() => {
-          void handler.handle(request).then((response) => {
-            if (alive && response) this.deliver(response);
-          });
-        });
+        void handler.then(
+          (h) =>
+            h.handle(request).then((response) => {
+              if (alive && response) this.deliver(response);
+            }),
+          (error: unknown) => {
+            if (!alive || request.type === 'cancel') return;
+            const message = error instanceof Error ? error.message : String(error);
+            this.deliver({ id: request.id, ok: false, error: { name: 'ModelFormatError', message: `The in-browser engine could not be loaded: ${message}` } });
+          },
+        );
       },
       terminate: () => {
         alive = false;
