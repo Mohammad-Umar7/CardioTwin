@@ -136,6 +136,9 @@ export function LabelProjector() {
     const ui = useUiStore.getState();
     const s = state.current;
     const { width, height } = size;
+    // The controls moved the camera earlier in this frame; project with this frame's matrices, not the
+    // last render's, so labels never trail a camera flight.
+    camera.updateMatrixWorld();
     eye.copy(camera.position);
 
     // Reveal after the first anatomy frame and the coronary ignition (never before there is a heart).
