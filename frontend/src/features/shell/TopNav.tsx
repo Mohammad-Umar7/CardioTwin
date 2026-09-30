@@ -1,18 +1,21 @@
-import { HelpCircle } from 'lucide-react';
+import { CircleHelp, Play, Search } from 'lucide-react';
 import { NavLink, useLocation, useNavigate } from 'react-router-dom';
-import { Button, HairlineProgress } from '@/design';
+import { Button, HairlineProgress, IconButton, Shortcut, withShortcut } from '@/design';
+import { startGuidedDemo } from '@/features/tour/tourApi';
 import { useDelayedFlag } from '@/hooks/useMediaQuery';
 import { cn } from '@/lib/cn';
 import { ROUTES, loadWorkstation } from '@/routes';
+import { SHORTCUT } from '@/state/commandIds';
 import { usePatientStore } from '@/state/patientStore';
 import { useUiStore } from '@/state/uiStore';
 import { EngineBadge } from './EngineBadge';
 import { PatientChip } from './PatientChip';
 
-const NAV = [
-  { to: ROUTES.workstation, label: 'Workstation', short: 'Workstation' },
-  { to: ROUTES.performance, label: 'Model performance', short: 'Performance' },
-  { to: ROUTES.methodology, label: 'Methodology', short: 'Method' },
+/** Primary nav, shortened (V2 §5.1, §5.20): Workstation · Performance · Method. */
+export const NAV = [
+  { to: ROUTES.workstation, label: 'Workstation' },
+  { to: ROUTES.performance, label: 'Performance' },
+  { to: ROUTES.methodology, label: 'Method' },
 ] as const;
 
 /** Brand mark: a rotated square outline with a heartbeat trace (◆). */
@@ -33,9 +36,49 @@ export function BrandMark({ className }: { className?: string }) {
 }
 
 /**
- * AppBar (DESIGN_SYSTEM §5): h 48 (40 below 1440), bg/app, bottom hairline. Nav tabs get a 2 px accent
- * underline when active. The patient chip is hidden on the landing page. A 1 px indeterminate accent
- * bar appears under the bar only while a prediction takes longer than 150 ms ("Verifying").
+ * Search field (V2 §5.1): 280 × 32, surface/1, "⌕ Search or jump to…" plus the Ctrl K / ⌘K chip. It is a
+ * button that opens the command palette; below 1440 it collapses to a 32 px icon button.
+ */
+function SearchTrigger() {
+  const open = () => useUiStore.getState().setPaletteOpen(true);
+  return (
+    <>
+      <button
+        type="button"
+        onClick={open}
+        aria-haspopup="dialog"
+        aria-keyshortcuts="Control+K Meta+K /"
+        className={cn(
+          'hidden h-8 w-[280px] items-center gap-2 rounded-sm border border-line bg-surface-1 pl-2.5 pr-1.5 text-left',
+          'text-body-s text-tertiary transition-colors duration-instant hover:border-line-strong hover:text-secondary',
+          'min-[1440px]:inline-flex',
+        )}
+      >
+        <Search aria-hidden className="size-4 shrink-0 stroke-[1.5]" />
+        <span className="min-w-0 flex-1 truncate">Search or jump to…</span>
+        <span aria-hidden>
+          <Shortcut shortcut="Mod+K" />
+        </span>
+      </button>
+      <IconButton
+        label="Search or jump to"
+        tooltip={withShortcut('Search or jump to…', SHORTCUT.palette)}
+        icon={<Search />}
+        size="md"
+        onClick={open}
+        aria-haspopup="dialog"
+        className="min-[1440px]:hidden"
+      />
+    </>
+  );
+}
+
+/**
+ * Top bar v2 (WORKSTATION_V2 §5.1): h 48 (40 below 1440), bg/app, bottom hairline. Brand · nav
+ * (13/18 500, 2 px accent underline on the active item) · centred search · PatientChip · EngineDot ·
+ * Guided demo (ghost, ▶; "Demo" below 1440) · ? (shortcut sheet). On the landing page the chip, the
+ * search, the demo button and ? are hidden: the hero owns the one tour entry (V2 §6.1). A 1 px
+ * indeterminate accent hairline runs under the bar only while a prediction takes longer than 150 ms.
  */
 export function TopNav() {
   const location = useLocation();
@@ -43,29 +86,20 @@ export function TopNav() {
   const onLanding = location.pathname === ROUTES.landing;
   const loading = usePatientStore((s) => s.status === 'loading');
   const showProgress = useDelayedFlag(loading, 150);
-  const openTour = useUiStore((s) => s.openTour);
-
-  const startTour = () => {
-    if (location.pathname !== ROUTES.workstation) {
-      void loadWorkstation();
-      navigate(ROUTES.workstation);
-    }
-    openTour(0);
-  };
 
   return (
-    <header className="sticky top-0 z-panels h-[var(--topbar-h)] shrink-0 border-b border-hairline bg-app">
+    <header data-region="topbar" className="sticky top-0 z-panels h-[var(--topbar-h)] shrink-0 border-b border-hairline bg-app">
       <div className="flex h-full items-center gap-2 px-3 min-[1440px]:px-4">
         <NavLink
           to={ROUTES.landing}
-          className="mr-2 flex items-center gap-2 rounded-sm px-1 py-1 text-title-2 text-primary"
+          className="mr-3 flex shrink-0 items-center gap-2 rounded-sm px-1 py-1 text-title-2 text-primary"
           aria-label="CardioTwin home"
         >
           <BrandMark />
           <span className="font-display tracking-[-0.02em]">CardioTwin</span>
         </NavLink>
 
-        <nav aria-label="Primary" className="flex h-full items-stretch">
+        <nav aria-label="Primary" className="flex h-full shrink-0 items-stretch">
           {NAV.map((item) => (
             <NavLink
               key={item.to}
@@ -80,8 +114,7 @@ export function TopNav() {
             >
               {({ isActive }) => (
                 <>
-                  <span className="hidden min-[1280px]:inline">{item.label}</span>
-                  <span className="min-[1280px]:hidden">{item.short}</span>
+                  {item.label}
                   <span
                     aria-hidden
                     className={cn('absolute inset-x-3 bottom-0 h-0.5 rounded-full', isActive ? 'bg-accent' : 'bg-transparent')}
@@ -92,29 +125,37 @@ export function TopNav() {
           ))}
         </nav>
 
-        <div className="ml-auto flex items-center gap-3">
+        <div className="flex min-w-0 flex-1 justify-center px-2">{!onLanding && <SearchTrigger />}</div>
+
+        <div className="flex shrink-0 items-center gap-1.5 min-[1440px]:gap-2">
           {!onLanding && <PatientChip />}
           <EngineBadge />
-          {onLanding ? (
-            <Button variant="secondary" size="sm" onClick={startTour} className="hidden sm:inline-flex">
-              Start 90-s tour
-            </Button>
-          ) : (
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={startTour}
-              iconLeft={<HelpCircle className="stroke-[1.5]" />}
-              data-tour="tour-button"
-            >
-              Tour
-            </Button>
+          {!onLanding && (
+            <>
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => startGuidedDemo(navigate, `${location.pathname}${location.search}`)}
+                iconLeft={<Play className="stroke-[1.5]" />}
+                data-tour="tour-button"
+                aria-label="Guided demo"
+              >
+                <span className="hidden min-[1440px]:inline">Guided demo</span>
+                <span className="min-[1440px]:hidden">Demo</span>
+              </Button>
+              <IconButton
+                label="Keyboard shortcuts"
+                tooltip={withShortcut('Keyboard shortcuts', SHORTCUT.shortcuts)}
+                icon={<CircleHelp />}
+                size="md"
+                onClick={() => useUiStore.getState().setShortcutsOpen(true)}
+                aria-haspopup="dialog"
+              />
+            </>
           )}
         </div>
       </div>
-      {showProgress && (
-        <HairlineProgress label="Verifying the estimate" className="absolute inset-x-0 -bottom-px" />
-      )}
+      {showProgress && <HairlineProgress label="Verifying the estimate" className="absolute inset-x-0 -bottom-px" />}
     </header>
   );
 }

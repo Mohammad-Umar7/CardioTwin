@@ -41,6 +41,7 @@ export function PatientChip({ className }: { className?: string }) {
             ref={ref}
             type="button"
             {...props}
+            data-region="patient-chip"
             aria-label={`Patient ${title}${edits > 0 ? `, ${edits} ${edits === 1 ? 'edit' : 'edits'}` : ''}. Switch patient`}
             className={cn(
               'relative inline-flex h-8 items-center gap-2 rounded-sm border border-transparent px-2 text-label text-secondary transition-colors duration-fast',
