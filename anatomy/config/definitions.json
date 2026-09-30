@@ -1,0 +1,260 @@
+{
+  "_comment": "Precise anatomical definitions and clinical relevance per node (CONTRACTS §7.1: structures[].fma_id / definition / clinical_relevance / accompanies). fma_id is the Foundational Model of Anatomy entity the node represents (null when the node is a set of parts or has no single FMA entity); provenance says whether the geometry is BodyParts3D, derived from it, or synthesised. Sources: docs/anatomy/REFERENCE.md.",
+  "nodes": {
+    "Skin_Torso": {
+      "fma_id": "FMA7163",
+      "provenance": "BodyParts3D",
+      "definition": "Skin of the anterior and lateral thoracic wall from the clavicles to below the costal margin (epidermis surface of the BodyParts3D whole-body skin, upper limbs removed).",
+      "clinical_relevance": "Landmark surface for auscultation and for the surface projection of the heart: apex beat in the left 5th intercostal space at the mid-clavicular line."
+    },
+    "Pectoralis_L": {
+      "fma_id": null,
+      "provenance": "BodyParts3D",
+      "definition": "Left pectoralis major: clavicular head (medial half of the clavicle) and sternocostal head (sternum and costal cartilages 1-6), converging on the lateral lip of the intertubercular sulcus of the humerus (cut at the shoulder plane).",
+      "clinical_relevance": "Overlies the anterior heart border; the window for parasternal echocardiography and the plane for device pockets lies beneath it."
+    },
+    "Pectoralis_R": {
+      "fma_id": null,
+      "provenance": "BodyParts3D",
+      "definition": "Right pectoralis major: clavicular and sternocostal heads converging on the humerus (cut at the shoulder plane).",
+      "clinical_relevance": "Overlies the right atrium and superior vena cava; site of the right infraclavicular venous access route."
+    },
+    "Ribs_L": {
+      "fma_id": null,
+      "provenance": "BodyParts3D",
+      "definition": "Left ribs 1-12 (bony parts; the costal cartilages are a separate node).",
+      "clinical_relevance": "Ribs 2-6 frame the cardiac silhouette; intercostal spaces are the reference for the apex (left 5th space) and valve projections."
+    },
+    "Ribs_R": {
+      "fma_id": null,
+      "provenance": "BodyParts3D",
+      "definition": "Right ribs 1-12 (bony parts).",
+      "clinical_relevance": "The right heart border (right atrium) projects between the right 3rd and 6th costal cartilages."
+    },
+    "CostalCartilage": {
+      "fma_id": null,
+      "provenance": "BodyParts3D",
+      "definition": "Hyaline costal cartilages of ribs 1-7 and the fused costal margin of ribs 8-10, joining the ribs to the sternum.",
+      "clinical_relevance": "Surface landmarks of the heart: superior border from left CC2 to right CC3, right border CC3-CC6, pulmonary valve at the left CC3 junction."
+    },
+    "Sternum": {
+      "fma_id": "FMA7485",
+      "provenance": "BodyParts3D",
+      "definition": "Manubrium, body and xiphoid process; the sternal angle (manubriosternal joint) lies at the level of the 2nd costal cartilage and the T4/T5 disc.",
+      "clinical_relevance": "Median sternotomy is the standard access for cardiac surgery; the sternal angle marks the start and end of the aortic arch and the carina."
+    },
+    "Clavicle_L": {
+      "fma_id": "FMA13323",
+      "provenance": "BodyParts3D",
+      "definition": "Left clavicle, from the sternoclavicular to the acromioclavicular joint.",
+      "clinical_relevance": "Landmark for the left subclavian vein (device leads) and the mid-clavicular line used to locate the apex beat."
+    },
+    "Clavicle_R": {
+      "fma_id": "FMA13322",
+      "provenance": "BodyParts3D",
+      "definition": "Right clavicle, from the sternoclavicular to the acromioclavicular joint.",
+      "clinical_relevance": "Landmark for subclavian and internal jugular venous access; the right brachiocephalic vein forms behind its sternal end."
+    },
+    "Spine_Thoracic": {
+      "fma_id": null,
+      "provenance": "BodyParts3D",
+      "definition": "Thoracic vertebrae T1-T12.",
+      "clinical_relevance": "Vertebral levels locate the carina (T4/T5), pulmonary-artery bifurcation (T5-T6) and IVC hiatus (T8); the descending aorta lies left anterolateral to the bodies."
+    },
+    "Lung_L": {
+      "fma_id": "FMA7310",
+      "provenance": "BodyParts3D",
+      "definition": "Left lung: superior lobe (with the lingula) and inferior lobe; the cardiac notch of the superior lobe leaves a bare area of pericardium at the 5th intercostal space.",
+      "clinical_relevance": "The cardiac notch is the acoustic window for apical echocardiography; lung tissue overlying the heart limits transthoracic imaging."
+    },
+    "Lung_R": {
+      "fma_id": "FMA7309",
+      "provenance": "BodyParts3D",
+      "definition": "Right lung: superior, middle and inferior lobes; its mediastinal surface is grooved by the right atrium, superior vena cava and azygos vein.",
+      "clinical_relevance": "The middle lobe abuts the right heart border; right pulmonary veins drain into the left atrium behind the right atrium and SVC."
+    },
+    "Trachea_Bronchi": {
+      "fma_id": null,
+      "provenance": "BodyParts3D",
+      "definition": "Trachea and bronchial tree; the carina (tracheal bifurcation) lies at T4/T5, the left main bronchus passes under the aortic arch.",
+      "clinical_relevance": "A widened subcarinal angle is a radiographic sign of left-atrial enlargement; the left atrium lies directly below the carina."
+    },
+    "Oesophagus": {
+      "fma_id": "FMA7131",
+      "provenance": "BodyParts3D",
+      "definition": "Thoracic oesophagus in the posterior mediastinum: behind the trachea, then directly behind the left atrium below about T5 (contact 58 +/- 14 mm), with the descending aorta to its left and, near the diaphragm, behind it.",
+      "clinical_relevance": "The window for transoesophageal echocardiography; at risk of atrio-oesophageal fistula during left-atrial (pulmonary-vein) ablation."
+    },
+    "Diaphragm": {
+      "fma_id": "FMA13295",
+      "provenance": "BodyParts3D",
+      "definition": "Musculotendinous floor of the thorax; the heart rests on its central tendon, fused to the fibrous pericardium; the IVC passes through it at T8.",
+      "clinical_relevance": "The inferior (diaphragmatic) wall of the heart, supplied by the PDA, lies on it; inferior myocardial infarction can mimic abdominal pain."
+    },
+    "Heart_Wall_Anterior": {
+      "fma_id": "FMA7274",
+      "provenance": "BodyParts3D",
+      "definition": "Anterior half of the heart wall (myocardium of all four chambers), opened by a long-axis cut through both ventricles; carries the sternocostal surface: right ventricle, anterior interventricular groove and the anterior left ventricle.",
+      "clinical_relevance": "Its COLOR_0 weights are the LAD / LCX / RCA perfusion territories used to colour model risk (a supply map, never a lesion map)."
+    },
+    "Heart_Wall_Posterior": {
+      "fma_id": "FMA7274",
+      "provenance": "BodyParts3D",
+      "definition": "Posterior half of the heart wall, opened by the same long-axis cut: left atrium, lateral and inferior (diaphragmatic) left-ventricular walls, posterior interventricular groove and crux.",
+      "clinical_relevance": "Inferior and inferolateral walls (AHA segments 3-5, 9-11, 15) are RCA / LCX territory in a right-dominant heart."
+    },
+    "Valve_Mitral": {
+      "fma_id": "FMA7235",
+      "provenance": "BodyParts3D",
+      "definition": "Left atrioventricular valve: anterior and posterior leaflets on the mitral annulus, tethered by chordae tendineae to the anterolateral and posteromedial papillary muscles; the anterior leaflet is in fibrous continuity with the aortic valve.",
+      "clinical_relevance": "Mitral regurgitation after inferior or lateral infarction follows papillary-muscle dysfunction (posteromedial muscle: single RCA/PDA supply)."
+    },
+    "Valve_Tricuspid": {
+      "fma_id": "FMA7234",
+      "provenance": "BodyParts3D",
+      "definition": "Right atrioventricular valve with anterior, posterior and septal leaflets; the septal leaflet hinge sits slightly apical to the mitral hinge.",
+      "clinical_relevance": "The RCA runs in the right AV groove next to its annulus (injury risk in tricuspid annuloplasty); apical displacement of the septal leaflet > 8 mm/m2 indicates Ebstein anomaly."
+    },
+    "Valve_Pulmonary": {
+      "fma_id": "FMA7246",
+      "provenance": "BodyParts3D",
+      "definition": "Semilunar valve at the right-ventricular outflow (conus), anterior, superior and to the left of the aortic valve; projects at the junction of the sternum and left 3rd costal cartilage.",
+      "clinical_relevance": "The pulmonary trunk and left main coronary artery are neighbours: the LM runs behind the trunk."
+    },
+    "Valve_Aortic": {
+      "fma_id": "FMA7236",
+      "provenance": "synthesised",
+      "definition": "Aortic valve: three semilunar cusps (right, left, non-coronary) hinged in a crown-shaped line in the sinuses of Valsalva from the annulus to the sino-tubular junction; the right and left sinuses give the RCA and left main ostia. Geometry synthesised (BodyParts3D has no aortic valve).",
+      "clinical_relevance": "Coronary ostial height above the annulus (MDCT ~14 mm LM, ~17 mm RCA) governs coronary-obstruction risk in transcatheter aortic valve implantation."
+    },
+    "Papillary_Muscles": {
+      "fma_id": null,
+      "provenance": "BodyParts3D",
+      "definition": "Papillary muscles: left-ventricular anterolateral and posteromedial groups and the right-ventricular anterior, posterior and septal muscles, anchoring the atrioventricular valve chordae.",
+      "clinical_relevance": "The posteromedial LV papillary muscle has a single (usually RCA/PDA) supply and is the one that ruptures after inferior infarction."
+    },
+    "GreatVessel_Aorta": {
+      "fma_id": "FMA3734",
+      "provenance": "BodyParts3D (ascending aorta calibre corrected, root synthesised)",
+      "definition": "Aortic root (annulus, three sinuses of Valsalva, sino-tubular junction; synthesised), ascending aorta (calibre corrected to an in-vivo value), arch (T4, over the right pulmonary artery and left main bronchus) and descending thoracic aorta (left of the spine, behind the left atrium and oesophagus).",
+      "clinical_relevance": "Both coronary arteries arise from its root; ascending-aortic dilatation (> 41 mm) and root anatomy matter for aortic surgery and TAVI."
+    },
+    "GreatVessel_Aorta_ArchBranches": {
+      "fma_id": null,
+      "provenance": "BodyParts3D",
+      "definition": "Branches of the aortic arch from right to left: brachiocephalic trunk (dividing into the right common carotid and right subclavian arteries), left common carotid and left subclavian arteries (standard three-branch arch, ~75-81 %).",
+      "clinical_relevance": "Arch anatomy determines catheter access for coronary angiography from the radial or femoral route and the risk of stroke in arch interventions."
+    },
+    "GreatVessel_PulmonaryArtery": {
+      "fma_id": "FMA66326",
+      "provenance": "BodyParts3D",
+      "definition": "Pulmonary trunk from the RV outflow (in front of and then left of the ascending aorta), bifurcating at T5-T6 into the right pulmonary artery (behind the ascending aorta and SVC) and the left pulmonary artery (over the left main bronchus), with the intrapulmonary branches.",
+      "clinical_relevance": "A main pulmonary artery wider than the ascending aorta (ratio > 1) suggests pulmonary hypertension. Vertex attributes _DIST_HEART / _DIST_HILUM separate the proximal trunk from the intrapulmonary tree."
+    },
+    "GreatVessel_PulmonaryVeins": {
+      "fma_id": "FMA66643",
+      "provenance": "BodyParts3D",
+      "definition": "Pulmonary veins (usually two right and two left) entering the smooth posterior-superior wall of the left atrium, with their intrapulmonary tributaries; they carry oxygenated blood.",
+      "clinical_relevance": "Pulmonary-vein isolation (ablation of atrial fibrillation) targets their left-atrial ostia; _DIST_HEART / _DIST_HILUM give the distance from those ostia and from the lung hilum."
+    },
+    "GreatVessel_SVC": {
+      "fma_id": "FMA4720",
+      "provenance": "BodyParts3D",
+      "definition": "Superior vena cava, formed behind the right 1st costal cartilage by the brachiocephalic veins, running vertically to the right of the ascending aorta into the roof of the right atrium (right 3rd costal cartilage).",
+      "clinical_relevance": "Route of central venous catheters and pacemaker leads; the sino-atrial node lies at its junction with the right atrium."
+    },
+    "GreatVessel_SVC_BrachiocephalicVeins": {
+      "fma_id": "FMA4723",
+      "provenance": "BodyParts3D",
+      "definition": "Right and left brachiocephalic veins, each formed behind the sternoclavicular joint by the internal jugular and subclavian veins (stubs shown); the longer left vein crosses in front of the arch branches to join the right behind the right 1st costal cartilage.",
+      "clinical_relevance": "Venous access route for central lines and transvenous pacing leads; the left vein can be compressed by an elongated aortic arch."
+    },
+    "GreatVessel_IVC": {
+      "fma_id": "FMA10951",
+      "provenance": "BodyParts3D",
+      "definition": "Inferior vena cava: passes the central tendon of the diaphragm at T8 and enters the posteroinferior right atrium after a short thoracic course (diameter < 21 mm).",
+      "clinical_relevance": "IVC calibre and collapsibility estimate right-atrial pressure on echocardiography; the coronary-sinus ostium lies in front of and medial to its orifice."
+    },
+    "CardiacVeins": {
+      "fma_id": "FMA12846",
+      "provenance": "BodyParts3D (re-swept with in-vivo calibres, joined and seated on the epicardium)",
+      "definition": "Coronary venous tree: coronary sinus in the posterior left AV groove on the atrial side of the mitral annulus, draining into the right atrium in front of the IVC orifice; great cardiac vein (left AV groove, beside the LCX) continuing as the anterior interventricular vein (beside the LAD); middle cardiac vein (with the PDA); posterior veins of the LV; anterior cardiac veins crossing the RCA to open directly into the right atrium. Per-vertex _VEIN labels.",
+      "clinical_relevance": "The coronary sinus and its tributaries are the route for left-ventricular leads in cardiac resynchronisation therapy and for retrograde cardioplegia; the LCX runs between the coronary sinus and the mitral annulus in ~70 % (percutaneous annuloplasty risk).",
+      "accompanies": ["lad", "lcx", "rca_pda", "rca"]
+    },
+    "EpicardialFat_Anterior": {
+      "fma_id": null,
+      "provenance": "synthesised",
+      "definition": "Epicardial adipose tissue in the anterior half: fat filling the right atrioventricular groove around the RCA and the anterior interventricular groove around the LAD and anterior interventricular vein (about 7 mm thick in the grooves, lobulated), with the vessels lying in shallow channels.",
+      "clinical_relevance": "Epicardial and pericoronary fat is metabolically active; CT pericoronary fat attenuation around the proximal RCA, LAD and LCX is a marker of coronary inflammation and risk."
+    },
+    "EpicardialFat_Posterior": {
+      "fma_id": null,
+      "provenance": "synthesised",
+      "definition": "Epicardial adipose tissue in the posterior half: fat in the left and posterior atrioventricular grooves around the LCX, great cardiac vein and coronary sinus, and in the posterior interventricular groove around the PDA and middle cardiac vein.",
+      "clinical_relevance": "Surrounds the coronary sinus and circumflex artery; excess epicardial fat is associated with atrial fibrillation and coronary artery disease."
+    },
+    "Coronary_LM": {
+      "fma_id": "FMA4685",
+      "provenance": "BodyParts3D",
+      "definition": "Left main coronary artery (SCCT 5): from its ostium in the left sinus of Valsalva, leftward behind the pulmonary trunk to its bifurcation into the LAD and LCX (about 10 mm long, 3.5-4.5 mm wide).",
+      "clinical_relevance": "Feeds both the LAD and LCX territories (~70 % of the LV); significant left-main disease is a surgical indication. Not a model target itself."
+    },
+    "Coronary_LAD": {
+      "fma_id": "FMA3862",
+      "provenance": "BodyParts3D",
+      "definition": "Left anterior descending artery in the anterior interventricular groove from the LM bifurcation to (and around) the apex, with diagonal branches to the anterolateral LV; SCCT 6 pLAD (to D1 / first septal), 7 mLAD (to half-way to the apex), 8 dLAD, 9 D1, 10 D2.",
+      "clinical_relevance": "Supplies the anterior wall, anterior two-thirds of the septum and the apex (AHA 1, 2, 7, 8, 13, 14, 17; ~42 % of the LV); proximal LAD occlusion causes the largest infarcts."
+    },
+    "Coronary_LAD_Septal": {
+      "fma_id": "FMA71670",
+      "provenance": "BodyParts3D",
+      "definition": "Septal perforating branches of the LAD, diving into the interventricular septum at 45-90 degrees (unnumbered in SCCT; labelled S1, S2 ... from proximal).",
+      "clinical_relevance": "Supply the anterior two-thirds of the septum and the conduction system (bundle branches); the first septal is the target of alcohol septal ablation."
+    },
+    "Coronary_LCX": {
+      "fma_id": "FMA3895",
+      "provenance": "BodyParts3D",
+      "definition": "Left circumflex artery in the left atrioventricular groove between the left atrium and ventricle (SCCT 11 pCx) to the obtuse margin, where it continues as the first obtuse marginal branch (SCCT 12 OM1) towards the apex over the lateral LV wall; it ends before the crux (right dominance).",
+      "clinical_relevance": "Supplies the lateral and inferolateral LV (AHA 5, 6, 11, 12, 16; ~29 % of the LV) and the left atrium; circumflex occlusions are often ECG-silent."
+    },
+    "Coronary_RCA": {
+      "fma_id": "FMA3802",
+      "provenance": "BodyParts3D",
+      "definition": "Right coronary artery from the right sinus of Valsalva, forward between the right auricle and pulmonary trunk, down the right atrioventricular groove, around the acute margin and along the inferior AV groove to the crux: SCCT 1 pRCA, 2 mRCA (to the acute margin), 3 dRCA (to the PDA origin), 16 R-PLB beyond the crux.",
+      "clinical_relevance": "Dominant in ~85 %: supplies the right ventricle, inferior wall and inferior septum (AHA 3, 4, 9, 10, 15) and usually the SA and AV nodes (bradyarrhythmia in inferior infarction)."
+    },
+    "Coronary_RCA_Marginal": {
+      "fma_id": "FMA3818",
+      "provenance": "BodyParts3D",
+      "definition": "Acute marginal and right-ventricular branches of the RCA running over the right-ventricular free wall towards the apex (unnumbered in SCCT).",
+      "clinical_relevance": "Supply the RV free wall; proximal RCA occlusion above them causes right-ventricular infarction."
+    },
+    "Coronary_RCA_PDA": {
+      "fma_id": "FMA3840",
+      "provenance": "BodyParts3D",
+      "definition": "Posterior descending artery (SCCT 4 R-PDA) from the RCA at the crux, running in the posterior (inferior) interventricular groove towards the apex and giving inferior septal branches.",
+      "clinical_relevance": "Defines right dominance; supplies the inferior wall, inferior third of the septum and the posteromedial papillary muscle."
+    },
+    "Coronary_RCA_PL": {
+      "fma_id": "FMA76994",
+      "provenance": "BodyParts3D",
+      "definition": "Posterolateral branch of the RCA (SCCT 16 R-PLB) continuing beyond the crux in the left AV groove and onto the inferolateral LV base.",
+      "clinical_relevance": "Supplies the inferior and inferolateral LV base in right-dominant hearts, overlapping with the LCX territory."
+    },
+    "Coronary_RCA_Septal": {
+      "fma_id": "FMA71669",
+      "provenance": "BodyParts3D",
+      "definition": "Inferior septal branches from the PDA (and RCA) into the posterior third of the interventricular septum (short, <= 15 mm; unnumbered in SCCT).",
+      "clinical_relevance": "Supply the inferior septum and often the AV node region together with the AV-nodal artery."
+    }
+  },
+  "veins": {
+    "1": {"label": "CS", "name": "Coronary sinus", "fma_id": "FMA4706", "accompanies": ["lcx"], "definition": "Last 30-40 mm of the venous tree in the posterior left AV groove, on the atrial side of the mitral annulus, from the valve of Vieussens / vein of Marshall to its ostium in the posteroinferior right atrium (in front of and medial to the IVC orifice); about 9-10 mm wide."},
+    "2": {"label": "GCV", "name": "Great cardiac vein", "fma_id": "FMA4707", "accompanies": ["lcx", "lm"], "definition": "Continuation of the anterior interventricular vein from the level of the LM bifurcation along the left AV groove beside the LCX, below the left auricle, to the coronary sinus; forms the triangle of Brocq and Mouchet with the proximal LAD and LCX."},
+    "3": {"label": "AIV", "name": "Anterior interventricular vein", "fma_id": "FMA4707", "accompanies": ["lad"], "definition": "Part of the great cardiac vein ascending in the anterior interventricular groove beside the LAD, usually on its left-ventricular side, from the apex to the LM bifurcation."},
+    "4": {"label": "MCV", "name": "Middle cardiac vein", "fma_id": "FMA4713", "accompanies": ["rca_pda"], "definition": "Runs from the apex in the posterior interventricular groove with the PDA and joins the coronary sinus about 10 mm from its ostium."},
+    "5": {"label": "PVLV", "name": "Posterior vein of the left ventricle", "fma_id": "FMA76751", "accompanies": ["rca_pl", "lcx"], "definition": "Posterior (inferolateral) left-ventricular veins between the middle cardiac and left marginal veins, draining into the coronary sinus about 28 mm from its ostium."},
+    "6": {"label": "ACV", "name": "Anterior cardiac veins", "fma_id": "FMA71567", "accompanies": ["rca", "rca_marginal"], "definition": "Two to five small veins of the anterior right-ventricular wall that cross the right AV groove (usually deep to the RCA) and open directly into the right atrium, bypassing the coronary sinus."}
+  }
+}

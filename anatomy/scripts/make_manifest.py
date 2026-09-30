@@ -26,7 +26,9 @@ from pathlib import Path
 import numpy as np
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
+import scct  # noqa: E402
 from common import (  # noqa: E402
+    ANATOMY_DIR,
     BUILD_REPORT,
     GLB_NAME,
     PUBLIC_DIR,
@@ -38,6 +40,24 @@ from common import (  # noqa: E402
 )
 
 MANIFEST = PUBLIC_DIR / "manifest.json"
+DEFINITIONS = ANATOMY_DIR / "config" / "definitions.json"
+#: Per-vertex attributes carried by the GLB (CONTRACTS §6.2 / §7.1); three.js lower-cases custom names.
+ATTRIBUTES = {
+    "COLOR_0": {"nodes": ["Heart_Wall_Anterior", "Heart_Wall_Posterior"], "type": "VEC3 unorm8",
+                "meaning": "perfusion-territory weights r = LAD, g = LCX, b = RCA; 1 - (r + g + b) = neutral (atria, roots)"},
+    "TEXCOORD_0": {"nodes": "every non-coronary mesh", "type": "VEC2",
+                   "meaning": "UVs of the baked PBR textures (baseColor, normal, occlusion + roughness)"},
+    "_ARCLEN": {"nodes": "Coronary_*", "type": "SCALAR float",
+                "meaning": "normalised arc length 0 -> 1 from the ostium of the tree (left tree from the LM ostium, right tree from the RCA ostium)"},
+    "_SEGMENT": {"nodes": "Coronary_*", "type": "SCALAR float (integer values)",
+                 "meaning": "SCCT 2014 segment number of the nearest labelled centreline point (1-18; 0 = named but unnumbered branch). See segments[]. Anatomical label only - never a lesion location."},
+    "_VEIN": {"nodes": ["CardiacVeins"], "type": "SCALAR float (integer values)",
+              "meaning": "cardiac-vein code of the nearest labelled vein centreline point, see veins[] (1 CS, 2 GCV, 3 AIV, 4 MCV, 5 PVLV, 6 ACV)"},
+    "_DIST_HEART": {"nodes": ["GreatVessel_PulmonaryArtery", "GreatVessel_PulmonaryVeins"], "type": "SCALAR float, scene units",
+                    "meaning": "geodesic distance along the vessel wall from its cardiac end (pulmonary valve / left-atrial ostium)"},
+    "_DIST_HILUM": {"nodes": ["GreatVessel_PulmonaryArtery", "GreatVessel_PulmonaryVeins"], "type": "SCALAR float, scene units",
+                    "meaning": "signed geodesic distance from where the vessel enters a lung: < 0 outside the lungs (towards the heart), > 0 intrapulmonary. Keep dist_hilum < ~0.02 to show only the proximal (extrapulmonary) vessels."},
+}
 VESSELS = "vessels.json"
 FOV_DEG = 35.0
 #: Aspect ratio the exploded camera preset is framed for (the viewer canvas is landscape).
@@ -99,7 +119,41 @@ def label_anchor(vessel: dict, fraction: float, heart_center: np.ndarray) -> tup
     return _r(p), _r(_unit(p - heart_center))
 
 
-def build_manifest(cfg: dict, report: dict, vessels: dict | None = None) -> dict:
+def definition_fields(node: str, definitions: dict) -> dict:
+    d = definitions.get("nodes", {}).get(node)
+    if not d:
+        return {}
+    out = {"fma_id": d.get("fma_id"), "provenance": d.get("provenance", "BodyParts3D"),
+           "definition": d["definition"], "clinical_relevance": d["clinical_relevance"]}
+    if d.get("accompanies"):
+        out["accompanies"] = d["accompanies"]
+    return out
+
+
+def segment_table(vessels: dict | None) -> list[dict]:
+    """SCCT 2014 18-segment table with the CardioTwin node, presence and measured extent."""
+    present: dict[int, float] = {}
+    if vessels:
+        for v in vessels["vessels"]:
+            for sg in v["segments"]:
+                P = np.array(sg["points"], dtype=float)
+                seglen = np.r_[0.0, np.cumsum(np.linalg.norm(np.diff(P, axis=0), axis=1))]
+                for lab in sg.get("labels", []):
+                    if lab["scct"]:
+                        a, b = lab["from"], max(lab["from"], min(lab["to"], len(P)) - 1)
+                        present[lab["scct"]] = present.get(lab["scct"], 0.0) + float(seglen[b] - seglen[a])
+    out = []
+    for n, (code, name, vessel, target, node, definition) in scct.SEGMENTS.items():
+        out.append({
+            "scct": n, "code": code, "name": name, "vessel": vessel, "target": target, "node": node or None,
+            "definition": definition, "source": scct.SOURCE, "present": n in present,
+            **({"length_mm": round(present[n] * 100, 1)} if n in present else {}),
+        })
+    return out
+
+
+def build_manifest(cfg: dict, report: dict, vessels: dict | None = None, definitions: dict | None = None) -> dict:
+    definitions = definitions or {}
     layers_cfg = layer_by_id(cfg)
     nodes = {n["node"]: n for n in report["nodes"]}
     cut_normal = _unit(np.array(report["heart"]["cut_plane"]["normal"], dtype=float))  # glTF, anterior-facing
@@ -145,7 +199,8 @@ def build_manifest(cfg: dict, report: dict, vessels: dict | None = None) -> dict
             "territory": spec.get("territory"),
             "category": spec["material"],
             "material": info["material"],
-            "fma": spec["parts"],
+            "fma": [p for p in spec["parts"] if not p.startswith("SYN_")],
+            **definition_fields(spec["node"], definitions),
             "center": _r(center),
             "bbox": {"min": _r(lo), "max": _r(hi)},
             "triangles": info["triangles"],
@@ -257,7 +312,10 @@ def build_manifest(cfg: dict, report: dict, vessels: dict | None = None) -> dict
                 "Soft nearest-artery assignment: softmax(-d/sigma) over the distances from each heart-wall vertex to "
                 "the LAD (+septal), LCX and RCA (+marginal, PDA, posterolateral, septal) groups, sigma = "
                 f"{cfg['territories']['sigma_mm']} mm, faded to zero on atria and great-vessel roots (thin wall and "
-                "closer to inflow/outflow vessels than to ventricular landmarks) and far from every artery."
+                "closer to inflow/outflow vessels than to ventricular landmarks) and far from every artery; on ventricular "
+                "myocardium blended "
+                f"{int(round(100 * cfg['territories'].get('standard_blend', {}).get('alpha', 0.0)))} % towards the AHA-17 "
+                "standard territories (Cerqueira 2002), the septum split between the LAD and RCA septal perforators."
             ),
             "interpretation": (
                 "Approximates the standard coronary perfusion territories of the AHA 17-segment model on this "
@@ -268,6 +326,9 @@ def build_manifest(cfg: dict, report: dict, vessels: dict | None = None) -> dict
         "targets": targets,
         "layers": layers,
         "structures": structures,
+        "segments": segment_table(vessels),
+        "veins": [{"code": int(k), **v} for k, v in sorted(definitions.get("veins", {}).items(), key=lambda kv: int(kv[0]))],
+        "attributes": ATTRIBUTES,
         "camera": {"fov": FOV_DEG, "home": home, "heart": heart_view, "exploded": exploded, "focus": focus},
     }
 
@@ -277,7 +338,8 @@ def main() -> int:
     report = read_json(BUILD_REPORT)
     vessels_path = PUBLIC_DIR / VESSELS
     vessels = read_json(vessels_path) if vessels_path.exists() else None
-    manifest = build_manifest(cfg, report, vessels)
+    definitions = read_json(DEFINITIONS) if DEFINITIONS.exists() else {}
+    manifest = build_manifest(cfg, report, vessels, definitions)
     write_json(MANIFEST, manifest)
     print(f"[manifest] wrote {MANIFEST} ({len(manifest['structures'])} structures, {len(manifest['layers'])} layers)")
     return 0
