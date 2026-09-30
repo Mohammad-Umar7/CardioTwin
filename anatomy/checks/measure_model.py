@@ -111,6 +111,7 @@ class Mesh:
     N: np.ndarray | None = None
     C: np.ndarray | None = None  # COLOR_0
     extras: dict = field(default_factory=dict)
+    A: dict = field(default_factory=dict)  # extra per-vertex attributes: "seg" (_SEGMENT), "vein" (_VEIN)
     _tm: trimesh.Trimesh | None = None
 
     @property
@@ -140,7 +141,9 @@ def decode_with_node(glb: Path) -> tuple[dict[str, Mesh], str]:
             N = np.fromfile(out / f"{n}.nrm.f32", dtype=np.float32).reshape(-1, 3).astype(np.float64)
             col = out / f"{n}.col.f32"
             C = np.fromfile(col, dtype=np.float32).reshape(-1, e["col"]).astype(np.float64) if col.exists() else None
-            meshes[n] = Mesh(n, V, F, N, C, e.get("extras") or {})
+            A = {k: np.fromfile(out / f"{n}.{k}.f32", dtype=np.float32).astype(np.float64)
+                 for k in ("seg", "vein") if (out / f"{n}.{k}.f32").exists()}
+            meshes[n] = Mesh(n, V, F, N, C, e.get("extras") or {}, A)
     finally:
         shutil.rmtree(out, ignore_errors=True)
     return meshes, f"{glb.relative_to(REPO)} (decoded with anatomy/scripts/decode_glb.mjs)"
@@ -1008,11 +1011,21 @@ class Model:
         return res
 
     def veins(self):
-        """CardiacVeins components, named, each with a skeleton path."""
+        """CardiacVeins pieces, named, each with a centreline path.
+
+        When the published asset labels its (single-lumen) vein tree - ``vessels.json`` ``veins`` centrelines
+        plus the ``_VEIN`` vertex attribute - the pieces are the labelled courses (CS, GCV + AIV, MCV, PVLV, ACV)
+        with their published centrelines and radii; otherwise (the original BodyParts3D asset, five disjoint
+        parts) each connected component is named from the source parts and skeletonised.
+        """
         if hasattr(self, "_veins"):
             return self._veins
-        self.log("labelling and skeletonising the cardiac veins")
         cv = self.m["CardiacVeins"]
+        vj = json.loads((PUBLIC / "vessels.json").read_text(encoding="utf-8")) if (PUBLIC / "vessels.json").exists() else {}
+        if vj.get("veins") and "vein" in cv.A:
+            self._veins = self._labelled_veins(vj["veins"], cv)
+            return self._veins
+        self.log("labelling and skeletonising the cardiac veins")
         comps = components(cv.V, cv.F, 30)
         names = self._name_vein_components(comps)
         out = []
@@ -1032,6 +1045,74 @@ class Model:
             out.append({"name": name, "V": V, "F": F, "tm": tm, "sk": sk, "P": P, "r": rr, "L": float(arclen(P)[-1])})
         self._veins = out
         return out
+
+    def _labelled_veins(self, vj: dict, cv: "Mesh") -> list[dict]:
+        self.log("cardiac veins: labelled centrelines (vessels.json veins) + _VEIN vertex labels")
+        codes = {int(v): k for k, v in vj["codes"].items()}
+        lab = np.round(cv.A["vein"]).astype(int)
+        segs = vj["segments"]
+        P_ = [np.asarray(sg["points"], float) for sg in segs]
+        R_ = [np.asarray(sg["radius"], float) for sg in segs]
+
+        def join(idx):
+            out = [P_[idx[0]]]
+            rr = [R_[idx[0]]]
+            for j in idx[1:]:
+                k0 = 1 if np.linalg.norm(P_[j][0] - out[-1][-1]) < 0.003 else 0
+                out.append(P_[j][k0:])
+                rr.append(R_[j][k0:])
+            return np.vstack(out), np.concatenate(rr)
+
+        def piece(name, idx_main, idx_all, code):
+            P, r = join(idx_main)
+            allP = np.vstack([P_[j] for j in idx_all])
+            allR = np.concatenate([R_[j] for j in idx_all])
+            V = cv.V[lab == code] if code is not None else cv.V
+            if code is not None and len(idx_all) < sum(1 for sg in segs if sg["code"] == code):
+                # several pieces share a label (PVLV / ACV sets): keep the vertices nearest this piece
+                other = np.vstack([P_[j] for j, sg in enumerate(segs) if sg["code"] == code and j not in idx_all])
+                V = V[cKDTree(allP).query(V)[0] <= cKDTree(other).query(V)[0]]
+            sk = type("Sk", (), {"pos": allP, "radius": allR})()
+            return {"name": name, "V": V, "F": None, "tm": None, "sk": sk, "P": P, "r": r, "L": float(arclen(P)[-1])}
+
+        by = lambda lb: [j for j, sg in enumerate(segs) if sg["label"] == lb]  # noqa: E731
+        main = lambda lb: [j for j in by(lb) if not segs[j].get("side")]  # noqa: E731
+        out = []
+        if by("CS"):
+            out.append(piece("CS", main("CS")[:1], by("CS"), vj["codes"]["CS"]))
+        gcv_main = main("GCV") + main("AIV")[:1]
+        if gcv_main:
+            out.append(piece("GCV", gcv_main, by("GCV") + by("AIV"), None))
+            out[-1]["V"] = cv.V[(lab == vj["codes"]["GCV"]) | (lab == vj["codes"]["AIV"])]
+        if by("MCV"):
+            out.append(piece("MCV", main("MCV")[:1], by("MCV"), vj["codes"]["MCV"]))
+        for lb in ("PVLV", "ACV"):
+            roots = [j for j in by(lb) if not segs[j].get("side")]
+            for rj in roots:
+                members = [j for j in by(lb) if j == rj or self._vein_ancestor(segs, j, rj)]
+                out.append(piece(lb, [rj], members, vj["codes"][lb]))
+        # connectivity of the drained tree = connected mesh components that are not anterior cardiac veins
+        comps = components(cv.V, cv.F, 30)
+        tree_idx = cKDTree(cv.V)
+        pieces = 0
+        for Vc, _ in comps:
+            _, ii = tree_idx.query(Vc)
+            maj = np.bincount(lab[ii], minlength=8).argmax()
+            if codes.get(int(maj)) != "ACV":
+                pieces += 1
+        self.vein_tree_pieces = pieces
+        self.vein_label_source = f"vessels.json veins centrelines + _VEIN labels ({len(comps)} mesh components)"
+        return out
+
+    @staticmethod
+    def _vein_ancestor(segs, j, root) -> bool:
+        seen = 0
+        while segs[j]["parent"] is not None and seen < 100:
+            j = segs[j]["parent"]
+            if j == root:
+                return True
+            seen += 1
+        return False
 
     def _name_vein_components(self, comps) -> list[str]:
         names = [None] * len(comps)
@@ -1992,7 +2073,7 @@ def run_checks(M: Model, yaml_checks: dict) -> list[Check]:
     c.cond("MCV", MCV is not None, "MCV present", ok_str(MCV is not None))
     c.cond("PVLV", "PVLV" in byname, "PVLV present", ok_str("PVLV" in byname), severity="soft")
     c.cond("LMV", "LMV" in byname, "left marginal vein present (66.7%)", "absent: BodyParts3D has no left marginal vein part", severity="soft")
-    c.note(f"CardiacVeins = {len(vs)} disconnected pieces: " + ", ".join(f"{v['name']} ({len(v['V'])} v, L {v['L'] / MM:.0f} mm)" for v in vs) + f"; labels from {M.vein_label_source}; small cardiac vein (FMA4714) exists in BodyParts3D but is not built")
+    c.note(f"CardiacVeins = {len(vs)} labelled pieces: " + ", ".join(f"{v['name']} ({len(v['V'])} v, L {v['L'] / MM:.0f} mm)" for v in vs) + f"; labels from {M.vein_label_source}; the small cardiac vein (FMA4714) is listed in BodyParts3D but its mesh is not published")
 
     c = new("VEN-02")
     sel = lad.s <= 2 / 3 * lad.L
@@ -2130,7 +2211,9 @@ def run_checks(M: Model, yaml_checks: dict) -> list[Check]:
         c.absent = True
 
     c = new("VEN-10")
-    n_tree = sum(1 for vv in vs if vv["name"] != "ACV")
+    n_tree = getattr(M, "vein_tree_pieces", None)
+    if n_tree is None:
+        n_tree = sum(1 for vv in vs if vv["name"] != "ACV")
     c.band("pieces of the CS tree (expect 1)", n_tree, 1, 1, "", fmt="{:.0f}")
     gaps = []
     if CS:
@@ -2138,12 +2221,15 @@ def run_checks(M: Model, yaml_checks: dict) -> list[Check]:
         for vv in vs:
             if vv["name"] in ("CS", "ACV"):
                 continue
+            if not len(vv["V"]):
+                continue
             if vv["name"] == "GCV":
                 g_ = float(cKDTree(CS["V"]).query(vv["V"])[0].min())
             else:
                 g_ = float(trunk_tree.query(vv["V"])[0].min())
             gaps.append((vv["name"], g_))
-    c.note("surface gap from each piece to the CS/GCV trunk (GCV: to the CS): " + ", ".join(f"{n} {g / MM:.1f} mm" for n, g in gaps) + "; the pieces touch or nearly touch but are not joined into one lumen")
+    c.note("surface gap from each piece to the CS/GCV trunk (GCV: to the CS): " + ", ".join(f"{n} {g / MM:.1f} mm" for n, g in gaps)
+           + (f"; {n_tree} connected lumen(s) drain through the CS" if getattr(M, "vein_tree_pieces", None) is not None else "; the pieces touch or nearly touch but are not joined into one lumen"))
     pvV = weld(m["GreatVessel_PulmonaryVeins"].V, m["GreatVessel_PulmonaryVeins"].F)[0]
     c.band("min dist(veins, pulmonary veins)", float(cKDTree(pvV).query(allVein)[0].min()), 0.005, None)
     ost = getattr(M, "cs_ostium", None)
@@ -2174,7 +2260,7 @@ def run_checks(M: Model, yaml_checks: dict) -> list[Check]:
             if len(q):
                 below.append(p[1] < q[:, 1].min() + 0.01)
         c.cond("below the left auricle", (np.mean(below) >= 0.8) if below else True, "Y below the auricle", f"{sum(below)}/{len(below)} overlapped samples below the auricle proxy (atrial epicardium left of the MA)")
-    c.cond("SCV", False, "small cardiac vein (optional)", "not modelled (BodyParts3D FMA4714 available)", severity="soft")
+    c.cond("SCV", False, "small cardiac vein (optional)", "not modelled (FMA4714 has no published BodyParts3D mesh; absent or tiny in ~60 %)", severity="soft")
     acv = byname.get("ACV", [])
     if acv:
         AV_ = acv[0]["V"]
