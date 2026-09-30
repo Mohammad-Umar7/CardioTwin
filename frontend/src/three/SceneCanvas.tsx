@@ -2,9 +2,11 @@ import { Canvas, useThree } from '@react-three/fiber';
 import { useEffect, useId, useState, type KeyboardEvent } from 'react';
 import { NeutralToneMapping, NoToneMapping, SRGBColorSpace } from 'three';
 import { useReducedMotion } from '@/hooks/useMediaQuery';
+import { useUiStore } from '@/state/uiStore';
 import { useViewerStore, type RenderTier } from '@/state/viewerStore';
 import { Anatomy } from './anatomy/Anatomy';
 import { CameraRig } from './camera/CameraRig';
+import { useCameraState } from './camera/cameraState';
 import { handleCanvasKey } from './camera/controlsApi';
 import { LabelProjector } from './labels/LabelProjector';
 import { VesselLabelsOverlay } from './labels/VesselLabels';
@@ -15,6 +17,7 @@ import { SceneFX } from './fx/SceneFX';
 import { QualityMonitor } from './stage/QualityMonitor';
 import { dprFor, resolvedDpr } from './stage/dpr';
 import { debugHandles } from './stage/debug';
+import { installProbes } from './stage/debugProbes';
 import { usePickStore } from './stage/pickStore';
 import { ensureRealisticDefault, useSceneControls } from './stage/sceneControls';
 import { probeWebGL } from './webgl';
@@ -125,7 +128,19 @@ export default function SceneCanvas({ active }: { active: boolean }) {
                 await new Promise((r) => setTimeout(r, ms));
               }
             };
-            (window as unknown as { __ct?: unknown }).__ct = { gl, scene, camera, viewer: useViewerStore, controls: useSceneControls, pick: usePickStore, frames };
+            const handles: Record<string, unknown> = {
+              gl,
+              scene,
+              camera,
+              viewer: useViewerStore,
+              controls: useSceneControls,
+              pick: usePickStore,
+              ui: useUiStore,
+              cam: useCameraState,
+              frames,
+            };
+            installProbes(handles, gl, camera, frames);
+            (window as unknown as { __ct?: unknown }).__ct = handles;
           }
           gl.setClearColor('#06080A', 1);
           gl.domElement.addEventListener('webglcontextlost', (event) => {
