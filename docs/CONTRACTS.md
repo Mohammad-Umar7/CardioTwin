@@ -257,7 +257,14 @@ demographics → +risk_factors → +symptoms → +exam → +ecg → +labs → +e
 `subgroups` (per target, test/OOF metrics by sex, age band, diabetes).
 
 ### 7.3 Calibrated-space explanations (ml v1.1.0, additive to §3.2)
-Each `explanations.<target>` object also carries `calibrated_base_value`, `calibrated_output_value`
-(== `predictions.<target>.probability`) and, per contribution, `shap_calibrated` — attributions rescaled so that
-`calibrated_base_value + Σ shap_calibrated == probability` exactly. The log-odds fields remain the primary SHAP
+Each `explanations.<target>` object also carries `calibrated_base_value`, `calibrated_output_value` and, per
+contribution, `shap_calibrated`. These live in **calibrated log-odds** space (after Platt scaling):
+`calibrated_base_value + Σ shap_calibrated == calibrated_output_value` exactly, and
+`σ(calibrated_output_value) == predictions.<target>.probability`. The log-odds fields remain the primary SHAP
 values; the calibrated fields let the UI speak in percentage points. The edge engine must reproduce them.
+
+### 7.4 Shapes of the §7.2 evaluation extras (as shipped by ml v1.1.0)
+`robustness`, `modality_ablation` and `subgroups` are **per-target maps** (`{ "CAD": {…}, "LAD": {…}, … }`), plus a
+top-level `analysis` block recording the run settings (splits, seeds, workers, runtime). A compact
+`metrics_summary.json` (≈19 kB; headline test + CV metrics with CIs, robustness and modality headlines) sits next to
+`metrics.json` in `ml/artifacts/` and `frontend/public/model/` for pages that don't need the full report.
