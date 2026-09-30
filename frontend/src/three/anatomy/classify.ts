@@ -15,12 +15,15 @@ export type TissueKind =
   | 'pulmonaryVeins'
   | 'systemicVein'
   | 'cardiacVein'
+  /** Epicardial fat in the AV / interventricular grooves: beats and explodes with its wall, never picked. */
+  | 'fat'
   | 'valve'
   | 'papillary'
   | 'bone'
   | 'cartilage'
   | 'lung'
   | 'airway'
+  | 'oesophagus'
   | 'skin'
   | 'muscle'
   | 'diaphragm'
@@ -35,12 +38,14 @@ const RULES: readonly [RegExp, TissueKind][] = [
   [/^GreatVessel_PulmonaryVeins/, 'pulmonaryVeins'],
   [/^GreatVessel_(SVC|IVC)/, 'systemicVein'],
   [/^CardiacVeins/, 'cardiacVein'],
+  [/^EpicardialFat/, 'fat'],
   [/^Valve_/, 'valve'],
   [/^Papillary/, 'papillary'],
   [/^CostalCartilage/, 'cartilage'],
   [/^(Ribs|Sternum|Clavicle|Spine)/, 'bone'],
   [/^Lung_/, 'lung'],
   [/^Trachea/, 'airway'],
+  [/^Oesophagus/, 'oesophagus'],
   [/^Skin/, 'skin'],
   [/^Pectoralis/, 'muscle'],
   [/^Diaphragm/, 'diaphragm'],
@@ -62,7 +67,7 @@ export function classifyNode(name: string, layerNode = ''): TissueKind {
 }
 
 /** Kinds that live inside the heart group and ride its affine beat through their node matrix. */
-export const BEATS_WITH_HEART: ReadonlySet<TissueKind> = new Set(['myocardium', 'coronary', 'leftMain', 'valve', 'papillary', 'cardiacVein']);
+export const BEATS_WITH_HEART: ReadonlySet<TissueKind> = new Set(['myocardium', 'coronary', 'leftMain', 'valve', 'papillary', 'cardiacVein', 'fat']);
 
 /** Vertex-shader beat mode for a kind (see beatDeform.ts). */
 export function beatModeOf(kind: TissueKind): number {
@@ -72,9 +77,13 @@ export function beatModeOf(kind: TissueKind): number {
 }
 
 /** Outer layers: rendered as ghosts once peeled, never pickable. */
-export const OUTER_KINDS: ReadonlySet<TissueKind> = new Set(['skin', 'muscle', 'bone', 'cartilage', 'lung', 'airway', 'diaphragm']);
+export const OUTER_KINDS: ReadonlySet<TissueKind> = new Set(['skin', 'muscle', 'bone', 'cartilage', 'lung', 'airway', 'oesophagus', 'diaphragm']);
 
-/** Kinds that answer the pointer (vessels first; the wall reports its supplied territory). */
+/**
+ * Kinds that answer the pointer (vessels first; the wall reports its supplied territory). Epicardial fat is
+ * deliberately absent: it wraps the arteries in their grooves, so a click aimed at the LAD must pass through
+ * it to the vessel (and its proxy tube) underneath.
+ */
 export const PICKABLE_KINDS: ReadonlySet<TissueKind> = new Set([
   'coronary',
   'leftMain',
@@ -85,6 +94,7 @@ export const PICKABLE_KINDS: ReadonlySet<TissueKind> = new Set([
   'pulmonaryArtery',
   'pulmonaryVeins',
   'systemicVein',
+  'cardiacVein',
 ]);
 
 /** Pulmonary trees are clipped to a sphere around the heart (V2 §5.15). */
@@ -102,6 +112,7 @@ export function assemblyStageOf(kind: TissueKind, node: string): AssemblyStageId
       return 'skeleton';
     case 'lung':
     case 'airway':
+    case 'oesophagus':
       return 'lungs';
     case 'diaphragm':
       return 'diaphragm';

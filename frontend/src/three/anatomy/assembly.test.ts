@@ -9,7 +9,7 @@ import {
   stageById,
   stagePose,
 } from './assembly';
-import { assemblyStageOf, beatModeOf, classifyNode } from './classify';
+import { BEATS_WITH_HEART, PICKABLE_KINDS, assemblyStageOf, beatModeOf, classifyNode } from './classify';
 import { BEAT_MODE } from './beatDeform';
 
 describe('cold-load assembly choreography', () => {
@@ -83,6 +83,21 @@ describe('node classification', () => {
     expect(classifyNode('Trachea_Bronchi')).toBe('airway');
     expect(classifyNode('Mystery', 'Layer_Skeleton')).toBe('bone');
     expect(classifyNode('Mystery')).toBe('other');
+  });
+
+  it('gives the epicardial fat and the oesophagus their own kinds (not the layer fallback)', () => {
+    expect(classifyNode('EpicardialFat_Anterior', 'Layer_Heart')).toBe('fat');
+    expect(classifyNode('EpicardialFat_Posterior', 'Layer_Heart')).toBe('fat');
+    expect(classifyNode('Oesophagus', 'Layer_Lungs')).toBe('oesophagus');
+    expect(classifyNode('CardiacVeins', 'Layer_Heart')).toBe('cardiacVein');
+  });
+
+  it('lets the fat beat and explode with its wall but never answer the pointer', () => {
+    expect(BEATS_WITH_HEART.has('fat')).toBe(true);
+    expect(PICKABLE_KINDS.has('fat')).toBe(false);
+    expect(PICKABLE_KINDS.has('cardiacVein')).toBe(true);
+    expect(assemblyStageOf('fat', 'EpicardialFat_Anterior')).toBe('heartAnterior');
+    expect(assemblyStageOf('oesophagus', 'Oesophagus')).toBe('lungs');
   });
 
   it('beats the heart and its riders through node matrices and blends the great-vessel roots', () => {
