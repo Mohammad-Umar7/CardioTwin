@@ -42,9 +42,9 @@ export function presetLabel(id: string | null | undefined): string | null {
   return PROJECTIONS.find((p) => p.id === id)?.label ?? null;
 }
 
-/** View-menu text for a C-arm direction that is not a named preset ("RAO 30 · CRA 25"). */
+/** View-menu text for a C-arm direction that is not a named preset ("RAO 30 CRA 25"). */
 export function angleLabel(azimuth: number, elevation: number): string {
-  return formatCarm(azimuth, elevation).replace(/°/g, '');
+  return formatCarm(azimuth, elevation).replace(/°/g, '').replace(' · ', ' ');
 }
 
 export const useCameraState = create<CameraViewState>()((set) => ({

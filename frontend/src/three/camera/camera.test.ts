@@ -147,7 +147,7 @@ describe('camera history (Back / Forward)', () => {
 describe('camera view state (View menu label)', () => {
   it('names presets, best views and free orbits', () => {
     expect(presetLabel('LAO45')).toBe('LAO 45');
-    expect(angleLabel(-30, 25)).toBe('RAO 30 · CRA 25');
+    expect(angleLabel(-30, 25)).toBe('RAO 30 CRA 25');
     const s = useCameraState.getState();
     s.setView('preset', { presetId: 'RAO30CAU25' });
     expect(useCameraState.getState().viewLabel).toBe('RAO 30 / CAU 25');

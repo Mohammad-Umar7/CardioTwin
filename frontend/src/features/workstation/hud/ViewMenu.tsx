@@ -7,7 +7,7 @@ import { PROJECTIONS } from '@/three/camera/presets';
 import { ToolbarTextButton } from './controls';
 
 /**
- * View ▾ (WORKSTATION_V2 §5.11): a text button with the current view's name ("AP", "RAO 30 · CRA 25",
+ * View ▾ (WORKSTATION_V2 §5.11): a text button with the current view's name ("AP", "RAO 30 CRA 25",
  * "Custom" after a free orbit) opening the C-arm projections (`[` `]` cycle them), Home view (H) and
  * Frame selection (double-click a vessel).
  */
@@ -31,7 +31,7 @@ export function ViewMenu({ iconOnly = false }: { iconOnly?: boolean }) {
           tooltip={iconOnly ? `View: ${label}` : 'View · C-arm projections'}
           aria-label={`View: ${label}`}
           iconOnly={iconOnly}
-          className="max-w-[148px] max-[1439.98px]:max-w-[132px]"
+          className="max-w-[176px] max-[1439.98px]:max-w-[160px]"
           {...props}
         >
           <span className="num">{label}</span>
