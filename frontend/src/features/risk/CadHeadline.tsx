@@ -55,8 +55,8 @@ export interface CadHeadlineProps {
  * The CAD answer (WORKSTATION_V2 §5.8 items 1–4): header with the "Model estimate" tag, the numeral
  * (`data-prob="CAD"`) with its band chip, the "was … · ▼ −7 pts" line while edits exist, the threshold track
  * (its scale lives in a tooltip, not in numerals) and the verdict line in the §3.2 vocabulary. Two encodings
- * of the result (numeral + band chip), the track as their scale. States: skeleton, value, stale ("Updating",
- * achromatic marks), unavailable (never a stale number presented as current).
+ * of the result (numeral + band chip), the track as their scale. States: skeleton, value, stale (dimmed numerals,
+ * achromatic marks and a dimmed verdict), unavailable (never a stale number presented as current).
  */
 export function CadHeadline({ titleId, covered = false, showTrack = true }: CadHeadlineProps) {
   const index = useSchemaIndex();
@@ -87,11 +87,12 @@ export function CadHeadline({ titleId, covered = false, showTrack = true }: CadH
   // Keep the last sentence while the line collapses, so it never empties before it closes.
   const lastReconcile = useRef<string | null>(null);
   if (reconcile) lastReconcile.current = reconcile;
+  // Read out every settled estimate (never a number the card no longer shows), not only band flips.
   const announcement = useFlipAnnouncement(
     cad && band
       ? `CAD ${formatProbability(cad.probability).spoken}, ${band.label}. ${display?.glyph === null ? display.text : spokenVerdict(cad)}.`
       : null,
-    cad ? `${cad.risk_band}-${verdict?.flagged}` : null,
+    view.stale,
   );
 
   return (
@@ -213,30 +214,21 @@ export function CadHeadline({ titleId, covered = false, showTrack = true }: CadH
             </Tooltip>
           </Collapse>
 
-          <div className="relative mt-2 h-5 overflow-clip">
-            <AnimatePresence initial={false} mode="popLayout">
-              <motion.p
-                key={view.stale ? 'updating' : verdictText}
-                initial={reduced ? { opacity: 0 } : { opacity: 0, y: 6 }}
-                animate={{ opacity: 1, y: 0 }}
-                exit={reduced ? { opacity: 0 } : { opacity: 0, y: -6 }}
-                transition={{ duration: reduced ? 0 : MOTION.fast / 1000, ease: EASE.out }}
-                className={cn('text-body-s font-semibold', view.stale ? 'text-tertiary' : 'text-primary')}
-              >
-                {view.stale ? (
-                  'Updating'
-                ) : (
-                  <>
-                    {display?.glyph && (
-                      <span aria-hidden className="mr-1.5">
-                        {display.glyph}
-                      </span>
-                    )}
-                    {verdictText}
-                  </>
-                )}
-              </motion.p>
-            </AnimatePresence>
+          {/* One element, never re-keyed or animated in: a pending update dims it (like the numerals) instead of
+              swapping in "Updating", so there is no exit / enter animation that an unchanged verdict could be
+              caught in (a returning key once stayed at its exit opacity 0 and left a blank line). */}
+          <div
+            className={cn('relative mt-2 h-5 overflow-clip transition-opacity duration-fast', view.stale && 'opacity-50')}
+            data-verdict="CAD"
+          >
+            <p className="text-body-s font-semibold text-primary">
+              {display?.glyph && (
+                <span aria-hidden className="mr-1.5">
+                  {display.glyph}
+                </span>
+              )}
+              {verdictText}
+            </p>
           </div>
           <Collapse show={truth !== null}>
             {truth && (
