@@ -3,6 +3,7 @@ import { AlertCircle, Info } from 'lucide-react';
 import { useRef } from 'react';
 import { BandChip, Probability, RiskTrack, Skeleton, Tooltip } from '@/design';
 import { useSchemaIndex } from '@/hooks/useData';
+import { usePatientStore } from '@/state/patientStore';
 import { useIsReducedMotion } from '@/hooks/useMediaQuery';
 import { cn } from '@/lib/cn';
 import { formatPercent, formatProbability, formatShownDeltaPts } from '@/lib/format';
@@ -10,8 +11,8 @@ import { RISK_BAND_STYLES } from '@/theme/risk';
 import { EASE, MOTION } from '@/theme/tokens';
 import { Collapse } from './Collapse';
 import { useFlipAnnouncement } from './useFlipAnnouncement';
-import { useRiskView } from './useRiskView';
-import { cadReconciliation, cadVerdictDisplay, spokenVerdict, verdictFor } from './verdict';
+import { useCohortPatient, useRiskView } from './useRiskView';
+import { cadReconciliation, cadVerdictDisplay, cathComparison, spokenVerdict, verdictFor } from './verdict';
 
 /**
  * "Model estimate" status tag (§3.2, §5.8): sits beside the numbers it qualifies; replaces the live-canvas
@@ -72,6 +73,10 @@ export function CadHeadline({ titleId, covered = false, showTrack = true }: CadH
     return vp ? [{ id: v.id, p: vp }] : [];
   });
   const display = cad ? cadVerdictDisplay(cad, vesselPs) : null;
+  // After "Reveal cath result": the angiogram's CAD answer against the RECORDED estimate, like the vessel rows.
+  const revealed = usePatientStore((s) => s.revealed);
+  const patient = useCohortPatient();
+  const truth = revealed ? cathComparison('CAD', patient?.labels.CAD, view.recorded?.predictions.CAD) : null;
   const verdictText = display?.text ?? null;
   // While an update is pending the sentence stays (dimmed like the numerals) instead of collapsing and
   // re-opening on every edit; it follows the numbers it reconciles.
@@ -233,6 +238,19 @@ export function CadHeadline({ titleId, covered = false, showTrack = true }: CadH
               </motion.p>
             </AnimatePresence>
           </div>
+          <Collapse show={truth !== null}>
+            {truth && (
+              <p className="mt-1 flex items-center gap-1.5 text-label font-normal text-secondary" data-cath="CAD">
+                {truth.truthText}
+                <span aria-hidden className="text-primary">
+                  {truth.truth === 1 ? '●' : '○'}
+                </span>
+                <span aria-hidden>·</span>
+                <span className={truth.agrees ? 'text-success' : 'text-primary'}>{truth.agreementText}</span>
+                {view.edits > 0 && <span className="text-tertiary">(recorded inputs)</span>}
+              </p>
+            )}
+          </Collapse>
           {/* CAD and the arteries are judged against their own thresholds: say so when they seem to disagree. */}
           <Collapse show={showTrack && (reconcile !== null || reserveReconcile)}>
             <p
