@@ -1,0 +1,20 @@
+# Complete Python environment for development and CI (Python 3.11), from the repository root:
+#   python -m pip install -r scripts/requirements-dev.txt && python -m pip install -e ml -c scripts/constraints.txt
+# (scripts/dev.ps1 setup / scripts/dev.sh setup / make setup do exactly this in ./.venv)
+-c constraints.txt
+
+# ML pipeline and its tests: exact versions the published artifacts were produced with
+-r ../ml/requirements.txt
+
+# FastAPI service and its test client
+-r ../backend/requirements-dev.txt
+
+# anatomy/ test-suite (asset contracts, centreline graphs, mesh QA); the Blender build itself is not needed
+trimesh==5.1.0
+scikit-image==0.26.0
+networkx==3.6.1
+rtree==1.4.1
+
+# Static analysis (backend/, scripts/, ml/)
+ruff==0.16.9
+mypy==2.3.1
