@@ -192,9 +192,31 @@ Validation (all 9 vessels, 2,612 points): **99.85 % of points inside their vesse
 Generated from the config plus measured geometry: per layer `id/node/label/explode/order/nodes`; per structure
 `id/node/label/layer/target/explode/description/territory` plus `category`, `material`, `fma`, `center`, `bbox`,
 `triangles` (and `territory_weights` / `feeds` where relevant); `targets` maps each model output (`CAD`, `LAD`,
-`LCX`, `RCA`) to its nodes; `camera` has `home`, `heart` and a `focus` preset per structure (35° vertical FOV).
-Explode: displayed position = rest + t · (layer.explode + structure.explode), t ∈ [0, 1]. Heart halves open along
-the cut normal; coronary branches and cardiac veins follow their half and peel outward (LAD +Z, LCX +X/−Z, RCA −X).
+`LCX`, `RCA`) to its nodes; `camera` has `home`, `heart`, `exploded` (frames the layout at t = 1 for a 16:9
+canvas) and a `focus` preset per structure (35° vertical FOV).
+
+## Exploded view
+
+Displayed position = rest + t · (layer.explode + structure.explode), t ∈ [0, 1]. The layout is radial in the
+picture plane of the home camera, so layers separate on screen instead of stacking along the view axis:
+
+* chest wall — pectorals up and out (±1.55, +0.45), rib halves out (±1.95) beyond the lungs, sternum up and
+  forward, costal cartilages down and forward, clavicles up and out, spine straight back;
+* lungs slide out (±0.8) and back to frame the heart; the airway rises;
+* heart — the anterior half swings open along the cut normal (0.8) plus a sideways offset (−0.45 X), so the
+  home camera sees the epicardium of the anterior half (LAD, RCA) beside the open cavity of the posterior half,
+  whose valves, papillary muscles and great vessels stay in place. Coronary branches and cardiac veins ride on the
+  half they lie on (the pulmonary valve rides with the anterior half's outflow tract), so vessels stay seated and
+  `vessels.json` particles only need their node's offset;
+* the skin is an enclosing shell: any translation sweeps it through the organs, so the viewer fades it out.
+
+`blender/check_explode.py` (build stage `explode`) moves every node exactly as documented and tests all pairs for
+intersecting triangles: 125 pairs already interpenetrate at rest (coronaries embedded in the epicardium, bronchi in
+the lungs) and may keep doing so, but no pair may intersect more at t = 1 than at rest. The previous layout failed
+with 9 collisions (lungs through the rib cage, costal cartilages through the LAD and marginal branch, the
+pulmonary trees through each other and the SVC); the current one has none. While sliding (0 < t < 1) the
+interleaved intrapulmonary vessel and bronchial trees still pass through neighbouring layers — the viewer's
+staggered peel windows hide most of that.
 
 ## Notes for the viewer
 

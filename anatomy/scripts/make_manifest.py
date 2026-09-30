@@ -7,9 +7,11 @@ glTF frame: +Y superior, +Z anterior, +X patient-left).
 
 Explode semantics (documented in the manifest itself): a node's displayed position is
 ``rest + t * (layer.explode + structure.explode)`` with ``t`` in [0, 1], applied in its parent's
-(layer's) space. Heart halves separate along the true cut-plane normal; every coronary branch and the
-cardiac veins travel with the heart half they lie on and additionally peel radially away from the
-heart centre, so the opened heart stays coherent.
+(layer's) space. The anterior heart half swings open along the true cut-plane normal (plus a sideways
+offset so the opened cavity faces the home camera) while the posterior half, valves, papillary muscles
+and great vessels stay put; every coronary branch and the cardiac veins ride on the heart half they lie
+on (config offsets are relative to that half), so vessels stay seated on the epicardium. The layout is
+checked for collisions at t = 1 (see anatomy/README.md#exploded-view).
 
 Usage::
 
@@ -38,9 +40,10 @@ from common import (  # noqa: E402
 MANIFEST = PUBLIC_DIR / "manifest.json"
 VESSELS = "vessels.json"
 FOV_DEG = 35.0
-#: Radial peel (scene units) of vessels travelling with an opened heart half.
-CORONARY_PEEL = 0.38
-VEIN_PEEL = 0.22
+#: Aspect ratio the exploded camera preset is framed for (the viewer canvas is landscape).
+EXPLODED_ASPECT = 16.0 / 9.0
+#: Nodes left out of the exploded framing: the skin is an enclosing shell that the viewer fades out.
+EXPLODED_FRAMING_SKIP = {"Skin_Torso"}
 
 
 def _unit(v: np.ndarray) -> np.ndarray:
@@ -62,6 +65,25 @@ def focus_preset(center: np.ndarray, radius: float, direction: np.ndarray, *, mi
     return {"position": _r(center + _unit(direction) * d), "target": _r(center), "fov": FOV_DEG}
 
 
+def exploded_preset(structures: list[dict], layer_explode: dict[str, list[float]], direction: np.ndarray) -> dict:
+    """Camera preset framing every structure (but the skin) at t = 1, seen from ``direction``."""
+    lo = np.full(3, np.inf)
+    hi = np.full(3, -np.inf)
+    for s in structures:
+        if s["node"] in EXPLODED_FRAMING_SKIP:
+            continue
+        off = np.array(layer_explode[s["layer"]], dtype=float) + np.array(s["explode"], dtype=float)
+        lo = np.minimum(lo, np.array(s["bbox"]["min"]) + off)
+        hi = np.maximum(hi, np.array(s["bbox"]["max"]) + off)
+    target = (lo + hi) / 2.0
+    half_h = (hi[1] - lo[1]) / 2.0
+    half_w = (hi[0] - lo[0]) / 2.0
+    tan_v = math.tan(math.radians(FOV_DEG) / 2.0)
+    d = 1.05 * max(half_h / tan_v, half_w / (tan_v * EXPLODED_ASPECT)) + hi[2] - target[2]
+    return {"position": _r(target + _unit(direction) * d), "target": _r(target), "fov": FOV_DEG,
+            "aspect": round(EXPLODED_ASPECT, 4)}
+
+
 def build_manifest(cfg: dict, report: dict) -> dict:
     layers_cfg = layer_by_id(cfg)
     nodes = {n["node"]: n for n in report["nodes"]}
@@ -76,9 +98,9 @@ def build_manifest(cfg: dict, report: dict) -> dict:
     half_explode = {}
     for spec in cfg["nodes"]:
         if spec.get("split"):
-            mag = float(np.linalg.norm(spec["explode"]))
             sign = 1.0 if spec["split"]["side"] == "anterior" else -1.0
-            half_explode[spec["split"]["side"]] = sign * mag * cut_normal
+            opening = float(spec["split"].get("open_along_cut_normal", 0.0))
+            half_explode[spec["split"]["side"]] = sign * opening * cut_normal + np.array(spec["explode"], dtype=float)
 
     structures = []
     focus = {}
@@ -91,10 +113,11 @@ def build_manifest(cfg: dict, report: dict) -> dict:
         explode = np.array(spec["explode"], dtype=float)
         if spec.get("split"):
             explode = half_explode[spec["split"]["side"]]
+        elif spec.get("rides_on") in half_explode:  # e.g. the pulmonary valve, set in the anterior half's RVOT
+            explode = half_explode[spec["rides_on"]] + explode
         elif spec["layer"] == "coronary" or spec["node"] == "CardiacVeins":
             side = "anterior" if float((center - cut_point) @ cut_normal) >= 0 else "posterior"
-            peel = CORONARY_PEEL if spec["layer"] == "coronary" else VEIN_PEEL
-            explode = half_explode[side] + peel * _unit(center - heart_center)
+            explode = half_explode[side] + explode
 
         entry = {
             "id": spec["id"],
@@ -151,6 +174,7 @@ def build_manifest(cfg: dict, report: dict) -> dict:
     home_dir = _unit(np.array([0.0, 0.12, 1.0]))
     home = {"position": _r(home_target + home_dir * home_d), "target": _r(home_target), "fov": FOV_DEG}
     heart_view = focus_preset(heart_center, 0.85, _unit(np.array([0.25, 0.2, 1.0])), min_distance=2.5)
+    exploded = exploded_preset(structures, {layer["id"]: layer["explode"] for layer in cfg["layers"]}, home_dir)
 
     targets = {t: [] for t in TARGETS}
     for s in structures:
@@ -187,8 +211,10 @@ def build_manifest(cfg: dict, report: dict) -> dict:
         },
         "explode_semantics": (
             "displayed position = rest position + t * (layer.explode + structure.explode), t in [0, 1], "
-            "in the parent layer's space (scene units). Heart halves separate along the cut-plane normal; "
-            "coronary branches and cardiac veins follow their heart half and peel radially outward."
+            "in the parent layer's space (scene units). The anterior heart half swings open along the cut-plane "
+            "normal while the posterior half, valves and great vessels stay; coronary branches and cardiac veins "
+            "ride on the heart half they lie on. The skin is an enclosing shell: fade it out as it peels. "
+            "camera.exploded frames the fully exploded layout (t = 1)."
         ),
         "heart": {
             "cut_plane": report["heart"]["cut_plane"],
@@ -215,7 +241,7 @@ def build_manifest(cfg: dict, report: dict) -> dict:
         "targets": targets,
         "layers": layers,
         "structures": structures,
-        "camera": {"fov": FOV_DEG, "home": home, "heart": heart_view, "focus": focus},
+        "camera": {"fov": FOV_DEG, "home": home, "heart": heart_view, "exploded": exploded, "focus": focus},
     }
 
 

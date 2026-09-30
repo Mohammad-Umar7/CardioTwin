@@ -1,6 +1,6 @@
 """CardioTwin anatomy pipeline — one entry point for every stage.
 
-    ./.venv/Scripts/python anatomy/build.py              # fetch -> blender -> optimise -> verify -> centrelines -> manifest
+    ./.venv/Scripts/python anatomy/build.py              # fetch -> blender -> optimise -> verify -> centrelines -> manifest -> explode
     ./.venv/Scripts/python anatomy/build.py --renders    # ... and the Cycles hero renders (GPU recommended)
     ./.venv/Scripts/python anatomy/build.py --only manifest,verify
 
@@ -11,6 +11,7 @@ Stages (see anatomy/README.md):
   verify       contract check of the web GLB (nodes, layers, COLOR_0, budgets)
   centerlines  coronary centrelines -> frontend/public/anatomy/vessels.json
   manifest     layers / structures / explode / cameras -> frontend/public/anatomy/manifest.json
+  explode      triangle-level collision check of the exploded layout (fails on collisions at t = 1)
   renders      portfolio renders -> docs/media/renders/ (opt-in: --renders)
 
 The Blender executable is taken from --blender, $CARDIOTWIN_BLENDER, or the default Windows install path.
@@ -29,7 +30,7 @@ ANATOMY = Path(__file__).resolve().parent
 REPO = ANATOMY.parent
 PY = sys.executable
 DEFAULT_BLENDER = "C:/Program Files/Blender Foundation/Blender 5.1/blender.exe"
-STAGES = ("fetch", "blender", "optimize", "verify", "centerlines", "manifest", "renders")
+STAGES = ("fetch", "blender", "optimize", "verify", "centerlines", "manifest", "explode", "renders")
 
 
 def find_blender(explicit: str | None) -> str:
@@ -72,7 +73,7 @@ def main(argv: list[str] | None = None) -> int:
         raise SystemExit(f"unknown stage(s): {sorted(unknown)}")
 
     t0 = time.perf_counter()
-    blender = find_blender(args.blender) if {"blender", "renders"} & set(stages) else None
+    blender = find_blender(args.blender) if {"blender", "explode", "renders"} & set(stages) else None
     for stage in stages:
         print(f"\n=== {stage} ===", flush=True)
         if stage == "fetch":
@@ -88,6 +89,8 @@ def main(argv: list[str] | None = None) -> int:
             run([PY, str(ANATOMY / "scripts" / "extract_centerlines.py")])
         elif stage == "manifest":
             run([PY, str(ANATOMY / "scripts" / "make_manifest.py")])
+        elif stage == "explode":
+            run([blender, "--background", "--factory-startup", "--python", str(ANATOMY / "blender" / "check_explode.py")])
         elif stage == "renders":
             extra = ["--", "--save-scene"] if args.save_scene else []
             run([blender, "--background", "--factory-startup", "--python", str(ANATOMY / "blender" / "render_heroes.py"), *extra])

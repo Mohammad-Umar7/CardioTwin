@@ -102,7 +102,7 @@ def test_manifest_target_mapping_is_consistent(manifest):
 
 def test_manifest_camera_presets(manifest):
     cam = manifest["camera"]
-    for key in ("home", "heart"):
+    for key in ("home", "heart", "exploded"):
         assert len(cam[key]["position"]) == 3 and len(cam[key]["target"]) == 3
     for s in manifest["structures"]:
         preset = cam["focus"][s["id"]]
@@ -111,14 +111,38 @@ def test_manifest_camera_presets(manifest):
         assert np.allclose(tgt, s["center"], atol=1e-3)
 
 
-def test_heart_halves_open_along_the_cut_normal(manifest):
+def test_heart_opens_like_a_book_with_vessels_riding_on_their_half(manifest):
     by_node = {s["node"]: s for s in manifest["structures"]}
     n = np.array(manifest["heart"]["cut_plane"]["normal"])
+    assert n[2] > 0.5  # the cut normal faces anteriorly (+Z)
     ant = np.array(by_node["Heart_Wall_Anterior"]["explode"])
     post = np.array(by_node["Heart_Wall_Posterior"]["explode"])
-    assert np.allclose(ant, -post)
-    assert np.dot(ant, n) > 0.99 * np.linalg.norm(ant)
-    assert n[2] > 0.5  # the cut normal faces anteriorly (+Z)
+    assert np.dot(ant - post, n) > 0.5  # the halves separate along the cut normal (>= 5 cm)
+    assert ant[2] > 0.3 and ant[0] < -0.3  # anterior half swings towards the viewer and to patient-right
+    cut_point = np.array(manifest["heart"]["cut_plane"]["point"])
+    for s in manifest["structures"]:
+        if s["layer"] == "coronary" or s["node"] == "CardiacVeins":
+            side = ant if (np.array(s["center"]) - cut_point) @ n >= 0 else post
+            assert np.allclose(s["explode"], side, atol=1e-4), s["node"]  # seated on its half
+
+
+def test_exploded_layout_separates_chest_wall_from_lungs_and_is_framed(manifest):
+    layer = {lay["id"]: np.array(lay["explode"]) for lay in manifest["layers"]}
+    by_node = {s["node"]: s for s in manifest["structures"]}
+
+    def box(node: str) -> tuple[np.ndarray, np.ndarray]:
+        s = by_node[node]
+        off = layer[s["layer"]] + np.array(s["explode"])
+        return np.array(s["bbox"]["min"]) + off, np.array(s["bbox"]["max"]) + off
+
+    for side, sign in (("L", 1), ("R", -1)):
+        ribs, lung = box(f"Ribs_{side}"), box(f"Lung_{side}")
+        # the half rib cage ends up entirely lateral to its lung (bounding boxes do not overlap in X)
+        assert (ribs[0][0] > lung[1][0]) if sign > 0 else (ribs[1][0] < lung[0][0])
+    cam = manifest["camera"]["exploded"]
+    assert np.linalg.norm(np.array(cam["position"]) - np.array(cam["target"])) > np.linalg.norm(
+        np.array(manifest["camera"]["home"]["position"]) - np.array(manifest["camera"]["home"]["target"])
+    )
 
 
 def test_vessels_cover_every_coronary_node_with_targets(vessels, manifest):
