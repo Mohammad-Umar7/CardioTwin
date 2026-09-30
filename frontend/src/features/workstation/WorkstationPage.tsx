@@ -23,6 +23,7 @@ import { SelectionChip } from './hud/SelectionChip';
 import { ChromeGate, StageLayout } from './StageLayout';
 import { useWorkstationCommands } from './useWorkstationCommands';
 import { useWorkstationUrlState } from './useWorkstationUrlState';
+import { useFocusModeFocus } from './useFocusModeFocus';
 
 /** Deep link: #/workstation/P-017 opens that cohort patient. */
 function usePatientFromRoute() {
@@ -64,6 +65,7 @@ const FOCUS_ONLY = ['focus'] as const;
  */
 function StageWorkstation() {
   const edits = usePatientStore(selectEditCount);
+  useFocusModeFocus();
   return (
     <div className="relative min-h-0" style={{ height: 'calc(100vh - var(--topbar-h) - var(--status-h))' }}>
       <PageTitle />

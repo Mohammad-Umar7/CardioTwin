@@ -129,8 +129,8 @@ const routeNow = (loc: { pathname: string; search: string }): string => {
 
 /**
  * Puts the app back exactly as it was before the demo (V2 §6.3 "restores the prior state on exit"): the
- * stores at once, the peel with an assemble tween, then the route, then the camera pose once the stage it
- * belongs to is live, and finally keyboard focus.
+ * stores at once, the peel with an assemble tween, then the route and keyboard focus, then the camera pose
+ * once the stage it belongs to is live.
  */
 async function restoreSession(
   s: TourSession,
@@ -142,11 +142,30 @@ async function restoreSession(
   void new PeelAnimator().tweenTo(snap.viewer.explode, opts.reduced);
   const moved = snap.route !== opts.currentRoute;
   if (moved) opts.navigate(snap.route);
+  // Focus first: it must not wait on the stage (frames can be throttled in a background tab).
+  returnFocusAfterTour(s.returnFocus);
   if (snap.route.startsWith('/workstation')) {
     const ok = moved ? await waitForStage('workstation', 3000) : true;
     if (ok) restoreCamera(snap.camera, !opts.reduced);
   }
-  s.returnFocus?.focus?.({ preventScroll: true });
+}
+
+/**
+ * Hands keyboard focus back when the demo ends (WCAG 2.4.3): to the control that opened it, or, when that
+ * one is gone or still inert while the chrome comes back (the palette's input, a card that re-rendered), to
+ * the top bar's Guided demo button. Retried for a few frames until the element is focusable again.
+ */
+function returnFocusAfterTour(opener: HTMLElement | null): void {
+  const usable = (el: HTMLElement | null) => !!el && el.isConnected && !el.closest('[inert],[aria-hidden="true"]');
+  const attempt = (n: number) => {
+    const target = usable(opener) ? opener : document.querySelector<HTMLElement>('[data-tour="tour-button"]');
+    if (target && usable(target)) {
+      target.focus({ preventScroll: true, focusVisible: true } as FocusOptions);
+      if (document.activeElement === target) return;
+    }
+    if (n < 8) window.setTimeout(() => attempt(n + 1), 60);
+  };
+  window.setTimeout(() => attempt(0), 0);
 }
 
 // ------------------------------------------------------------------------------------ chapter rail
