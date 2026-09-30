@@ -20,6 +20,9 @@
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import type { FeatureSchema, FeatureVector, PredictResponse, TargetId } from '@/types/contracts';
 import schemaRaw from '../../public/model/schema.json?raw';
+import { ApiError } from '@/services/api';
+import { EdgeEngine } from '@/services/engine';
+import { InferenceClient } from './client';
 import { EdgeModel } from './model';
 import { sigmoid } from './numeric';
 import { compareResponses } from './parity';
@@ -426,6 +429,29 @@ describe.skipIf(!live)(`edge engine vs live server (${API || 'set CARDIOTWIN_LIV
     console.info(`[live parity] ${crossings} smooth threshold crossings, ${rows.length} rows, ${worst.boundaryTies - tiesBefore} explained label ties`);
     expect(crossings).toBeGreaterThan(10);
   }, 300_000);
+
+  it('rejects out-of-range values with the same 422 message as the server (EdgeEngine range policy)', async () => {
+    const client = new InferenceClient({ source: { spec: loadModelSpec() } });
+    const edge = new EdgeEngine({ client, schema: async () => schema });
+    try {
+      const cases: FeatureVector[] = [{ BMI: 18.1 }, { Age: 200.5 }, { BMI: '17', Age: 20, WBC: 100000 }, { HB: 17.7, K: 2.9 }];
+      for (const features of cases) {
+        const { status, json } = await postJson('/api/predict', { features });
+        expect(status).toBe(422);
+        const edgeError = (await edge.predict(features).catch((e: unknown) => e)) as ApiError;
+        expect(edgeError).toBeInstanceOf(ApiError);
+        expect(edgeError.status).toBe(422);
+        expect(edgeError.message).toBe((json as { message: string }).message);
+      }
+      // …and both accept the exact bounds.
+      const bounds: FeatureVector = { BMI: 18.1154, Age: 86, HDL: 15.9, WBC: 18000 };
+      const { status, json } = await postJson('/api/predict', { features: bounds });
+      expect(status).toBe(200);
+      expect(diff((await edge.predict(bounds)) as EdgePredictResponse, json as PredictResponse)).toEqual([]);
+    } finally {
+      client.dispose();
+    }
+  });
 
   it('matches every cohort patient field by field at full precision', async () => {
     const rows = cohort.map((p) => p.features);
