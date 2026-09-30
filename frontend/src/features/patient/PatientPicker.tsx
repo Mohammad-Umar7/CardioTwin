@@ -19,7 +19,8 @@ function TruthChips({ patient }: { patient: CohortPatient }) {
     );
   }
   return (
-    <span className="inline-flex items-center gap-1.5 text-[0.6875rem] text-tertiary" aria-label="Catheterisation result">
+    <span className="inline-flex items-center gap-1.5 text-[0.6875rem] text-tertiary">
+      <span className="sr-only">Catheterisation result:</span>
       {VESSELS.map((v) => (
         <span key={v} className="inline-flex items-center gap-0.5">
           <span aria-hidden>{patient.labels[v] === 1 ? '●' : '○'}</span>

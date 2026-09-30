@@ -5,6 +5,7 @@ import { Card, EmptyState, SegmentedControl, Skeleton, Stat, Tabs, Tooltip } fro
 import { useMetrics } from '@/hooks/useData';
 import { cn } from '@/lib/cn';
 import { formatCi, formatMetricValue, formatPercent } from '@/lib/format';
+import { tabPanelId } from '@/design/tabIds';
 import { ROUTES } from '@/routes';
 import { TARGET_ORDER, type TargetMetrics } from '@/types/contracts';
 import { LineChart } from './LineChart';
@@ -67,7 +68,9 @@ function Confusion({ m }: { m: TargetMetrics }) {
       <caption className="sr-only">Confusion matrix at the deployed threshold</caption>
       <thead>
         <tr className="text-label text-tertiary">
-          <th />
+          <th>
+            <span className="sr-only">Actual class</span>
+          </th>
           <th scope="col" className="font-medium">
             predicted −
           </th>
@@ -114,7 +117,7 @@ export default function PerformancePage() {
       <header className="flex flex-col gap-3 animate-rise-in">
         <div className="flex flex-wrap items-end justify-between gap-4">
           <div>
-            <p className="overline text-accent">Model performance</p>
+            <p className="eyebrow text-accent">Model performance</p>
             <h1 className="font-display text-display-2 text-primary">How well does it separate diseased from healthy?</h1>
             <p className="mt-1 text-body text-secondary">On patients it never saw: the held-out test split was scored once, after every decision was frozen.</p>
           </div>
@@ -155,7 +158,7 @@ export default function PerformancePage() {
       )}
 
       {m && (
-        <>
+        <div id={tabPanelId('perf-target', target)} role="tabpanel" aria-labelledby={`perf-target-tab-${target}`} className="flex flex-col gap-5">
           <Tiles m={m} split={split} />
           <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
             <ChartFrame title="ROC · 95 % bootstrap band" howTo="the closer the curve hugs the top-left corner, the better; the diagonal is chance.">
@@ -260,7 +263,7 @@ export default function PerformancePage() {
             </ChartFrame>
           </div>
           <Card className="flex flex-col gap-2" id="protocol">
-            <h2 className="overline text-tertiary">Protocol</h2>
+            <h2 className="eyebrow text-tertiary">Protocol</h2>
             <ul className="grid grid-cols-1 gap-x-6 gap-y-1.5 text-body-s text-secondary md:grid-cols-2">
               {[
                 'LAD / LCX / RCA / Cath are never inputs (unit-tested)',
@@ -284,7 +287,7 @@ export default function PerformancePage() {
             Single-centre cohort (n = {ds?.n ?? 303}), not externally validated · decision support and education only, not a
             diagnosis.
           </p>
-        </>
+        </div>
       )}
     </div>
   );

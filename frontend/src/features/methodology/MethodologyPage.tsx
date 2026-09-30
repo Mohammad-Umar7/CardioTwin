@@ -61,7 +61,7 @@ export default function MethodologyPage() {
       </nav>
       <article className="flex flex-col gap-8">
         <header className="animate-rise-in">
-          <p className="overline text-accent">Methodology</p>
+          <p className="eyebrow text-accent">Methodology</p>
           <h1 className="font-display text-display-2 text-primary">From routine clinical data to vessel-level risk.</h1>
           <p className="mt-2 max-w-[72ch] text-body text-secondary">
             CardioTwin predicts coronary artery disease and the stenosis status of the LAD, LCX and RCA from demographic,
@@ -102,7 +102,7 @@ export default function MethodologyPage() {
               {(['holdout', 'cv', 'tuning', 'calibration', 'threshold'] as const).map((k) =>
                 typeof protocol[k] === 'string' ? (
                   <div key={k}>
-                    <dt className="overline text-tertiary">{k === 'cv' ? 'Cross-validation' : k}</dt>
+                    <dt className="eyebrow text-tertiary">{k === 'cv' ? 'Cross-validation' : k}</dt>
                     <dd className="mt-0.5">{protocol[k] as string}</dd>
                   </div>
                 ) : null,
@@ -183,7 +183,7 @@ export default function MethodologyPage() {
             <li>Model version: <span className="mono">{m?.version ?? schema.data?.model_version ?? '–'}</span>{m?.generated_at ? ` · generated ${m.generated_at.slice(0, 10)}` : ''}.</li>
             <li>
               Source code and reproducible pipeline:{' '}
-              <a href={REPOSITORY_URL} target="_blank" rel="noreferrer" className="text-accent hover:text-accent-hover">
+              <a href={REPOSITORY_URL} target="_blank" rel="noreferrer" className="text-accent underline underline-offset-2 hover:text-accent-hover">
                 GitHub
               </a>
               .

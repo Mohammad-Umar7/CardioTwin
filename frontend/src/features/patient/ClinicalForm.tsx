@@ -21,11 +21,12 @@ function ShareBar({ segments }: { segments: 0 | 1 | 2 | 3 | 4 }) {
 export function GroupHeader({ label, info }: { label: string; info: GroupHeaderInfo | undefined }) {
   return (
     <>
-      <span className="overline truncate text-secondary">{label}</span>
+      <span className="eyebrow truncate text-secondary">{label}</span>
       {info && info.edited > 0 && (
-        <span className="inline-flex items-center gap-1 text-[0.6875rem] font-semibold text-accent" aria-label={`${info.edited} edited`}>
+        <span className="inline-flex items-center gap-1 text-[0.6875rem] font-semibold text-accent">
           <span aria-hidden className="size-1.5 rounded-full bg-accent" />
           {info.edited}
+          <span className="sr-only"> edited</span>
         </span>
       )}
       {info && info.imputed > 0 && <span className="text-[0.6875rem] text-tertiary">{info.imputed} imputed</span>}

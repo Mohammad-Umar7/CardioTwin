@@ -43,6 +43,8 @@ export function SceneHost() {
 
   useEffect(() => {
     if (!probeWebGL().webgl2) useViewerStore.getState().setTier('D', true);
+    // The parked canvas must not be reachable by keyboard or assistive technology.
+    if (parkRef.current) parkRef.current.inert = true;
   }, []);
 
   useLayoutEffect(() => {

@@ -98,8 +98,9 @@ export function GroupRail() {
         ))}
         <div className="my-1 h-px w-8 bg-hairline" />
         {edits > 0 && (
-          <span className="num text-label font-semibold text-accent" aria-label={`${edits} edits`}>
+          <span className="num text-label font-semibold text-accent">
             {edits}
+            <span className="sr-only"> edits</span>
           </span>
         )}
         <IconButton label="Reset all inputs to recorded" icon={<RotateCcw />} size="md" onClick={resetAll} disabled={edits === 0} />
@@ -125,7 +126,7 @@ export function GroupRail() {
             className="absolute bottom-0 left-[var(--rail-w)] top-0 z-flyout flex w-[var(--flyout-w)] flex-col rounded-r-lg bg-panel shadow-e3"
           >
             <header className="flex h-10 shrink-0 items-center justify-between border-b border-hairline pl-4 pr-2">
-              <h2 className="overline text-secondary">{title}</h2>
+              <h2 className="eyebrow text-secondary">{title}</h2>
               <IconButton label="Close (Esc)" icon={<X />} size="sm" onClick={close} tooltip={false} />
             </header>
             <div className="panel-scroll min-h-0 flex-1">

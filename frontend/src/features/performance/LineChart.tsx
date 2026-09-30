@@ -56,7 +56,7 @@ export function LineChart({ series, band, xLabel, yLabel, xDomain = [0, 1], yDom
 
   return (
     <figure className="m-0">
-      <svg viewBox={`0 0 ${W} ${height}`} className="h-auto w-full" role="img" aria-describedby={id}>
+      <svg viewBox={`0 0 ${W} ${height}`} className="h-auto w-full" role="img" aria-label={`${yLabel} versus ${xLabel}`} aria-describedby={id}>
         {yTicks.map((t) => (
           <line key={`gy${t}`} x1={M.left} x2={W - M.right} y1={y(t)} y2={y(t)} stroke={UI.borderHairline} />
         ))}

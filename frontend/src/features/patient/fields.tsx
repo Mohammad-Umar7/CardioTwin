@@ -24,7 +24,12 @@ function FieldLabel({ spec, edited, imputed, htmlFor, extra }: { spec: FeatureSp
   );
   return (
     <span className="flex min-w-0 items-center gap-1.5">
-      {edited && <span aria-label="edited" className="size-1.5 shrink-0 rounded-full bg-accent" />}
+      {edited && (
+        <>
+          <span aria-hidden className="size-1.5 shrink-0 rounded-full bg-accent" />
+          <span className="sr-only">edited:</span>
+        </>
+      )}
       {spec.description ? (
         <Tooltip content={<span><span className="mono text-tertiary">{spec.key}</span> · {spec.description}</span>}>
           <span tabIndex={-1} className="min-w-0 truncate">
@@ -104,11 +109,6 @@ export function NumericFeatureRow({ spec, ice, hint }: { spec: FeatureSpec; ice?
       <div className="flex h-6 items-center gap-2">
         <FieldLabel spec={spec} edited={field.edited} imputed={field.imputed} htmlFor={inputId} extra={hint} />
         <span className="ml-auto flex items-center gap-1">
-          {status && status !== 'within' && (
-            <span className="whitespace-nowrap text-[0.6875rem] text-secondary">
-              {status === 'above' ? '▲ above normal' : '▼ below normal'}
-            </span>
-          )}
           <span className="hidden items-center group-focus-within/row:flex">
             <IconButton label={`Decrease ${spec.label}`} icon={<Minus />} size="xs" tooltip={false} onClick={() => nudge(-1)} />
             <IconButton label={`Increase ${spec.label}`} icon={<Plus />} size="xs" tooltip={false} onClick={() => nudge(1)} />
@@ -155,7 +155,12 @@ export function NumericFeatureRow({ spec, ice, hint }: { spec: FeatureSpec; ice?
             {invalid}
           </span>
         ) : (
-          <span>{formatNormalRange(spec.normal, step)}</span>
+          <span>
+            {formatNormalRange(spec.normal, step)}
+            {status && status !== 'within' && (
+              <span className="ml-1.5 text-secondary">{status === 'above' ? '▲ above normal' : '▼ below normal'}</span>
+            )}
+          </span>
         )}
         {field.edited && typeof field.recorded === 'number' && <span>recorded {formatNumber(field.recorded, step)}</span>}
       </div>

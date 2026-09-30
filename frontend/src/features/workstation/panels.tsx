@@ -49,7 +49,7 @@ function PhysiologySection() {
         className="flex items-center gap-1.5 rounded-sm text-left"
       >
         <ChevronRight aria-hidden className={cn('size-4 text-tertiary transition-transform duration-fast', open && 'rotate-90')} />
-        <h2 id="physiology-title" className="overline text-secondary">
+        <h2 id="physiology-title" className="eyebrow text-secondary">
           Physiology
         </h2>
         <span className="ml-auto text-label font-normal text-tertiary">value · ref · SHAP ({target})</span>

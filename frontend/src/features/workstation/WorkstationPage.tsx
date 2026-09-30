@@ -116,6 +116,12 @@ function CompactTabs() {
  *   < 1100      canvas 55vh on top, tabs Inputs / Risk / Why below
  * Panels read the stores; the canvas is the persistent shell canvas moved into this page's slot.
  */
+function PageTitle() {
+  const id = usePatientStore((s) => s.selectedPatientId);
+  const mode = usePatientStore((s) => s.mode);
+  return <h1 className="sr-only">Workstation · {mode === 'custom' ? 'custom patient' : (id ?? 'no patient selected')}</h1>;
+}
+
 export default function WorkstationPage() {
   const mode = useLayoutMode();
   useWorkstationHotkeys();
@@ -124,6 +130,7 @@ export default function WorkstationPage() {
   if (mode === 'compact') {
     return (
       <div className="flex flex-col">
+        <PageTitle />
         <CanvasStage className="h-[55vh] min-h-[320px]" />
         <CompactTabs />
       </div>
@@ -138,6 +145,7 @@ export default function WorkstationPage() {
         gridTemplateColumns: mode === 'wide' ? 'var(--left-w) minmax(0, 1fr) var(--right-w)' : 'var(--rail-w) minmax(0, 1fr) var(--right-w)',
       }}
     >
+      <PageTitle />
       {mode === 'wide' ? <LeftPanel /> : <GroupRail />}
       <CanvasStage className="min-h-0" />
       {mode === 'wide' ? <RightPanel /> : <TabbedRightPanel />}
