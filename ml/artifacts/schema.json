@@ -1,6 +1,6 @@
 {
   "version": "1.0.0",
-  "model_version": "1.0.0",
+  "model_version": "1.1.0",
   "groups": [
     {
       "id": "demographics",
@@ -929,10 +929,10 @@
       "step": 5,
       "default": 50.0,
       "normal": {
-        "low": 55,
-        "high": 70
+        "low": 52,
+        "high": 72
       },
-      "description": "Share of blood the left ventricle pumps out with each beat, measured by transthoracic echocardiography. 55 % or more is normal; 40 % or less means a weak heart muscle.",
+      "description": "Share of blood the left ventricle pumps out with each beat, measured by transthoracic echocardiography. Normal is about 52-72 % (ASE/EACVI 2015; the lower limit is 54 % in women); 41-49 % is mildly reduced and 40 % or less is reduced (a weak heart muscle). This dataset records EF in 5 % steps.",
       "options": null
     },
     {
@@ -1003,7 +1003,7 @@
       ],
       "territory": "Whole heart - at least one major coronary artery with >= 50 % diameter narrowing",
       "description": "Overall probability that coronary angiography would show at least one major coronary artery (LAD, LCX or RCA) narrowed by 50 % or more.",
-      "threshold": 0.6845141554067578
+      "threshold": 0.747430873962682
     },
     {
       "id": "LAD",
@@ -1016,7 +1016,7 @@
       ],
       "territory": "Anterior wall, anterior two-thirds of the septum and the apex of the left ventricle",
       "description": "Probability of >= 50 % narrowing somewhere in the left anterior descending artery or its branches.",
-      "threshold": 0.5248182820504891
+      "threshold": 0.5509916129143697
     },
     {
       "id": "LCX",
@@ -1028,7 +1028,7 @@
       ],
       "territory": "Lateral and posterolateral walls of the left ventricle (and the inferior wall in left-dominant hearts)",
       "description": "Probability of >= 50 % narrowing somewhere in the left circumflex artery or its branches.",
-      "threshold": 0.35592694851143625
+      "threshold": 0.3265237715143447
     },
     {
       "id": "RCA",
@@ -1042,9 +1042,9 @@
         "Coronary_RCA_PL",
         "Coronary_RCA_Septal"
       ],
-      "territory": "Right ventricle, inferior wall and inferior septum (via the posterior descending artery in right-dominant hearts), sinus and AV nodes",
+      "territory": "Right ventricle, inferior wall and inferior septum (via the posterior descending artery in right-dominant hearts) and, in most hearts, the sinus and AV nodes",
       "description": "Probability of >= 50 % narrowing somewhere in the right coronary artery or its branches.",
-      "threshold": 0.32965875052787025
+      "threshold": 0.31823138558092373
     }
   ],
   "risk_bands": [
