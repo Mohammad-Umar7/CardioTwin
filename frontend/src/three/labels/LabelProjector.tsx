@@ -20,6 +20,7 @@ import {
   chamberFade,
   coverFade,
   dotEls,
+  glideToward,
   labelEls,
   labelSizes,
   layoutLanes,
@@ -133,6 +134,10 @@ export function LabelProjector() {
     occluders: [] as Mesh[],
     occludersAt: -Infinity,
     chambers: null as ChamberAnchor[] | null,
+    /** Layout the labels are in ('row' at Open heart, else 'lanes') and where each label is drawn. */
+    layout: 'lanes' as 'row' | 'lanes',
+    gliding: false,
+    drawn: new Map<string, { left: number; top: number; edgeX: number; edgeY: number }>(),
   });
   const axis = useMemo(() => heartAxisFrame(manifest), [manifest]);
   const cut = useMemo(() => heartFrameFrom(manifest?.heart), [manifest]);
@@ -340,7 +345,22 @@ export function LabelProjector() {
       items.push({ id: r.id, lane: resolveLane(r.id, viewer.carm?.azimuth, x, heart), x, y, width: box.width, height: box.height });
     }
     // Opened: one row below (or above) both halves; else the radiological lanes beside the heart.
-    const placed = (union && heartOpen > 0.5 ? layoutRow(items, bounds, union) : null) ?? layoutLanes(items, bounds, heart);
+    const row = union && heartOpen > 0.5 ? layoutRow(items, bounds, union) : null;
+    const placed = row ?? layoutLanes(items, bounds, heart);
+    // A switch between the row and the lanes (the heart opening or closing) glides every label to its new
+    // slot (≤ LAYOUT_GLIDE_STEP px a frame) instead of jumping in one frame; otherwise labels track exactly.
+    const layout = row ? 'row' : 'lanes';
+    if (layout !== s.layout) {
+      s.layout = layout;
+      s.gliding = s.drawn.size > 0 && visible;
+    }
+    let arrived = true;
+    for (const [id, at] of placed) {
+      const drawn = s.drawn.get(id);
+      if (!drawn || !s.gliding) s.drawn.set(id, { left: at.left, top: at.top, edgeX: at.edgeX, edgeY: at.edgeY });
+      else if (!glideToward(drawn, at)) arrived = false;
+    }
+    if (s.gliding && arrived) s.gliding = false;
 
     // 4. States and DOM writes.
     const selected = viewer.selectedStructure;
@@ -348,9 +368,15 @@ export function LabelProjector() {
     resolved.forEach((r) => {
       const label = labelEls.get(r.id);
       const line = lineEls.get(r.id);
-      const at = placed.get(r.id);
-      const p = screen.get(r.id);
-      if (!label || !line || !at || !p) return;
+      const at = s.drawn.get(r.id) ?? placed.get(r.id);
+      const anchor = screen.get(r.id);
+      if (!label || !line || !at || !anchor) return;
+      // The leader's far end never leaves the free area (a vessel point projected off-stage mid-flight would
+      // otherwise draw a leader to the canvas edge).
+      const p = {
+        x: Math.min(bounds.right, Math.max(bounds.left, anchor.x)),
+        y: Math.min(bounds.bottom, Math.max(free.y, anchor.y)),
+      };
       const order = targets.indexOf(r.id);
       const revealed = visible && now - s.revealAt >= order * REVEAL_STAGGER_MS;
       const isSelected = selected === r.id;

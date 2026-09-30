@@ -208,6 +208,38 @@ export const chamberEls = new Map<string, HTMLElement>();
 
 /** Chamber tags fade in over the last part of the heart's opening. Pure. */
 export const chamberFade = (heartOpen: number): number => {
-  const t = Math.min(1, Math.max(0, (heartOpen - 0.7) / 0.25));
+  // Only on the (nearly) opened heart: they are gone within the first fifth of ⟲ Assemble, before the
+  // halves close over the chambers they name.
+  const t = Math.min(1, Math.max(0, (heartOpen - 0.88) / 0.1));
   return t * t * (3 - 2 * t);
 };
+
+/** Largest move (px) of a label per frame while it glides between the open-heart row and the lanes. */
+export const LAYOUT_GLIDE_STEP = 36;
+
+/**
+ * One frame of a label's glide from where it is drawn toward its new layout slot: an exponential approach
+ * (`rate` of the remaining distance) capped at `maxStep` px, so a switch between the open-heart row and the
+ * side lanes is a short glide, never a one-frame jump, whatever the frame rate. Returns true when arrived.
+ */
+export function glideToward(
+  drawn: { left: number; top: number; edgeX: number; edgeY: number },
+  target: { left: number; top: number; edgeX: number; edgeY: number },
+  rate = 0.35,
+  maxStep = LAYOUT_GLIDE_STEP,
+): boolean {
+  const dx = target.left - drawn.left;
+  const dy = target.top - drawn.top;
+  const dist = Math.hypot(dx, dy);
+  if (dist < 0.5) {
+    Object.assign(drawn, target);
+    return true;
+  }
+  const step = Math.min(maxStep, Math.max(dist * rate, Math.min(dist, 2)));
+  const k = step / dist;
+  drawn.left += dx * k;
+  drawn.top += dy * k;
+  drawn.edgeX += (target.edgeX - drawn.edgeX) * k;
+  drawn.edgeY += (target.edgeY - drawn.edgeY) * k;
+  return false;
+}

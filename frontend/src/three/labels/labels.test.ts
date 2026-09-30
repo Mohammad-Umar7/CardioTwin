@@ -9,7 +9,20 @@ import { buildTracks, heartAxisFrame, restToDisplayed } from './anchorTracks';
 import { anatomicalTitle, anatomyOnly, clip, hoverContent } from './hoverContent';
 import { nearestPeelStage, sceneSummaryText } from './sceneSummaryText';
 import { ANCHOR_PERIOD_MS, AnchorChooser, bestCandidate, buildCandidates, facing, mainTrunk } from './dynamicAnchor';
-import { LABEL_MIN_GAP, chamberFade, coverFade, labelShowsProbability, laneFor, layoutLanes, layoutRow, resolveLane, stackLane, type LaneItem } from './labelRegistry';
+import {
+  LABEL_MIN_GAP,
+  LAYOUT_GLIDE_STEP,
+  chamberFade,
+  coverFade,
+  glideToward,
+  labelShowsProbability,
+  laneFor,
+  layoutLanes,
+  layoutRow,
+  resolveLane,
+  stackLane,
+  type LaneItem,
+} from './labelRegistry';
 
 const read = <T,>(file: string) => JSON.parse(readFileSync(resolve(__dirname, '../../../public/anatomy', file), 'utf8')) as T;
 const manifest = read<AnatomyManifest>('manifest.json');
@@ -316,7 +329,9 @@ describe('open-heart label row (V2 §10 explode)', () => {
   it('fades the chamber tags in only as the heart finishes opening', () => {
     expect(chamberFade(0.5)).toBe(0);
     expect(chamberFade(1)).toBe(1);
-    expect(chamberFade(0.8)).toBeGreaterThan(0);
+    expect(chamberFade(0.93)).toBeGreaterThan(0);
+    // Gone early in ⟲ Assemble (heartOpen ≈ 0.88 a fifth of the way back), before the halves close.
+    expect(chamberFade(0.88)).toBe(0);
   });
 });
 
@@ -327,5 +342,22 @@ describe('wall hover wording', () => {
     const out = anatomyOnly(text)!;
     expect(out).not.toMatch(/half|long-axis cut|opened by/i);
     expect(out).toMatch(/sternocostal surface/);
+  });
+});
+
+describe('label layout glide (open-heart row <-> side lanes)', () => {
+  it('never moves a label more than the glide step per frame and arrives exactly', () => {
+    const drawn = { left: 400, top: 540, edgeX: 440, edgeY: 540 };
+    const target = { left: 470, top: 350, edgeX: 500, edgeY: 360 };
+    let frames = 0;
+    let prev = { ...drawn };
+    while (!glideToward(drawn, target) && frames < 100) {
+      expect(Math.hypot(drawn.left - prev.left, drawn.top - prev.top)).toBeLessThanOrEqual(LAYOUT_GLIDE_STEP + 1e-9);
+      prev = { ...drawn };
+      frames += 1;
+    }
+    expect(frames).toBeGreaterThan(3);
+    expect(frames).toBeLessThan(40);
+    expect(drawn).toEqual(target);
   });
 });
