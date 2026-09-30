@@ -13,6 +13,25 @@ data/raw/*.xlsx ─► preprocess ─► locked split ─► ablations ─► ne
       ml/artifacts/{schema,model,metrics,cohort,fixtures}.json + cardiotwin_models.joblib ──► frontend/public/model
 ```
 
+## Headline results
+
+Locked test set (61 unseen patients; 95 % stratified-bootstrap CIs) and development CV (repeated stratified
+5-fold × 10, nested tuning). Full tables: [`reports/results.md`](reports/results.md).
+
+| Target | Test ROC-AUC | Test F1 | Test sensitivity / specificity | Dev-CV ROC-AUC |
+| --- | --- | --- | --- | --- |
+| CAD | 0.858 (0.741–0.955) | 0.874 (0.800–0.933) | 0.864 / 0.706 | 0.942 ± 0.034 |
+| LAD | 0.742 (0.611–0.858) | 0.712 (0.600–0.811) | 0.722 / 0.560 | 0.872 ± 0.055 |
+| LCX | 0.808 (0.683–0.909) | 0.702 (0.586–0.807) | 0.800 / 0.667 | 0.743 ± 0.052 |
+| RCA | 0.735 (0.593–0.851) | 0.618 (0.537–0.689) | 0.913 / 0.368 | 0.738 ± 0.064 |
+
+The deployed ensemble ranks first on the development leaderboard for all four targets. On the test set it does
+not significantly beat a 5-feature clinical baseline (age, sex, typical angina, DM, HTN; paired ΔAUC CIs include 0)
+— reported honestly in the [model card](../docs/MODEL_CARD.md), together with the CV-to-test gap that the baseline
+shows as well.
+
+![Test ROC-AUC vs baseline](../docs/figures/test_auc_forest.png)
+
 ## Quick start
 
 Prerequisites: Python 3.11, ~1 GB RAM, any CPU (no GPU).
