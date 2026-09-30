@@ -130,7 +130,7 @@ export class InferenceClient {
 
   /** One full prediction with exact SHAP explanations (CONTRACTS §3.2, `engine = "edge"`). */
   async predict(features: EdgeFeatureInput, options: RequestOptions = {}): Promise<EdgePredictResponse> {
-    await this.readyPromise;
+    await this.whenReady(options.signal);
     return this.request<EdgePredictResponse>({ id: this.allocateId(), type: 'predict', features }, options.signal);
   }
 
@@ -142,7 +142,7 @@ export class InferenceClient {
   predictBatch(rows: readonly EdgeFeatureInput[], options?: BatchOptions & { explain?: false }): Promise<EdgeScore[]>;
   predictBatch(rows: readonly EdgeFeatureInput[], options: BatchOptions & { explain: true }): Promise<EdgePredictResponse[]>;
   async predictBatch(rows: readonly EdgeFeatureInput[], options: BatchOptions = {}): Promise<EdgeScore[] | EdgePredictResponse[]> {
-    await this.readyPromise;
+    await this.whenReady(options.signal);
     if (rows.length === 0) return [];
     return this.request<EdgeScore[] | EdgePredictResponse[]>(
       { id: this.allocateId(), type: 'predictBatch', rows: [...rows], explain: options.explain === true },
@@ -162,6 +162,26 @@ export class InferenceClient {
 
   // ---------------------------------------------------------------------------------- internals
 
+  /** Wait for the model, but give up at once when `signal` aborts (a slow model.json must not delay an abort). */
+  private whenReady(signal?: AbortSignal): Promise<ModelInfo> {
+    if (!signal) return this.readyPromise;
+    if (signal.aborted) return Promise.reject(abortError());
+    return new Promise<ModelInfo>((resolve, reject) => {
+      const onAbort = () => reject(abortError());
+      signal.addEventListener('abort', onAbort, { once: true });
+      this.readyPromise.then(
+        (info) => {
+          signal.removeEventListener('abort', onAbort);
+          resolve(info);
+        },
+        (error: unknown) => {
+          signal.removeEventListener('abort', onAbort);
+          reject(error instanceof Error ? error : new Error(String(error)));
+        },
+      );
+    });
+  }
+
   private allocateId(): number {
     const id = this.nextId;
     this.nextId += 1;
@@ -178,7 +198,7 @@ export class InferenceClient {
         reject(abortError());
       };
       signal?.addEventListener('abort', onAbort, { once: true });
-      this.pending.set(request.id, {
+      const entry: Pending = {
         request,
         resolve: (result, computeMs) => {
           signal?.removeEventListener('abort', onAbort);
@@ -189,8 +209,16 @@ export class InferenceClient {
           signal?.removeEventListener('abort', onAbort);
           reject(error);
         },
-      });
-      this.transport.post(request);
+      };
+      this.pending.set(request.id, entry);
+      try {
+        this.transport.post(request);
+      } catch (error) {
+        // postMessage throws synchronously for values it cannot clone (DataCloneError). Without this the
+        // entry would stay pending forever and be replayed on the next worker crash.
+        this.pending.delete(request.id);
+        entry.reject(error instanceof Error ? error : new Error(String(error)));
+      }
     });
   }
 
