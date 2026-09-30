@@ -240,6 +240,8 @@ export interface ConfusionMatrix {
 
 export interface EvaluationCurves {
   roc: { fpr: number[]; tpr: number[]; thresholds?: number[] };
+  /** Additive: 95 % bootstrap band around the ROC curve. */
+  roc_band?: { fpr: number[]; tpr_low: number[]; tpr_high: number[] };
   pr: { recall: number[]; precision: number[]; thresholds?: number[] };
   calibration: { mean_predicted: number[]; fraction_positive: number[]; count: number[] };
   dca: { thresholds: number[]; model: number[]; treat_all: number[]; treat_none: number[] };
@@ -247,6 +249,8 @@ export interface EvaluationCurves {
 
 export interface LeaderboardRow {
   model: string;
+  /** Additive: human-readable model name. */
+  label?: string;
   roc_auc_mean: number;
   roc_auc_std: number;
   f1_mean?: number;
@@ -336,11 +340,23 @@ export interface PortableModel {
   [extra: string]: unknown;
 }
 
-/** `fixtures.json`: cross-engine parity pairs. */
+/** `fixtures.json`: cross-engine parity cases (edge engine must match within `tolerance`). */
 export interface ParityFixture {
-  features: FeatureVector;
-  expected: PredictResponse;
   id?: string;
+  description?: string;
+  features: FeatureVector;
+  /** Encoded model columns, in `columns` order. */
+  encoded?: number[];
+  expected: PredictResponse;
+}
+
+export interface FixturesFile {
+  version: string;
+  model_version: string;
+  tolerance: { probability: number; logit: number; base_value: number; shap: number };
+  columns: string[];
+  n_cases: number;
+  cases: ParityFixture[];
 }
 
 // ------------------------------------------------------------------------ §6 anatomy assets
@@ -365,6 +381,9 @@ export interface ManifestLayer {
   label: string;
   explode: Vec3;
   order: number;
+  description?: string;
+  /** Additive: GLB node names in this layer. */
+  nodes?: string[];
   /** Additive (§7.8). */
   pivot?: Vec3;
   hingeAxis?: Vec3;
@@ -397,8 +416,11 @@ export interface AnatomyManifest {
   layers: ManifestLayer[];
   structures: ManifestStructure[];
   camera: {
-    home: CameraPose;
-    focus?: Record<string, CameraPose>;
+    home: CameraPose & { fov?: number };
+    /** Additive: close-up pose framing the heart (used as the workstation home). */
+    heart?: CameraPose & { fov?: number };
+    focus?: Record<string, CameraPose & { fov?: number }>;
+    fov?: number;
     [extra: string]: unknown;
   };
   [extra: string]: unknown;

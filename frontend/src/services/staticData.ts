@@ -12,8 +12,8 @@ import type {
   AnatomyManifest,
   CohortResponse,
   FeatureSchema,
+  FixturesFile,
   MetricsReport,
-  ParityFixture,
   PortableModel,
   VesselsFile,
 } from '@/types/contracts';
@@ -125,9 +125,7 @@ export const metricsResource = memoize<MetricsReport>(() =>
 );
 /** Portable model for the edge engine (static only — the API never serves it). */
 export const portableModelResource = memoize<PortableModel>(() => fetchStaticJson(`${MODEL_DIR}/model.json`));
-export const fixturesResource = memoize<ParityFixture[] | { fixtures: ParityFixture[] }>(() =>
-  fetchStaticJson(`${MODEL_DIR}/fixtures.json`),
-);
+export const fixturesResource = memoize<FixturesFile>(() => fetchStaticJson(`${MODEL_DIR}/fixtures.json`));
 export const manifestResource = memoize<AnatomyManifest>(() => fetchStaticJson(`${ANATOMY_DIR}/manifest.json`));
 export const vesselsResource = memoize<VesselsFile>(() => fetchStaticJson(`${ANATOMY_DIR}/vessels.json`));
 
