@@ -16,6 +16,8 @@ import { useViewerStore } from '@/state/viewerStore';
 interface RigLike {
   byNode: Map<string, { mesh: Mesh }>;
   explode: number;
+  update: (...args: never[]) => boolean;
+  __hidden?: Set<string>;
 }
 
 export interface Box2 {
@@ -123,5 +125,89 @@ export function installProbes(target: Record<string, unknown>, gl: WebGLRenderer
     return out;
   };
 
-  Object.assign(target, { probe, box, zoom, unzoom: () => document.getElementById('__ct-zoom')?.remove(), peel });
+  /** Nodes hidden after the rig's own per-frame visibility pass (the rig re-shows everything each frame). */
+  const hidden = (): Set<string> | null => {
+    const r = rig();
+    if (!r) return null;
+    if (!r.__hidden) {
+      const own = r.update.bind(r);
+      const set = new Set<string>();
+      r.__hidden = set;
+      r.update = ((...args: never[]) => {
+        const moving = own(...args);
+        for (const n of set) {
+          const e = r.byNode.get(n);
+          if (e) e.mesh.visible = false;
+        }
+        return moving;
+      }) as RigLike['update'];
+    }
+    return r.__hidden;
+  };
+
+  const grab = (): Uint8ClampedArray => {
+    void frames(1, 0);
+    const src = gl.domElement;
+    const c = document.createElement('canvas');
+    c.width = src.width;
+    c.height = src.height;
+    const ctx = c.getContext('2d');
+    if (!ctx) return new Uint8ClampedArray(0);
+    ctx.drawImage(src, 0, 0);
+    return ctx.getImageData(0, 0, c.width, c.height).data;
+  };
+
+  /**
+   * Colour statistics of the pixels `nodes` cover on screen (a frame with them minus a frame without):
+   * mean luminance, chroma (max − min) and hue — e.g. "is the fat darker and less chromatic than the
+   * coronaries" (V2 §10 3D criteria).
+   */
+  const stats = (nodes: readonly string[]) => {
+    const set = hidden();
+    if (!set) return null;
+    const base = grab();
+    for (const n of nodes) set.add(n);
+    const without = grab();
+    for (const n of nodes) set.delete(n);
+    grab();
+    let count = 0;
+    let lum = 0;
+    let chroma = 0;
+    let hx = 0;
+    let hy = 0;
+    for (let i = 0; i < base.length; i += 16) {
+      if (Math.abs(base[i]! - without[i]!) + Math.abs(base[i + 1]! - without[i + 1]!) + Math.abs(base[i + 2]! - without[i + 2]!) <= 30) continue;
+      const r = base[i]! / 255;
+      const g = base[i + 1]! / 255;
+      const b = base[i + 2]! / 255;
+      const mx = Math.max(r, g, b);
+      const mn = Math.min(r, g, b);
+      lum += 0.2126 * r + 0.7152 * g + 0.0722 * b;
+      chroma += mx - mn;
+      if (mx > mn) {
+        const h = mx === r ? ((g - b) / (mx - mn) + 6) % 6 : mx === g ? (b - r) / (mx - mn) + 2 : (r - g) / (mx - mn) + 4;
+        hx += Math.cos((h * Math.PI) / 3);
+        hy += Math.sin((h * Math.PI) / 3);
+      }
+      count += 1;
+    }
+    const round = (x: number) => Math.round(x * 1000) / 1000;
+    return { px: count, lum: round(lum / Math.max(1, count)), chroma: round(chroma / Math.max(1, count)), hue: Math.round(((Math.atan2(hy, hx) * 180) / Math.PI + 360) % 360) };
+  };
+
+  Object.assign(target, {
+    probe,
+    box,
+    zoom,
+    unzoom: () => document.getElementById('__ct-zoom')?.remove(),
+    peel,
+    stats,
+    hide: (nodes: readonly string[], on = true) => {
+      const set = hidden();
+      for (const n of nodes) {
+        if (on) set?.add(n);
+        else set?.delete(n);
+      }
+    },
+  });
 }
