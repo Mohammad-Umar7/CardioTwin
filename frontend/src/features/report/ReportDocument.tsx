@@ -142,6 +142,18 @@ function StateNotice({ model }: { model: ReportModel }) {
   );
 }
 
+/** What-if "was" line: the estimate for the recorded inputs and the change in points (V2 §3.3). */
+function WasLine({ recorded, compact }: { recorded: NonNullable<TargetResult['recorded']>; compact?: boolean }) {
+  const d = recorded.delta;
+  return (
+    <span className="rp-was rp-num">
+      {!compact && <>was {recorded.pctText} · </>}
+      {d.direction === 'none' ? 'no change' : `${d.glyph} ${d.text}`}
+      <span className="sr-only"> from the recorded inputs</span>
+    </span>
+  );
+}
+
 function CadBlock({ cad, sentence }: { cad: TargetResult; sentence: string }) {
   return (
     <div className="rp-cad">
@@ -153,7 +165,10 @@ function CadBlock({ cad, sentence }: { cad: TargetResult; sentence: string }) {
       </div>
       <PaperProbability p={cad.p} text={cad.pctText} target={cad.id} className="rp-cad__value" />
       <div className="rp-cad__side">
-        <BandTag band={cad.band} />
+        <div className="rp-cad__tags">
+          <BandTag band={cad.band} />
+          {cad.recorded && <WasLine recorded={cad.recorded} />}
+        </div>
         <PaperTrack p={cad.p} threshold={cad.threshold} scale thresholdText={cad.thresholdText} />
       </div>
       <div className="rp-cad__verdict">
@@ -172,7 +187,7 @@ function VesselTable({ model }: { model: ReportModel }) {
         <tr>
           <th scope="col">Vessel</th>
           <th scope="col" className="rp-r">
-            Probability
+            {model.vessels.some((v) => v.recorded) ? 'Probability · Δ' : 'Probability'}
           </th>
           <th scope="col">Scale · threshold</th>
           <th scope="col">{model.flaggedText}</th>
@@ -187,13 +202,14 @@ function VesselTable({ model }: { model: ReportModel }) {
                 <Pip p={v.p} />
                 <span>
                   <span className="rp-vessel__code">{v.short}</span>
-                  <span className="rp-vessel__name">{v.label.replace(/ artery$/, '')}</span>
+                  {!model.truthShown && <span className="rp-vessel__name">{v.label.replace(/ artery$/, '')}</span>}
                 </span>
               </span>
             </th>
             <td className="rp-r">
               <span className="rp-vessel__prob">
                 <PaperProbability p={v.p} text={v.pctText} target={v.id} className="rp-vessel__p" />
+                {v.recorded && <WasLine recorded={v.recorded} compact />}
                 <BandTag band={v.band} />
               </span>
             </td>
@@ -312,6 +328,7 @@ function PageOne({ model, perf }: { model: ReportModel; perf: PerformanceSummary
         </div>
         {ready && (
           <p className="rp-note">
+            {model.truthWithheld && 'The catheterisation result is not compared while inputs differ from the record. '}
             Band = size of the probability (cut-offs 25, 50, 75{THIN_SPACE}%). Verdict = probability against that target’s own
             decision threshold (Youden’s J on development data), so a vessel can be Moderate and still Flagged.
           </p>

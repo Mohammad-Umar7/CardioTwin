@@ -28,8 +28,10 @@ import {
   THIN_SPACE,
   formatFeatureValue,
   formatNormalRange,
+  formatDeltaPts,
   formatProbability,
   rangeStatus,
+  type FormattedDelta,
   type FormattedProbability,
   type RangeStatus,
 } from '@/lib/format';
@@ -62,6 +64,8 @@ export interface ReportInput {
   mode: string;
   /** Catheterisation ground truth, passed ONLY after the user revealed it (TEST patients). */
   truth?: Partial<Record<TargetId, 0 | 1>> | null;
+  /** Estimate for the RECORDED inputs (patientStore.recordedPrediction); shown as "was" only while edits exist. */
+  recordedPrediction?: PredictResponse | null;
   generatedAt: Date;
   /** Number of drivers listed per target (default 5). */
   topDrivers?: number;
@@ -126,6 +130,8 @@ export interface TargetResult {
   /** Plain sentence reconciling band and decision (V2 §3.1). */
   reconcile: string;
   truth: TargetTruth | null;
+  /** What-if only: the estimate for the recorded inputs and the change in percentage points. */
+  recorded: { p: number; pctText: string; delta: FormattedDelta } | null;
 }
 
 export interface DriverRow {
@@ -210,6 +216,8 @@ export interface ReportModel {
   editedCount: number;
   /** Cath truth was revealed and is shown. */
   truthShown: boolean;
+  /** Cath truth was revealed but is withheld because what-if edits make the comparison meaningless. */
+  truthWithheld: boolean;
 }
 
 // -------------------------------------------------------------------------------------- helpers
@@ -299,12 +307,18 @@ const targetShort = (t: TargetSpec | undefined, id: TargetId) => t?.short || id;
 
 // --------------------------------------------------------------------------------------- results
 
+function recordedResult(recordedP: number | undefined, p: number): TargetResult['recorded'] {
+  if (!isNum(recordedP)) return null;
+  return { p: recordedP, pctText: formatProbability(recordedP).text, delta: formatDeltaPts(p - recordedP) };
+}
+
 export function targetResult(
   id: TargetId,
   prediction: PredictResponse,
   spec: TargetSpec | undefined,
   bands: readonly RiskBandSpec[],
   truth: Partial<Record<TargetId, 0 | 1>> | null | undefined,
+  recordedPrediction: PredictResponse | null = null,
 ): TargetResult | null {
   const pred = prediction.predictions[id];
   if (!pred || !isNum(pred.probability)) return null;
@@ -343,6 +357,7 @@ export function targetResult(
     verdictLine,
     reconcile,
     truth: truthValue === 0 || truthValue === 1 ? { stenotic: truthValue === 1, agrees: (truthValue === 1) === flagged } : null,
+    recorded: recordedResult(recordedPrediction?.predictions[id]?.probability, p),
   };
 }
 
@@ -647,15 +662,21 @@ export function buildReport(input: ReportInput): ReportModel {
   };
   const targets = [...schema.targets].sort((a, b) => rank(a.id) - rank(b.id));
   const isVessel = (t: TargetSpec) => (t.kind ? t.kind === 'vessel' : t.id !== 'CAD');
-  const truth = input.truth ?? null;
 
   const ready = state === 'ready' && prediction !== null;
   const cadSpec = targets.find((t) => !isVessel(t));
-  const cad = ready && cadSpec ? targetResult(cadSpec.id, prediction, cadSpec, bands, truth) : null;
+  const inputs = inputGroups(schema, features, recorded, prediction?.imputed ?? []);
+  const rows = inputs.flatMap((g) => [...g.rows, ...g.present, ...g.absent]);
+  const editedCount = rows.filter((r) => r.edited).length;
+  // "was" values only while the inputs differ from the record, and only from a real recorded estimate.
+  const was = editedCount > 0 ? (input.recordedPrediction ?? null) : null;
+  // The cath result belongs to the RECORDED patient: never compare it with a what-if estimate.
+  const truth = editedCount === 0 ? (input.truth ?? null) : null;
+  const cad = ready && cadSpec ? targetResult(cadSpec.id, prediction, cadSpec, bands, truth, was) : null;
   const vessels = ready
     ? targets
         .filter(isVessel)
-        .map((t) => targetResult(t.id, prediction, t, bands, truth))
+        .map((t) => targetResult(t.id, prediction, t, bands, truth, was))
         .filter((r): r is TargetResult => r !== null)
     : [];
   const drivers = ready
@@ -664,9 +685,6 @@ export function buildReport(input: ReportInput): ReportModel {
         .filter((d): d is DriverPanel => d !== null)
     : [];
   const flaggedCount = vessels.filter((v) => v.flagged).length;
-  const inputs = inputGroups(schema, features, recorded, prediction?.imputed ?? []);
-  const rows = inputs.flatMap((g) => [...g.rows, ...g.present, ...g.absent]);
-  const editedCount = rows.filter((r) => r.edited).length;
   const cadDrivers = drivers.find((d) => d.target === cadSpec?.id);
 
   return {
@@ -689,5 +707,6 @@ export function buildReport(input: ReportInput): ReportModel {
     },
     editedCount,
     truthShown: ready && truth !== null && [cad, ...vessels].some((r) => r?.truth),
+    truthWithheld: ready && editedCount > 0 && !!input.truth,
   };
 }

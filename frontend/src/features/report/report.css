@@ -424,6 +424,21 @@
   color: rgb(var(--ink-2));
 }
 
+.rp-cad__tags {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.rp-was {
+  font-size: 12px;
+  line-height: 16px;
+  color: rgb(var(--ink-2));
+  white-space: nowrap;
+}
+.rp-vessel__prob .rp-was {
+  font-size: 11px;
+  line-height: 13px;
+}
 .rp-band {
   display: inline-flex;
   align-items: center;

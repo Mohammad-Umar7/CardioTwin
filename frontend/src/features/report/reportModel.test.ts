@@ -344,9 +344,28 @@ describe('buildReport', () => {
     expect(r.editedCount).toBe(1);
   });
 
+  it('adds "was" values from the recorded estimate only while what-if edits exist', () => {
+    const recordedPrediction = {
+      ...calibrated,
+      predictions: { ...calibrated.predictions, CAD: { ...calibrated.predictions.CAD!, probability: 0.94 } },
+    };
+    const edited = buildReport(input({ features: { ...patient.features, BP: 118 }, recordedPrediction }));
+    expect(edited.cad?.recorded).toMatchObject({ p: 0.94, pctText: `94${T}%` });
+    expect(edited.cad?.recorded?.delta).toMatchObject({ direction: 'down', text: `−7${T}pts` });
+    expect(edited.vessels[0]?.recorded?.delta.direction).toBe('none');
+    const unedited = buildReport(input({ recordedPrediction }));
+    expect(unedited.cad?.recorded).toBeNull();
+  });
+
   it('shows the cath comparison only when the truth is passed (after Reveal)', () => {
     const r = buildReport(input({ truth: patient.labels }));
     expect(r.truthShown).toBe(true);
     expect(r.cad?.truth).toEqual({ stenotic: true, agrees: true });
+    expect(r.truthWithheld).toBe(false);
+    // A what-if patient is hypothetical: its estimate is never scored against the recorded cath result.
+    const whatIf = buildReport(input({ truth: patient.labels, features: { ...patient.features, BP: 118 } }));
+    expect(whatIf.truthShown).toBe(false);
+    expect(whatIf.truthWithheld).toBe(true);
+    expect(whatIf.vessels.every((v) => v.truth === null)).toBe(true);
   });
 });

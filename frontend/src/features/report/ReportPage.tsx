@@ -38,6 +38,7 @@ function useReportModel(): { model: ReportModel | null; loading: boolean } {
       features: st.features,
       recorded: st.recorded,
       prediction: st.prediction,
+      recordedPrediction: st.recordedPrediction,
       status: st.status,
       error: st.error,
       engineStatus: st.engineStatus,
@@ -66,6 +67,7 @@ function useReportModel(): { model: ReportModel | null; loading: boolean } {
       patient: { id: s.id, split: s.split, summary: patient?.summary ?? null },
       mode: s.mode,
       truth: s.revealed && patient ? patient.labels : null,
+      recordedPrediction: s.recordedPrediction,
       generatedAt,
     });
   }, [schema.data, cohort.data, s, generatedAt]);
