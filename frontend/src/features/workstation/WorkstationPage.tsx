@@ -28,6 +28,7 @@ import { SelectionChip } from './hud/SelectionChip';
 import { LeftPanel, PatientHeader, RightPanel, TabbedRightPanel } from './panels';
 import { ChromeGate, StageLayout } from './StageLayout';
 import { useWorkstationCommands } from './useWorkstationCommands';
+import { useWorkstationUrlState } from './useWorkstationUrlState';
 
 /** Deep link: #/workstation/P-017 opens that cohort patient. */
 function usePatientFromRoute() {
@@ -191,6 +192,7 @@ export default function WorkstationPage() {
   const [params] = useSearchParams();
   useWorkstationCommands();
   usePatientFromRoute();
+  useWorkstationUrlState();
   useWorkstationChrome();
 
   if (mode === 'compact') {
