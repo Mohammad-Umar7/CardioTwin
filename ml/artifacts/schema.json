@@ -1,0 +1,1072 @@
+{
+  "version": "1.0.0",
+  "model_version": "1.0.0",
+  "groups": [
+    {
+      "id": "demographics",
+      "label": "Demographics",
+      "order": 1,
+      "icon": "user"
+    },
+    {
+      "id": "risk_factors",
+      "label": "Risk factors & history",
+      "order": 2,
+      "icon": "clipboard"
+    },
+    {
+      "id": "symptoms",
+      "label": "Symptoms",
+      "order": 3,
+      "icon": "activity"
+    },
+    {
+      "id": "exam",
+      "label": "Physical examination",
+      "order": 4,
+      "icon": "stethoscope"
+    },
+    {
+      "id": "ecg",
+      "label": "ECG",
+      "order": 5,
+      "icon": "heart-pulse"
+    },
+    {
+      "id": "labs",
+      "label": "Laboratory",
+      "order": 6,
+      "icon": "flask"
+    },
+    {
+      "id": "echo",
+      "label": "Echocardiography",
+      "order": 7,
+      "icon": "waves"
+    }
+  ],
+  "features": [
+    {
+      "key": "Age",
+      "label": "Age",
+      "group": "demographics",
+      "type": "numeric",
+      "unit": "years",
+      "min": 30,
+      "max": 86,
+      "step": 1,
+      "default": 57.0,
+      "normal": {
+        "low": null,
+        "high": null
+      },
+      "description": "Age in years. Coronary risk rises steadily with age.",
+      "options": null
+    },
+    {
+      "key": "Weight",
+      "label": "Weight",
+      "group": "demographics",
+      "type": "numeric",
+      "unit": "kg",
+      "min": 48,
+      "max": 120,
+      "step": 1,
+      "default": 74.0,
+      "normal": {
+        "low": null,
+        "high": null
+      },
+      "description": "Body weight in kilograms.",
+      "options": null
+    },
+    {
+      "key": "Length",
+      "label": "Height",
+      "group": "demographics",
+      "type": "numeric",
+      "unit": "cm",
+      "min": 140,
+      "max": 188,
+      "step": 1,
+      "default": 165.0,
+      "normal": {
+        "low": null,
+        "high": null
+      },
+      "description": "Body height in centimetres (the dataset calls this column \"Length\").",
+      "options": null
+    },
+    {
+      "key": "Sex",
+      "label": "Sex",
+      "group": "demographics",
+      "type": "categorical",
+      "unit": null,
+      "min": null,
+      "max": null,
+      "step": null,
+      "default": "Male",
+      "normal": {
+        "low": null,
+        "high": null
+      },
+      "description": "Biological sex recorded in the chart. Men develop coronary disease earlier on average.",
+      "options": [
+        {
+          "value": "Male",
+          "label": "Male"
+        },
+        {
+          "value": "Female",
+          "label": "Female"
+        }
+      ]
+    },
+    {
+      "key": "BMI",
+      "label": "Body-mass index",
+      "group": "demographics",
+      "type": "numeric",
+      "unit": "kg/m²",
+      "min": 18.1154,
+      "max": 40.9007,
+      "step": 0.1,
+      "default": 26.82611905128693,
+      "normal": {
+        "low": 18.5,
+        "high": 24.9
+      },
+      "description": "Weight divided by height squared (kg/m²). 18.5-24.9 is the healthy range; 25-29.9 is overweight and 30 or more is obese.",
+      "options": null
+    },
+    {
+      "key": "DM",
+      "label": "Diabetes",
+      "group": "risk_factors",
+      "type": "binary",
+      "unit": null,
+      "min": 0,
+      "max": 1,
+      "step": 1,
+      "default": 0,
+      "normal": {
+        "low": null,
+        "high": null
+      },
+      "description": "Diagnosed diabetes mellitus (high blood sugar). Diabetes damages artery walls and roughly doubles coronary risk.",
+      "options": null
+    },
+    {
+      "key": "HTN",
+      "label": "Hypertension",
+      "group": "risk_factors",
+      "type": "binary",
+      "unit": null,
+      "min": 0,
+      "max": 1,
+      "step": 1,
+      "default": 1,
+      "normal": {
+        "low": null,
+        "high": null
+      },
+      "description": "Diagnosed high blood pressure (hypertension), a major driver of artery damage.",
+      "options": null
+    },
+    {
+      "key": "Current Smoker",
+      "label": "Current smoker",
+      "group": "risk_factors",
+      "type": "binary",
+      "unit": null,
+      "min": 0,
+      "max": 1,
+      "step": 1,
+      "default": 0,
+      "normal": {
+        "low": null,
+        "high": null
+      },
+      "description": "Currently smokes tobacco. Smoking injures the artery lining and promotes clotting.",
+      "options": null
+    },
+    {
+      "key": "EX-Smoker",
+      "label": "Former smoker",
+      "group": "risk_factors",
+      "type": "binary",
+      "unit": null,
+      "min": 0,
+      "max": 1,
+      "step": 1,
+      "default": 0,
+      "normal": {
+        "low": null,
+        "high": null
+      },
+      "description": "Used to smoke but has stopped.",
+      "options": null
+    },
+    {
+      "key": "FH",
+      "label": "Family history",
+      "group": "risk_factors",
+      "type": "binary",
+      "unit": null,
+      "min": 0,
+      "max": 1,
+      "step": 1,
+      "default": 0,
+      "normal": {
+        "low": null,
+        "high": null
+      },
+      "description": "Family history of heart disease. The dataset does not state the exact criterion; clinically this usually means coronary disease in a parent or sibling at a young age.",
+      "options": null
+    },
+    {
+      "key": "Obesity",
+      "label": "Obesity (BMI > 25)",
+      "group": "risk_factors",
+      "type": "binary",
+      "unit": null,
+      "min": 0,
+      "max": 1,
+      "step": 1,
+      "default": 1,
+      "normal": {
+        "low": null,
+        "high": null
+      },
+      "description": "Flag recorded by the dataset authors as \"Yes if BMI > 25\", so it also covers people who are overweight (it matches BMI > 25 for 302 of 303 patients).",
+      "options": null
+    },
+    {
+      "key": "CRF",
+      "label": "Chronic renal failure",
+      "group": "risk_factors",
+      "type": "binary",
+      "unit": null,
+      "min": 0,
+      "max": 1,
+      "step": 1,
+      "default": 0,
+      "normal": {
+        "low": null,
+        "high": null
+      },
+      "description": "Long-standing kidney failure. Kidney disease strongly accelerates artery disease.",
+      "options": null
+    },
+    {
+      "key": "CVA",
+      "label": "Previous stroke",
+      "group": "risk_factors",
+      "type": "binary",
+      "unit": null,
+      "min": 0,
+      "max": 1,
+      "step": 1,
+      "default": 0,
+      "normal": {
+        "low": null,
+        "high": null
+      },
+      "description": "History of cerebrovascular accident (stroke), a sign of artery disease elsewhere in the body.",
+      "options": null
+    },
+    {
+      "key": "Airway disease",
+      "label": "Airway disease",
+      "group": "risk_factors",
+      "type": "binary",
+      "unit": null,
+      "min": 0,
+      "max": 1,
+      "step": 1,
+      "default": 0,
+      "normal": {
+        "low": null,
+        "high": null
+      },
+      "description": "Chronic lung airway disease such as asthma or COPD (the dataset does not specify which).",
+      "options": null
+    },
+    {
+      "key": "Thyroid Disease",
+      "label": "Thyroid disease",
+      "group": "risk_factors",
+      "type": "binary",
+      "unit": null,
+      "min": 0,
+      "max": 1,
+      "step": 1,
+      "default": 0,
+      "normal": {
+        "low": null,
+        "high": null
+      },
+      "description": "Any recorded thyroid disorder (over- or under-active thyroid; type not specified).",
+      "options": null
+    },
+    {
+      "key": "DLP",
+      "label": "Dyslipidaemia",
+      "group": "risk_factors",
+      "type": "binary",
+      "unit": null,
+      "min": 0,
+      "max": 1,
+      "step": 1,
+      "default": 0,
+      "normal": {
+        "low": null,
+        "high": null
+      },
+      "description": "Diagnosed abnormal blood fats (high cholesterol and/or triglycerides, or low HDL).",
+      "options": null
+    },
+    {
+      "key": "Typical Chest Pain",
+      "label": "Typical angina",
+      "group": "symptoms",
+      "type": "binary",
+      "unit": null,
+      "min": 0,
+      "max": 1,
+      "step": 1,
+      "default": 1,
+      "normal": {
+        "low": null,
+        "high": null
+      },
+      "description": "Classic angina - chest pressure brought on by exertion or stress and relieved by rest or nitroglycerin. The single strongest symptom of coronary narrowing.",
+      "options": null
+    },
+    {
+      "key": "Atypical",
+      "label": "Atypical angina",
+      "group": "symptoms",
+      "type": "binary",
+      "unit": null,
+      "min": 0,
+      "max": 1,
+      "step": 1,
+      "default": 0,
+      "normal": {
+        "low": null,
+        "high": null
+      },
+      "description": "Chest pain with only some of the features of typical angina.",
+      "options": null
+    },
+    {
+      "key": "Nonanginal",
+      "label": "Non-anginal chest pain",
+      "group": "symptoms",
+      "type": "binary",
+      "unit": null,
+      "min": 0,
+      "max": 1,
+      "step": 1,
+      "default": 0,
+      "normal": {
+        "low": null,
+        "high": null
+      },
+      "description": "Chest pain that does not look like angina (for example sharp, positional or pressing pain).",
+      "options": null
+    },
+    {
+      "key": "LowTH Ang",
+      "label": "Low-threshold angina",
+      "group": "symptoms",
+      "type": "binary",
+      "unit": null,
+      "min": 0,
+      "max": 1,
+      "step": 1,
+      "default": 0,
+      "normal": {
+        "low": null,
+        "high": null
+      },
+      "description": "Angina triggered by very little effort, a marker of severe narrowing.",
+      "options": null
+    },
+    {
+      "key": "Dyspnea",
+      "label": "Shortness of breath",
+      "group": "symptoms",
+      "type": "binary",
+      "unit": null,
+      "min": 0,
+      "max": 1,
+      "step": 1,
+      "default": 0,
+      "normal": {
+        "low": null,
+        "high": null
+      },
+      "description": "Breathlessness (dyspnoea) reported by the patient.",
+      "options": null
+    },
+    {
+      "key": "Function Class",
+      "label": "Functional class",
+      "group": "symptoms",
+      "type": "numeric",
+      "unit": "class",
+      "min": 0,
+      "max": 3,
+      "step": 1,
+      "default": 0.0,
+      "normal": {
+        "low": null,
+        "high": 1
+      },
+      "description": "How much symptoms limit daily activity on a 1-4 scale (higher = symptoms with less effort). The source does not say whether the NYHA or CCS scale was used; 0 in this dataset appears to mean no limitation was recorded.",
+      "options": null
+    },
+    {
+      "key": "BP",
+      "label": "Blood pressure",
+      "group": "exam",
+      "type": "numeric",
+      "unit": "mmHg",
+      "min": 90,
+      "max": 190,
+      "step": 5,
+      "default": 130.0,
+      "normal": {
+        "low": 90,
+        "high": 120
+      },
+      "description": "Blood pressure in mmHg recorded as a single number (most likely the systolic, i.e. upper, value - the dataset does not say). Below 120 is normal.",
+      "options": null
+    },
+    {
+      "key": "PR",
+      "label": "Pulse rate",
+      "group": "exam",
+      "type": "numeric",
+      "unit": "beats/min",
+      "min": 50,
+      "max": 110,
+      "step": 1,
+      "default": 70.0,
+      "normal": {
+        "low": 60,
+        "high": 100
+      },
+      "description": "Resting heart rate in beats per minute; 60-100 is the normal adult range.",
+      "options": null
+    },
+    {
+      "key": "Edema",
+      "label": "Leg swelling",
+      "group": "exam",
+      "type": "binary",
+      "unit": null,
+      "min": 0,
+      "max": 1,
+      "step": 1,
+      "default": 0,
+      "normal": {
+        "low": null,
+        "high": null
+      },
+      "description": "Swelling (oedema), usually of the ankles or legs, found on examination - can accompany heart failure.",
+      "options": null
+    },
+    {
+      "key": "Weak Peripheral Pulse",
+      "label": "Weak peripheral pulse",
+      "group": "exam",
+      "type": "binary",
+      "unit": null,
+      "min": 0,
+      "max": 1,
+      "step": 1,
+      "default": 0,
+      "normal": {
+        "low": null,
+        "high": null
+      },
+      "description": "Weak pulses in the arms or legs on examination, suggesting narrowed arteries outside the heart.",
+      "options": null
+    },
+    {
+      "key": "Lung rales",
+      "label": "Lung crackles",
+      "group": "exam",
+      "type": "binary",
+      "unit": null,
+      "min": 0,
+      "max": 1,
+      "step": 1,
+      "default": 0,
+      "normal": {
+        "low": null,
+        "high": null
+      },
+      "description": "Crackling sounds (rales) heard over the lungs, often from fluid congestion.",
+      "options": null
+    },
+    {
+      "key": "Systolic Murmur",
+      "label": "Systolic murmur",
+      "group": "exam",
+      "type": "binary",
+      "unit": null,
+      "min": 0,
+      "max": 1,
+      "step": 1,
+      "default": 0,
+      "normal": {
+        "low": null,
+        "high": null
+      },
+      "description": "A whooshing heart sound while the heart contracts, usually from a leaking or narrowed valve.",
+      "options": null
+    },
+    {
+      "key": "Diastolic Murmur",
+      "label": "Diastolic murmur",
+      "group": "exam",
+      "type": "binary",
+      "unit": null,
+      "min": 0,
+      "max": 1,
+      "step": 1,
+      "default": 0,
+      "normal": {
+        "low": null,
+        "high": null
+      },
+      "description": "A heart murmur heard while the heart relaxes; almost always indicates a valve problem.",
+      "options": null
+    },
+    {
+      "key": "Q Wave",
+      "label": "Q waves",
+      "group": "ecg",
+      "type": "binary",
+      "unit": null,
+      "min": 0,
+      "max": 1,
+      "step": 1,
+      "default": 0,
+      "normal": {
+        "low": null,
+        "high": null
+      },
+      "description": "Pathological Q waves on the resting ECG - usually the scar of a previous heart attack.",
+      "options": null
+    },
+    {
+      "key": "St Elevation",
+      "label": "ST elevation",
+      "group": "ecg",
+      "type": "binary",
+      "unit": null,
+      "min": 0,
+      "max": 1,
+      "step": 1,
+      "default": 0,
+      "normal": {
+        "low": null,
+        "high": null
+      },
+      "description": "ST-segment elevation on the resting ECG, which can reflect acute or old injury of the heart muscle.",
+      "options": null
+    },
+    {
+      "key": "St Depression",
+      "label": "ST depression",
+      "group": "ecg",
+      "type": "binary",
+      "unit": null,
+      "min": 0,
+      "max": 1,
+      "step": 1,
+      "default": 0,
+      "normal": {
+        "low": null,
+        "high": null
+      },
+      "description": "ST-segment depression on the resting ECG, a sign that heart muscle may be short of oxygen (ischaemia).",
+      "options": null
+    },
+    {
+      "key": "Tinversion",
+      "label": "T-wave inversion",
+      "group": "ecg",
+      "type": "binary",
+      "unit": null,
+      "min": 0,
+      "max": 1,
+      "step": 1,
+      "default": 0,
+      "normal": {
+        "low": null,
+        "high": null
+      },
+      "description": "Inverted T waves on the resting ECG, which can indicate ischaemia or strain.",
+      "options": null
+    },
+    {
+      "key": "LVH",
+      "label": "Left ventricular hypertrophy",
+      "group": "ecg",
+      "type": "binary",
+      "unit": null,
+      "min": 0,
+      "max": 1,
+      "step": 1,
+      "default": 0,
+      "normal": {
+        "low": null,
+        "high": null
+      },
+      "description": "ECG signs of a thickened left heart chamber, often caused by long-standing high blood pressure.",
+      "options": null
+    },
+    {
+      "key": "Poor R Progression",
+      "label": "Poor R-wave progression",
+      "group": "ecg",
+      "type": "binary",
+      "unit": null,
+      "min": 0,
+      "max": 1,
+      "step": 1,
+      "default": 0,
+      "normal": {
+        "low": null,
+        "high": null
+      },
+      "description": "R waves that fail to grow across the chest leads, which may point to an old anterior heart attack.",
+      "options": null
+    },
+    {
+      "key": "BBB",
+      "label": "Bundle branch block",
+      "group": "ecg",
+      "type": "categorical",
+      "unit": null,
+      "min": null,
+      "max": null,
+      "step": null,
+      "default": "N",
+      "normal": {
+        "low": null,
+        "high": null
+      },
+      "description": "A delay in the heart's electrical wiring on the left (LBBB) or right (RBBB) side. LBBB in particular is associated with underlying heart disease.",
+      "options": [
+        {
+          "value": "N",
+          "label": "None"
+        },
+        {
+          "value": "LBBB",
+          "label": "Left bundle branch block"
+        },
+        {
+          "value": "RBBB",
+          "label": "Right bundle branch block"
+        }
+      ]
+    },
+    {
+      "key": "FBS",
+      "label": "Fasting blood sugar",
+      "group": "labs",
+      "type": "numeric",
+      "unit": "mg/dL",
+      "min": 62,
+      "max": 400,
+      "step": 1,
+      "default": 97.5,
+      "normal": {
+        "low": 70,
+        "high": 99
+      },
+      "description": "Blood glucose after an overnight fast. 70-99 mg/dL is normal; 100-125 is pre-diabetes and 126 or more suggests diabetes.",
+      "options": null
+    },
+    {
+      "key": "CR",
+      "label": "Creatinine",
+      "group": "labs",
+      "type": "numeric",
+      "unit": "mg/dL",
+      "min": 0.5,
+      "max": 2.2,
+      "step": 0.1,
+      "default": 1.0,
+      "normal": {
+        "low": 0.6,
+        "high": 1.3
+      },
+      "description": "Blood creatinine, a waste product cleared by the kidneys; higher values mean weaker kidney function. Normal is roughly 0.6-1.3 mg/dL (lower in women).",
+      "options": null
+    },
+    {
+      "key": "TG",
+      "label": "Triglycerides",
+      "group": "labs",
+      "type": "numeric",
+      "unit": "mg/dL",
+      "min": 37,
+      "max": 1050,
+      "step": 1,
+      "default": 119.0,
+      "normal": {
+        "low": null,
+        "high": 150
+      },
+      "description": "Fasting blood triglycerides (a type of fat). Below 150 mg/dL is normal.",
+      "options": null
+    },
+    {
+      "key": "LDL",
+      "label": "LDL cholesterol",
+      "group": "labs",
+      "type": "numeric",
+      "unit": "mg/dL",
+      "min": 18,
+      "max": 232,
+      "step": 1,
+      "default": 100.0,
+      "normal": {
+        "low": null,
+        "high": 100
+      },
+      "description": "\"Bad\" cholesterol that builds plaque in artery walls. Below 100 mg/dL is optimal.",
+      "options": null
+    },
+    {
+      "key": "HDL",
+      "label": "HDL cholesterol",
+      "group": "labs",
+      "type": "numeric",
+      "unit": "mg/dL",
+      "min": 15.9,
+      "max": 111,
+      "step": 1,
+      "default": 39.0,
+      "normal": {
+        "low": 40,
+        "high": null
+      },
+      "description": "\"Good\" cholesterol that helps clear fat from arteries. Below 40 mg/dL (men) or 50 mg/dL (women) increases risk.",
+      "options": null
+    },
+    {
+      "key": "BUN",
+      "label": "Blood urea nitrogen",
+      "group": "labs",
+      "type": "numeric",
+      "unit": "mg/dL",
+      "min": 6,
+      "max": 52,
+      "step": 1,
+      "default": 16.0,
+      "normal": {
+        "low": 7,
+        "high": 20
+      },
+      "description": "Blood urea nitrogen, another kidney-function marker; normal is about 7-20 mg/dL.",
+      "options": null
+    },
+    {
+      "key": "ESR",
+      "label": "ESR",
+      "group": "labs",
+      "type": "numeric",
+      "unit": "mm/h",
+      "min": 1,
+      "max": 90,
+      "step": 1,
+      "default": 15.0,
+      "normal": {
+        "low": 0,
+        "high": 20
+      },
+      "description": "Erythrocyte sedimentation rate, a general marker of inflammation. Normal upper limit is about 15-20 mm/h and rises with age.",
+      "options": null
+    },
+    {
+      "key": "HB",
+      "label": "Haemoglobin",
+      "group": "labs",
+      "type": "numeric",
+      "unit": "g/dL",
+      "min": 8.9,
+      "max": 17.6,
+      "step": 0.1,
+      "default": 13.3,
+      "normal": {
+        "low": 12.0,
+        "high": 17.5
+      },
+      "description": "Oxygen-carrying protein in red blood cells. Normal is about 13.5-17.5 g/dL in men and 12.0-15.5 g/dL in women; low values mean anaemia.",
+      "options": null
+    },
+    {
+      "key": "K",
+      "label": "Potassium",
+      "group": "labs",
+      "type": "numeric",
+      "unit": "mEq/L",
+      "min": 3,
+      "max": 6.6,
+      "step": 0.1,
+      "default": 4.2,
+      "normal": {
+        "low": 3.5,
+        "high": 5.0
+      },
+      "description": "Blood potassium, important for the heart's electrical rhythm; normal is 3.5-5.0 mEq/L.",
+      "options": null
+    },
+    {
+      "key": "Na",
+      "label": "Sodium",
+      "group": "labs",
+      "type": "numeric",
+      "unit": "mEq/L",
+      "min": 128,
+      "max": 156,
+      "step": 1,
+      "default": 141.0,
+      "normal": {
+        "low": 135,
+        "high": 145
+      },
+      "description": "Blood sodium; normal is 135-145 mEq/L.",
+      "options": null
+    },
+    {
+      "key": "WBC",
+      "label": "White blood cells",
+      "group": "labs",
+      "type": "numeric",
+      "unit": "cells/µL",
+      "min": 3700,
+      "max": 18000,
+      "step": 100,
+      "default": 7150.0,
+      "normal": {
+        "low": 4000,
+        "high": 11000
+      },
+      "description": "White blood cell count per microlitre, a marker of infection or inflammation; normal is about 4,000-11,000. (The source paper writes the unit as \"cells/ml\"; the values match cells per microlitre.)",
+      "options": null
+    },
+    {
+      "key": "Lymph",
+      "label": "Lymphocytes",
+      "group": "labs",
+      "type": "numeric",
+      "unit": "%",
+      "min": 7,
+      "max": 60,
+      "step": 1,
+      "default": 32.0,
+      "normal": {
+        "low": 20,
+        "high": 40
+      },
+      "description": "Lymphocytes as a percentage of white blood cells; normal is about 20-40 %.",
+      "options": null
+    },
+    {
+      "key": "Neut",
+      "label": "Neutrophils",
+      "group": "labs",
+      "type": "numeric",
+      "unit": "%",
+      "min": 32,
+      "max": 89,
+      "step": 1,
+      "default": 60.0,
+      "normal": {
+        "low": 40,
+        "high": 70
+      },
+      "description": "Neutrophils as a percentage of white blood cells; normal is about 40-70 %.",
+      "options": null
+    },
+    {
+      "key": "PLT",
+      "label": "Platelets",
+      "group": "labs",
+      "type": "numeric",
+      "unit": "×10³/µL",
+      "min": 25,
+      "max": 742,
+      "step": 1,
+      "default": 208.0,
+      "normal": {
+        "low": 150,
+        "high": 450
+      },
+      "description": "Platelet count in thousands per microlitre (clotting cells); normal is about 150-450.",
+      "options": null
+    },
+    {
+      "key": "EF-TTE",
+      "label": "Ejection fraction",
+      "group": "echo",
+      "type": "numeric",
+      "unit": "%",
+      "min": 15,
+      "max": 60,
+      "step": 5,
+      "default": 50.0,
+      "normal": {
+        "low": 55,
+        "high": 70
+      },
+      "description": "Share of blood the left ventricle pumps out with each beat, measured by transthoracic echocardiography. 55 % or more is normal; 40 % or less means a weak heart muscle.",
+      "options": null
+    },
+    {
+      "key": "Region RWMA",
+      "label": "Regional wall-motion abnormality",
+      "group": "echo",
+      "type": "numeric",
+      "unit": "regions",
+      "min": 0,
+      "max": 4,
+      "step": 1,
+      "default": 0.0,
+      "normal": {
+        "low": 0,
+        "high": 0
+      },
+      "description": "Echo finding of heart-wall segments that move abnormally, coded 0-4 in the dataset (0 = none; higher = more extensive, exact coding not documented by the authors). It describes wall motion, not the location of a blockage.",
+      "options": null
+    },
+    {
+      "key": "VHD",
+      "label": "Valvular heart disease",
+      "group": "echo",
+      "type": "categorical",
+      "unit": null,
+      "min": null,
+      "max": null,
+      "step": null,
+      "default": "mild",
+      "normal": {
+        "low": null,
+        "high": null
+      },
+      "description": "Severity of any heart-valve disease seen on echocardiography.",
+      "options": [
+        {
+          "value": "N",
+          "label": "None"
+        },
+        {
+          "value": "mild",
+          "label": "Mild"
+        },
+        {
+          "value": "Moderate",
+          "label": "Moderate"
+        },
+        {
+          "value": "Severe",
+          "label": "Severe"
+        }
+      ]
+    }
+  ],
+  "derived_features": [],
+  "dropped_features": [
+    "CHF",
+    "Exertional CP"
+  ],
+  "targets": [
+    {
+      "id": "CAD",
+      "label": "Coronary artery disease",
+      "short": "CAD",
+      "kind": "overall",
+      "anatomy": [
+        "heart"
+      ],
+      "territory": "Whole heart - at least one major coronary artery with >= 50 % diameter narrowing",
+      "description": "Overall probability that coronary angiography would show at least one major coronary artery (LAD, LCX or RCA) narrowed by 50 % or more.",
+      "threshold": 0.6845141554067578
+    },
+    {
+      "id": "LAD",
+      "label": "Left anterior descending artery",
+      "short": "LAD",
+      "kind": "vessel",
+      "anatomy": [
+        "Coronary_LAD",
+        "Coronary_LAD_Septal"
+      ],
+      "territory": "Anterior wall, anterior two-thirds of the septum and the apex of the left ventricle",
+      "description": "Probability of >= 50 % narrowing somewhere in the left anterior descending artery or its branches.",
+      "threshold": 0.5248182820504891
+    },
+    {
+      "id": "LCX",
+      "label": "Left circumflex artery",
+      "short": "LCX",
+      "kind": "vessel",
+      "anatomy": [
+        "Coronary_LCX"
+      ],
+      "territory": "Lateral and posterolateral walls of the left ventricle (and the inferior wall in left-dominant hearts)",
+      "description": "Probability of >= 50 % narrowing somewhere in the left circumflex artery or its branches.",
+      "threshold": 0.35592694851143625
+    },
+    {
+      "id": "RCA",
+      "label": "Right coronary artery",
+      "short": "RCA",
+      "kind": "vessel",
+      "anatomy": [
+        "Coronary_RCA",
+        "Coronary_RCA_Marginal",
+        "Coronary_RCA_PDA",
+        "Coronary_RCA_PL",
+        "Coronary_RCA_Septal"
+      ],
+      "territory": "Right ventricle, inferior wall and inferior septum (via the posterior descending artery in right-dominant hearts), sinus and AV nodes",
+      "description": "Probability of >= 50 % narrowing somewhere in the right coronary artery or its branches.",
+      "threshold": 0.32965875052787025
+    }
+  ],
+  "risk_bands": [
+    {
+      "id": "low",
+      "label": "Low",
+      "max": 0.25
+    },
+    {
+      "id": "moderate",
+      "label": "Moderate",
+      "max": 0.5
+    },
+    {
+      "id": "high",
+      "label": "High",
+      "max": 0.75
+    },
+    {
+      "id": "critical",
+      "label": "Critical",
+      "max": 1.0
+    }
+  ]
+}
