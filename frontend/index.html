@@ -19,6 +19,24 @@
         color: #edf1f5;
       }
     </style>
+    <script>
+      // Start the stage still (V2 §5.18) at top priority for the route being opened, so a cold load never
+      // shows an empty hero while the poster decodes. Same size rule as src/three/posters.ts (closest of
+      // 1440 / 1280); other routes preload nothing.
+      (function () {
+        var h = location.hash.replace(/^#/, '') || '/';
+        var stage = h === '/' || h.indexOf('/?') === 0 ? 'hero' : h.indexOf('/workstation') === 0 ? 'workstation' : null;
+        if (!stage) return;
+        var wide = window.innerWidth >= 1360;
+        var file = stage === 'hero' ? (wide ? 'hero.webp' : 'hero-1280.webp') : wide ? 'workstation.webp' : 'workstation-1280.webp';
+        var link = document.createElement('link');
+        link.rel = 'preload';
+        link.as = 'image';
+        link.href = './posters/' + file;
+        link.setAttribute('fetchpriority', 'high');
+        document.head.appendChild(link);
+      })();
+    </script>
   </head>
   <body>
     <div id="root"></div>
