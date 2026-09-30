@@ -204,7 +204,7 @@ export const FEATURE_FALLBACK_NAMES: Readonly<Record<string, string>> = {
   'Current Smoker': 'Current smoker',
   'EX-Smoker': 'Former smoker',
   FH: 'Family history',
-  Obesity: 'Obesity',
+  Obesity: 'Overweight or obese',
   CRF: 'Chronic renal failure',
   CVA: 'Previous stroke',
   'Airway disease': 'Airway disease',

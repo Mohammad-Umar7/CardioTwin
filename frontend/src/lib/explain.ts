@@ -120,7 +120,8 @@ const LEXICON: Readonly<Record<string, Lexeme>> = {
   'Current Smoker': { present: 'current smoking', absent: 'not smoking' },
   'EX-Smoker': { present: 'past smoking', absent: 'no past smoking' },
   FH: { present: 'a family history of heart disease', absent: 'no family history of heart disease' },
-  Obesity: { noun: 'obesity' },
+  // The dataset's "Obesity" is BMI > 25: overweight (obesity starts at BMI 30).
+  Obesity: { present: 'being overweight (BMI > 25)', absent: 'a BMI of 25 or less' },
   CRF: { noun: 'chronic renal failure' },
   CVA: { present: 'a previous stroke', absent: 'no previous stroke' },
   'Airway disease': { noun: 'airway disease' },

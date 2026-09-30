@@ -17,6 +17,7 @@ import { jsonResponse } from '@/test/fixtures';
 import type { CohortResponse, FeatureSchema } from '@/types/contracts';
 import CommandPalette from './CommandPalette';
 import { useShellCommands } from './useShellCommands';
+import { withDisplayLabels } from '@/lib/displayLabels';
 
 const artifact = <T,>(name: string): T =>
   JSON.parse(readFileSync(resolve(__dirname, '../../../public/model', name), 'utf-8')) as T;
@@ -73,7 +74,8 @@ describe('command registry on the workstation', () => {
   it('never shows a raw dataset key as an input title, and gives every input its group and value', () => {
     mount();
     const inputs = getCommands().filter((c) => c.id.startsWith('input.edit.'));
-    const labels = new Map(schema.features.map((f) => [f.key, f.label]));
+    // As loaded by the app: the schema with its display-label overrides (e.g. "Overweight or obese (BMI > 25)").
+    const labels = new Map(withDisplayLabels(schema).features.map((f) => [f.key, f.label]));
     for (const c of inputs) {
       const key = c.id.slice('input.edit.'.length);
       expect(c.title).toBe(labels.get(key));

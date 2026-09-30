@@ -18,6 +18,7 @@ import type {
   VesselsFile,
 } from '@/types/contracts';
 import { api, type RequestOptions } from './api';
+import { withDisplayLabels } from '@/lib/displayLabels';
 
 export class MissingAssetError extends Error {
   readonly path: string;
@@ -114,8 +115,8 @@ export const MODEL_DIR = 'model';
 export const ANATOMY_DIR = 'anatomy';
 export const DEFAULT_GLB = 'cardiotwin_anatomy.glb';
 
-export const schemaResource = memoize<FeatureSchema>(() =>
-  staticThenApi(`${MODEL_DIR}/schema.json`, () => api.schema({ timeoutMs: 4000 })),
+export const schemaResource = memoize<FeatureSchema>(async () =>
+  withDisplayLabels(await staticThenApi<FeatureSchema>(`${MODEL_DIR}/schema.json`, () => api.schema({ timeoutMs: 4000 }))),
 );
 export const cohortResource = memoize<CohortResponse>(() =>
   staticThenApi(`${MODEL_DIR}/cohort.json`, () => api.cohort({ timeoutMs: 4000 })),

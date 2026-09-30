@@ -14,7 +14,7 @@ export const INPUT_ALIASES: Readonly<Record<string, readonly string[]>> = {
   'Current Smoker': ['smoking', 'tobacco', 'cigarettes'],
   'EX-Smoker': ['ex-smoker', 'former smoker', 'quit smoking'],
   FH: ['family history', 'premature CAD in family'],
-  Obesity: ['overweight', 'BMI > 25'],
+  Obesity: ['obesity', 'obese', 'BMI > 25'],
   CRF: ['chronic renal failure', 'CKD', 'kidney disease'],
   CVA: ['stroke', 'cerebrovascular accident', 'TIA'],
   'Airway disease': ['COPD', 'asthma', 'lung disease'],

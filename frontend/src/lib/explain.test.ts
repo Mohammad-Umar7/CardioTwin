@@ -75,7 +75,8 @@ describe('narrative phrase rules (WORKSTATION_V2 §5.10)', () => {
     expect(say('Typical Chest Pain', 0, 'object')).toBe('the absence of typical angina');
     expect(say('St Depression', 1)).toBe('ST depression');
     expect(say('Current Smoker', 0)).toBe('not smoking');
-    expect(say('Obesity', 1)).toBe('obesity');
+    expect(say('Obesity', 1)).toBe('being overweight (BMI > 25)');
+    expect(say('Obesity', 0)).toBe('a BMI of 25 or less');
   });
 
   it('describes measures against their reference range, in words', () => {
