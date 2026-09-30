@@ -718,6 +718,10 @@
   min-width: 0;
   line-height: 15px;
 }
+.rp-assoc {
+  margin-left: 1px;
+  color: rgb(var(--ink-3));
+}
 .rp-driver__value {
   color: rgb(var(--ink-3));
   text-align: right;

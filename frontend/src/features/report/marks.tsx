@@ -48,11 +48,14 @@ export function BandTag({ band }: { band: RiskBandId }) {
   );
 }
 
-/** ● Flagged / ○ Not flagged (ink glyphs; the verdict never uses risk colour). */
-export function Verdict({ flagged, text }: { flagged: boolean; text?: string }) {
+/**
+ * ● Flagged / ○ Not flagged (ink glyphs; the verdict never uses risk colour). `neutral`: no glyph, for an
+ * unflagged CAD beside a High band or flagged arteries.
+ */
+export function Verdict({ flagged, text, neutral = false }: { flagged: boolean; text?: string; neutral?: boolean }) {
   return (
     <span className={`rp-verdict ${flagged ? '' : 'rp-verdict--no'}`}>
-      <span aria-hidden className={`rp-verdict__glyph ${flagged ? 'rp-verdict__glyph--on' : ''}`} />
+      {!neutral && <span aria-hidden className={`rp-verdict__glyph ${flagged ? 'rp-verdict__glyph--on' : ''}`} />}
       {text ?? (flagged ? 'Flagged' : 'Not flagged')}
     </span>
   );

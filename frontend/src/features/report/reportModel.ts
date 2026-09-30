@@ -127,6 +127,11 @@ export interface TargetResult {
   verdict: string;
   /** CAD: "Flagged — above the 75 % threshold"; vessels: "Flagged — above LAD's 55 % threshold". */
   verdictLine: string;
+  /**
+   * CAD only: not flagged, yet the band is High or an artery is flagged, so the verdict reads neutral
+   * ("Below CAD's 75 % decision threshold · 2 of 3 vessels flagged"), never a hollow "Not flagged".
+   */
+  neutral?: boolean;
   /** Plain sentence reconciling band and decision (V2 §3.1). */
   reconcile: string;
   truth: TargetTruth | null;
@@ -359,6 +364,16 @@ export function targetResult(
     truth: truthValue === 0 || truthValue === 1 ? { stenotic: truthValue === 1, agrees: (truthValue === 1) === flagged } : null,
     recorded: recordedResult(recordedPrediction?.predictions[id]?.probability, p),
   };
+}
+
+/** The workstation's rule (risk/verdict `cadVerdictDisplay`): no hollow "Not flagged" beside a High band or flagged arteries. */
+function neutralCadVerdict(cad: TargetResult, vessels: readonly TargetResult[]): TargetResult {
+  if (cad.flagged) return cad;
+  const k = vessels.filter((v) => v.flagged).length;
+  const bandHigh = cad.band === 'high' || cad.band === 'critical';
+  if (!bandHigh && k === 0) return cad;
+  const flaggedText = k > 0 ? ` · ${k} of ${vessels.length} vessel${vessels.length === 1 ? '' : 's'} flagged` : '';
+  return { ...cad, neutral: true, verdictLine: `Below CAD’s ${cad.thresholdText} decision threshold${flaggedText}` };
 }
 
 // --------------------------------------------------------------------------------------- drivers
@@ -672,13 +687,14 @@ export function buildReport(input: ReportInput): ReportModel {
   const was = editedCount > 0 ? (input.recordedPrediction ?? null) : null;
   // The cath result belongs to the RECORDED patient: never compare it with a what-if estimate.
   const truth = editedCount === 0 ? (input.truth ?? null) : null;
-  const cad = ready && cadSpec ? targetResult(cadSpec.id, prediction, cadSpec, bands, truth, was) : null;
+  const cadResult = ready && cadSpec ? targetResult(cadSpec.id, prediction, cadSpec, bands, truth, was) : null;
   const vessels = ready
     ? targets
         .filter(isVessel)
         .map((t) => targetResult(t.id, prediction, t, bands, truth, was))
         .filter((r): r is TargetResult => r !== null)
     : [];
+  const cad = cadResult ? neutralCadVerdict(cadResult, vessels) : null;
   const drivers = ready
     ? targets
         .map((t) => driverPanel(t.id, prediction, specs.get(t.id), byKey, input.topDrivers ?? 5))

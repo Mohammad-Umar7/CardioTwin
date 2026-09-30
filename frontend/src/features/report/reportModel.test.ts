@@ -369,3 +369,14 @@ describe('buildReport', () => {
     expect(whatIf.vessels.every((v) => v.truth === null)).toBe(true);
   });
 });
+
+describe('CAD verdict next to flagged arteries', () => {
+  it('reads neutral, never a hollow "Not flagged", when CAD is below its threshold but an artery is flagged', () => {
+    const preds = { ...calibrated.predictions };
+    preds.CAD = { ...preds.CAD!, probability: 0.4, threshold: 0.75, label: 0, risk_band: 'moderate' };
+    preds.LCX = { ...preds.LCX!, probability: 0.39, label: 1 };
+    const model = buildReport(input({ prediction: { ...calibrated, predictions: preds } }));
+    expect(model.cad?.neutral).toBe(true);
+    expect(model.cad?.verdictLine).toMatch(/^Below CAD’s 75\s%\sdecision threshold · [1-3] of 3 vessels flagged$/);
+  });
+});

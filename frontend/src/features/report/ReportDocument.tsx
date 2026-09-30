@@ -6,6 +6,7 @@
 import { Info } from 'lucide-react';
 import type { ReactNode } from 'react';
 import { EN_DASH, formatCi, formatMetricValue, formatPercent, THIN_SPACE } from '@/lib/format';
+import { ASSOCIATION_LEGEND, ASSOCIATION_MARK, ASSOCIATION_NOTE, isAssociationOnly } from '@/lib/associations';
 import { TEST_SET } from '@/lib/testSetCopy';
 import { CoronarySchematic, type SchematicVessel } from './CoronarySchematic';
 import { BandTag, DivergingBar, PaperProbability, PaperTrack, Pip, RampLegend, Verdict } from './marks';
@@ -173,7 +174,7 @@ function CadBlock({ cad, sentence }: { cad: TargetResult; sentence: string }) {
         <PaperTrack p={cad.p} threshold={cad.threshold} scale thresholdText={cad.thresholdText} />
       </div>
       <div className="rp-cad__verdict">
-        <Verdict flagged={cad.flagged} text={cad.verdictLine} />
+        <Verdict flagged={cad.flagged} text={cad.verdictLine} neutral={cad.neutral} />
       </div>
       {sentence && <p className="rp-cad__why">{sentence}</p>}
     </div>
@@ -259,6 +260,11 @@ function DriverCard({ panel }: { panel: DriverPanel }) {
           </span>
           <span className="rp-driver__label">
             {r.label}
+            {isAssociationOnly(r.feature) && (
+              <span className="rp-assoc" title={ASSOCIATION_NOTE}>
+                {ASSOCIATION_MARK}
+              </span>
+            )}
             <span className="sr-only">
               , {r.valueText}, {r.direction === 'raises' ? 'raises' : 'lowers'} {panel.short} risk
             </span>
@@ -352,6 +358,8 @@ function PageOne({ model, perf }: { model: ReportModel; perf: PerformanceSummary
             {unit === 'points'
               ? 'Exact SHAP contributions, converted from log-odds through the calibration so that the cohort baseline plus every contribution equals the estimate. ▶ raises, ◀ lowers. Associations in this cohort, not causes.'
               : 'Exact SHAP contributions in log-odds (this engine sent no calibrated values); they add up from the baseline to the model margin. ▶ raises, ◀ lowers. Associations in this cohort, not causes.'}
+            {model.drivers.some((d) => d.rows.some((r) => isAssociationOnly(r.feature))) &&
+              ` ${ASSOCIATION_LEGEND}: no established causal role in coronary disease.`}
           </p>
         </section>
       )}
@@ -477,8 +485,8 @@ function PerformanceTable({ perf }: { perf: PerformanceSummary }) {
         </tbody>
       </table>
       <p className="rp-note">
-        {MODEL_PLAIN_NAME}. Test metrics were computed once on a locked set of {perf.nTest} patients after every modelling
-        decision was frozen; sensitivity and specificity at the deployed threshold. Dev CV: repeated 5-fold cross-validation
+        {MODEL_PLAIN_NAME}. Test metrics come from a locked set of {perf.nTest} patients, scored after every modelling
+        decision was frozen; sensitivity and specificity at the deployed threshold. {TEST_SET.rescore} Dev CV: repeated 5-fold cross-validation
         on {perf.nDev} patients (mean ± sd).
         {robust.length > 0 &&
           ` Median held-out ROC-AUC over ${robust[0]!.robustAuc!.nSplits ?? 'repeated'} random re-splits: ${robust
