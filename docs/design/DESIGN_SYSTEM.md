@@ -795,3 +795,108 @@ Everything else from the rejected list in §0 is banned.
 - The canvas stays usable with reduced motion on.
 - The status line is visible at every breakpoint, in fullscreen and during the tour.
 - Exports carry the watermark.
+
+---
+
+## §7.9 Realistic mode (owner request)
+
+The owner asked for anatomy that "looks real, super close to real human anatomy", and for "the exploded view where the model separates apart and comes back". This amendment adds a **Realistic** look beside LUMEN's **Clinical** clay and makes the exploded view the signature of the 3D stage. It amends §2.3, §6 (Peel, Physiology loops), §7.3, §7.5 and §7.7 only where stated; every risk rule of §2.2 and every safety rule of §9 still holds.
+
+### 7.9.1 Decision: Realistic is the default look
+
+- **Default.** Realistic is the default Look in the workstation and on the landing. Clinical stays available as the second option. The Look menu lists `Realistic · Clinical`, in that order (`LOOK_OPTIONS` in `three/stage/sceneControls.ts`).
+- **Why this does not contradict V2 §5.15.** V2's "plain clay at rest" states a figure/ground rule: the myocardium carries no colour until a vessel is selected, and the coronary tree is the only saturated thing. Realistic keeps that rule by construction (§7.9.2), so it is the primary option and the V2 scene defaults apply to both looks unchanged.
+- **Store.** `viewerStore.look` stays the single source of truth: `'anat'` means Realistic (the upgraded Anatomical look) and `'clay'` means Clinical. The first scene mount switches the untouched store default to `'anat'` once (`ensureRealisticDefault`). The values `'realistic' | 'clinical'` are also understood, so the store type can be widened without touching the scene.
+
+### 7.9.2 Guardrails: risk stays unmistakable
+
+| Rule | How Realistic keeps it |
+|---|---|
+| Only the coronary targets carry risk colour | Coronary targets keep `color = emissive = LUT(p)` in both looks, one colour per target, root to tip, animated through p. |
+| The myocardium never competes with the ramp | The muscle red is desaturated and dark (`#5A2622`, OKLab L ≈ 0.33, chroma ≈ 0.07), below the p = 0 vessel's lightness and far from the coral/apricot chroma. A baked albedo, when present, is clamped to 72 % saturation. The myocardium is never emissive. |
+| Glow means high risk | The emissive gain follows `0.3·k + 2.1·smoothstep(0.5, 1, p)`. The floor k is 0.45 in Realistic so glossy low-risk tubes still read as their hue. The bloom threshold (0.80) is crossed from p ≈ 0.70 only. |
+| Anatomical colour is never read as risk colour | Arteries use a pale adventitia (`#9C8274`), not red. Systemic veins use a dusty atlas blue (`#34405C`), darker and greyer than the ramp's low end and never emissive. Cardiac veins stay hidden by default ("not modelled"). |
+| Territory tint | Unchanged: `mix(albedo, Σ wᵢ·LUT(pᵢ), strength)`. The mode is Off · Selected · All, with 0.10 + 0.25·p in Selected mode and 0.10 + 0.30·Σwp in All mode, faded where COLOR_0's neutral weight dominates (atria). |
+| Pending or stale state | Achromatic `#4B5260`, exactly as §2.2 rule 6. |
+
+### 7.9.3 Materials (`three/anatomy/tissue.ts`, palette in `palette.ts`)
+
+- **Material model.** One material instance per mesh (its rest offset, dissolve and baked maps differ) and a handful of shader programs, keyed by patch flags. Clinical = `MeshStandardMaterial` exactly as §7.3. Realistic = `MeshPhysicalMaterial` at tiers A/B and `MeshStandardMaterial` at tier C.
+
+| Tissue | Realistic parameters |
+|---|---|
+| Myocardium | `#5A2622`, roughness 0.52, **clearcoat 0.9 / 0.16** (the wet epicardium), sheen 0.2 `#8E3A34` (tier A only), wrap-diffuse 0.55 tinted `#E0503C` and back-scatter `#B8322A` × 0.28 (the subsurface look where the rim light shines through thin edges), fibre-stretched detail, AV-groove fat, cavity AO. Chamber and cut faces `#3A1716`. |
+| Coronaries | Ramp colour, roughness 0.34, clearcoat 0.55 / 0.2, env 0.5, rim `#FFF4EC` × 0.10, 0.5 mm display inflation (§7.3). |
+| Valves, papillary muscles | Fibrous `#D6C4AA` with translucency; papillary muscles as myocardium `#5A2926`. |
+| Great arteries | Adventitia `#9C8274`, clearcoat 0.35. Pulmonary veins `#6E3D3B`. SVC, IVC and cardiac veins atlas blue `#34405C`. |
+| Bone, cartilage | Ivory `#E2D6BF` with pore-scale bump and yellowed mottling. Cartilage is a glossy bluish white `#BCC9CB` with translucency. |
+| Lungs | Translucent spongy tissue (α 0.42 + fresnel rim, alveolar-scale bump) when closed; fresnel ghost once peeled. |
+| Skin, muscle, diaphragm | Skin is always a warm fresnel ghost. Muscle and diaphragm are striated wet muscle `#6E2622`. |
+
+- **Procedural detail.** All detail is computed in the heart's rest frame, so it sticks to the tissue while nodes explode, hinge and beat. No UVs are needed.
+  - Detail comes from one baked, tileable 32³ RGBA8 volume holding value and gradient (`noiseTexture.ts`). There is one trilinear fetch per octave: 3 octaves at tier A, 2 at B and C.
+  - It drives the bump (the tangential gradient), albedo mottling, roughness variation and the myocardial fibre direction (detail stretched across the long axis).
+  - Octaves fade as they approach the pixel footprint, so distant tissue never shimmers.
+- **Cavity attribute** (`cavity.ts`). `aCavity` is computed once per heart wall in idle time, with three channels:
+  - x: crease AO, from the mean neighbour rise over squared edge length (≈ 1/(2R), independent of resolution);
+  - y: the groove shadow next to each coronary centreline;
+  - z: epicardial fat along the arteries.
+- **Baked textures** (CONTRACTS §7.1). When the GLB carries `TEXCOORD_0` and PBR maps, Realistic uses them. Upload is lazy: one mesh per idle slice through `renderer.initTexture`, then that mesh's material is rebuilt with the maps. The procedural bump drops to 35 % and the mottling to 40 % on top of them. Clinical always ignores them.
+- **Lighting** (`three/stage/studio.ts`). Realistic reflects a code-built photographic studio instead of RoomEnvironment: a dark cyclorama, a large warm softbox above left, a tall cool strip behind right, a soft top panel and a dim warm bounce, converted with PMREM once per look. Its camera-attached rig has a warmer key (2.7), a cool rim (2.3) that also drives the tissue back-scatter, and a lower hemisphere (0.42). Clinical keeps §7.2 exactly.
+
+### 7.9.4 Scene defaults (V2 §5.15), both looks
+
+- Lungs and airway are hidden in the workstation unless the Layers popover shows them. On the landing they are a fresnel ghost.
+- **Pulmonary trees** are trimmed by a sphere centred between the pulmonary valve and the venous inflow: (0, 0.28, −0.15), radius 0.58, feather 0.2. The trunk, the proximal pulmonary arteries and the veins entering the left atrium remain. The trimmed ends fade out with alpha, so there is no black stub and no dither sparkle.
+- The **descending aorta and the IVC** fade out beyond 1.35 units from the heart (feather 0.45). The arch stays.
+- Peeled outer layers are ghosts faded to 40 % in the workstation (α ≤ 0.12). Skin also fades as it swings through the camera: the ghost shader has a near-lens fade.
+- The orbit clamp (polar 35°–145°, distance 2.4–7) belongs to the camera rig (D1).
+
+### 7.9.5 The exploded view (amends §6 "Peel")
+
+- **Transform.** Every mesh's displayed matrix is `E · A · B · R`: rest (R), the affine beat (B), the cold-load assembly (A) and the explode (E). It is computed per frame in `three/anatomy/rig.ts` without React state.
+- **Explode (E).** Displayed position = rest + k·(layer.explode + structure.explode), with k eased inside each layer's peel window (§6 table).
+  - This fixes the bug where only layer vectors were applied and the heart never opened.
+  - The anterior half first swings **16°** about an AV-groove hinge, then slides out along the cut-plane normal. The hinge lies in the cut plane, perpendicular to the long axis, through the base. It opens the half away from the posterior half and uncovers the chambers, valves and papillary muscles.
+  - A manifest `pivot` / `hingeAxis` / `hingeDeg` on a layer or structure overrides the derived hinge.
+  - A structure with `rides` inherits its wall's full rigid transform (translation and hinge), so coronary branches never detach.
+- **Spring.** The displayed peel follows `viewerStore.explode` through a critically damped spring (ω = 7, about 0.7 s for the full travel, no overshoot). Scrubbing, ▶ Dissect and ⟲ Assemble all glide, and "comes back" is the same spring toward the rest detent (0.60).
+- **Cold-load assembly** (`assembly.ts`). About 2.25 s, played once per session:
+  - Layers fly in from beyond their explode offsets and materialise with a temporally dithered dissolve, in the order skin → muscle → ribs → lungs → diaphragm → great vessels → posterior half → anterior half.
+  - The anterior half swings shut, carrying its coronaries. The curve is a critically damped settle: monotone, zero slope at both ends.
+  - Any pointer, key or wheel input compresses the rest into 150 ms. Under reduced motion or Calm mode it is skipped.
+  - The heart starts beating once it has closed. `sceneRuntime.assembly.t ≥ igniteAt` (2.05 s) is the fx layer's cue for the coronary ignition, and `useSceneControls().replayAssembly()` replays it.
+- **Isolate (O)** keeps the myocardium and the selected artery (plus the left main for LAD and LCX), with its territory tinted, and fades everything else out. **Ghost others (G)** turns the myocardium, the other vessels and the great vessels into fresnel glass and keeps the selected artery solid and glowing. Every solid ↔ ghost change crossfades, because each mesh has a ghost twin.
+- **Section.** An optional clipping plane on the manifest cut plane (`useSceneControls().setSection`, with depth ±0.6) glides in. Back faces render as tissue interior, so chambers and wall thickness read as a cutaway. The planes are shared through `sceneRuntime.sectionPlanes`.
+
+### 7.9.6 Physiological heartbeat (amends §6 "Physiology loops")
+
+- **Clock.** The beat runs on the scene's shared cardiac clock (`fx/cardiacClock.ts`, idempotent per frame) at the patient's PR (40–140 bpm), so the anatomy, the flow and the pulse share one phase.
+- **Ventricular curve** (`heartbeat.ts`, tested). Isovolumic contraction (0–0.05); ejection peaking at end-systole (0.35 of the cycle); isovolumic relaxation (to 0.42); rapid filling (to 0.60); diastasis; an **atrial kick** (0.84–1.0) that over-fills the ventricles by 12 %.
+- **Deformation.** Radial shortening of 3 % toward the long axis and longitudinal shortening of 4.5 % toward a point near the apex, so the base descends and the apex barely moves. This is an affine matrix in the node matrices of the walls, valves and coronaries. The atrial squeeze (4 %) and the great-vessel roots (which follow the beat near the base and stay still distally) use the same uniforms in the vertex shader (`BEAT_VERTEX_PARS` / `BEAT_VERTEX`).
+- **Rules kept.** The beat is scale only, never luminance. It fades in and out over about 0.6 s and is off in Calm mode and under reduced motion.
+
+### 7.9.7 Picking API
+
+three-mesh-bvh raycasts against the heart walls, valves, great vessels and invisible proxy tubes at 3× lumen radius around the coronaries. BVHs are built lazily in idle time.
+
+- `usePickStore` (`three/stage/pickStore.ts`) publishes `hover` and `selected` as `{ structureId, node, label, target, kind, segment, territory, point }`.
+  - `segment` is the SCCT segment from `_SEGMENT`, resolved through manifest `segments[]` with the SCCT 2014 table as the fallback.
+  - `territory` is the dominant COLOR_0 territory under the pointer on the myocardium.
+- `pickPointer` carries the per-move face point and its screen position for per-frame consumers.
+- Segments are anatomical labels for inspection, never lesion locations.
+
+### 7.9.8 Performance
+
+- Tiers are unchanged. Realistic uses clearcoat at A/B and sheen at A only, and falls back to `MeshStandardMaterial` with 2 octaves at C.
+- The noise volume replaces about 120 ALU operations per octave with one texture fetch.
+- Switching patients only moves uniforms: geometries, textures and programs stay constant (verified over repeated switches).
+
+### 7.9.9 Amendments to earlier sections
+
+| § | Was | Now |
+|---|---|---|
+| §2.3 | `anat/vein`: "hidden by default, never blue" | Clinical unchanged. Realistic uses a muted atlas blue for the SVC, IVC and (when shown) cardiac veins, darker and greyer than the ramp's low end and never emissive. |
+| §7.3 | "MeshStandardMaterial … No transmission and no physical sheen" | Clinical unchanged. Realistic uses MeshPhysicalMaterial with clearcoat (tiers A/B) and sheen (tier A). There is still no transmission. |
+| §7.7 | "Zero image textures: only the LUT and the blue-noise texture" | The shared 128 KB noise volume is also generated in code. Baked GLB textures are allowed (CONTRACTS §7.1) and uploaded lazily. |
+| §6 Peel | Layer vectors, rib hinge "phase 2" | Layer and structure vectors, the anterior-half hinge, riders, a critically damped spring and the cold-load assembly (§7.9.5). |
