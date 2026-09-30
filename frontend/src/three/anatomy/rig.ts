@@ -515,9 +515,9 @@ export class AnatomyRig {
       const step = Math.max(1, Math.floor(pos.count / budget));
       for (let i = 0; i < pos.count; i += step) each(v.fromBufferAttribute(pos, i).applyMatrix4(restWorld));
     };
-    // "Visible" = the clip fade still leaves ≥ 10 % alpha (alpha = keep², keep = 1 − smoothstep over the feather).
+    // "Visible" = inside the clean cut halfway through the feather (shaders.ts: the trimmed vessels end in a cut).
     const visibleIn = (clip: { centre: readonly number[]; radius: number; feather: number }, p: Vector3) =>
-      Math.hypot(p.x - clip.centre[0]!, p.y - clip.centre[1]!, p.z - clip.centre[2]!) < clip.radius - clip.feather * 0.35;
+      Math.hypot(p.x - clip.centre[0]!, p.y - clip.centre[1]!, p.z - clip.centre[2]!) < clip.radius - clip.feather * 0.5;
     for (const entry of this.entries) {
       const k = entry.kind;
       if (k === 'myocardium') sample(entry, 500, (p) => heart.push(p.clone()));
@@ -526,11 +526,11 @@ export class AnatomyRig {
         const along = (entry.mesh.geometry as BufferGeometry).getAttribute('_dist_heart');
         const fade = ALONG_FADE[k];
         if (along && fade) {
-          // Visible = the along-the-wall fade still leaves ≥ 10 % alpha.
+          // Visible = before the along-the-wall cut (halfway through the fade band).
           const pos = (entry.mesh.geometry as BufferGeometry).getAttribute('position');
           restWorld.copy(rootInverse).multiply(entry.mesh.matrixWorld);
           const step = Math.max(1, Math.floor(pos.count / 300));
-          const limit = fade[0] + 0.35 * (fade[1] - fade[0]);
+          const limit = fade[0] + 0.5 * (fade[1] - fade[0]);
           for (let i = 0; i < pos.count; i += step) if (along.getX(i) < limit) keep.push(v.fromBufferAttribute(pos, i).applyMatrix4(restWorld).clone());
         } else sample(entry, 300, (p) => visibleIn(PULMONARY_CLIP, p) && keep.push(p.clone()));
       }
@@ -554,7 +554,7 @@ export class AnatomyRig {
           const pos = (entry.mesh.geometry as BufferGeometry).getAttribute('position');
           restWorld.copy(rootInverse).multiply(entry.mesh.matrixWorld);
           const step = Math.max(1, Math.floor(pos.count / 120));
-          const limit = fade[0] + 0.35 * (fade[1] - fade[0]);
+          const limit = fade[0] + 0.5 * (fade[1] - fade[0]);
           for (let i = 0; i < pos.count; i += step) if (along.getX(i) < limit) push(v.fromBufferAttribute(pos, i).applyMatrix4(restWorld));
         } else
           sample(entry, k === 'myocardium' ? 500 : 120, (p) => {

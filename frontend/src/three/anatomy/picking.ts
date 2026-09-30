@@ -102,9 +102,9 @@ export function buildProxyGeometry(segments: CentrelineLike['segments'], restOff
 const proxyMaterial = new MeshBasicMaterial({ visible: false });
 
 /**
- * For clip-trimmed great vessels, a test that says whether a hit lies where the vessel is faded out (≤ 10 %
- * alpha): the pulmonary trunk along its wall (`_dist_heart`), the pulmonary veins and systemic vessels inside
- * their clip spheres (rig.ts). Null for every other kind.
+ * For clip-trimmed great vessels, a test that says whether a hit lies beyond the vessel's clean cut (halfway
+ * through its fade band, shaders.ts): the pulmonary trunk along its wall (`_dist_heart`), the pulmonary veins
+ * and systemic vessels inside their clip spheres (rig.ts). Null for every other kind.
  */
 function fadedTest(entry: RigEntry): ((hit: Intersection) => boolean) | null {
   const kind = entry.kind;
@@ -112,7 +112,7 @@ function fadedTest(entry: RigEntry): ((hit: Intersection) => boolean) | null {
   const along = kind === 'pulmonaryArtery' ? geometry.getAttribute('_dist_heart') : null;
   const fade = ALONG_FADE[kind];
   if (along && fade) {
-    const limit = fade[0] + 0.7 * (fade[1] - fade[0]);
+    const limit = fade[0] + 0.5 * (fade[1] - fade[0]);
     return (hit) => {
       const f = hit.face;
       if (!f) return false;
@@ -131,8 +131,8 @@ function fadedTest(entry: RigEntry): ((hit: Intersection) => boolean) | null {
     const radius = u?.uClipRadius?.value as number | undefined;
     const feather = u?.uClipFeather?.value as number | undefined;
     return centre && radius !== undefined && feather !== undefined
-      ? { centre, limit: radius - 0.3 * feather }
-      : { centre: fixedCentre, limit: clip.radius - 0.3 * clip.feather };
+      ? { centre, limit: radius - 0.5 * feather }
+      : { centre: fixedCentre, limit: clip.radius - 0.5 * clip.feather };
   };
   return (hit) => {
     const { centre, limit } = live();
