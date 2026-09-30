@@ -566,6 +566,120 @@ def yield_wall_to(V: np.ndarray, F: np.ndarray, solids: list[mo.Mesh], centre: n
 
 
 # =============================================================================================
+# Mitral isthmus: the left pulmonary veins enter the left atrium 20-40 mm from the mitral hinge
+# =============================================================================================
+#: In BodyParts3D the left pulmonary-vein ostia sit 10 mm (median 17 mm) from the mitral hinge ring, i.e. in the
+#: left atrioventricular groove itself, so the circumflex and the great cardiac vein pass within 2-4 mm of them and
+#: there is no mitral isthmus (in vivo the lateral mitral isthmus, from the mitral annulus to the left inferior
+#: pulmonary vein ostium, is 20-40 mm; REFERENCE.md §4.4 and §6). The posterolateral left-atrial wall is stretched
+#: away from the annulus by a smooth field: nothing moves within ISTHMUS_RAMP_MM[0] of the hinge ring or on the
+#: ventricular side of it, wall farther than ISTHMUS_RAMP_MM[1] from the ring and within ISTHMUS_REACH_MM[0] of a
+#: left pulmonary-vein ostium moves by ISTHMUS_LIFT_MM cranially and posteriorly, fading out by ISTHMUS_REACH_MM[1];
+#: the pulmonary veins follow with the same field (their extrapericardial trunks bend, the intrapulmonary tree
+#: stays: PV_REACH_MM). The only other change to the wall is the yield round the aortic root.
+ISTHMUS_LIFT_MM = 20.0
+ISTHMUS_DIR = (0.45, 0.2, 0.87)   # scene: +x patient left, +y posterior, +z superior
+ISTHMUS_RAMP_MM = (3.0, 11.0)     # ring distance over which the wall stretches
+ISTHMUS_REACH_MM = (14.0, 38.0)   # distance from the left PV ostia (full move / none)
+PV_REACH_MM = (16.0, 60.0)
+
+
+def hinge_ring(wall_V: np.ndarray, wall_F: np.ndarray, valve_V: np.ndarray, hf: dict):
+    """Hinge ring of an AV valve exactly as ``vascular.HeartGeo`` / ``anatomy/checks`` fit it (valve vertices within
+    1 mm of the wall, basal quartile along the long axis, algebraic circle fit)."""
+    import vascular as vs
+
+    d = trimesh.proximity.closest_point(trimesh.Trimesh(wall_V, wall_F, process=False), valve_V)[1]
+    proj = (valve_V - hf["base"]) @ hf["u_ba"]
+    sel = (d <= 1.0 * MM) & (proj <= np.quantile(proj, 0.25))
+    if sel.sum() < 20:
+        sel = proj <= np.quantile(proj, 0.25)
+    return vs.fit_ring(valve_V[sel], -hf["u_ba"])
+
+
+#: In BodyParts3D the superior vena cava is only 37 mm long and joins a right-atrial roof that sits at the level of
+#: the 2nd costal cartilage, so the right superior heart border is higher than the left (in vivo the SVC is 60-80 mm
+#: long and enters the right atrium at the right 3rd costal cartilage; REFERENCE.md §3.1, §4.1). The right-atrial roof
+#: round the cavo-atrial junction is lowered by SVC_DROP_MM (fading out over RA_ROOF_REACH_MM) and the lower SVC
+#: follows, so the vein is that much longer.
+SVC_DROP_MM = 10.0
+RA_ROOF_REACH_MM = (10.0, 38.0)
+SVC_STRETCH_MM = 40.0
+
+
+def lower_ra_roof(wall_V: np.ndarray, wall_F: np.ndarray, svc_V: np.ndarray, ta_ring) -> tuple[np.ndarray, np.ndarray, dict]:
+    """Lower the right-atrial roof round the SVC junction and stretch the lower SVC with it (smooth fields)."""
+    z0 = float(svc_V[:, 2].min())
+    foot = svc_V[svc_V[:, 2] <= z0 + 3.0 * MM]
+    c = foot.mean(axis=0)
+    d = np.linalg.norm(wall_V - c, axis=1)
+    w = 1.0 - mo.smoothstep(RA_ROOF_REACH_MM[0] * MM, RA_ROOF_REACH_MM[1] * MM, d)
+    w = w * mo.smoothstep(2.0 * MM, 8.0 * MM, ta_ring.height(wall_V))  # atrial side of the tricuspid hinge only
+    D = np.zeros_like(wall_V)
+    D[:, 2] = -SVC_DROP_MM * MM * w
+    fn0 = mo.face_normals(wall_V, wall_F)
+    new_wall = wall_V + D
+    ws = 1.0 - mo.smoothstep(0.0, SVC_STRETCH_MM * MM, svc_V[:, 2] - z0)
+    new_svc = svc_V.copy()
+    new_svc[:, 2] -= SVC_DROP_MM * MM * ws
+    info = {"svc_bottom_mm": round(float((z0 - SVC_DROP_MM * MM) / MM), 1), "moved_wall_vertices": int((w > 0.05).sum()),
+            "svc_length_gain_mm": SVC_DROP_MM,
+            "folded_faces": int(((mo.face_normals(new_wall, wall_F) * fn0).sum(axis=1) < 0).sum())}
+    return new_wall, new_svc, info
+
+
+def left_pv_contact(pv_V: np.ndarray, wall_V: np.ndarray, base: np.ndarray) -> np.ndarray:
+    """Pulmonary-vein vertices touching the heart wall (<= 1.5 mm) on the patient's left of the heart base."""
+    d = cKDTree(wall_V).query(pv_V)[0]
+    C = pv_V[d <= 1.5 * MM]
+    return C[C[:, 0] > base[0]]
+
+
+def mitral_isthmus(wall_V: np.ndarray, wall_F: np.ndarray, pv_V: np.ndarray, ring, base: np.ndarray
+                   ) -> tuple[np.ndarray, np.ndarray, dict]:
+    """Stretch the posterolateral left atrium so the left pulmonary-vein ostia lie >= 20 mm from the mitral hinge."""
+    import vascular as vs
+
+    C = left_pv_contact(pv_V, wall_V, base)
+    before = ring.dist(C)
+    d = mo.unit(np.array(ISTHMUS_DIR, float))
+
+    def field(P: np.ndarray, reach: tuple[float, float], wall: bool = True) -> np.ndarray:
+        g = 1.0 - mo.smoothstep(reach[0] * MM, reach[1] * MM, cKDTree(C).query(P)[0])
+        if not wall:  # the extrapericardial veins move with their ostia (the inferior trunk crosses the groove level)
+            return g[:, None] * d[None] * ISTHMUS_LIFT_MM * MM
+        s = mo.smoothstep(ISTHMUS_RAMP_MM[0] * MM, ISTHMUS_RAMP_MM[1] * MM, ring.dist(P))
+        s = s * mo.smoothstep(-4.0 * MM, 2.0 * MM, ring.height(P))  # atrial side of the hinge only
+        return (s * g)[:, None] * d[None] * ISTHMUS_LIFT_MM * MM
+
+    D = field(wall_V, ISTHMUS_REACH_MM)
+    fn0 = mo.face_normals(wall_V, wall_F)
+    moved = np.linalg.norm(D, axis=1) > 1e-6
+    e = mo.unique_edges(wall_F)
+    deg = np.maximum(np.bincount(e.ravel(), minlength=len(wall_V)), 1).astype(float)
+    it = 0
+    for it in range(120):  # relax the field over the mesh edges until no face folds over
+        folded = int(((mo.face_normals(wall_V + D, wall_F) * fn0).sum(axis=1) < 0).sum())
+        if folded == 0:
+            break
+        acc = np.zeros_like(D)
+        for k in range(3):
+            acc[:, k] = np.bincount(e[:, 0], weights=D[e[:, 1], k], minlength=len(wall_V)) + np.bincount(e[:, 1], weights=D[e[:, 0], k], minlength=len(wall_V))
+        D = np.where(moved[:, None], 0.5 * D + 0.5 * acc / deg[:, None], D)
+    new_wall = wall_V + D
+    new_pv = pv_V + field(pv_V, PV_REACH_MM, wall=False)
+    C2 = left_pv_contact(new_pv, new_wall, base)
+    after = ring.dist(C2)
+    info = {"left_pv_ring_dist_mm_min_median": [[round(float(before.min() / MM), 1), round(float(np.median(before) / MM), 1)],
+                                                [round(float(after.min() / MM), 1), round(float(np.median(after) / MM), 1)]],
+            "moved_wall_vertices": int((np.linalg.norm(D, axis=1) > 0.5 * MM).sum()),
+            "max_shift_mm": round(float(np.linalg.norm(D, axis=1).max() / MM), 1),
+            "folded_faces": int(((mo.face_normals(new_wall, wall_F) * fn0).sum(axis=1) < 0).sum()), "relax_iterations": it}
+    _ = vs
+    return new_wall, new_pv, info
+
+
+# =============================================================================================
 def arclen(P: np.ndarray) -> np.ndarray:
     return np.r_[0.0, np.cumsum(np.linalg.norm(np.diff(P, axis=0), axis=1))]
 
@@ -596,9 +710,23 @@ def main() -> int:
     wall_V, wall_F = parts.scene("FMA7274")
     wall_V, yinfo = yield_wall_to(wall_V, wall_F, [root, asc], np.array(aorta_info["annulus_centre_scene"]),
                                   margin=ROOT_CLEARANCE_MM * MM, reach=ROOT_YIELD_REACH_MM * MM)
-    mo.write_ply(SYNTH_DIR / "SYN_HeartWall.ply", parts.to_mm(wall_V), wall_F)
     log(f"heart wall: yields to the root {yinfo}")
     report["heart_wall_yield"] = yinfo
+    # --- mitral isthmus: the left pulmonary veins move away from the mitral hinge -----------------------------
+    pv_V, pv_F = parts.scene("FMA66643")
+    ring_ma = hinge_ring(wall_V, wall_F, parts.scene("FMA7235")[0], hf)
+    wall_V, pv_V, iinfo = mitral_isthmus(wall_V, wall_F, pv_V, ring_ma, hf["base"])
+    log(f"mitral isthmus: {iinfo}")
+    report["mitral_isthmus"] = iinfo
+    # --- right-atrial roof and SVC: the cavo-atrial junction at the right 3rd costal cartilage -------------------
+    svc_V, svc_F = parts.scene("FMA4720")
+    ring_ta = hinge_ring(wall_V, wall_F, parts.scene("FMA7234")[0], hf)
+    wall_V, svc_V, rinfo = lower_ra_roof(wall_V, wall_F, svc_V, ring_ta)
+    log(f"right-atrial roof and SVC: {rinfo}")
+    report["ra_roof_svc"] = rinfo
+    mo.write_ply(SYNTH_DIR / "SYN_HeartWall.ply", parts.to_mm(wall_V), wall_F)
+    mo.write_ply(SYNTH_DIR / "SYN_PulmonaryVeins.ply", parts.to_mm(pv_V), pv_F)
+    mo.write_ply(SYNTH_DIR / "SYN_SVC.ply", parts.to_mm(svc_V), svc_F)
 
     # --- coronary arteries and cardiac veins on the corrected heart ----------------------------------------
     # vessels are seated on the wall as the build will show it: the build Taubin-smooths the wall (10 + 5 passes)
@@ -607,7 +735,19 @@ def main() -> int:
     geo = vascular.HeartGeo((seat_V, wall_F), parts.scene("FMA7235"), parts.scene("FMA7234"),
                             cache=SYNTH_DIR / "_cache" / "wall_sdf.pkl")
     log(f"heart geometry: MA ring D {2 * geo.rings['MA'].R / MM:.1f} mm, TA ring D {2 * geo.rings['TA'].R / MM:.1f} mm")
-    cor = coronary.design(parts, geo, aorta_info["_ostia"], log, svc_V=parts.scene("FMA4720")[0],
+    # --- atrioventricular valve apparatus: leaflets, chordae, papillary muscles (valves.py) --------------------
+    import valves
+    vap = valves.design(parts, geo, log, aortic_centre=np.array(aorta_info["annulus_centre_scene"]))
+    for name in ("SYN_MitralValve", "SYN_TricuspidValve", "SYN_PapillaryMuscles"):
+        mo.write_ply(SYNTH_DIR / f"{name}.ply", parts.to_mm(vap[name][0]), vap[name][1])
+    report["valves"] = vap["_report"]
+    # the aorto-mitral curtain now joins the designed anterior mitral hinge
+    curtain, cinfo = aortomitral_curtain(aorta_info["_rim"], vap["_mitral_hinge"], reach_mm=5.0)
+    mo.write_ply(SYNTH_DIR / "SYN_AortoMitralCurtain.ply", parts.to_mm(curtain[0]), curtain[1])
+    report["aortomitral_curtain"] = cinfo
+    log(f"aorto-mitral curtain on the designed mitral hinge: {cinfo}")
+
+    cor = coronary.design(parts, geo, aorta_info["_ostia"], log, svc_V=svc_V,
                           pv_valve_V=parts.scene("FMA7246")[0])
     cmesh = coronary.meshes(cor["trees"])
     for node, (V, F) in cmesh.items():
@@ -634,6 +774,13 @@ def main() -> int:
                    "diameter_mm": [round(float(2 * sg["R"][0] / MM), 2), round(float(2 * sg["R"][-1] / MM), 2)]}
                   for sg in vtree.segs],
     }
+    # --- channels for the vessels that pass under the fused tip of the left auricle (carved by the build) ---------
+    paths = [(sg["P"], sg["R"]) for t in cor["trees"].values() for sg in t.segs if not sg["code"].startswith(("S", "IS"))]
+    paths += [(sg["P"], sg["R"]) for sg in vtree.segs]
+    cut, cinfo = vascular.tunnel_cutter(geo, paths)
+    mo.write_ply(SYNTH_DIR / "SYN_TunnelCutter.ply", parts.to_mm(cut[0]), cut[1])
+    log(f"tunnels under fused structures: {len(cinfo['stretches'])} stretches {cinfo['stretches']}")
+    report["tunnels"] = cinfo
     report["aorta"] = {k: v for k, v in aorta_info.items() if not k.startswith("_")}
     write_json(REPORT, report)
     log("done")
