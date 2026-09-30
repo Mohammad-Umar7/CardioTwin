@@ -46,6 +46,8 @@ python -m venv .venv
 
 ./.venv/Scripts/python -m cardiotwin_ml.train                      # full deterministic run -> artifacts, figures, report
                                                                    # (~4 min with 12 CPU workers)
+./.venv/Scripts/python -m cardiotwin_ml.analysis --jobs 8         # validation analyses -> metrics.json, figures, report
+                                                                   # (~30 min with 8 workers; keep --jobs <= 8)
 ./.venv/Scripts/python -m pytest ml/tests -q                       # test-suite (uses the built artifacts)
 ```
 
@@ -53,6 +55,8 @@ python -m venv .venv
 `--dev-only` (development-set CV only; never touches the test set), `--out DIR` (write artifacts elsewhere; skips
 figures and the frontend mirror), `--jobs N`. Regenerate figures without retraining:
 `python -m cardiotwin_ml.report`. Re-download and verify the dataset: `python -m cardiotwin_ml.data`.
+Analysis flags: `--only robustness|modality|subgroups` (re-run a subset; other analyses are kept), `--splits N`,
+`--hyperparameters search|frozen`, `--cache DIR` (memoise the expensive runs), `--fast --out DIR` (smoke run).
 
 ## Package layout
 
@@ -74,6 +78,7 @@ figures and the frontend mirror), `--jobs N`. Regenerate figures without retrain
 | `portable.py` | stdlib-only reference evaluator of `model.json` (spec for the TypeScript engine) |
 | `report.py` | figures (`docs/figures`) and `reports/results.md` |
 | `train.py` | one-command orchestration |
+| `analysis/` | validation analyses behind `python -m cardiotwin_ml.analysis`: `robustness.py` (Monte-Carlo repeated hold-out of the frozen recipe), `modality.py` (modality ablation), `subgroups.py`, `stats.py` (corrected-t, Holm, percentiles), `summary.py` (additive `metrics.json` merge, `metrics_summary.json`) |
 
 ## Extending
 
@@ -223,10 +228,48 @@ name). Numeric `value`s are emitted as integers when integral. `summary.expected
 | --- | --- | --- |
 | `schema.json` | backend, frontend | feature metadata (labels, groups, units, ranges, defaults, reference ranges, descriptions), targets + anatomy + thresholds, risk bands |
 | `model.json` | frontend edge engine | portable model (above) |
-| `metrics.json` | backend, frontend | protocol, dataset, ablations, per-target CV + test metrics with CIs, curves, leaderboard, SHAP importance and beeswarm, checks |
+| `metrics.json` | backend, frontend | protocol, dataset, ablations, per-target CV + test metrics with CIs, curves, leaderboard, SHAP importance and beeswarm, checks; plus `robustness`, `modality_ablation`, `subgroups`, `analysis` (below) |
+| `metrics_summary.json` | frontend landing page | ~20 kB compact extract of `metrics.json`: headline test/CV metrics with CIs, robustness and modality headlines (below) |
 | `cohort.json` | backend, frontend | all 61 test patients (unseen by the model) + 20 dev demo patients with ground truth |
 | `fixtures.json` | parity tests | request → expected response pairs, with encoded vectors |
 | `cardiotwin_models.joblib` | backend | native scikit-learn / XGBoost models (weights deliverable) |
 
 All JSON artifacts are deterministic: reruns (also with a different `--jobs`) reproduce every file byte for byte,
 except `metrics.json → generated_at`.
+
+### Validation-analysis keys in `metrics.json`
+
+Added by `python -m cardiotwin_ml.analysis` (docs/CONTRACTS.md §7.2); every key is optional for consumers and each
+per-target map is keyed by target id in display order. Existing keys are never modified (the merge re-serialises
+them byte for byte and refuses otherwise).
+
+| Key | Shape |
+| --- | --- |
+| `robustness.<target>` | `n_splits`; `fixed_split_percentile` (percentile of the locked split's test ROC-AUC in the Monte-Carlo distribution); per metric (`roc_auc`, `pr_auc`, `f1`, `recall`, `specificity`, `accuracy`, `balanced_accuracy`, `mcc`, `brier`, `log_loss`, `calibration_slope`, `calibration_in_the_large`) `{n, mean, sd, p05, p25, p50, p75, p95, min, max, fixed_split, fixed_split_percentile}`; `baseline_roc_auc`, `delta_roc_auc_vs_baseline` (+ `share_positive`); `cv_estimate {roc_auc, percentile}`; `recipe` (distributions of `weight_lr`, `platt_a`, `threshold`); `samples {roc_auc, f1, brier}` (one value per split, for histograms); `hyperparameter_sensitivity` |
+| `modality_ablation.<target>` | `full {n_columns, roc_auc}`; `cumulative[]`, `leave_one_out[]`, `single[]` rows `{id, group, label, groups, n_columns, roc_auc {mean, sd, se, ci, n_folds}, lr_roc_auc, xgb_roc_auc}` with `delta_vs_previous` (cumulative; `null` for the first step) or `delta_vs_full` (leave-one-out) `{mean, se, ci, p_value, p_holm, share_folds_improved}`; `instrumental {bedside_groups, added_groups, bedside_roc_auc, full_roc_auc, delta}` |
+| `subgroups.<target>` | `overall {oof, test}`; `factors.{sex, age_band, diabetes} = {label, reference, levels[] {id, label, oof, test}}`; each block `{n, n_pos, prevalence, roc_auc, sensitivity, specificity, ppv, f1, brier, calibration_in_the_large, mean_predicted, small_n, delta_roc_auc_vs_reference}` with metrics as `{value, ci}` or `null` when not estimable (< 3 patients in the class) |
+| `analysis` | `version`, `command`, `fingerprint` (sha-256 of `model.json`, dataset, `features.yaml`, `targets.yaml` and the training config without its `analysis` section), `note`, and per analysis its method, settings, checks and `fast_mode` |
+
+`train.py` keeps these keys when it is re-run and the fingerprint is unchanged (a deterministic rerun reproduces
+`model.json`); otherwise it drops them and asks for `python -m cardiotwin_ml.analysis`.
+
+### `metrics_summary.json`
+
+Compact single-line JSON (~20 kB) written next to `metrics.json` by `train.py` and by the analysis command, and
+mirrored to `frontend/public/model`, so the landing page does not have to download the 1.5 MB `metrics.json`. It is
+a pure extract: every number also appears in `metrics.json` (checked by `tests/test_analysis.py`).
+
+| Field | Content |
+| --- | --- |
+| `format`, `format_version` | `"cardiotwin-metrics-summary"`, `"1.0.0"` |
+| `model_version`, `source`, `metrics_generated_at` | model release, `"metrics.json"`, its `generated_at` |
+| `dataset` | `name`, `n`, `n_dev`, `n_test`, `prevalence` per target |
+| `protocol` | one-line descriptions of the test CIs (`test`) and the CV estimate (`cv`) |
+| `targets.<id>.label`, `.threshold` | display label (from `schema.json`) and deployed Youden threshold |
+| `targets.<id>.test` | `{value, ci}` for `roc_auc`, `pr_auc`, `f1`, `precision`, `recall`, `specificity`, `accuracy`, `balanced_accuracy`, `mcc`, `brier` |
+| `targets.<id>.cv` | `{mean, std}` for `roc_auc`, `pr_auc`, `f1`, `recall`, `specificity`, `accuracy`, `brier` |
+| `targets.<id>.calibration` | test `calibration_slope`, `calibration_in_the_large`, `ece` |
+| `targets.<id>.baseline` | clinical-baseline `features`, `test_roc_auc {value, ci}`, paired `delta_roc_auc {value, ci, p_value_one_sided}` |
+| `targets.<id>.robustness` | *(when analysed)* `n_splits`, `fixed_split_percentile`, `roc_auc` / `f1` / `brier` / `calibration_slope` `{mean, sd, p05, p50, p95, fixed_split, fixed_split_percentile}`, `delta_roc_auc_vs_baseline {mean, p05, p50, p95, share_positive}` |
+| `targets.<id>.modality` | *(when analysed)* `full_roc_auc {mean, ci}`; `cumulative[] {group, label, roc_auc {mean, ci}, delta {mean, ci, p_holm} \| null}`; `unique_contribution[] {group, label, delta_if_removed {mean, ci, p_holm}}`; `instrumental {bedside_roc_auc, full_roc_auc, delta {mean, ci, p_value, share_folds_improved}, added_groups}` |
+| `headline` | `robustness {text, n_splits, median_roc_auc, fixed_split_percentile}`, `modality {text, instrumental_delta, most_informative_modality}`, `labels` — ready-to-display sentences and numbers |
