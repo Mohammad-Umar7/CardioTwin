@@ -512,6 +512,13 @@ function TourView() {
     useUiStore.getState().setTourDockLeft(dockLeft);
   }, [dockLeft]);
   useEffect(() => () => useUiStore.getState().setTourDockLeft(0), []);
+  // Glide the caption between nearby spots only: a long move (another column, or the first placement from
+  // off-screen) would sweep it across the heart, so it cuts there and just fades.
+  const lastPos = useRef<{ left: number; top: number } | null>(null);
+  const glide = !!(pos && lastPos.current && Math.abs(pos.left - lastPos.current.left) + Math.abs(pos.top - lastPos.current.top) <= 240);
+  useEffect(() => {
+    lastPos.current = pos ? { left: pos.left, top: pos.top } : null;
+  });
   const chapter = CHAPTERS[beat.chapter]!;
   const inChapter = beatInChapter(index);
 
@@ -525,7 +532,10 @@ function TourView() {
         aria-modal="true"
         aria-labelledby="tour-title"
         aria-describedby="tour-body"
-        className="fixed z-coachmark flex flex-col gap-2.5 rounded-lg bg-surface-3 p-4 shadow-e3 transition-[top,left,opacity] duration-base ease-out"
+        className={cn(
+          'fixed z-coachmark flex flex-col gap-2.5 rounded-lg bg-surface-3 p-4 shadow-e3 duration-base ease-out',
+          glide ? 'transition-[top,left,opacity]' : 'transition-opacity',
+        )}
         style={{ top: pos?.top ?? -9999, left: pos?.left ?? 0, width: cardW, opacity: pos ? 1 : 0 }}
       >
         <div className="flex items-center gap-2">
