@@ -69,7 +69,8 @@ Runs on every push to `main` and every pull request.
 | ML reproducibility | Two full fast trainings from the raw dataset produce byte-identical artifacts (reference platform) |
 | Anatomy assets | Asset contracts, centreline graphs and mesh QA (no Blender needed) |
 | API | ruff, mypy `--strict`, unit, contract and real-model integration tests |
-| Frontend | typecheck, eslint, unit and engine-parity tests, production build and bundle report |
+| Frontend | eslint (zero warnings), unit and engine-parity tests |
+| Frontend build | typecheck and production bundle (size table in the run summary); the bundle feeds the end-to-end job |
 | End-to-end | Boots the API serving the built SPA and runs `e2e_check.py` (latency table in the run summary) |
 | Docker image + compose | Builds `backend/Dockerfile`, starts it with `docker compose --wait` and runs `e2e_check.py` against the container |
 | One-command run | From a clean checkout: `make setup && make smoke` on Linux, `dev.ps1 setup`, `dev -Smoke`, `serve -Smoke` on Windows |
