@@ -35,6 +35,14 @@ const TURNTABLE_RAD_PER_S = 6 * DEG;
 const TURNTABLE_RESUME_MS = 8000;
 /** Camera field of view (DESIGN_SYSTEM §7.1). */
 export const CAMERA_FOV = 30;
+/**
+ * Peel camera move: when the chest closes (peel < 0.4) the camera pulls back to show the thorax separate,
+ * and it comes back in to the heart once the lungs are aside again (> 0.55). The hysteresis keeps a
+ * slider scrub around one value from pumping the camera.
+ */
+const PEEL_OUT_BELOW = 0.4;
+const PEEL_IN_ABOVE = 0.55;
+const THORAX_DISTANCE = 7;
 /** Share of the trunk a best view must show (proximal 5–80 %). */
 const VIEW_WINDOW: readonly [number, number] = [0.05, 0.8];
 /** A vessel's best view sits a touch closer than home so the selection reads as "going to it". */
@@ -343,6 +351,29 @@ export function CameraRig() {
             flyToPose(back, !reducedRef.current);
             useCameraState.getState().setView('custom');
           }
+        }
+      }),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [],
+  );
+
+  // Peel camera move (see PEEL_OUT_BELOW): pull back while the thorax is assembled, return for the heart.
+  const peelOut = useRef<{ distance: number } | null>(null);
+  useEffect(
+    () =>
+      useViewerStore.subscribe((s, prev) => {
+        const controls = ref.current;
+        if (!controls || s.explode === prev.explode || s.stage !== 'workstation') return;
+        const animate = !reducedRef.current;
+        if (!peelOut.current && s.explode < PEEL_OUT_BELOW && prev.explode >= PEEL_OUT_BELOW) {
+          peelOut.current = { distance: controls.distance };
+          const l = useCameraState.getState().freeOrbit ? ORBIT_LIMITS.free : ORBIT_LIMITS.clamped;
+          void controls.dollyTo(Math.min(l.maxDistance, Math.max(controls.distance, THORAX_DISTANCE)), animate);
+          invalidate();
+        } else if (peelOut.current && s.explode > PEEL_IN_ABOVE && prev.explode <= PEEL_IN_ABOVE) {
+          void controls.dollyTo(peelOut.current.distance, animate);
+          peelOut.current = null;
+          invalidate();
         }
       }),
     // eslint-disable-next-line react-hooks/exhaustive-deps
