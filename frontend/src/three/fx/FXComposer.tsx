@@ -1,17 +1,19 @@
 import { useFrame, useThree } from '@react-three/fiber';
-import { Bloom, EffectComposer, SMAA, ToneMapping, Vignette } from '@react-three/postprocessing';
-import { EffectPass, SMAAPreset, ToneMappingMode, type EffectComposer as EffectComposerImpl } from 'postprocessing';
-import { useEffect, useRef } from 'react';
+import { EffectComposer, SMAA, ToneMapping, Vignette } from '@react-three/postprocessing';
+import {
+  BlendFunction,
+  EffectPass,
+  SMAAPreset,
+  SelectiveBloomEffect,
+  ToneMappingMode,
+  type EffectComposer as EffectComposerImpl,
+} from 'postprocessing';
+import { useEffect, useMemo, useRef } from 'react';
 import { HalfFloatType } from 'three';
 import type { RenderTier } from '@/state/viewerStore';
+import { BLOOM_LAYER, MASK_EPSILON, SCAN_EVERY, coronaryMeshes } from './bloomSelection';
 
-/**
- * Bloom settings per tier (DESIGN_SYSTEM §7.7). Bloom is selective *by construction*: the threshold
- * (0.80, on the linear HDR buffer, before tone mapping) sits above every non-emissive surface of the
- * clay rig, so only emissive vessels (≥ p ≈ 0.70), the flow particles and the pulse / ignition overlay
- * carry enough energy to glow. No second render of a selection layer is needed, which keeps the cost at
- * one mip chain (≤ 1.5 ms on Iris Xe at half resolution).
- */
+/** Bloom settings per tier (DESIGN_SYSTEM §7.7). */
 export const BLOOM = {
   luminanceThreshold: 0.8,
   luminanceSmoothing: 0.1,
@@ -25,16 +27,52 @@ export const BLOOM = {
  * The post chain (DESIGN_SYSTEM §7.7), tiers A and B only — tier C renders without a composer and the
  * renderer applies Khronos PBR Neutral itself:
  *
- *   RenderPass → EffectPass(Bloom · ToneMapping NEUTRAL · Vignette) → EffectPass(SMAA MEDIUM, dithered)
+ *   RenderPass → EffectPass(SelectiveBloom · ToneMapping NEUTRAL · Vignette) → EffectPass(SMAA MEDIUM, dithered)
  *
- * Bloom, tone mapping and vignette are not convolution effects, so postprocessing merges them into ONE
- * fullscreen pass; SMAA runs on the tone-mapped LDR image as it should. The last pass writes to the
- * screen with 8-bit ordered dithering so the dark vignette and bloom falloff never band.
+ * SELECTIVE bloom: only the coronary tree may glow — the vessels' emissive risk colour (visible from
+ * p ≈ 0.70), and the flow streaks, pulse and ignition light that land on them. A depth-only pass of the
+ * coronary meshes (layer BLOOM_LAYER) masks the bloom input, so glossy highlights on the myocardium, great
+ * vessels or bone never bloom however bright they get. Cost: ~30 k triangles of depth plus one mask pass.
+ * Bloom, tone mapping and vignette are not convolution effects, so they merge into ONE fullscreen pass;
+ * SMAA runs on the tone-mapped image; the last pass is dithered so dark gradients never band.
  */
 export function FXComposer({ tier }: { tier: RenderTier }) {
   const composer = useRef<EffectComposerImpl>(null);
   const gl = useThree((s) => s.gl);
+  const scene = useThree((s) => s.scene);
+  const camera = useThree((s) => s.camera);
   const levels = tier === 'A' ? BLOOM.levels.A : BLOOM.levels.B;
+
+  const bloom = useMemo(() => {
+    const effect = new SelectiveBloomEffect(scene, camera, {
+      blendFunction: BlendFunction.ADD,
+      mipmapBlur: true,
+      luminanceThreshold: BLOOM.luminanceThreshold,
+      luminanceSmoothing: BLOOM.luminanceSmoothing,
+      intensity: BLOOM.intensity,
+      radius: BLOOM.radius,
+      levels,
+      resolutionScale: BLOOM.resolutionScale,
+    });
+    effect.selection.layer = BLOOM_LAYER;
+    // `depthMaskMaterial` is public in postprocessing but missing from its typings.
+    (effect as unknown as { depthMaskMaterial: { epsilon: number } }).depthMaskMaterial.epsilon = MASK_EPSILON;
+    return effect;
+  }, [scene, camera, levels]);
+
+  const countdown = useRef(0);
+  // Leave the anatomy's meshes as we found them (the selection toggles a layer bit on each) and free the
+  // bloom targets when the chain goes away (tier C, unmount). Under StrictMode's development double-invoke
+  // the effect is reused after this: three re-creates released GPU resources on next use and the next scan
+  // re-selects the meshes.
+  useEffect(
+    () => () => {
+      bloom.selection.clear();
+      bloom.dispose();
+      countdown.current = 0;
+    },
+    [bloom],
+  );
 
   // postprocessing's EffectComposer switches the renderer's autoClear OFF (it clears its own buffers) and
   // never switches it back. Dropping to tier C at runtime would then render R3F frames without clearing
@@ -46,9 +84,16 @@ export function FXComposer({ tier }: { tier: RenderTier }) {
     [gl],
   );
 
-  // Passes are (re)built by the composer's layout effect whenever children change; flag dithering on the
-  // screen-facing pass as soon as it exists (a loop over ≤ 3 passes per frame, no allocation).
   useFrame(() => {
+    // Keep the bloom selection in sync with the (re)loaded anatomy: GLB, procedural placeholder, remounts.
+    if (countdown.current-- <= 0) {
+      countdown.current = SCAN_EVERY;
+      const meshes = coronaryMeshes(scene);
+      const same = meshes.length === bloom.selection.size && meshes.every((m) => bloom.selection.has(m));
+      if (!same) bloom.selection.set(meshes);
+    }
+    // Passes are (re)built by the composer's layout effect whenever children change; flag dithering on
+    // the screen-facing pass as soon as it exists (a loop over ≤ 3 passes per frame, no allocation).
     const passes = composer.current?.passes;
     if (!passes) return;
     for (let i = passes.length - 1; i >= 0; i -= 1) {
@@ -62,15 +107,8 @@ export function FXComposer({ tier }: { tier: RenderTier }) {
 
   return (
     <EffectComposer ref={composer} multisampling={0} frameBufferType={HalfFloatType} enableNormalPass={false}>
-      <Bloom
-        mipmapBlur
-        luminanceThreshold={BLOOM.luminanceThreshold}
-        luminanceSmoothing={BLOOM.luminanceSmoothing}
-        intensity={BLOOM.intensity}
-        radius={BLOOM.radius}
-        levels={levels}
-        resolutionScale={BLOOM.resolutionScale}
-      />
+      {/* no `dispose` prop: on a primitive R3F would assign it onto the effect (bloom.dispose = null) */}
+      <primitive object={bloom} />
       <ToneMapping mode={ToneMappingMode.NEUTRAL} />
       <Vignette offset={0.3} darkness={0.5} />
       <SMAA preset={SMAAPreset.MEDIUM} />
