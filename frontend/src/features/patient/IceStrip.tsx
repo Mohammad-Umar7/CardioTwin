@@ -6,7 +6,8 @@ import type { IceResult } from './lib/whatIfEngine';
 
 /**
  * ICE strip (DESIGN_SYSTEM §5 NumericFeatureRow): 32 samples of p(target) across [min, max], a 1 px
- * text/secondary line over an Ember-gradient fill at 60 % (risk colour on a mark, never on text). The
+ * text/secondary line over an Ember-gradient fill at 60 %, fading toward the track (risk colour on a mark,
+ * never on text). The
  * y-axis is the absolute 0–1 probability, so a flat strip honestly means "this input barely matters".
  */
 export function IceStrip({ result, target, className }: { result: IceResult; target: TargetId; className?: string }) {
@@ -42,8 +43,16 @@ export function IceStrip({ result, target, className }: { result: IceResult; tar
             <stop key={s.offset} offset={s.offset} stopColor={s.color} />
           ))}
         </linearGradient>
+        {/* Fade the fill toward the track so a high, flat strip reads as a curve, not a slab. */}
+        <linearGradient id={`${gradientId}-fade`} x1="0" x2="0" y1="0" y2="1">
+          <stop offset="0" stopColor="#fff" stopOpacity={0.6} />
+          <stop offset="1" stopColor="#fff" stopOpacity={0.08} />
+        </linearGradient>
+        <mask id={`${gradientId}-mask`} maskContentUnits="userSpaceOnUse">
+          <rect x="0" y="0" width="100" height="16" fill={`url(#${gradientId}-fade)`} />
+        </mask>
       </defs>
-      <path d={shape.area} fill={`url(#${gradientId})`} fillOpacity={0.6} />
+      <path d={shape.area} fill={`url(#${gradientId})`} mask={`url(#${gradientId}-mask)`} />
       <path d={shape.line} fill="none" className="stroke-secondary" strokeWidth={1} vectorEffect="non-scaling-stroke" />
     </svg>
   );

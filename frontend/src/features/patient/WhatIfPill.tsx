@@ -42,8 +42,13 @@ function useHoldToCompare() {
       onPointerDown: (e: PointerEvent<HTMLButtonElement>) => {
         // Primary button only (a right-click must not stick the compare state on).
         if (e.button > 0) return;
-        e.currentTarget.setPointerCapture?.(e.pointerId);
         setComparing(true);
+        // Keep receiving the release even if the pointer slides off the button.
+        try {
+          e.currentTarget.setPointerCapture?.(e.pointerId);
+        } catch {
+          /* not an active pointer (synthetic events): the pointerup handler still ends the hold */
+        }
       },
       onPointerUp: () => setComparing(false),
       onPointerCancel: () => setComparing(false),

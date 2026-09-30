@@ -10,9 +10,9 @@ import { editedKeys, selectEditCount, usePatientStore } from '@/state/patientSto
 import { useUiStore } from '@/state/uiStore';
 import { useViewerStore } from '@/state/viewerStore';
 import type { CohortPatient, FeatureSpec, FeatureVector } from '@/types/contracts';
-import { CURATED_CASES, CURATED_IDS } from './curated';
+import { CURATED_IDS } from './curated';
 import { aliasesFor } from './lib/aliases';
-import { describeFeatures, identityOf } from './lib/describe';
+import { compactIdentity, identityOf } from './lib/describe';
 import { useInputInteraction } from './lib/interaction';
 import { displayValue, flipped, isPresent, sameValue } from './lib/values';
 import { scoreRows } from './lib/whatIfEngine';
@@ -108,18 +108,19 @@ function inputCommands(index: SchemaIndex, features: FeatureVector, recorded: Fe
 }
 
 function patientCommands(patients: readonly CohortPatient[], navigate: Navigate): Command[] {
-  const curatedNote = new Map(CURATED_CASES.map((c) => [c.id, c.note]));
   const rank = (p: CohortPatient) => (CURATED_IDS.has(p.id) ? 0 : p.split === 'test' ? 1 : 2);
   return [...patients]
     .sort((a, b) => rank(a) - rank(b) || a.id.localeCompare(b.id))
     .map((p): Command => {
-      const { sex } = identityOf(p.features);
+      const identity = identityOf(p.features);
+      // Identity only: clinical findings in these subtitles would bury the input rows under 81 patients
+      // whenever a query names a finding ("typical", "diabetes"). Findings are searchable in the switcher.
       return {
         id: PATIENT_CMD.openPatient(p.id),
         group: 'patients',
         title: `Open ${p.id}`,
-        subtitle: `${describeFeatures(p.features)}${p.split === 'test' ? ' · held-out test' : ' · development'}`,
-        keywords: [p.id, p.id.replace('P-', ''), sex ?? '', p.split === 'test' ? 'test held-out' : 'dev development', curatedNote.get(p.id) ?? ''],
+        subtitle: `${compactIdentity(identity)} · ${p.split === 'test' ? 'held-out test' : 'development'}`,
+        keywords: [p.id, p.id.replace('P-', ''), identity.sex ?? ''],
         icon: User,
         when: () => usePatientStore.getState().selectedPatientId !== p.id || usePatientStore.getState().mode !== 'cohort',
         run: () => openPatient(p, navigate),
