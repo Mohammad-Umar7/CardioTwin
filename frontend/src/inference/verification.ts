@@ -3,7 +3,8 @@
  *
  * When both engines exist (server healthy AND the portable model loaded), one prediction per patient
  * is computed by BOTH engines on identical inputs and compared field by field with the contract
- * tolerances (|Δp| < 1e-6, |Δshap| < 1e-5, same labels and bands — `parity.compareResponses`):
+ * tolerances (|Δp| < 1e-6, |Δshap| < 1e-5, same labels and bands except explained boundary ties —
+ * `parity.compareResponses`):
  *   1. the patient on screen first, as soon as it is selected;
  *   2. then, in the background and paced, every other cohort patient (so the tooltip can say
  *      "81 / 81 patients agree"). Paused while the tab is hidden.

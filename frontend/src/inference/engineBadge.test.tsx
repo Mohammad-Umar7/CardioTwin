@@ -17,6 +17,7 @@ const report = (agree: boolean): ParityReport => ({
   targets: ['CAD', 'LAD', 'LCX', 'RCA'],
   contributions: 212,
   mismatches: agree ? [] : ['LAD.probability |Δ| 3.10e-4 > 1.00e-6'],
+  boundaryTies: [],
 });
 
 const record = (key: string, agree: boolean): VerificationRecord => ({ key, agree, report: report(agree), edgeMs: 1, serverMs: 8, at: Date.now() });

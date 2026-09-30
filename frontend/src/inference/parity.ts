@@ -2,7 +2,7 @@
  * Cross-engine parity: compare two §3.2 responses (edge vs server, edge vs fixture) field by field.
  * Used by the fixture/cohort test-suites and at runtime by the engine verifier behind the EnginePill.
  */
-import type { Explanation, PredictResponse, TargetId } from '@/types/contracts';
+import type { Explanation, PredictResponse, TargetId, TargetPrediction } from '@/types/contracts';
 
 export interface ParityTolerance {
   probability: number;
@@ -33,6 +33,35 @@ export interface ParityReport {
   contributions: number;
   /** Human-readable failures (capped), e.g. "LAD.probability |Δ| 3.1e-4 > 1e-6". */
   mismatches: string[];
+  /**
+   * Discrete outcomes (label, risk band, highest-risk vessel) that differ only because the two
+   * probabilities straddle the decision boundary within tolerance — not counted as disagreements.
+   */
+  boundaryTies: string[];
+}
+
+/** Risk bands from lowest to highest (CONTRACTS §2 `risk_bands`). */
+const BAND_ORDER: readonly string[] = ['low', 'moderate', 'high', 'critical'];
+
+/**
+ * Two engines that agree to a few ulps can still land on opposite sides of a decision boundary: found
+ * against the live server, e.g. CAD with Age = 47.27671142066387 gives p = threshold − 1 ulp on the edge
+ * (label 0) and p = threshold on the server (label 1). No two float64 pipelines with different summation
+ * orders can rule this out, so such a flip is a *boundary tie*, accepted only when it is explained:
+ * |Δp| is within tolerance and each side's outcome is the one its own probability implies.
+ */
+function labelTie(pa: TargetPrediction, pe: TargetPrediction, tol: number): boolean {
+  const consistent = (p: TargetPrediction) => p.label === (p.probability >= p.threshold ? 1 : 0);
+  return Math.abs(pa.probability - pe.probability) <= tol && pa.threshold === pe.threshold && consistent(pa) && consistent(pe);
+}
+
+function bandTie(pa: TargetPrediction, pe: TargetPrediction, tol: number): boolean {
+  const ia = BAND_ORDER.indexOf(pa.risk_band);
+  const ie = BAND_ORDER.indexOf(pe.risk_band);
+  if (ia < 0 || ie < 0 || Math.abs(ia - ie) !== 1) return false;
+  if (!(Math.abs(pa.probability - pe.probability) <= tol)) return false;
+  // The higher band must come with the strictly higher probability (a boundary lies between them).
+  return ia > ie ? pa.probability > pe.probability : pe.probability > pa.probability;
 }
 
 const MAX_MESSAGES = 25;
@@ -43,9 +72,10 @@ type CalibratedContribution = { shap_calibrated?: number };
 const fmt = (x: number) => x.toExponential(2);
 
 /**
- * Compare `actual` against `expected`. Numeric fields use `tolerance`; labels, bands, the imputed list,
- * the set of contribution features and their values must match exactly (numbers within 1e-9).
- * The `engine` field is ignored — that is the one field that is supposed to differ.
+ * Compare `actual` against `expected`. Numeric fields use `tolerance`; the imputed list, the set of
+ * contribution features and their values must match exactly (numbers within 1e-9); labels, bands and the
+ * highest-risk vessel must match unless the difference is a boundary tie (see `labelTie`), which is
+ * reported in `boundaryTies` instead. The `engine` field is ignored — it is supposed to differ.
  */
 export function compareResponses(
   actual: PredictResponse,
@@ -66,6 +96,7 @@ export function compareResponses(
     targets: [],
     contributions: 0,
     mismatches,
+    boundaryTies: [],
   };
   const check = (field: string, a: number, e: number, tol: number): number => {
     const delta = Math.abs(a - e);
@@ -93,8 +124,16 @@ export function compareResponses(
     report.maxDeltaProbability = Math.max(report.maxDeltaProbability, check(`${t}.probability`, pa.probability, pe.probability, tolerance.probability));
     report.maxDeltaLogit = Math.max(report.maxDeltaLogit, check(`${t}.logit`, pa.logit, pe.logit, tolerance.logit));
     check(`${t}.threshold`, pa.threshold, pe.threshold, 1e-12);
-    if (pa.label !== pe.label) fail(`${t}.label ${pa.label} ≠ ${pe.label}`);
-    if (pa.risk_band !== pe.risk_band) fail(`${t}.risk_band ${pa.risk_band} ≠ ${pe.risk_band}`);
+    if (pa.label !== pe.label) {
+      const message = `${t}.label ${pa.label} ≠ ${pe.label} (p ${pa.probability} vs ${pe.probability}, threshold ${pe.threshold})`;
+      if (labelTie(pa, pe, tolerance.probability)) report.boundaryTies.push(message);
+      else fail(message);
+    }
+    if (pa.risk_band !== pe.risk_band) {
+      const message = `${t}.risk_band ${pa.risk_band} ≠ ${pe.risk_band} (p ${pa.probability} vs ${pe.probability})`;
+      if (bandTie(pa, pe, tolerance.probability)) report.boundaryTies.push(message);
+      else fail(message);
+    }
 
     const ea = actual.explanations?.[t] as Calibrated | undefined;
     const ee = expected.explanations?.[t] as Calibrated | undefined;
@@ -139,8 +178,18 @@ export function compareResponses(
   const se = expected.summary;
   if (sa && se) {
     check('summary.expected_diseased_vessels', sa.expected_diseased_vessels, se.expected_diseased_vessels, 3 * tolerance.probability);
-    if (sa.highest_risk_vessel !== se.highest_risk_vessel) {
-      fail(`summary.highest_risk_vessel ${String(sa.highest_risk_vessel)} ≠ ${String(se.highest_risk_vessel)}`);
+    const va = sa.highest_risk_vessel;
+    const ve = se.highest_risk_vessel;
+    if (va !== ve) {
+      const message = `summary.highest_risk_vessel ${String(va)} ≠ ${String(ve)}`;
+      // A near-tie between two vessels: each engine picked its own maximum, and both pairs are within tolerance.
+      const p = (r: PredictResponse, v: TargetId | null) => (v ? r.predictions[v]?.probability : undefined);
+      const [aa, ab, ea, eb] = [p(actual, va), p(actual, ve), p(expected, va), p(expected, ve)];
+      const tie =
+        aa !== undefined && ab !== undefined && ea !== undefined && eb !== undefined &&
+        aa >= ab && eb >= ea && aa - ab <= 2 * tolerance.probability && eb - ea <= 2 * tolerance.probability;
+      if (tie) report.boundaryTies.push(message);
+      else fail(message);
     }
   } else if (sa || se) {
     fail('summary missing on one side');
