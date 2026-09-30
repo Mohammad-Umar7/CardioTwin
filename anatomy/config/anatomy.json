@@ -263,10 +263,24 @@
       "layer": "skeleton",
       "label": "Costal cartilages",
       "parts": [
+        "FMA7875",
+        "FMA7886",
+        "FMA7913",
+        "FMA7976",
+        "FMA8070",
+        "FMA8194",
+        "FMA8248",
+        "FMA8005",
+        "FMA8031",
+        "FMA8058",
+        "FMA8167",
+        "FMA8112",
+        "FMA8221",
+        "FMA8275",
         "BP24",
         "BP28"
       ],
-      "budget": 9000,
+      "budget": 14000,
       "material": "Cartilage",
       "explode": [
         0.0,
@@ -274,7 +288,7 @@
         0.9
       ],
       "target": null,
-      "description": "Hyaline cartilage bars that connect the anterior ends of the ribs to the sternum and form the costal margin."
+      "description": "Hyaline costal cartilages: the individual cartilages of ribs 1–7 forming the sternocostal joints, and the fused cartilages of ribs 8–10 that form the costal margin."
     },
     {
       "node": "Sternum",

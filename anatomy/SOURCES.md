@@ -40,6 +40,20 @@ input files the committed assets were built from.
 | `FMA8445` | right tenth rib | `Ribs_R` | 31,010 | 1,550,584 | `74b03c2cd1d227d262d848aa0564b2022f1944bcaf6d3b469cceb5310da07c70` |
 | `FMA8531` | right eleventh rib | `Ribs_R` | 22,428 | 1,121,484 | `e2bc61ccb59923b00048f093cb5d105c5a4a03f5d4cabce2be147df0192af269` |
 | `FMA8533` | right twelfth rib | `Ribs_R` | 13,262 | 663,184 | `eb47b3d7b6b8440a90fe27f333c8f30f72c6ae82694f4d0737ca6279b04e0b74` |
+| `FMA7875` | right first costal cartilage | `CostalCartilage` | 2,342 | 117,184 | `5a92e898b016f1d6cc485498ff0f0e207b31098feccabc85d5219f103c4cb206` |
+| `FMA7886` | right second costal cartilage | `CostalCartilage` | 2,540 | 127,084 | `a714eaf849a06c058e7decd6f835395ae5d311087cb421b54ae8b8ad9037e8af` |
+| `FMA7913` | right third costal cartilage | `CostalCartilage` | 2,694 | 134,784 | `46ee473827b2d0c86e89e987abd6a3a06bf58d83b1cf5a15ac74a4e329407fd8` |
+| `FMA7976` | right fourth costal cartilage | `CostalCartilage` | 3,486 | 174,384 | `8eb4e349353481cb9fc5e61cc64335d09fdd835b704725d21a7a0259f579b2c8` |
+| `FMA8070` | right fifth costal cartilage | `CostalCartilage` | 4,830 | 241,584 | `4806b779a0c7ff894f258172c8d38ea27773846dfde5c3dbc4ec1970efc934aa` |
+| `FMA8194` | right sixth costal cartilage | `CostalCartilage` | 6,078 | 303,984 | `0036ae34629bdc085cdca443267e6624fa645623b7baf0a34469920689778552` |
+| `FMA8248` | right seventh costal cartilage | `CostalCartilage` | 10,492 | 524,684 | `deed7fc150913c7f1a5944ede84f5c80314bf80ee320e086040694232e440b89` |
+| `FMA8005` | left first costal cartilage | `CostalCartilage` | 2,204 | 110,284 | `ec3ce37db56619908322f97ec11a3fac6af3783b1c1becf0584aba0b3aaa34d0` |
+| `FMA8031` | left second costal cartilage | `CostalCartilage` | 2,350 | 117,584 | `a1789b441e573b99c2ec9bc926bbbb4ea3e1320024a4d192a495eb6e6d17380b` |
+| `FMA8058` | left third costal cartilage | `CostalCartilage` | 2,428 | 121,484 | `94b352139f62506839687cef4dc7ffc9e8314094a4975cc0d9105f79eedc376a` |
+| `FMA8167` | left fourth costal cartilage | `CostalCartilage` | 3,220 | 161,084 | `3ad3eed191f35c724b5beefaa835852b3e3f3e874871278bb5423cef17f2efcd` |
+| `FMA8112` | left fifth costal cartilage | `CostalCartilage` | 4,536 | 226,884 | `ec2b2c0aa5181884e2661695f821e34e3a3774ae4cce7125b6d8eee8cc396945` |
+| `FMA8221` | left sixth costal cartilage | `CostalCartilage` | 5,966 | 298,384 | `a378b49e15d1a728170cc4a14642bd40d3a451f601e60e41204ce004f0025708` |
+| `FMA8275` | left seventh costal cartilage | `CostalCartilage` | 9,902 | 495,184 | `22f94e1cff58983b435c2c838bf28b286172c226b36499160c3bbcedeadff098` |
 | `BP24` | left costal cartilage | `CostalCartilage` | 18,942 | 947,184 | `20cee8c685e48c0be5dc8a19c7291d226772bd509e9f58c096a52fa08312c6f8` |
 | `BP28` | right costal cartilage | `CostalCartilage` | 19,156 | 957,884 | `3830b7572af7fe795f3f80d5e13a8603f6bc2f5bb8d2070d1cbce0855f9fcb64` |
 | `FMA7486` | manubrium | `Sternum` | 11,882 | 594,184 | `1d503e4a4b7b7090bb43ced9870d8bf8c618c4cc6c88f9570a6a3c0962b6597b` |
