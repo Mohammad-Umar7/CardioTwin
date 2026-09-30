@@ -5,8 +5,20 @@
 seed: 42
 
 holdout:
-  test_size: 0.20          # locked test set, touched exactly once after all decisions are frozen
+  test_size: 0.20          # locked test set, touched exactly once per release after all decisions are frozen
   min_stratum_count: 5     # joint label patterns rarer than this are merged (see splits.py)
+  # Every release that re-scored the locked test set, and why (reported in metrics.json and the model card).
+  history:
+    - release: 1.0.0
+      note: First and only evaluation of the v1.0.0 models.
+    - release: 1.1.0
+      note: >-
+        Re-scored after an independent code review found a calibration defect (Platt scaling, ensemble weight and
+        thresholds had been fitted on out-of-fold margins of differently tuned fold models, so the map did not match
+        the scale of the deployed components). The same review switched hyper-parameter tuning from ROC-AUC to
+        log-loss (a proper scoring rule; ROC-AUC tuning had driven C to the edge of its range). Both changes and the
+        cross-fitted CV estimate were specified and checked on the development set only; no feature, model family,
+        search space or selection rule was changed in response to test results.
 
 cv:                        # development-set leaderboard: repeated stratified k-fold, per target
   n_splits: 5
@@ -14,7 +26,11 @@ cv:                        # development-set leaderboard: repeated stratified k-
 
 tuning:                    # nested CV: inner search inside every outer training fold
   inner_splits: 5
-  scoring: roc_auc
+  # Proper scoring rule. ROC-AUC is nearly flat in the regularisation strength, so tuning on it picked C at the
+  # edge of the search range (e.g. 0.0017) and produced components whose margins needed Platt slopes up to 7.7.
+  # Dev-only comparison (cross-fitted 10x5 CV, v1.1.0): mean ROC-AUC 0.8171 vs 0.8178 (unchanged), mean
+  # log-loss 0.4966 vs 0.5025 (better), Platt slopes 1.03-1.28 vs 1.36-7.68 (see docs/MODEL_CARD.md).
+  scoring: neg_log_loss
 
 final_tuning:              # hyper-parameters of the deployed components, searched on the full dev set
   inner_splits: 5
