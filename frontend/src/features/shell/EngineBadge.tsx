@@ -94,7 +94,9 @@ export function EngineBadge({ className }: { className?: string }) {
               {patient.patientId}:{' '}
               {current
                 ? current.agree
-                  ? `engines agree (|Δp| ${formatDelta(current.report.maxDeltaProbability)})`
+                  ? `engines agree (|Δp| ${formatDelta(current.report.maxDeltaProbability)}${
+                      current.report.boundaryTies.length > 0 ? ` · ${current.report.boundaryTies.length} boundary tie` : ''
+                    })`
                   : `engines disagree · ${current.report.mismatches[0] ?? ''}`
                 : activeKey === patient.patientId
                   ? 'checking…'
@@ -114,7 +116,9 @@ export function EngineBadge({ className }: { className?: string }) {
               {firstDisagreement.key}: {firstDisagreement.report.mismatches[0]}
             </div>
           )}
-          <div className="text-tertiary">Tolerance |Δp| &lt; 10⁻⁶, |Δshap| &lt; 10⁻⁵, identical labels and bands.</div>
+          <div className="text-tertiary">
+            Tolerance |Δp| &lt; 10⁻⁶, |Δshap| &lt; 10⁻⁵, identical labels and bands (except a probability within 10⁻⁶ of a cut-off).
+          </div>
         </div>
       ) : (
         patient.engineStatus !== 'resolving' && <div className="text-tertiary">{verification.why}</div>
