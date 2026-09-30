@@ -192,7 +192,7 @@ export function RiskTrack({
         )}
       </div>
       {(showScale || showThresholdLabel) && (
-        <div className="num relative mt-0.5 h-4 text-[0.6875rem] leading-4 text-tertiary">
+        <div className="num relative mt-0.5 h-4 text-label font-normal text-tertiary">
           {showScale && (
             <>
               <span className="absolute left-0">0</span>
@@ -241,7 +241,7 @@ export function RiskLegend({ threshold, width = 160, caption = 'P(stenosis)', cl
             />
           )}
         </div>
-        <div className="num mt-0.5 flex justify-between text-[0.6875rem] leading-3 text-tertiary">
+        <div className="num mt-0.5 flex justify-between text-label font-normal text-tertiary">
           <span>0</span>
           <span>25</span>
           <span>50</span>
