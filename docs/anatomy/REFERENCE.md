@@ -388,7 +388,7 @@ redefine segments.
   - 23% of infarcted segments did not match it.
   - Segments **2, 7, 8 and 13 were 100% specific for the LAD**. Segment 6 was 98% specific for the LCX, segment 5 95% LCX, and segment 4 93% RCA.
   - Segments 12 and 16 were often LAD territory, and segment 15 was LAD or LCX territory in 67%.
-  - Checks: COR-23, COR-24.
+  - Checks: COR-23, COR-24; COR-25 (the right-ventricular free wall is RCA territory apart from a strip beside the anterior interventricular groove, which the LAD's RV branches supply).
 - **Share of LV mass (CT):** LAD about 42.5%, LCX about 28.8%, RCA about 26.4% [VESSELMASS]. This was read from a search summary only.
 - **CardioTwin:** `COLOR_0` on the heart walls holds soft territory weights (R = LAD, G = LCX, B = RCA). It is an approximation, not a lesion map (CONTRACTS §6.2).
 
@@ -403,7 +403,7 @@ redefine segments.
   - The **lesser** system: the Thebesian veins.
 - **Share of myocardial venous return:** the CS about 55%, anterior cardiac veins about 35% and Thebesian veins about 10% [SP-CS]. Other sources give the greater system about 3/4 [SP-VEINS], and the Thebesian veins up to 30% [SP-THEB].
 - The myocardium has at least twice as many veins as arteries [VHL].
-- **Topology:** one tree drains through the CS ostium into the RA. Only the anterior cardiac veins, the right marginal vein and (sometimes) the small cardiac vein open into the RA separately. No cardiac vein drains into the left heart, apart from the rare unroofed CS [SP-VEINS], [RP-CS]. Checks: VEN-01 (presence), VEN-10 (topology and epicardial layer).
+- **Topology:** one tree drains through the CS ostium into the RA. Only the anterior cardiac veins, the right marginal vein and (sometimes) the small cardiac vein open into the RA separately. No cardiac vein drains into the left heart, apart from the rare unroofed CS [SP-VEINS], [RP-CS]. Checks: VEN-01 (presence), VEN-10 (topology and epicardial layer), VEN-12 (the CS and anterior cardiac veins open flush into the RA wall; distal tips thin to ≤ 0.8 mm on the epicardium), COR-26 (the crux, the CS ostium and the MCV junction lie within 15 mm of each other).
 
 ### 6.2 Coronary sinus (CS)
 
@@ -567,6 +567,21 @@ is synthesised: [`SYNTHESIS.md`](SYNTHESIS.md)):
 | LV territory shares | LAD 42.9 %, LCX 24.8 %, RCA 32.2 %; AHA-17 majority map correct in all segments | COR-24 minor |
 | SCCT labels | `_SEGMENT`, `vessels.json` labels and `manifest.segments` present | COR-22 pass |
 | Diaphragm domes | Lowered 4 mm (dome order unchanged); heart-diaphragm overlap 1.9 mm | POS-10 |
+
+**Update after realism round 2** (52 PASS / 8 MINOR / 13 FAIL of 73; the coronary tree and the cardiac veins are now
+designed on the heart, see [`SYNTHESIS.md`](SYNTHESIS.md)):
+
+| Finding | Value now | Check |
+| --- | --- | --- |
+| Aorto-mitral continuity | Root moved (3, 10, −10) mm plus a 1 mm fibrous curtain; gap 1.1 mm | VLV-05 pass |
+| LM | 17 mm leftwards behind the pulmonary trunk; bifurcation 13.7 mm from the mitral ring; LM–LAD 48°, LAD–LCX 112° | COR-03/04/05 pass |
+| RCA | Anterior take-off, in the right AV groove (≤ 12.9 mm from the tricuspid hinge), acute margin at 99 mm, crux at 140 mm, no loop (rise 1.6 mm) | COR-13/14/15 pass |
+| Septal perforators | Three from the LAD and three from the PDA, take-off 55–95°, 80–100 % intramyocardial | COR-09 pass |
+| Obtuse marginals | OM1 and OM2 (≥ 1.5 mm) run to the apex over the lateral wall | COR-12 pass |
+| Calibres | LM 4.15, pLAD 3.47, pRCA 3.25, pLCX 2.95 mm; every segment tapers | COR-20 pass |
+| RV free wall | 85 % RCA-dominant; the LAD strip reaches 15 mm (14.6 % beyond, band 10 %) | COR-25 minor |
+| Cardiac veins | CS 9.3 mm (ostium 10 mm) 2.1 mm from the tricuspid hinge, MCV joins 9.6 mm from the ostium; LMV and SCV present; GCV 4.6 mm; tips 0.45 mm | VEN-01/05/08/11 pass |
+| Coronary sinus course | 70 % atrial to the mitral hinge, 48 % parallel; CS + GCV 197 mm | VEN-04, VEN-09 fail |
 
 ---
 
