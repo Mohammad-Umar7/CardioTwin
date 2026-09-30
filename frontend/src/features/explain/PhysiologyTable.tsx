@@ -40,6 +40,10 @@ function RangeBar({ spec, value }: { spec: FeatureSpec; value: number }) {
 
 const STATUS_TEXT: Record<RangeStatus, string> = { above: 'above', below: 'below', within: '' };
 
+/** "2 class" reads badly: ordinal scales put the unit first ("Class 2"). */
+const valueText = (spec: FeatureSpec, value: number) =>
+  spec.unit === 'class' ? `Class ${value}` : formatFeatureValue(spec, value);
+
 /**
  * Physiology (WORKSTATION_V2 §5.10): every measured value with its unit, a reference-range bar, its status
  * in words and its contribution to the selected target; "Abnormal only" on by default. Then the findings that
@@ -140,14 +144,14 @@ export function PhysiologyTable({ target }: { target: string }) {
                         }}
                         onFocus={() => highlight(spec.key)}
                         onBlur={() => highlight(null)}
-                        aria-label={`${spec.label}, ${formatFeatureValue(spec, value)}${status && status !== 'within' ? `, ${status} normal` : ''}${range ? `, ${range}` : ''}${f ? `, ${f.spoken} for ${target}` : ''}. Edit this input.`}
+                        aria-label={`${spec.label}, ${valueText(spec, value)}${status && status !== 'within' ? `, ${status} normal` : ''}${range ? `, ${range}` : ''}${f ? `, ${f.spoken} for ${target}` : ''}. Edit this input.`}
                         className="max-w-full truncate rounded-xs text-left text-body-s text-secondary outline-none focus-visible:shadow-focus"
                       >
                         {spec.label}
                       </button>
                     </Tooltip>
                   </th>
-                  <td className="num whitespace-nowrap pr-2 text-right text-body-s font-medium text-primary">{formatFeatureValue(spec, value)}</td>
+                  <td className="num whitespace-nowrap pr-2 text-right text-body-s font-medium text-primary">{valueText(spec, value)}</td>
                   <td>{spec.normal && (spec.normal.low !== null || spec.normal.high !== null) ? <RangeBar spec={spec} value={value} /> : null}</td>
                   <td className="whitespace-nowrap pl-2 text-label font-normal text-secondary">
                     {status === 'above' && '▲ '}

@@ -52,7 +52,7 @@ export function useRiskCommands(): void {
           id: CMD.explainVessel(t.id),
           group: 'vessels',
           title: `Explain ${t.id}`,
-          subtitle: t.id === 'CAD' ? 'Why the overall estimate is what it is' : `Why ${t.label.toLowerCase()} is flagged or not`,
+          subtitle: t.id === 'CAD' ? 'What drives the overall estimate' : `Why the ${t.label.toLowerCase()} is flagged or not`,
           keywords: [t.id, t.label, 'why', 'explain', 'shap'],
           icon: MessageSquareText,
           run: () => {
