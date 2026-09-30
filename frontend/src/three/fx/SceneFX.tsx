@@ -3,7 +3,9 @@ import { Component, Suspense, useMemo, type ReactNode } from 'react';
 import { Vector3 } from 'three';
 import { useAnatomyGlbUrl, useVessels } from '@/hooks/useData';
 import { useViewerStore, type RenderTier } from '@/state/viewerStore';
+import { Atmosphere } from './Atmosphere';
 import { computeArcLengths, type CentrelineFile } from './centreline';
+import { FlowCaption } from './FlowCaption';
 import { FlowParticles, PARTICLES_BY_TIER } from './FlowParticles';
 import { FxDriver } from './FxDriver';
 import { FXComposer } from './FXComposer';
@@ -66,6 +68,12 @@ export function SceneFX() {
   return (
     <>
       <FxDriver />
+      <FlowCaption />
+      {tier !== 'D' && (
+        <FxBoundary name="atmosphere">
+          <Atmosphere tier={tier} />
+        </FxBoundary>
+      )}
       {source === 'glb' && glb && vessels ? (
         <FxBoundary name="coronary flow">
           <Suspense fallback={null}>
