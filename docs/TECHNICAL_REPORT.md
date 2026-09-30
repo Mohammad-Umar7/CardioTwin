@@ -51,7 +51,7 @@ each training fold. A registry (`features.yaml`) holds each feature's unit, rang
 
 ## 3 Models
 
-**Candidates.** Eleven model families were compared on identical folds of a repeated stratified 5-fold × 10 CV
+**Candidates.** Eleven candidate models were compared on identical folds of a repeated stratified 5-fold × 10 CV
 (nested tuning: an inner 5-fold `RandomizedSearchCV` on **log-loss**):
 
 - logistic regression: L2, L1, elastic net, and a "clinical core" variant on age, sex, typical angina, DM and HTN;
@@ -110,11 +110,11 @@ harness reproduces the deployed model on the locked split exactly (max |Δp| = 0
 | RCA | 0.759 | 0.751 (0.660–0.828) | 58th | 0.727 (30th) | 69 % of splits | +0.015 (−0.023 to +0.054) |
 
 The locked split is among the hardest 3 % for CAD and LAD, and the clinical baseline also lands at its 4th and
-14.5th percentile there. The cross-fitted CV means sit mid-distribution. **The CV-to-test gap is therefore split
-difficulty, not overfitting.** The Monte-Carlo medians describe the expected held-out performance better than the
-single split does. Re-searching hyper-parameters in every split instead of reusing the deployed ones changes the mean
-ROC-AUC by ≤ 0.0007, so there is no tuning optimism. Caveat: test parts overlap across splits, and all come from one
-centre.
+14.5th percentile there, while the cross-fitted CV means fall inside the distribution (30th–78th percentile). **The
+CV-to-test gap is therefore split difficulty, not overfitting.** The Monte-Carlo medians describe the expected
+held-out performance better than the single split does. Re-searching hyper-parameters in every split instead of
+reusing the deployed ones changes the mean ROC-AUC by ≤ 0.0007, so there is no tuning optimism. Caveat: test parts
+overlap across splits, and all come from one centre.
 
 <figure><img src="figures/robustness.png" alt="Monte-Carlo repeated hold-out distributions of ROC-AUC, F1 and Brier with the locked split marked" style="width:100%"><figcaption>Figure 1. Held-out ROC-AUC, F1 and Brier over 200 random splits. The diamond marks the locked test split and its percentile, and the triangle the cross-fitted CV mean.</figcaption></figure>
 
@@ -122,12 +122,12 @@ centre.
 Adding **ECG, labs and echo** to bedside information (demographics, history, symptoms, examination) raises ROC-AUC by
 **+0.028 (+0.002 to +0.054) for CAD** and **+0.069 (+0.024 to +0.115) for LAD**. For LCX and RCA the gains are
 +0.028 and +0.021, and both CIs include 0. Removing symptoms costs the most (CAD −0.077, LAD −0.054). Echo is the only
-instrumental modality with unique information for CAD and LAD (−0.021 and −0.047), and the ECG adds nothing once
-echo and labs are present (|Δ| ≤ 0.007).
+instrumental modality whose removal hurts CAD and LAD (−0.021 and −0.047, Holm-adjusted p 0.07 and 0.02), and the
+ECG adds nothing once echo and labs are present (|Δ| ≤ 0.007).
 
 <figure><img src="figures/modality_ablation.png" alt="Cumulative and leave-one-modality-out ROC-AUC per target" style="width:92%"><figcaption>Figure 2. What each modality adds (development CV, 50 paired folds, 95 % corrected-t CIs). Top: cumulative ROC-AUC from demographics to the full panel, with the instrumental tests shaded. Bottom: ROC-AUC lost when one modality is removed.</figcaption></figure>
 
-**Subgroups** (exploratory, OOF). CAD discrimination is similar across sex, age band and diabetes (0.90–0.98).
+**Subgroups** (exploratory, OOF). CAD discrimination stays high in every sex, age and diabetes subgroup (0.90–0.98).
 Vessel-level discrimination is lower for LCX over 65 (0.54 vs 0.75, Δ −0.21, CI −0.36 to −0.05) and for LAD with
 diabetes (0.75 vs 0.88). Calibration-in-the-large stays within ±0.09 in every subgroup.
 
@@ -163,8 +163,10 @@ associations in the model, not causes.
 
 ## 6 3D anatomy pipeline
 
-`anatomy/build.py` is a scripted, reproducible pipeline driven by one declarative config (`anatomy.json`). A rebuild
-leaves the committed assets unchanged.
+`anatomy/build.py` is a scripted, reproducible pipeline driven by declarative configs (`anatomy.json`,
+`definitions.json`). Geometry, centrelines and the manifest rebuild deterministically, and the baked textures use a fixed
+seed. Setup: Blender 5.1 (`--blender PATH` or `CARDIOTWIN_BLENDER`), Node ≥ 18 for glTF-Transform and meshoptimizer,
+and internet once for the ~190 MB STL fetch. The Cycles portfolio renders are opt-in (`--renders`).
 
 1. **Fetch.** BodyParts3D STL meshes (FMA-named) are downloaded and pinned by SHA-256.
 2. **Synthesise.** What BodyParts3D lacks or has collapsed is built deterministically: an aortic root with three
@@ -194,7 +196,7 @@ measures the published GLB against them.
 | Snapshot | PASS | MINOR | FAIL |
 | --- | --- | --- | --- |
 | Baseline, before the realism work (`anatomy/checks/gap_report.md`) | 35 | 12 | 23 |
-| Current asset: the 41-structure realism rebuild (re-run for this report, 30 Sep 2026) | **44** | 7 | 19 |
+| Current asset: the 41-structure realism rebuild (re-run for this report, 30 Sep 2026) | **45** | 8 | 17 |
 
 Passes include:
 
@@ -206,12 +208,11 @@ Passes include:
 
 The main open items are:
 
-- a LCX trunk that leaves the AV groove;
-- the course of the proximal RCA;
-- valve-annulus levels and aorto-mitral continuity;
-- a short SVC;
-- the LV share of the territory map (LAD 38 %, RCA 38 % vs a reference of about 43 % and 26 %);
-- small mesh interpenetrations with the lungs and diaphragm.
+- the LCX trunk and obtuse marginals leave the left AV groove, and the proximal RCA course is off;
+- valve-annulus levels and diameters, and aorto-mitral continuity;
+- SVC position, length and calibre; coronary-sinus position and vein topology;
+- small mesh interpenetrations with the lungs and diaphragm (≤ 3.3 mm);
+- the viewer's Realistic look mutes the aorta and pulmonary-artery colours (the glTF colours pass).
 
 <figure class="pair"><img src="media/renders/territories.jpg" alt="Perfusion territories tinted by vessel risk"><img src="media/renders/exploded_torso.jpg" alt="Exploded thorax"><figcaption>Figure 3. Cycles renders of the published asset. Left: perfusion territories tinted by an example risk profile (LAD very high, LCX moderate, RCA low), in anterior and posterior-inferior views. Right: the radial exploded layout used by the viewer's dissection.</figcaption></figure>
 
@@ -289,7 +290,7 @@ on Windows and Linux.
 - External, multi-centre validation with local recalibration.
 - Thresholds chosen for the clinical costs of each setting.
 - Imaging inputs (CT coronary angiography or perfusion) for lesion-level targets.
-- Closing the remaining anatomical checks: the LCX course, the aortic root to the annulus, and the territory shares.
+- Closing the remaining anatomical checks: the LCX and RCA courses, the valve annuli, the SVC and the coronary sinus.
 
 <p class="refs"><b>References.</b> Alizadehsani R. et al., Extension of Z-Alizadeh Sani dataset, UCI ML Repository, doi:10.24432/C5461K ·
 Lundberg S.M. et al., Consistent individualized feature attribution for tree ensembles, 2018 · Nadeau C., Bengio Y., Inference for the
@@ -297,4 +298,5 @@ generalization error, Machine Learning 2003 · Leipsic J. et al., SCCT guideline
 Standardized myocardial segmentation, Circulation 2002 · BodyParts3D, © The Database Center for Life Science, CC BY-SA 2.1 JP ·
 Mitchell M. et al., Model Cards for Model Reporting, FAT* 2019. Every number in this report is traceable to
 <code>ml/artifacts/metrics.json</code>, <code>ml/reports/results.md</code>, <code>docs/MODEL_CARD.md</code>,
-<code>frontend/src/inference/README.md</code> or <code>anatomy/checks/measure_model.py</code>.</p>
+<code>frontend/src/inference/README.md</code>, <code>scripts/README.md</code>, <code>anatomy/README.md</code> or
+<code>anatomy/checks/measure_model.py</code>.</p>
