@@ -234,7 +234,10 @@ def summarise(run: RobustnessRun, ctx: AnalysisContext, sensitivity: RobustnessR
             s = sensitivity.values[t]
             d = v["roc_auc"] - s["roc_auc"]
             block["hyperparameter_sensitivity"] = {
-                "compared": f"{run.hyperparameters} (primary) - {sensitivity.hyperparameters} hyper-parameters, same splits",
+                "compared": (
+                    f"primary = {run.hyperparameters}, alternative = {sensitivity.hyperparameters} hyper-parameters, "
+                    "same splits; delta = primary - alternative"
+                ),
                 "roc_auc_mean_primary": round_float(float(np.mean(v["roc_auc"]))),
                 "roc_auc_mean_alternative": round_float(float(np.mean(s["roc_auc"]))),
                 "delta_roc_auc": distribution(d),

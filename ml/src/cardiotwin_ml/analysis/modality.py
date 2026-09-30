@@ -78,6 +78,10 @@ def modality_sets(order: list[str], cols: dict[str, list[int]]) -> list[Modality
     return sets
 
 
+def _params(params: dict[str, Any]) -> str:
+    return ", ".join(f"{k} = {v:g}" if isinstance(v, (int, float)) else f"{k} = {v}" for k, v in params.items())
+
+
 def _fold_auc(lr: CVResult, xgb: CVResult, y: np.ndarray, folds: list[Fold]) -> dict[str, np.ndarray]:
     assert lr.margin is not None and xgb.margin is not None
     ens, a_lr, a_xgb = [], [], []
@@ -198,8 +202,8 @@ def run_modality_ablation(
             "on identical folds; score = per-fold ROC-AUC. The locked test set is not used."
         ),
         "model": (
-            f"equal-weight log-odds ensemble of L2 logistic regression {fixed_lr} and XGBoost {fixed_xgb} "
-            "(fixed hyper-parameters of training.yaml -> ablations, identical for every feature set)"
+            f"equal-weight log-odds ensemble of L2 logistic regression ({_params(fixed_lr)}) and XGBoost "
+            f"({_params(fixed_xgb)}); fixed hyper-parameters of training.yaml -> ablations, identical for every feature set"
         ),
         "folds": f"repeated stratified {k}-fold x {n_repeats} per target (the leaderboard folds when n_repeats matches)",
         "n_folds": k * n_repeats,

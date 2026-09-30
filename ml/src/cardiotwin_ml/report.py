@@ -17,6 +17,7 @@ matplotlib.use("Agg")
 import matplotlib.pyplot as plt  # noqa: E402
 import numpy as np  # noqa: E402
 from matplotlib.colors import LinearSegmentedColormap  # noqa: E402
+from matplotlib.ticker import MaxNLocator  # noqa: E402
 
 from .paths import ARTIFACTS_DIR, FIGURES_DIR, REPORTS_DIR  # noqa: E402
 
@@ -421,6 +422,8 @@ def fig_modality(metrics: dict[str, Any], path: Path) -> None:
         ax2.barh(ys, dm, height=0.62, color=[GROUP_COLORS.get(r["group"], NEUTRAL) for r in loo], edgecolor="white", linewidth=1)
         ax2.errorbar(dm, ys, xerr=[dlo, dhi], fmt="none", ecolor=INK_2, elinewidth=1.1, capsize=2)
         ax2.axvline(0, color=INK_2, lw=0.8)
+        ax2.set_axisbelow(True)
+        ax2.xaxis.set_major_locator(MaxNLocator(nbins=4))
         ax2.set_yticks(ys, [r["label"] for r in loo], fontsize=8)
         ax2.grid(axis="y", visible=False)
         ax2.set_xlabel("Δ ROC-AUC if removed (vs full panel)")
@@ -678,8 +681,8 @@ def analysis_markdown(metrics: dict[str, Any]) -> list[str]:
             ]
             lines += [
                 "",
-                f"Tuning-optimism check (same splits, {rob[ts[0]]['hyperparameter_sensitivity']['compared']}): mean ROC-AUC "
-                "with the deployed hyper-parameters reused vs re-searched per split — " + "; ".join(parts) + ".",
+                f"Tuning-optimism check on the same {rob[ts[0]]['n_splits']} splits — mean ROC-AUC with the deployed "
+                "hyper-parameters reused vs re-searched inside every split: " + "; ".join(parts) + ".",
             ]
     mod = metrics.get("modality_ablation")
     if mod:
