@@ -888,8 +888,12 @@ class Model:
         tm = a.tm
         sk = skeleton_of(tm.vertices, tm.faces, 0.012, tm)
         ends = sk.endpoints()
-        prox = min(ends, key=lambda i: np.linalg.norm(sk.pos[i] - self.base_center))
         dist_end = min(ends, key=lambda i: sk.pos[i][1])
+        # proximal end = the root end of the trunk: of the endpoints near the heart base, the one farthest along
+        # the skeleton from the distal end (a spur into a sinus of Valsalva ends near the base too)
+        near = min(np.linalg.norm(sk.pos[i] - self.base_center) for i in ends)
+        cands = [i for i in ends if np.linalg.norm(sk.pos[i] - self.base_center) <= near + 0.03 and i != dist_end]
+        prox = max(cands, key=lambda i: float(arclen(sk.pos[sk.path(i, dist_end)])[-1]))
         path = sk.path(prox, dist_end)
         P = resample(smooth_path(sk.pos[path], 7), 0.01)
         # the root ends in a flat (possibly oblique) cap = the modelled aortic annulus plane
@@ -907,16 +911,38 @@ class Model:
         P = resample(np.vstack([c, P]), 0.01)
         _, r, _ = trimesh.proximity.closest_point(tm, P)
         r = ndimage.uniform_filter1d(r, 3, mode="nearest")
+        # Outer-wall diameter in the plane perpendicular to the centreline (equivalent-area circle): the YAML's
+        # "outer-wall diameter". The 3D inscribed radius r underestimates the root near the closed annulus cap
+        # (the nearest surface there is the cap, not the sinus wall) and takes the minor axis of an oval section.
+        T_ = np.gradient(P, axis=0)
+        T_ /= np.maximum(np.linalg.norm(T_, axis=1, keepdims=True), 1e-12)
+        Dp = np.full(len(P), np.nan)
+        for i_, (p_, t_) in enumerate(zip(P, T_)):
+            sec = tm.section(plane_origin=p_, plane_normal=t_)
+            if sec is None:
+                continue
+            best = None
+            for L_ in sec.discrete:
+                e1_ = unit(np.cross(t_, [1.0, 0.0, 0.0] if abs(t_[0]) < 0.9 else [0.0, 1.0, 0.0]))
+                e2_ = np.cross(t_, e1_)
+                x_, y_ = (L_ - p_) @ e1_, (L_ - p_) @ e2_
+                a_ = 0.5 * abs(float(np.dot(x_, np.roll(y_, -1)) - np.dot(np.roll(x_, -1), y_)))
+                d_ = float(np.linalg.norm(L_.mean(axis=0) - p_))
+                if best is None or d_ < best[0]:
+                    best = (d_, a_)
+            if best is not None:
+                Dp[i_] = 2.0 * math.sqrt(best[1] / math.pi)
+        Dp = np.where(np.isnan(Dp), 2 * r, Dp)
         s = arclen(P)
         root_axis = unit(at_s(P, 0.30) - P[0])
         # sinus bulge and STJ
         first = s <= 0.25
-        i_sin = int(np.argmax(np.where(first, r, -1)))
+        i_sin = int(np.argmax(np.where(first, Dp, -1)))
         i_stj = i_sin
         for i in range(i_sin + 1, len(r) - 1):
             if s[i] - s[i_sin] > 0.35:
                 break
-            if r[i] <= r[i - 1] and r[i] <= r[i + 1]:
+            if Dp[i] <= Dp[i - 1] and Dp[i] <= Dp[i + 1]:
                 i_stj = i
                 break
         aov = Ring(c, -n_cap, cap_D / 2, np.vstack([rim, cap]))
@@ -926,7 +952,7 @@ class Model:
         above = P[:, 1] >= self.Y_SA
         i_as = int(np.argmax(above)) if above.any() else top
         i_ae = int(len(above) - 1 - np.argmax(above[::-1])) if above.any() else top
-        self._aorta = dict(P=P, r=r, s=s, root_axis=root_axis, i_sin=i_sin, i_stj=i_stj, AoV=aov, top=top, i_as=i_as, i_ae=i_ae, sk=sk)
+        self._aorta = dict(P=P, r=r, Dp=Dp, s=s, root_axis=root_axis, i_sin=i_sin, i_stj=i_stj, AoV=aov, top=top, i_as=i_as, i_ae=i_ae, sk=sk)
         return self._aorta
 
     def pa(self):
@@ -1516,14 +1542,15 @@ def run_checks(M: Model, yaml_checks: dict) -> list[Check]:
     c.band("L", s[ao["i_as"]], 0.4, 0.7, "u", typical=0.5)
 
     c = new("GV-02")
-    D_sin, D_stj = 2 * r[ao["i_sin"]], 2 * r[ao["i_stj"]]
+    Dp = ao["Dp"]
+    D_sin, D_stj = Dp[ao["i_sin"]], Dp[ao["i_stj"]]
     k_asc = at_y(asc, bif[1])
-    D_asc = 2 * r[k_asc]
+    D_asc = Dp[k_asc]
     c.band("D_sinus", D_sin, 0.29, 0.40)
     c.band("D_stj", D_stj, 0.22, 0.36)
     c.cond("sinus bulge", D_sin > D_stj + 0.01, "D_sinus > D_stj (+1 mm)", f"max root D at s={s[ao['i_sin']]:.2f} u, next minimum at s={s[ao['i_stj']]:.2f} u; bulge {(D_sin - D_stj) / MM:.1f} mm")
     c.band("D_asc", D_asc, 0.25, 0.41, typical=0.33)
-    c.note("diameters = 2 x inscribed radius (centreline-to-wall distance) of GreatVessel_Aorta")
+    c.note(f"diameters = outer-wall equivalent-area diameter of the cross-section perpendicular to the centreline (3D inscribed diameters: sinus {2 * r[ao['i_sin']] / MM:.1f} mm, STJ {2 * r[ao['i_stj']] / MM:.1f} mm, ascending {2 * r[k_asc] / MM:.1f} mm)")
 
     c = new("GV-03")
     y_top = P[:, 1].max()
@@ -1566,7 +1593,7 @@ def run_checks(M: Model, yaml_checks: dict) -> list[Check]:
 
     c = new("GV-06")
     k_d = at_y(desc, bif[1])
-    D_desc = 2 * r[k_d]
+    D_desc = ao["Dp"][k_d]
     c.band("D_desc", D_desc, 0.18, 0.30, typical=0.24)
     c.band("ratio", D_desc / D_asc, 0.60, 0.90, "", typical=0.73)
 
@@ -2175,7 +2202,8 @@ def run_checks(M: Model, yaml_checks: dict) -> list[Check]:
         near_k = np.linalg.norm(skp - skp[k0], axis=1) < 0.01
         c.band("D_MCV_ostium", float(2 * np.median(skr[near_k])), 0.028, 0.068, typical=0.048)
     if CS and GCV:
-        c.band("cs_gcv_ratio", float(np.median(CS["r"]) / np.median(GCV["r"])), 1.3, 2.2, "")
+        av_ = GCV["P"][:, 2] < 0.1
+        c.band("cs_gcv_ratio", float(np.median(CS["r"]) / np.median(GCV["r"][av_] if av_.any() else GCV["r"])), 1.3, 2.2, "")
     c.note("diameters = 2 x centreline-to-wall distance of each labelled piece (BodyParts3D veins are cadaveric, i.e. collapsed)")
 
     c = new("VEN-09")
@@ -2281,7 +2309,12 @@ def run_checks(M: Model, yaml_checks: dict) -> list[Check]:
         node_mat[mm["name"]] = mats[mm["primitives"][0]["material"]] if mm["primitives"][0].get("material") is not None else {}
 
     def hsv(node):
-        f = (node_mat.get(node, {}).get("pbrMetallicRoughness", {}) or {}).get("baseColorFactor", [1, 1, 1, 1])
+        pbr = node_mat.get(node, {}).get("pbrMetallicRoughness", {}) or {}
+        f = list(pbr.get("baseColorFactor", [1, 1, 1, 1]))
+        if "baseColorTexture" in pbr:  # baked albedo: factor x mean texture colour (linear)
+            lin = texture_mean_linear(GLB, gj, pbr["baseColorTexture"]["index"])
+            if lin is not None:
+                f = [a * b for a, b in zip(f[:3], lin)] + f[3:]
         srgb = [(12.92 * x if x <= 0.0031308 else 1.055 * x ** (1 / 2.4) - 0.055) for x in f[:3]]
         h, s_, v_ = colorsys.rgb_to_hsv(*srgb)
         return h * 360, s_, v_
@@ -2337,6 +2370,31 @@ def run_checks(M: Model, yaml_checks: dict) -> list[Check]:
     if fe.get("_source"):
         c.note("viewer colours parsed from " + fe["_source"])
     return checks
+
+
+def texture_mean_linear(glb: Path, gj: dict, tex_index: int) -> list[float] | None:
+    """Mean linear-RGB colour of a glTF texture embedded in the GLB (PNG / JPEG / WebP via Pillow)."""
+    try:
+        from io import BytesIO
+
+        from PIL import Image
+    except ImportError:  # pragma: no cover
+        return None
+    tex = gj["textures"][tex_index]
+    src = tex.get("source")
+    for ext in ("EXT_texture_webp", "KHR_texture_basisu"):
+        src = (tex.get("extensions", {}).get(ext) or {}).get("source", src)
+    img = gj["images"][src]
+    if "bufferView" not in img:
+        return None
+    b = glb.read_bytes()
+    jlen = struct.unpack("<I", b[12:16])[0]
+    bin0 = 20 + jlen + 8
+    bv = gj["bufferViews"][img["bufferView"]]
+    data = b[bin0 + bv.get("byteOffset", 0): bin0 + bv.get("byteOffset", 0) + bv["byteLength"]]
+    px = np.asarray(Image.open(BytesIO(data)).convert("RGB"), dtype=np.float64) / 255.0
+    lin = np.where(px <= 0.04045, px / 12.92, ((px + 0.055) / 1.055) ** 2.4)
+    return lin.reshape(-1, 3).mean(axis=0).tolist()
 
 
 def hex_hsv(hx: str) -> tuple[float, float, float]:
