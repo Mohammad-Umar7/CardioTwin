@@ -208,7 +208,8 @@ cmd_build() {
   ensure_node_modules
   if [ -n "$BASE_PATH" ]; then
     say "Building the SPA with base $BASE_PATH"
-    npm --prefix frontend run build -- --base "$BASE_PATH"
+    # Git Bash / MSYS2 would rewrite "/CardioTwin/" into "C:/Program Files/Git/CardioTwin/" before npm sees it.
+    MSYS_NO_PATHCONV=1 MSYS2_ARG_CONV_EXCL='*' npm --prefix frontend run build -- --base "$BASE_PATH"
   else
     say "Building the SPA"
     npm --prefix frontend run build
