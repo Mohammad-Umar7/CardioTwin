@@ -1,6 +1,7 @@
 import { motion } from 'framer-motion';
 import { DirectionMark, Skeleton, Tooltip } from '@/design';
 import { useIsReducedMotion } from '@/hooks/useMediaQuery';
+import { ASSOCIATION_MARK, ASSOCIATION_NOTE, isAssociationOnly } from '@/lib/associations';
 import { cn } from '@/lib/cn';
 import { NEGLIGIBLE_SHAP, sortedContributions } from '@/lib/explain';
 import { formatFeatureValue, formatNormalRange } from '@/lib/format';
@@ -50,6 +51,7 @@ export function ContributionRow({ c, spec, target, max, unit, scale, changed, in
   const logodds = formatContribution(c.shap, 'logodds', null).text;
   const pts = formatContribution(c.shap, 'points', scale);
   const range = spec?.normal ? formatNormalRange(spec.normal, spec.step) : '';
+  const association = isAssociationOnly(c.feature);
 
   const tip = (
     <div className="flex max-w-[260px] flex-col gap-1">
@@ -58,6 +60,7 @@ export function ContributionRow({ c, spec, target, max, unit, scale, changed, in
       </span>
       {range && <span className="text-secondary">{range}</span>}
       {spec?.description && <span className="text-secondary">{spec.description}</span>}
+      {association && <span className="text-secondary">{ASSOCIATION_NOTE}</span>}
       <span className="text-primary">
         {negligible ? 'Negligible effect' : up ? 'Raises' : 'Lowers'} {target}: {logodds} log-odds
         {scale ? ` (${pts.text === '<1' ? '<1' : pts.text} pts)` : ''}
@@ -76,7 +79,7 @@ export function ContributionRow({ c, spec, target, max, unit, scale, changed, in
           onMouseLeave={() => highlight(null)}
           onFocus={() => highlight(c.feature)}
           onBlur={() => highlight(null)}
-          aria-label={`${label}, ${value}, ${negligible ? 'negligible effect on' : up ? 'raises' : 'lowers'} ${target} risk, ${f.spoken}. Edit this input.`}
+          aria-label={`${label}, ${value}, ${negligible ? 'negligible effect on' : up ? 'raises' : 'lowers'} ${target} risk, ${f.spoken}.${association ? ' Association only, not a known cause.' : ''} Edit this input.`}
           className={cn(
             'relative grid h-7 w-full items-center gap-x-2 rounded-sm pr-1 text-left outline-none transition-colors duration-instant',
             ROW_GRID,
@@ -94,7 +97,10 @@ export function ContributionRow({ c, spec, target, max, unit, scale, changed, in
             )}
           />
           <DirectionMark direction={negligible ? null : up ? 'raises' : 'lowers'} />
-          <span className="truncate text-body-s text-secondary">{label}</span>
+          <span className="truncate text-body-s text-secondary">
+            {label}
+            {association && <span className="ml-0.5 text-tertiary">{ASSOCIATION_MARK}</span>}
+          </span>
           <span className="num whitespace-nowrap text-right text-label font-normal text-tertiary">{value}</span>
           <span aria-hidden className="relative h-3">
             <span className="absolute inset-y-0 left-1/2 w-px bg-line-strong" />

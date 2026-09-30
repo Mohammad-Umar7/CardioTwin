@@ -2,6 +2,7 @@ import { AnimatePresence, motion } from 'framer-motion';
 import { useMemo } from 'react';
 import { useSchemaIndex } from '@/hooks/useData';
 import { useIsReducedMotion } from '@/hooks/useMediaQuery';
+import { ASSOCIATION_LEGEND, ASSOCIATION_MARK, ASSOCIATION_NOTE, isAssociationOnly, namesAssociation } from '@/lib/associations';
 import { cn } from '@/lib/cn';
 import { buildNarrative, narrativeText, type NarrativePart } from '@/lib/explain';
 import { selectDisplayedPrediction, usePatientStore } from '@/state/patientStore';
@@ -49,7 +50,20 @@ export function PhraseLink({ part, className }: { part: NarrativePart; className
 export function NarrativeParts({ parts }: { parts: NarrativePart[] }) {
   return (
     <>
-      {parts.map((part, i) => (part.kind === 'phrase' ? <PhraseLink key={i} part={part} /> : <span key={i}>{part.text}</span>))}
+      {parts.map((part, i) =>
+        part.kind === 'phrase' ? (
+          <span key={i}>
+            <PhraseLink part={part} />
+            {isAssociationOnly(part.feature) && (
+              <span className="text-tertiary" title={ASSOCIATION_NOTE}>
+                {ASSOCIATION_MARK}
+              </span>
+            )}
+          </span>
+        ) : (
+          <span key={i}>{part.text}</span>
+        ),
+      )}
     </>
   );
 }
@@ -69,6 +83,7 @@ export function NarrativeSentence({ target, className }: { target: string; class
   );
   if (!parts) return null;
   const text = narrativeText(parts);
+  const legend = namesAssociation(parts);
 
   return (
     <div className={cn('relative', className)}>
@@ -84,6 +99,9 @@ export function NarrativeSentence({ target, className }: { target: string; class
           <NarrativeParts parts={parts} />
         </motion.p>
       </AnimatePresence>
+      {/* Right under the sentence, never at the bottom of a drawer: "a normal ESR pulls it down" is an
+          association in this cohort, not physiology. */}
+      {legend && <p className="mt-0.5 text-label font-normal text-tertiary">{ASSOCIATION_LEGEND}</p>}
     </div>
   );
 }

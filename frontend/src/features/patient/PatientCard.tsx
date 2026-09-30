@@ -5,6 +5,7 @@ import { Button, ExitInert, IconButton, Kbd, Skeleton, StageCard, Tooltip, withS
 import { useSchemaIndex } from '@/hooks/useData';
 import { useIsReducedMotion } from '@/hooks/useMediaQuery';
 import { useCommandShortcut } from '@/hooks/useRegisterCommands';
+import { ASSOCIATION_LEGEND, ASSOCIATION_MARK, ASSOCIATION_NOTE, isAssociationOnly } from '@/lib/associations';
 import { cn } from '@/lib/cn';
 import { CMD, SHORTCUT } from '@/state/commandIds';
 import { selectEditCount, usePatientStore } from '@/state/patientStore';
@@ -67,11 +68,15 @@ function KeyRow({ item, value, recorded, target, compare }: { item: KeyInput; va
   const glyph = rangeGlyph(item.spec, value);
   const label = cardLabel(item.spec);
   const truncatedLabel = label !== item.spec.label ? item.spec.label : null;
+  const association = isAssociationOnly(item.key);
+  const tip = [edited ? `${item.spec.label} · was ${displayValue(item.spec, recorded)}` : truncatedLabel, association ? ASSOCIATION_NOTE : null]
+    .filter(Boolean)
+    .join(' · ');
   return (
     <button
       type="button"
       data-feature={item.key}
-      aria-label={`${keyInputAriaLabel(item, spokenValue(item.spec, value), target)}${edited ? ` Edited, was ${spokenValue(item.spec, recorded)}.` : ''} Edit.`}
+      aria-label={`${keyInputAriaLabel(item, spokenValue(item.spec, value), target)}${edited ? ` Edited, was ${spokenValue(item.spec, recorded)}.` : ''}${association ? ' Association only, not a known cause.' : ''} Edit.`}
       onClick={() => openDrawer('inputs', { field: item.key })}
       onPointerEnter={() => useUiStore.getState().highlightFeature(item.key)}
       onPointerLeave={() => useUiStore.getState().highlightFeature(null)}
@@ -89,8 +94,11 @@ function KeyRow({ item, value, recorded, target, compare }: { item: KeyInput; va
       <span className="flex min-w-0 items-center">
         {/* The edited dot sits in the row's left gutter, so an edit never costs the label any width. */}
         {edited && <span aria-hidden className="absolute left-0 top-1/2 size-1.5 -translate-y-1/2 rounded-full bg-accent" />}
-        <Tooltip content={edited ? `${item.spec.label} · was ${displayValue(item.spec, recorded)}` : truncatedLabel} placement="right">
-          <span className="min-w-0 truncate text-body-s text-secondary">{label}</span>
+        <Tooltip content={tip || null} placement="right">
+          <span className="min-w-0 truncate text-body-s text-secondary">
+            {label}
+            {association && <span className="ml-0.5 text-tertiary">{ASSOCIATION_MARK}</span>}
+          </span>
         </Tooltip>
       </span>
       <span className="flex items-baseline gap-1 whitespace-nowrap">
@@ -206,6 +214,9 @@ function CardBody() {
             </motion.li>
           ))}
         </ul>
+      )}
+      {!loading && items.some((i) => isAssociationOnly(i.key)) && (
+        <p className="m-0 mt-0.5 px-0 text-label text-tertiary">{ASSOCIATION_LEGEND}</p>
       )}
       {moreAbnormal > 0 && (
         <button

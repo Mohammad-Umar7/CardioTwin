@@ -1,6 +1,7 @@
 import { ChevronDown, ChevronUp } from 'lucide-react';
 import { useMemo, useState } from 'react';
 import { Button, SegmentedControl, Skeleton } from '@/design';
+import { ASSOCIATION_MARK } from '@/lib/associations';
 import { cn } from '@/lib/cn';
 import { NEGLIGIBLE_SHAP, sortedContributions } from '@/lib/explain';
 import { formatSigned } from '@/lib/format';
@@ -127,7 +128,10 @@ export function WhyTab({ target }: { target: TargetId }) {
         <p className="text-label font-normal text-tertiary">
           {d.unit === 'points'
             ? 'How to read this: each bar is how many percentage points one input adds to, or takes from, the typical patient.'
-            : 'How to read this: each bar is one input’s exact SHAP contribution on the model’s log-odds scale.'}
+            : 'How to read this: each bar is one input’s exact SHAP contribution on the model’s log-odds scale.'}{' '}
+          {/* The caveat sits above the lists, not under them: a driver such as ESR must never read as a cause. */}
+          <span className="text-secondary">Associations in this cohort, not causes</span>; {ASSOCIATION_MARK} marks inputs
+          with no established causal role in coronary disease.
         </p>
       </div>
 
@@ -244,8 +248,7 @@ export function WhyTab({ target }: { target: TargetId }) {
             <span className="num text-secondary">{formatSigned(d.explanation.base_value)}</span>) to this estimate (
             <span className="num text-secondary">{formatSigned(d.explanation.output_value)}</span>).
           </>
-        )}{' '}
-        Associations in this cohort, not causes.
+        )}
       </p>
     </div>
   );
