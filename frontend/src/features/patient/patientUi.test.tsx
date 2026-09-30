@@ -200,7 +200,7 @@ describe('InputsDrawer', () => {
     expect(useUiStore.getState().drawer).toBe('inputs');
   });
 
-  it('toggles findings as pressed chips and lists the edit under Changed after 1.2 s', async () => {
+  it('toggles findings as pressed chips and lists the edit in the Changed tray at once, outside the list', async () => {
     vi.useFakeTimers({ shouldAdvanceTime: true });
     renderIn(<InputsDrawer />);
     openDrawer();
@@ -210,11 +210,12 @@ describe('InputsDrawer', () => {
     fireEvent.click(chip);
     expect(chip).toHaveAttribute('aria-pressed', 'false');
     expect(usePatientStore.getState().features['Typical Chest Pain']).toBe(0);
-    expect(within(drawer).queryByRole('region', { name: 'Changed inputs' })).not.toBeInTheDocument();
     await act(async () => {
-      await vi.advanceTimersByTimeAsync(1300);
+      await vi.advanceTimersByTimeAsync(50);
     });
     const changed = within(drawer).getByRole('region', { name: 'Changed inputs' });
+    // Docked below the list, never inside it: an edit does not move the rows under the pointer.
+    expect(changed.closest('[id$="-body"]')).toBeNull();
     expect(within(changed).getByText('was Yes')).toBeInTheDocument();
     expect(within(drawer).getByText(/1 change/)).toBeInTheDocument();
     fireEvent.click(within(changed).getByRole('button', { name: 'Reset all' }));

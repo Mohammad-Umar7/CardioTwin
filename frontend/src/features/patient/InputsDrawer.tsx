@@ -15,7 +15,7 @@ import { EASE, MOTION } from '@/theme/tokens';
 import type { FeatureSpec } from '@/types/contracts';
 import { FieldRow } from './FieldRow';
 import { FindingChips } from './FindingChips';
-import { rowIdOf, useCurrentTarget, useRowExpansion } from './hooks';
+import { useCurrentTarget, useRowExpansion } from './hooks';
 import { computeSections, searchInputs, type DrawerSections } from './lib/sections';
 import { copyShareLink, exportProfile, importProfileFile, pickProfileFile, resetAllEdits } from './profileActions';
 
@@ -39,7 +39,6 @@ export interface InputsDrawerProps {
   className?: string;
 }
 
-const CHANGED_DELAY_MS = 1200;
 
 export function InputsDrawer({ className }: InputsDrawerProps) {
   const open = useUiStore((s) => s.drawer === 'inputs');
@@ -138,7 +137,22 @@ function InputList({
   );
 }
 
-function ChangedSection({ keys, index, expanded }: { keys: string[]; index: SchemaIndex; expanded: string | null }) {
+/**
+ * The live "Changed" tray, docked between the list and the footer. It sits outside the scrolling list, so
+ * an edit never moves the list under the pointer (no layout shift, V2 §8.6): growing it only shortens the
+ * list's viewport from the bottom. It follows the edits in the same frame.
+ */
+function ChangedTray({
+  keys,
+  index,
+  expanded,
+  onHold,
+}: {
+  keys: string[];
+  index: SchemaIndex;
+  expanded: string | null;
+  onHold(feature: string | null): void;
+}) {
   const reduced = useIsReducedMotion();
   const specs = keys.map((k) => index.byKey.get(k)).filter((s): s is FeatureSpec => !!s);
   const t = { duration: reduced ? 0.12 : MOTION.base / 1000, ease: EASE.out };
@@ -153,7 +167,11 @@ function ChangedSection({ keys, index, expanded }: { keys: string[]; index: Sche
           animate={reduced ? { opacity: 1 } : { height: 'auto', opacity: 1 }}
           exit={reduced ? { opacity: 0 } : { height: 0, opacity: 0 }}
           transition={t}
-          className="relative"
+          className="relative shrink-0 overflow-clip border-t border-hairline bg-panel"
+          onFocusCapture={(e) => onHold((e.target as HTMLElement).closest<HTMLElement>('[data-feature]')?.dataset.feature ?? null)}
+          onBlurCapture={(e) => {
+            if (!e.currentTarget.contains(e.relatedTarget as Node | null)) onHold(null);
+          }}
         >
           <SectionHeader
             title="Changed"
@@ -168,7 +186,7 @@ function ChangedSection({ keys, index, expanded }: { keys: string[]; index: Sche
               </button>
             }
           />
-          <div className="flex flex-col px-3 pb-2 pt-1">
+          <div className="panel-scroll flex max-h-[min(30vh,172px)] flex-col px-3 pb-2 pt-1">
             <AnimatePresence initial={false}>
               {specs.map((spec) => {
                 const rowId = `changed:${spec.key}`;
@@ -179,7 +197,7 @@ function ChangedSection({ keys, index, expanded }: { keys: string[]; index: Sche
                     animate={reduced ? { opacity: 1 } : { height: 'auto', opacity: 1 }}
                     exit={reduced ? { opacity: 0 } : { height: 0, opacity: 0 }}
                     transition={t}
-                    className="overflow-clip"
+                    className="shrink-0 overflow-clip"
                   >
                     <FieldRow spec={spec} rowId={rowId} expanded={expanded === rowId} />
                   </motion.div>
@@ -279,37 +297,22 @@ function useLayoutSnapshot(index: SchemaIndex | null, target: string) {
   return { snapshot, relayout: () => setRefresh((r) => r + 1) };
 }
 
-/** The live "Changed" list, 1.2 s behind the edits; a row that holds focus stays until focus leaves. */
-function useChangedList(index: SchemaIndex | null, body: React.RefObject<HTMLElement>) {
+/**
+ * The keys the "Changed" tray lists, in schema order and in the same frame as the edit. A tray row that holds
+ * focus stays until focus leaves the tray, even once its edit is undone (it never vanishes under the caret).
+ */
+function useChangedList(index: SchemaIndex | null) {
   const features = usePatientStore((s) => s.features);
   const recorded = usePatientStore((s) => s.recorded);
-  const liveKeys = useMemo(() => {
+  const [held, setHeld] = useState<string | null>(null);
+  const keys = useMemo(() => {
     const edited = new Set(editedKeys(features, recorded));
+    // Everything reset (Reset all, a new patient): the tray closes at once.
+    if (edited.size === 0) return [];
+    if (held) edited.add(held);
     return (index?.features ?? []).map((f) => f.key).filter((k) => edited.has(k));
-  }, [features, recorded, index]);
-  const [keys, setKeys] = useState(liveKeys);
-  const [recheck, setRecheck] = useState(0);
-
-  useEffect(() => {
-    if (liveKeys.join('|') === keys.join('|')) return;
-    // Everything reset (Reset all, a new patient): no reason to wait.
-    if (liveKeys.length === 0) {
-      setKeys([]);
-      return;
-    }
-    const t = window.setTimeout(() => {
-      const active = document.activeElement;
-      const focusedChanged =
-        active && body.current?.querySelector('[data-section="changed"]')?.contains(active)
-          ? active.closest<HTMLElement>('[data-feature]')?.dataset.feature
-          : undefined;
-      const keep = new Set([...liveKeys, ...(focusedChanged && keys.includes(focusedChanged) ? [focusedChanged] : [])]);
-      setKeys((index?.features ?? []).map((f) => f.key).filter((k) => keep.has(k)));
-    }, CHANGED_DELAY_MS);
-    return () => window.clearTimeout(t);
-  }, [liveKeys, keys, index, body, recheck]);
-
-  return { keys, onFocusOut: () => setRecheck((r) => r + 1) };
+  }, [features, recorded, index, held]);
+  return { keys, hold: setHeld };
 }
 
 function DrawerContent({ titleId, onClose }: { titleId: string; onClose(): void }) {
@@ -329,7 +332,7 @@ function DrawerContent({ titleId, onClose }: { titleId: string; onClose(): void 
   const search = useRef<HTMLInputElement>(null);
   const { expanded, handlers } = useRowExpansion();
   const { snapshot, relayout } = useLayoutSnapshot(index, target);
-  const changed = useChangedList(index, body);
+  const changed = useChangedList(index);
 
   // "/" focuses the search while the drawer is open (V2 §4.10), above the palette's own "/".
   useRegisterCommands(
@@ -371,10 +374,8 @@ function DrawerContent({ titleId, onClose }: { titleId: string; onClose(): void 
   }, [features, recorded, imputedList, index]);
 
   // ---- focus a requested field (row click in the card, palette, tour) and scroll to a section
-  const upper = useMemo(
-    () => new Set([...(changed.keys ?? []), ...(snapshot?.abnormal ?? []), ...(snapshot?.key ?? [])]),
-    [changed.keys, snapshot],
-  );
+  // Sections inside the scrolling list (the Changed tray sits outside it): other fields open their group.
+  const upper = useMemo(() => new Set([...(snapshot?.abnormal ?? []), ...(snapshot?.key ?? [])]), [snapshot]);
   useLayoutEffect(() => {
     if (!focusField || !index) return;
     const spec = index.byKey.get(focusField);
@@ -515,15 +516,11 @@ function DrawerContent({ titleId, onClose }: { titleId: string; onClose(): void 
         </div>
       </div>
 
+      <div className="flex min-h-0 flex-1 flex-col" {...handlers}>
       <div
         ref={body}
         id={`${titleId}-body`}
         className="panel-scroll relative min-h-0 flex-1 border-t border-hairline pb-4"
-        {...handlers}
-        onBlurCapture={(e) => {
-          handlers.onBlurCapture(e);
-          if (!rowIdOf(e.relatedTarget)) changed.onFocusOut();
-        }}
       >
         {!index || !snapshot ? (
           <div className="flex flex-col gap-2 px-4 py-3" aria-busy="true">
@@ -550,7 +547,6 @@ function DrawerContent({ titleId, onClose }: { titleId: string; onClose(): void 
           </section>
         ) : (
           <>
-            <ChangedSection keys={changed.keys} index={index} expanded={expanded} />
             {snapshot.abnormal.length > 0 && (
               <section aria-label="Outside normal range" data-section="abnormal">
                 <SectionHeader title="Outside normal range" count={snapshot.abnormal.length} />
@@ -586,6 +582,8 @@ function DrawerContent({ titleId, onClose }: { titleId: string; onClose(): void 
             </section>
           </>
         )}
+      </div>
+      {index && <ChangedTray keys={changed.keys} index={index} expanded={expanded} onHold={changed.hold} />}
       </div>
 
       <footer className="flex h-14 shrink-0 items-center justify-between gap-3 border-t border-hairline px-4">
