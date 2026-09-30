@@ -19,7 +19,7 @@ export interface DrawerProps {
   region?: string;
   /**
    * Selector (inside the drawer) of the element to focus on open. Default: `[data-autofocus]`, then the
-   * first input, then the first focusable, then the drawer itself.
+   * first input, then the drawer itself (never the close button: focusing it would pop its tooltip).
    */
   initialFocus?: string;
   /** Esc closes the drawer (default true); it sits below palette, modals and menus in the Esc chain. */
@@ -29,7 +29,6 @@ export interface DrawerProps {
 }
 
 const FIELD = 'input:not([disabled]):not([type="hidden"]), select:not([disabled]), textarea:not([disabled])';
-const FOCUSABLE = `${FIELD}, button:not([disabled]), a[href], [tabindex]:not([tabindex="-1"])`;
 
 /**
  * Docked drawer (WORKSTATION_V2 §5.4): full stage height on one edge, bg/panel, e-3 depth, 1 px
@@ -75,7 +74,6 @@ export function Drawer({
         (initialFocus ? root.querySelector<HTMLElement>(initialFocus) : null) ??
         root.querySelector<HTMLElement>('[data-autofocus]') ??
         root.querySelector<HTMLElement>(FIELD) ??
-        root.querySelector<HTMLElement>(FOCUSABLE) ??
         root;
       target.focus({ preventScroll: true });
     }, 0);

@@ -211,4 +211,16 @@ describe('Drawer', () => {
     expect(onClose).toHaveBeenCalledTimes(1);
     await vi.waitFor(() => expect(opener).toHaveFocus());
   });
+
+  it('focuses the dialog itself, not its close button, when it has no field', async () => {
+    render(
+      <Drawer open side="right" label="Explain" onClose={() => undefined}>
+        <button type="button">Close · Esc</button>
+        <p>Evidence</p>
+      </Drawer>,
+    );
+    const dialog = await screen.findByRole('dialog', { name: 'Explain' });
+    await vi.waitFor(() => expect(dialog).toHaveFocus());
+    expect(screen.getByRole('button', { name: 'Close · Esc' })).not.toHaveFocus();
+  });
 });
