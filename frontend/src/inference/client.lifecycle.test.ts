@@ -135,7 +135,8 @@ describe('InferenceClient under worker faults', () => {
     const worker = new ScriptedWorker();
     const client = workerClient(worker);
     await client.ready();
-    worker.onmessage?.({ data: { id: 9999, ok: true, result: [], computeMs: 0 } } as MessageEvent<InferenceResponse>);
+    const stale: InferenceResponse = { id: 9999, ok: true, result: [], computeMs: 0 };
+    worker.onmessage?.({ data: stale } as MessageEvent<InferenceResponse>);
     await expect(client.predict({ Age: 50 })).resolves.toEqual(reference.predict({ Age: 50 }));
   });
 
