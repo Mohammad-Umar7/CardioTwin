@@ -26,7 +26,7 @@ import { useIsReducedMotion } from '@/hooks/useMediaQuery';
 import { useRegisterCommands } from '@/hooks/useRegisterCommands';
 import { CMD, SHORTCUT } from '@/state/commandIds';
 import type { Command } from '@/state/commandStore';
-import { TERRITORY_MODES, useViewerStore, type TerritoryMode } from '@/state/viewerStore';
+import { PEEL_REST, TERRITORY_MODES, useViewerStore, type TerritoryMode } from '@/state/viewerStore';
 import { useCameraState } from '@/three/camera/cameraState';
 import { PROJECTIONS, cycleProjection } from '@/three/camera/presets';
 import { LOOK_OPTIONS, lookOf, storeValueFor, useSceneControls } from '@/three/stage/sceneControls';
@@ -81,6 +81,8 @@ export function useViewCommands(): void {
   const ghostLayers = useViewerStore((s) => s.ghostLayers);
   const stage = useViewerStore((s) => s.stage);
   const open = useViewerStore((s) => s.explode >= OPEN_AT);
+  // ▶ Explode from the heart view opens the heart directly; only from a closed chest does it dissect first.
+  const chestClosed = useViewerStore((s) => s.explode < PEEL_REST - 0.02);
   const freeOrbit = useCameraState((s) => s.freeOrbit);
   const viewer = () => useViewerStore.getState();
 
@@ -141,7 +143,7 @@ export function useViewCommands(): void {
       id: CMD.peel,
       group: 'views',
       title: open ? 'Assemble the heart' : 'Explode the heart',
-      subtitle: open ? 'Close the heart and put the layers back' : 'Skin, ribs, lungs, then open the heart',
+      subtitle: open ? 'Close the heart' : chestClosed ? 'Skin, ribs, lungs, then open the heart' : 'Separate the heart and open it',
       keywords: ['peel', 'exploded view', 'explode', 'open heart', 'dissection', 'assemble'],
       shortcut: SHORTCUT.peel,
       icon: open ? FoldHorizontal : UnfoldHorizontal,
@@ -321,6 +323,7 @@ export function useViewCommands(): void {
     ghostLayers,
     stage,
     open,
+    chestClosed,
     freeOrbit,
     reduced,
   ]);
