@@ -1,26 +1,27 @@
 """Stage 7 — portfolio renders of the CardioTwin anatomy (Cycles + OpenImageDenoise).
 
-Run after the build (needs ``anatomy/build/cardiotwin_build.blend`` and the published manifest /
-vessels)::
+Run after the build (needs ``anatomy/build/cardiotwin_build.blend`` and the published manifest / vessels)::
 
     blender --background --factory-startup --python anatomy/blender/render_heroes.py -- \
-        [--shots hero_heart,exploded_torso,territories,xray,turntable] [--samples 256] [--scale 1.0] [--save-scene]
+        [--shots hero_heart,heart_posterior,coronary_detail,open_heart,exploded_torso,xray,territories,turntable]
+        [--samples 160] [--scale 1.0] [--save-scene]
 
-Shots (1920x1080 JPEG in ``docs/media/renders``):
+Shots (1920x1080 JPEG in ``docs/media/renders``), all with the photoreal tissue looks of ``looks.py`` (the same
+procedural materials that are baked into the web textures) and the coronary arteries coloured by an example
+risk profile (LAD critical, LCX moderate, RCA low), as the viewer does:
 
-* ``hero_heart``      left-anterior-oblique view of the whole heart and aortic arch; subsurface myocardium,
-                      glossy coronary tree coloured by an example risk profile (LAD critical, LCX moderate,
-                      RCA low), muted great vessels, dark studio, rim light, DOF.
-* ``exploded_torso``  head-on view of the manifest's collision-free exploded layout (t = 1): glassy lungs,
-                      ivory bone, opened heart; the skin shell is faded out as in the viewer.
-* ``territories``     heart walls shaded by their COLOR_0 perfusion-territory weights tinted with the
-                      same risk profile — anterior and inferior views side by side.
-* ``xray``            fresnel "hologram" torso with the glowing coronary tree and flow particles
-                      placed along the ``vessels.json`` centrelines.
-* ``turntable``       7 s 720p MP4 of the heart and coronary tree (``heart_turntable.mp4``).
+* ``hero_heart``       anterior three-quarter (left-anterior-oblique) view of the heart, epicardial fat, great
+                       vessels and arch branches.
+* ``heart_posterior``  posterior-inferior view: crux, PDA, middle cardiac vein, coronary sinus.
+* ``coronary_detail``  close-up of the anterior interventricular groove: LAD, diagonal, AIV in the fat.
+* ``open_heart``       the two halves opened like a book: chambers, valves, papillary muscles.
+* ``exploded_torso``   head-on view of the manifest's exploded layout (t = 1); the intrapulmonary vessel trees
+                       are trimmed at the hilum with the GLB's ``_DIST_HILUM`` attribute, as the viewer can.
+* ``xray``             fresnel "hologram" torso with the glowing coronary tree and flow particles.
+* ``territories``      heart walls tinted by their COLOR_0 perfusion territories x the risk colours.
+* ``turntable``        7 s 720p MP4 of the heart (``heart_turntable.mp4``).
 
-``--save-scene`` also writes the lit render scene to ``anatomy/blender/cardiotwin_scene.blend`` when
-it is no larger than 40 MB.
+The web-fidelity preview (EEVEE, baked textures only) is ``render_web_preview.py``.
 """
 from __future__ import annotations
 
@@ -33,11 +34,14 @@ from pathlib import Path
 
 import bmesh
 import bpy
+import numpy as np
 from mathutils import Matrix, Vector
 
 HERE = Path(__file__).resolve().parent
+sys.path.insert(0, str(HERE))
 sys.path.insert(0, str(HERE.parent / "scripts"))
-from common import BUILD_BLEND, PUBLIC_DIR, RENDER_DIR  # noqa: E402
+import looks  # noqa: E402
+from common import BUILD_BLEND, BUILD_REPORT, PUBLIC_DIR, RENDER_DIR, read_json  # noqa: E402
 
 SCENE_BLEND = HERE / "cardiotwin_scene.blend"
 MAX_SCENE_MB = 40.0
@@ -45,7 +49,6 @@ T0 = time.perf_counter()
 
 #: Example risk profile used across the portfolio renders (CONTRACTS risk bands).
 RISK_HEX = {"LAD": "#ef4444", "LCX": "#f59e0b", "RCA": "#2dd4bf"}
-NEUTRAL_ARTERY = (0.55, 0.16, 0.13)
 GROUP_OF = {
     "Coronary_LAD": "LAD", "Coronary_LAD_Septal": "LAD", "Coronary_LCX": "LCX",
     "Coronary_RCA": "RCA", "Coronary_RCA_Marginal": "RCA", "Coronary_RCA_PDA": "RCA",
@@ -53,19 +56,15 @@ GROUP_OF = {
 }
 LAYERS = ("Layer_Skin", "Layer_Muscle", "Layer_Skeleton", "Layer_Lungs", "Layer_Diaphragm", "Layer_Heart", "Layer_Coronary")
 PULMONARY_TREES = ("GreatVessel_PulmonaryArtery", "GreatVessel_PulmonaryVeins")
+HEART_ONLY_HIDE = ("GreatVessel_PulmonaryVeins", "GreatVessel_IVC")
 
 
 def log(msg: str) -> None:
     print(f"[render {time.perf_counter() - T0:7.1f}s] {msg}", flush=True)
 
 
-def hex_to_linear(h: str) -> tuple[float, float, float]:
-    h = h.lstrip("#")
-    srgb = [int(h[i : i + 2], 16) / 255.0 for i in (0, 2, 4)]
-    return tuple(c / 12.92 if c <= 0.04045 else ((c + 0.055) / 1.055) ** 2.4 for c in srgb)
-
-
-RISK = {k: hex_to_linear(v) for k, v in RISK_HEX.items()}
+RISK = {k: looks.srgb(v) for k, v in RISK_HEX.items()}
+LM_COLOR = looks.srgb("#b8352c")
 
 
 def gltf_to_blender(v) -> Vector:
@@ -87,24 +86,21 @@ def setup_cycles(scene, samples: int, scale: float, width: int = 1920, height: i
                 for d in prefs.devices:
                     d.use = d.type == backend
                 scene.cycles.device = "GPU"
-                log(f"cycles on {backend}: {', '.join(d.name for d in gpus)}")
                 break
         except TypeError:
             continue
     else:
         scene.cycles.device = "CPU"
-        log("cycles on CPU")
     scene.cycles.samples = samples
     scene.cycles.use_adaptive_sampling = True
-    scene.cycles.adaptive_threshold = 0.01
+    scene.cycles.adaptive_threshold = 0.015
     scene.cycles.use_denoising = True
     scene.cycles.denoiser = "OPENIMAGEDENOISE"
     if hasattr(scene.cycles, "denoising_use_gpu"):
         scene.cycles.denoising_use_gpu = True
-    # Keep kernels / BVH / denoiser alive between animation frames (turntable) instead of rebuilding.
     scene.render.use_persistent_data = True
-    scene.cycles.max_bounces = 12
-    scene.cycles.transmission_bounces = 12
+    scene.cycles.max_bounces = 10
+    scene.cycles.transmission_bounces = 8
     scene.cycles.transparent_max_bounces = 32
     scene.cycles.caustics_reflective = False
     scene.cycles.caustics_refractive = False
@@ -119,7 +115,7 @@ def setup_cycles(scene, samples: int, scale: float, width: int = 1920, height: i
         scene.view_settings.view_transform = "Filmic"
     scene.render.image_settings.media_type = "IMAGE"
     scene.render.image_settings.file_format = "JPEG"
-    scene.render.image_settings.quality = 92
+    scene.render.image_settings.quality = 90
 
 
 def setup_world(scene, top=(0.018, 0.022, 0.03), bottom=(0.002, 0.002, 0.003), strength: float = 1.0) -> None:
@@ -192,6 +188,12 @@ def camera(name: str, loc, target, lens: float = 85.0, fstop: float | None = Non
     return ob
 
 
+def orbit(target: Vector, azimuth_deg: float, elevation_deg: float, distance: float) -> Vector:
+    """Camera position around ``target``: azimuth 0 = anterior (-Y), positive towards patient-left (+X)."""
+    az, el = math.radians(azimuth_deg), math.radians(elevation_deg)
+    return Vector(target) + distance * Vector((math.sin(az) * math.cos(el), -math.cos(az) * math.cos(el), math.sin(el)))
+
+
 def compositor_glow(scene, strength: float = 0.6, threshold: float = 0.8, size: float = 0.5, vignette: float = 0.35) -> None:
     """Bloom + soft vignette via the 5.x compositor node group."""
     ng = bpy.data.node_groups.new("CT_Comp", "CompositorNodeTree")
@@ -227,168 +229,31 @@ def compositor_glow(scene, strength: float = 0.6, threshold: float = 0.8, size: 
     scene.render.use_compositing = True
 
 
-def no_compositor(scene) -> None:
-    scene.compositing_node_group = None
+def studio_rig(target, key_dir=(-35.0, 40.0), rim_dir=(150.0, 25.0), fill_dir=(70.0, -5.0), dist=5.0, scale=1.0,
+               warm=(1.0, 0.93, 0.86), cool=(0.62, 0.78, 1.0)) -> None:
+    """Soft key, cool rim and weak fill around ``target`` (azimuth / elevation in degrees)."""
+    t = Vector(target)
+    area_light("Key", orbit(t, key_dir[0], key_dir[1], dist), t, power=520 * scale, size=2.6 * scale ** 0.5, color=warm)
+    area_light("Rim", orbit(t, rim_dir[0], rim_dir[1], dist), t, power=900 * scale, size=1.6 * scale ** 0.5, color=cool)
+    area_light("Fill", orbit(t, fill_dir[0], fill_dir[1], dist * 1.1), t, power=120 * scale, size=3.5 * scale ** 0.5, color=(0.8, 0.85, 1.0))
+    area_light("Under", orbit(t, 20.0, -55.0, dist), t, power=90 * scale, size=3.0 * scale ** 0.5, color=(1.0, 0.7, 0.62))
 
 
 # ============================================================================================
 # Materials
 # ============================================================================================
-def _principled(name: str, **inputs) -> bpy.types.Material:
+def mat_emissive(name, color, strength) -> bpy.types.Material:
     mat = bpy.data.materials.new(name)
     if not mat.node_tree:
         mat.use_nodes = True
-    bsdf = next(n for n in mat.node_tree.nodes if n.type == "BSDF_PRINCIPLED")
-    for key, value in inputs.items():
-        bsdf.inputs[key.replace("_", " ")].default_value = value
-    return mat
-
-
-def _bump(mat: bpy.types.Material, scale: float, strength: float, detail: float = 6.0) -> None:
     nt = mat.node_tree
-    bsdf = next(n for n in nt.nodes if n.type == "BSDF_PRINCIPLED")
-    tex = nt.nodes.new("ShaderNodeTexNoise")
-    tex.inputs["Scale"].default_value = scale
-    tex.inputs["Detail"].default_value = detail
-    tex.inputs["Roughness"].default_value = 0.55
-    bump = nt.nodes.new("ShaderNodeBump")
-    bump.inputs["Strength"].default_value = strength
-    bump.inputs["Distance"].default_value = 0.002
-    nt.links.new(tex.outputs["Fac"], bump.inputs["Height"])
-    nt.links.new(bump.outputs["Normal"], bsdf.inputs["Normal"])
-
-
-def mat_myocardium() -> bpy.types.Material:
-    m = _principled(
-        "R_Myocardium", Base_Color=(0.15, 0.02, 0.018, 1), Roughness=0.36, Subsurface_Weight=0.32,
-        Subsurface_Radius=(1.0, 0.18, 0.09), Subsurface_Scale=0.012, Coat_Weight=0.55, Coat_Roughness=0.12,
-        Sheen_Weight=0.12, Sheen_Tint=(1.0, 0.7, 0.65, 1),
-    )
-    _bump(m, 55.0, 0.1)
-    return m
-
-
-def mat_coronary(color, glow: float = 0.35) -> bpy.types.Material:
-    return _principled(
-        f"R_Coronary_{'%.2f%.2f%.2f' % tuple(color)}", Base_Color=(*color, 1), Roughness=0.2,
-        Subsurface_Weight=0.15, Subsurface_Radius=(1.0, 0.4, 0.3), Subsurface_Scale=0.006,
-        Coat_Weight=1.0, Coat_Roughness=0.04, Emission_Color=(*color, 1), Emission_Strength=glow,
-    )
-
-
-def mat_vessel(name, color, rough=0.35, sss=0.3) -> bpy.types.Material:
-    return _principled(
-        name, Base_Color=(*color, 1), Roughness=rough, Subsurface_Weight=sss,
-        Subsurface_Radius=(1.0, 0.35, 0.25), Subsurface_Scale=0.008, Coat_Weight=0.25, Coat_Roughness=0.15,
-    )
-
-
-def mat_bone() -> bpy.types.Material:
-    m = _principled(
-        "R_Bone", Base_Color=(0.78, 0.72, 0.60, 1), Roughness=0.55, Subsurface_Weight=0.2,
-        Subsurface_Radius=(1.0, 0.8, 0.6), Subsurface_Scale=0.02, Coat_Weight=0.1,
-    )
-    _bump(m, 120.0, 0.05)
-    return m
-
-
-def mat_cartilage() -> bpy.types.Material:
-    return _principled(
-        "R_Cartilage", Base_Color=(0.70, 0.76, 0.78, 1), Roughness=0.3, Subsurface_Weight=0.5,
-        Subsurface_Radius=(0.8, 0.9, 1.0), Subsurface_Scale=0.02, Coat_Weight=0.4, Coat_Roughness=0.1,
-    )
-
-
-def mat_muscle() -> bpy.types.Material:
-    m = _principled(
-        "R_Muscle", Base_Color=(0.33, 0.045, 0.04, 1), Roughness=0.45, Subsurface_Weight=0.3,
-        Subsurface_Radius=(1.0, 0.25, 0.15), Subsurface_Scale=0.02, Coat_Weight=0.25, Coat_Roughness=0.2,
-        Anisotropic=0.3,
-    )
-    _bump(m, 90.0, 0.1)
-    return m
-
-
-def mat_glass(name, color, rough=0.12, ior=1.33, alpha=1.0) -> bpy.types.Material:
-    m = _principled(
-        name, Base_Color=(*color, 1), Roughness=rough, IOR=ior, Transmission_Weight=1.0, Alpha=alpha,
-        Coat_Weight=0.3, Coat_Roughness=0.05,
-    )
-    return m
-
-
-def mat_film(name, color, alpha_face: float, alpha_edge: float, rough: float = 0.25, emission: float = 0.0) -> bpy.types.Material:
-    """Translucent tissue film: alpha rises from ``alpha_face`` (facing) to ``alpha_edge`` (grazing).
-
-    Reads as glassy skin / lungs on a dark studio background without the smoky look that true
-    refraction produces against a black environment.
-    """
-    m = _principled(name, Base_Color=(*color, 1), Roughness=rough, Coat_Weight=0.6, Coat_Roughness=0.08,
-                    Emission_Color=(*color, 1), Emission_Strength=emission)
-    nt = m.node_tree
-    bsdf = next(n for n in nt.nodes if n.type == "BSDF_PRINCIPLED")
-    lw = nt.nodes.new("ShaderNodeLayerWeight")
-    lw.inputs["Blend"].default_value = 0.4
-    rng = nt.nodes.new("ShaderNodeMapRange")
-    rng.inputs["To Min"].default_value = alpha_face
-    rng.inputs["To Max"].default_value = alpha_edge
-    nt.links.new(lw.outputs["Facing"], rng.inputs["Value"])
-    nt.links.new(rng.outputs["Result"], bsdf.inputs["Alpha"])
-    return m
-
-
-def mat_territory(neutral=(0.075, 0.045, 0.045)) -> bpy.types.Material:
-    """Myocardium tinted by COLOR_0 territory weights x the example risk colours."""
-    m = mat_myocardium()
-    m.name = "R_Territory"
-    nt = m.node_tree
-    bsdf = next(n for n in nt.nodes if n.type == "BSDF_PRINCIPLED")
-    attr = nt.nodes.new("ShaderNodeAttribute")
-    attr.attribute_name = "Territory"
-    sep = nt.nodes.new("ShaderNodeSeparateColor")
-    nt.links.new(attr.outputs["Color"], sep.inputs["Color"])
-    # colour = neutral * (1 - sum(w)) + sum(w_i * risk_i)
-    acc = nt.nodes.new("ShaderNodeMix")
-    acc.data_type = "RGBA"
-    acc.blend_type = "MIX"
-    acc.inputs["A"].default_value = (*neutral, 1)
-    acc.inputs["B"].default_value = (0, 0, 0, 1)
-    acc.inputs["Factor"].default_value = 0.0
-    last = acc.outputs["Result"]
-    emit_last = None
-    for ch, key in (("Red", "LAD"), ("Green", "LCX"), ("Blue", "RCA")):
-        mix = nt.nodes.new("ShaderNodeMix")
-        mix.data_type = "RGBA"
-        mix.blend_type = "MIX"
-        mix.inputs["B"].default_value = (*(0.42 * c for c in RISK[key]), 1)
-        # Sequential blend towards each territory tint by its weight (weights sum to <= 1).
-        nt.links.new(last, mix.inputs["A"])
-        nt.links.new(sep.outputs[ch], mix.inputs["Factor"])
-        last = mix.outputs["Result"]
-        emix = nt.nodes.new("ShaderNodeMix")
-        emix.data_type = "RGBA"
-        emix.blend_type = "ADD"
-        emix.inputs["Factor"].default_value = 1.0
-        scaled = nt.nodes.new("ShaderNodeMix")
-        scaled.data_type = "RGBA"
-        scaled.blend_type = "MULTIPLY"
-        scaled.inputs["Factor"].default_value = 1.0
-        scaled.inputs["B"].default_value = (*RISK[key], 1)
-        comb = nt.nodes.new("ShaderNodeCombineColor")
-        for c in ("Red", "Green", "Blue"):
-            nt.links.new(sep.outputs[ch], comb.inputs[c])
-        nt.links.new(comb.outputs["Color"], scaled.inputs["A"])
-        if emit_last is None:
-            emit_last = scaled.outputs["Result"]
-        else:
-            nt.links.new(emit_last, emix.inputs["A"])
-            nt.links.new(scaled.outputs["Result"], emix.inputs["B"])
-            emit_last = emix.outputs["Result"]
-    nt.links.new(last, bsdf.inputs["Base Color"])
-    nt.links.new(emit_last, bsdf.inputs["Emission Color"])
-    bsdf.inputs["Emission Strength"].default_value = 0.12
-    bsdf.inputs["Subsurface Weight"].default_value = 0.12
-    return m
+    nt.nodes.clear()
+    out = nt.nodes.new("ShaderNodeOutputMaterial")
+    emit = nt.nodes.new("ShaderNodeEmission")
+    emit.inputs["Color"].default_value = (*color, 1)
+    emit.inputs["Strength"].default_value = strength
+    nt.links.new(emit.outputs[0], out.inputs["Surface"])
+    return mat
 
 
 def mat_hologram(name, color, rim: float, core: float = 0.0, power: float = 2.5) -> bpy.types.Material:
@@ -420,18 +285,51 @@ def mat_hologram(name, color, rim: float, core: float = 0.0, power: float = 2.5)
     return mat
 
 
-def mat_emissive(name, color, strength) -> bpy.types.Material:
-    mat = bpy.data.materials.new(name)
-    if not mat.node_tree:
-        mat.use_nodes = True
-    nt = mat.node_tree
-    nt.nodes.clear()
-    out = nt.nodes.new("ShaderNodeOutputMaterial")
-    emit = nt.nodes.new("ShaderNodeEmission")
-    emit.inputs["Color"].default_value = (*color, 1)
-    emit.inputs["Strength"].default_value = strength
-    nt.links.new(emit.outputs[0], out.inputs["Surface"])
-    return mat
+def mat_territory(neutral=(0.075, 0.045, 0.045)) -> bpy.types.Material:
+    """Myocardium tinted by COLOR_0 territory weights x the example risk colours."""
+    m = looks.myocardium("R_Territory")
+    nt = m.node_tree
+    bsdf = next(n for n in nt.nodes if n.type == "BSDF_PRINCIPLED")
+    attr = nt.nodes.new("ShaderNodeAttribute")
+    attr.attribute_name = "Territory"
+    sep = nt.nodes.new("ShaderNodeSeparateColor")
+    nt.links.new(attr.outputs["Color"], sep.inputs["Color"])
+    acc = nt.nodes.new("ShaderNodeMix")
+    acc.data_type = "RGBA"
+    acc.inputs["Factor"].default_value = 0.0
+    acc.inputs[6].default_value = (*neutral, 1)
+    last = acc.outputs[2]
+    emit_last = None
+    for ch, key in (("Red", "LAD"), ("Green", "LCX"), ("Blue", "RCA")):
+        mix = nt.nodes.new("ShaderNodeMix")
+        mix.data_type = "RGBA"
+        mix.inputs[7].default_value = (*(0.42 * c for c in RISK[key]), 1)
+        nt.links.new(last, mix.inputs[6])
+        nt.links.new(sep.outputs[ch], mix.inputs["Factor"])
+        last = mix.outputs[2]
+        scaled = nt.nodes.new("ShaderNodeMix")
+        scaled.data_type = "RGBA"
+        scaled.blend_type = "MULTIPLY"
+        scaled.inputs["Factor"].default_value = 1.0
+        scaled.inputs[7].default_value = (*RISK[key], 1)
+        comb = nt.nodes.new("ShaderNodeCombineColor")
+        for c in ("Red", "Green", "Blue"):
+            nt.links.new(sep.outputs[ch], comb.inputs[c])
+        nt.links.new(comb.outputs["Color"], scaled.inputs[6])
+        if emit_last is None:
+            emit_last = scaled.outputs[2]
+        else:
+            emix = nt.nodes.new("ShaderNodeMix")
+            emix.data_type = "RGBA"
+            emix.blend_type = "ADD"
+            emix.inputs["Factor"].default_value = 1.0
+            nt.links.new(emit_last, emix.inputs[6])
+            nt.links.new(scaled.outputs[2], emix.inputs[7])
+            emit_last = emix.outputs[2]
+    nt.links.new(last, bsdf.inputs["Base Color"])
+    nt.links.new(emit_last, bsdf.inputs["Emission Color"])
+    bsdf.inputs["Emission Strength"].default_value = 0.12
+    return m
 
 
 def assign(ob, mat) -> None:
@@ -448,14 +346,18 @@ class Anatomy:
     def __init__(self, manifest: dict):
         self.manifest = manifest
         self.objects = {o.name: o for o in bpy.data.objects if o.type == "MESH" and o.parent and o.parent.name in LAYERS}
-        self.rest = {n: o.location.copy() for n, o in self.objects.items()}
+        self.rest = {n: o.matrix_world.copy() for n, o in self.objects.items()}
+        self.parents = {n: o.parent for n, o in self.objects.items()}
         self.base_materials = {n: list(o.data.materials) for n, o in self.objects.items()}
         self.layer_of = {n: o.parent.name for n, o in self.objects.items()}
+        self.struct = {s["node"]: s for s in manifest["structures"]}
         self.extra: list[bpy.types.Object] = []
+        self.looks: dict[str, bpy.types.Material] = {}
 
     def reset(self) -> None:
         for n, o in self.objects.items():
-            o.location = self.rest[n].copy()
+            o.parent = self.parents[n]
+            o.matrix_world = self.rest[n].copy()
             o.hide_render = False
             o.data.materials.clear()
             for m in self.base_materials[n]:
@@ -470,53 +372,126 @@ class Anatomy:
         for n, o in self.objects.items():
             o.hide_render = not ((self.layer_of[n] in layers or n in nodes) and n not in hide)
 
-    def explode(self, t: float = 1.0, layers_scale: dict | None = None) -> None:
+    def explode(self, t: float = 1.0, layers=None) -> None:
         layer_vec = {layer["node"]: layer["explode"] for layer in self.manifest["layers"]}
         for s in self.manifest["structures"]:
-            o = self.objects[s["node"]]
-            k = (layers_scale or {}).get(self.layer_of[s["node"]], 1.0)
-            off = [k * t * (a + b) for a, b in zip(layer_vec[self.layer_of[s["node"]]], s["explode"])]
-            o.location = self.rest[s["node"]] + gltf_to_blender(off)
+            o = self.objects.get(s["node"])
+            if o is None or (layers and self.layer_of[s["node"]] not in layers):
+                continue
+            off = [t * (a + b) for a, b in zip(layer_vec[self.layer_of[s["node"]]], s["explode"])]
+            o.matrix_world = Matrix.Translation(gltf_to_blender(off)) @ self.rest[s["node"]]
 
-    def cropped_copy(
-        self, name: str, *, radius: float | None = None, center=(0, 0, 0), z_min: float | None = None,
-        keep_largest: bool = False,
-    ) -> bpy.types.Object:
-        """Render-only copy of a vessel clipped to a sphere and/or above a height (Blender Z).
+    def look(self, node: str) -> bpy.types.Material:
+        if node not in self.looks:
+            self.looks[node] = looks.look_for(self.objects[node].get("ct_category", ""), node)
+        return self.looks[node]
 
-        Used to hide far intrapulmonary branches and the abdominal run of the aorta / IVC in
-        close-ups; the exported asset is never modified.
-        """
+    def style(self, *, glow: float = 0.0) -> None:
+        """Photoreal looks everywhere; coronary arteries in the example risk colours (as the viewer)."""
+        for n, o in self.objects.items():
+            if self.layer_of[n] == "Layer_Coronary":
+                group = GROUP_OF.get(n)
+                color = RISK[group] if group else LM_COLOR
+                key = f"R_Coronary_{group or 'LM'}"
+                if key not in self.looks:
+                    self.looks[key] = looks.coronary(key, color, glow=glow if group else 0.0)
+                assign(o, self.looks[key])
+            else:
+                assign(o, self.look(n))
+
+    def cropped_copy(self, name: str, *, radius: float | None = None, center=(0, 0, 0), z_min: float | None = None,
+                     z_max: float | None = None, keep_largest: bool = False, max_hilum: float | None = None,
+                     max_heart: float | None = None) -> bpy.types.Object:
+        """Render-only copy of a node clipped to a sphere, a height band and/or the proximal part of a pulmonary
+        tree (``_DIST_HILUM`` <= ``max_hilum``). The published asset is never modified."""
         src = self.objects[name]
         ob = src.copy()
         ob.data = src.data.copy()
-        ob["ct_extra"] = True  # render-only geometry, removed by Anatomy.reset()
+        ob["ct_extra"] = True
         bpy.context.scene.collection.objects.link(ob)
         ob.parent = None
         ob.matrix_world = src.matrix_world.copy()
-        cutters = []
+        for attr, limit in (("_DIST_HILUM", max_hilum), ("_DIST_HEART", max_heart)):
+            if limit is None or attr not in ob.data.attributes:
+                continue
+            vals = np.empty(len(ob.data.vertices), dtype=np.float32)
+            ob.data.attributes[attr].data.foreach_get("value", vals)
+            bm = bmesh.new()
+            bm.from_mesh(ob.data)
+            bm.verts.ensure_lookup_table()
+            bmesh.ops.delete(bm, geom=[v for v in bm.verts if vals[v.index] > limit], context="VERTS")
+            open_edges = [e for e in bm.edges if e.is_boundary]
+            if open_edges:
+                bmesh.ops.holes_fill(bm, edges=open_edges, sides=0)
+            bm.to_mesh(ob.data)
+            bm.free()
+        # plane cuts (bisect, capped) and a sphere cut (vertex deletion): robust on meshes that touch themselves,
+        # where exact booleans can return nothing
+        M = ob.matrix_world
+        Mi = M.inverted()
+        bm = bmesh.new()
+        bm.from_mesh(ob.data)
+        planes = ([((0, 0, z_min), (0, 0, -1))] if z_min is not None else []) + ([((0, 0, z_max), (0, 0, 1))] if z_max is not None else [])
+        for co, no in planes:
+            res = bmesh.ops.bisect_plane(bm, geom=bm.verts[:] + bm.edges[:] + bm.faces[:], dist=1e-6,
+                                         plane_co=Mi @ Vector(co), plane_no=(Mi.to_3x3().transposed() @ Vector(no)).normalized(),
+                                         clear_outer=True)
+            edges = [e for e in res["geom_cut"] if isinstance(e, bmesh.types.BMEdge) and e.is_valid and e.is_boundary]
+            if edges:
+                bmesh.ops.holes_fill(bm, edges=edges, sides=0)
+        bm.to_mesh(ob.data)
+        bm.free()
         if radius is not None:
-            bpy.ops.mesh.primitive_uv_sphere_add(segments=96, ring_count=48, radius=radius, location=center)
-            cutters.append(bpy.context.active_object)
-        if z_min is not None:
-            bpy.ops.mesh.primitive_cube_add(size=20.0, location=(0.0, 0.0, z_min + 10.0))
-            cutters.append(bpy.context.active_object)
-        for cutter in cutters:
-            mod = ob.modifiers.new("clip", "BOOLEAN")
-            mod.operation = "INTERSECT"
-            mod.solver = "EXACT"
-            mod.object = cutter
-        dg = bpy.context.evaluated_depsgraph_get()
-        me = bpy.data.meshes.new_from_object(ob.evaluated_get(dg), depsgraph=dg)
-        ob.modifiers.clear()
-        ob.data = me
-        for cutter in cutters:
-            bpy.data.objects.remove(cutter, do_unlink=True)
+            sphere_clip(ob, center, radius)
         if keep_largest:
-            keep_largest_island(me)
+            keep_largest_island(ob.data)
+        assign(ob, src.data.materials[0])
         self.extra.append(ob)
         src.hide_render = True
         return ob
+
+    def stage_heart(self, *, keep_ivc: bool = False) -> None:
+        """Close-up staging: pulmonary-vein tree hidden, pulmonary artery trimmed near its bifurcation, the
+        descending aorta, arch branches and brachiocephalic veins trimmed to short stumps."""
+        for n in HEART_ONLY_HIDE:
+            if n == "GreatVessel_IVC" and keep_ivc:
+                continue
+            self.objects[n].hide_render = True
+        self.cropped_copy("GreatVessel_Aorta", z_min=0.02)
+        # pulmonary trunk + short stumps of the right / left pulmonary arteries
+        valve = self.objects["Valve_Pulmonary"].matrix_world.translation
+        self.cropped_copy("GreatVessel_PulmonaryArtery", radius=0.42, keep_largest=True,
+                          center=(valve.x - 0.02, valve.y + 0.2, valve.z + 0.3))
+        top = max(v.co.z for v in self.objects["GreatVessel_Aorta"].data.vertices) + self.objects["GreatVessel_Aorta"].matrix_world.translation.z
+        arch = self.objects["GreatVessel_Aorta"].matrix_world.translation
+        for n in ("GreatVessel_Aorta_ArchBranches", "GreatVessel_SVC_BrachiocephalicVeins"):
+            if n in self.objects:
+                self.cropped_copy(n, z_max=top + 0.10, radius=0.62, center=(arch.x - 0.05, arch.y, top - 0.1), keep_largest=False)
+
+
+def sphere_clip(ob: bpy.types.Object, center, radius: float) -> None:
+    """Keep the part of a mesh inside a sphere: exact boolean (clean round cut), vertex deletion if it fails."""
+    bpy.ops.mesh.primitive_uv_sphere_add(segments=96, ring_count=48, radius=radius, location=center)
+    cutter = bpy.context.active_object
+    mod = ob.modifiers.new("clip", "BOOLEAN")
+    mod.operation = "INTERSECT"
+    mod.solver = "EXACT"
+    mod.object = cutter
+    dg = bpy.context.evaluated_depsgraph_get()
+    me = bpy.data.meshes.new_from_object(ob.evaluated_get(dg), depsgraph=dg)
+    ob.modifiers.clear()
+    bpy.data.objects.remove(cutter, do_unlink=True)
+    if len(me.polygons) > 50:
+        ob.data = me
+        return
+    bpy.data.meshes.remove(me)
+    bm = bmesh.new()
+    bm.from_mesh(ob.data)
+    c = Vector(center)
+    M = ob.matrix_world
+    bmesh.ops.delete(bm, geom=[v for v in bm.verts if (M @ v.co - c).length > radius], context="VERTS")
+    bm.to_mesh(ob.data)
+    bm.free()
 
 
 def keep_largest_island(me: bpy.types.Mesh) -> None:
@@ -563,7 +538,7 @@ def flow_particles(vessels: dict, every: int, radius: float, strength: float, an
         bm.to_mesh(me)
         bm.free()
         ob = bpy.data.objects.new(f"Flow_{key}", me)
-        ob["ct_extra"] = True  # render-only geometry, removed by Anatomy.reset()
+        ob["ct_extra"] = True
         bpy.context.scene.collection.objects.link(ob)
         color = RISK.get(key, (1.0, 0.5, 0.45))
         assign(ob, mat_emissive(f"R_Flow_{key}", tuple(min(1.0, c * 1.2 + 0.1) for c in color), strength))
@@ -578,127 +553,133 @@ def render_to(scene, path: Path) -> None:
     log(f"wrote {path.name} ({path.stat().st_size / 1e3:.0f} kB, {time.perf_counter() - t:.0f}s)")
 
 
+def centreline_point(vessels: dict, vid: str, frac: float) -> Vector:
+    v = next(x for x in vessels["vessels"] if x["id"] == vid)
+    P = np.array(v["segments"][0]["points"])
+    s = np.r_[0.0, np.cumsum(np.linalg.norm(np.diff(P, axis=0), axis=1))]
+    return gltf_to_blender(P[int(np.searchsorted(s, frac * s[-1]))])
+
+
 # ============================================================================================
 # Shots
 # ============================================================================================
-def style_heart(an: Anatomy, *, close_up: bool = True, glow: dict | None = None) -> None:
-    """Studio look for the heart: dark wet myocardium, muted great vessels, risk-coloured coronaries.
-
-    ``close_up`` stages the heart on its own (see below); the torso shots keep every vessel.
-    """
-    glow = glow or {"LAD": 1.1, "LCX": 0.9, "RCA": 0.7}
-    myo = mat_myocardium()
-    for n in ("Heart_Wall_Anterior", "Heart_Wall_Posterior", "Papillary_Muscles"):
-        assign(an.objects[n], myo)
-    valve = _principled("R_Valve", Base_Color=(0.78, 0.66, 0.54, 1), Roughness=0.35, Subsurface_Weight=0.5,
-                        Subsurface_Radius=(1, 0.7, 0.5), Subsurface_Scale=0.006, Coat_Weight=0.4)
-    for n in ("Valve_Mitral", "Valve_Tricuspid", "Valve_Pulmonary"):
-        assign(an.objects[n], valve)
-    # Great vessels stay deep and semi-matt so the risk-coloured coronaries own the frame: oxygenated
-    # arterial red for the aorta, desaturated venous blue for the pulmonary trunk.
-    assign(an.objects["GreatVessel_Aorta"], mat_vessel("R_Aorta", (0.20, 0.035, 0.03), rough=0.48, sss=0.2))
-    assign(an.objects["GreatVessel_PulmonaryArtery"], mat_vessel("R_PA", (0.045, 0.06, 0.13), rough=0.48, sss=0.2))
-    assign(an.objects["GreatVessel_PulmonaryVeins"], mat_vessel("R_PV", (0.24, 0.06, 0.06), rough=0.32))
-    for n in ("GreatVessel_SVC", "GreatVessel_IVC"):
-        assign(an.objects[n], mat_vessel("R_Cava", (0.08, 0.05, 0.09), rough=0.3))
-    assign(an.objects["CardiacVeins"], mat_vessel("R_Vein", (0.07, 0.05, 0.13), rough=0.28))
-    for n, o in an.objects.items():
-        if an.layer_of[n] == "Layer_Coronary":
-            group = GROUP_OF.get(n)
-            assign(o, mat_coronary(RISK[group] if group else NEUTRAL_ARTERY, glow=glow[group] if group else 0.1))
-    if close_up:
-        # Close-up staging: the intrapulmonary vein tree and the IVC stub are hidden, the pulmonary
-        # artery is clipped around its bifurcation, and the descending aorta is cut at mid-heart height
-        # so its end stays hidden behind the atria. Render-only copies; the asset is untouched.
-        for n in ("GreatVessel_PulmonaryVeins", "GreatVessel_IVC"):
-            an.objects[n].hide_render = True
-        aorta = an.cropped_copy("GreatVessel_Aorta", z_min=0.05)
-        assign(aorta, an.objects["GreatVessel_Aorta"].data.materials[0])
-        # Pulmonary trunk with short stubs of the right / left pulmonary arteries.
-        valve = an.objects["Valve_Pulmonary"].location
-        pa = an.cropped_copy("GreatVessel_PulmonaryArtery", radius=0.42, keep_largest=True,
-                             center=(valve.x - 0.02, valve.y + 0.2, valve.z + 0.3))
-        assign(pa, an.objects["GreatVessel_PulmonaryArtery"].data.materials[0])
+HERO_TARGET = (0.06, -0.05, 0.36)
+HERO_VIEW = (28.0, 8.0, 7.9)  # azimuth, elevation (deg), distance
 
 
-HERO_TARGET = (0.1, -0.05, 0.24)
-#: Left-anterior-oblique, slightly cranial: LAD centre-frame, RCA on the right border, whole arch in frame.
-HERO_VIEW = (30.0, 7.0, 6.4)  # azimuth, elevation (deg), distance
-
-
-def hero_rig(scene) -> None:
-    target = Vector(HERO_TARGET)
-    az, el, dist = HERO_VIEW
-    camera("CamHero", orbit(target, az, el, dist), target, lens=70, fstop=5.6, focus=(0.3, -0.45, 0.0))
-    area_light("Key", (-1.5, -4.6, 3.6), target, power=560, size=2.4, color=(1.0, 0.93, 0.86))
-    area_light("Rim", (2.8, 3.2, 2.6), target, power=1200, size=1.4, color=(0.55, 0.75, 1.0))
-    area_light("Kicker", (-3.4, 1.8, -0.8), target, power=220, size=2.2, color=(1.0, 0.55, 0.45))
-    area_light("Under", (2.0, -1.5, -3.6), target, power=120, size=3.0, color=(0.6, 0.75, 1.0))
-    area_light("Fill", (4.6, -1.2, 0.8), target, power=110, size=3.5, color=(0.7, 0.8, 1.0))
-
-
-def shot_hero_heart(scene, an: Anatomy, out: Path) -> None:
+def shot_hero_heart(scene, an: Anatomy, out: Path, vessels: dict) -> None:
     an.show_only(layers=("Layer_Heart", "Layer_Coronary"))
-    style_heart(an)
-    setup_world(scene, top=(0.010, 0.013, 0.02), bottom=(0.0008, 0.0008, 0.0012))
-    hero_rig(scene)
-    compositor_glow(scene, strength=0.55, threshold=0.7, size=0.55, vignette=0.45)
+    an.style(glow=0.25)
+    an.stage_heart()
+    setup_world(scene, top=(0.010, 0.012, 0.018), bottom=(0.0008, 0.0008, 0.0012))
+    t = Vector(HERO_TARGET)
+    az, el, dist = HERO_VIEW
+    focus = centreline_point(vessels, "LAD", 0.35)
+    camera("CamHero", orbit(t, az, el, dist), t, lens=70, fstop=6.3, focus=focus)
+    studio_rig(t, key_dir=(-40.0, 38.0), rim_dir=(160.0, 30.0), fill_dir=(75.0, 5.0), dist=5.0)
+    compositor_glow(scene, strength=0.25, threshold=1.0, size=0.5, vignette=0.4)
     render_to(scene, out / "hero_heart.jpg")
 
 
-def orbit(target: Vector, azimuth_deg: float, elevation_deg: float, distance: float) -> Vector:
-    """Camera position around ``target``: azimuth 0 = anterior (-Y), positive towards patient-left (+X)."""
-    az, el = math.radians(azimuth_deg), math.radians(elevation_deg)
-    return target + distance * Vector((math.sin(az) * math.cos(el), -math.cos(az) * math.cos(el), math.sin(el)))
+def shot_heart_posterior(scene, an: Anatomy, out: Path, vessels: dict) -> None:
+    """Posterior-inferior view of the diaphragmatic surface: crux, PDA, MCV, coronary sinus."""
+    an.show_only(layers=("Layer_Heart", "Layer_Coronary"),
+                 hide=("GreatVessel_Aorta", "GreatVessel_Aorta_ArchBranches", "GreatVessel_SVC_BrachiocephalicVeins",
+                       "GreatVessel_PulmonaryVeins", "GreatVessel_PulmonaryArtery", "GreatVessel_SVC"))
+    an.style(glow=0.25)
+    an.cropped_copy("GreatVessel_IVC", z_min=-0.30)
+    crux = centreline_point(vessels, "RCA_PDA", 0.0)
+    t = Vector((0.06, 0.10, -0.12))
+    setup_world(scene, top=(0.010, 0.012, 0.018), bottom=(0.0008, 0.0008, 0.0012))
+    camera("CamPost", orbit(t, 168.0, -28.0, 4.7), t, lens=62, fstop=7.0, focus=crux)
+    studio_rig(t, key_dir=(130.0, 10.0), rim_dir=(-10.0, 40.0), fill_dir=(220.0, -40.0), dist=5.0)
+    compositor_glow(scene, strength=0.25, threshold=1.0, size=0.5, vignette=0.4)
+    render_to(scene, out / "heart_posterior.jpg")
 
 
-EXPLODE_VIEW = (0.0, 8.0, 9.6)  # azimuth, elevation (deg), distance
-EXPLODE_TARGET = (-0.1, 0.32, 0.3)  # glTF frame
-EXPLODE_LENS = 50.0  # replaced by the manifest's vertical field of view
+def shot_coronary_detail(scene, an: Anatomy, out: Path, vessels: dict) -> None:
+    """Close-up of the anterior interventricular groove: LAD, first diagonal, AIV, epicardial fat."""
+    an.show_only(layers=("Layer_Heart", "Layer_Coronary"))
+    an.style(glow=0.15)
+    an.stage_heart()
+    t = centreline_point(vessels, "LAD", 0.42)
+    n = (t - Vector((0.05, 0.0, 0.0))).normalized()
+    loc = t + Vector((n.x * 1.2 + 0.25, -2.2, n.z * 0.6 + 0.25))
+    camera("CamDetail", loc, t, lens=100, fstop=4.0, focus=t)
+    setup_world(scene, top=(0.012, 0.014, 0.02), bottom=(0.001, 0.001, 0.0015))
+    studio_rig(t, key_dir=(-30.0, 45.0), rim_dir=(120.0, 20.0), fill_dir=(40.0, -20.0), dist=3.0, scale=0.45)
+    compositor_glow(scene, strength=0.2, threshold=1.0, size=0.5, vignette=0.35)
+    render_to(scene, out / "coronary_detail.jpg")
+
+
+def shot_open_heart(scene, an: Anatomy, out: Path, report: dict) -> None:
+    """The heart opened along its long-axis cut: the posterior half (LV, RV, septum, mitral and tricuspid
+    valves, papillary muscles and chordae) faces the camera, and the anterior half is turned 180 degrees about
+    the vertical and set beside it, so both cut faces and cavities read side by side."""
+    show = ("Heart_Wall_Anterior", "Heart_Wall_Posterior", "Valve_Mitral", "Valve_Tricuspid", "Valve_Pulmonary",
+            "Valve_Aortic", "Papillary_Muscles", "EpicardialFat_Anterior", "EpicardialFat_Posterior")
+    an.show_only(nodes=show)
+    an.style()
+    cut_n = gltf_to_blender(report["heart"]["cut_plane"]["normal"]).normalized()
+    cut_p = gltf_to_blender(report["heart"]["cut_plane"]["point"])
+    anterior = ("Heart_Wall_Anterior", "EpicardialFat_Anterior", "Valve_Pulmonary")
+    centre = an.objects["Heart_Wall_Anterior"].matrix_world.translation.copy()
+    pivot = bpy.data.objects.new("OpenPivot", None)
+    pivot["ct_rig"] = True
+    scene.collection.objects.link(pivot)
+    pivot.location = centre
+    bpy.context.view_layer.update()
+    for n in anterior:
+        o = an.objects[n]
+        mw = o.matrix_world.copy()
+        o.parent = pivot
+        o.matrix_world = mw
+    # face the posterior half's cut towards the camera: camera looks along -cut normal (from the anterior side)
+    side = Vector((-1.0, 0.0, 0.0))
+    pivot.rotation_euler = (0.0, 0.0, math.radians(180.0))
+    pivot.location = centre + side * 1.25 + cut_n * 0.2 + Vector((0.0, 0.0, -0.10))
+    bpy.context.view_layer.update()
+    t = cut_p + side * 0.62 + Vector((0.0, 0.0, -0.02))
+    cam_dir = (cut_n + Vector((0.0, 0.0, 0.35))).normalized()
+    camera("CamOpen", t + cam_dir * 7.0, t, lens=58, fstop=11.0, focus=cut_p)
+    setup_world(scene, top=(0.012, 0.014, 0.02), bottom=(0.001, 0.001, 0.0015))
+    studio_rig(t, key_dir=(-15.0, 50.0), rim_dir=(170.0, 30.0), fill_dir=(40.0, 10.0), dist=6.0, scale=1.6)
+    compositor_glow(scene, strength=0.2, threshold=1.0, size=0.5, vignette=0.35)
+    render_to(scene, out / "open_heart.jpg")
+
+
+EXPLODE_VIEW = (0.0, 6.0, 10.2)  # azimuth, elevation (deg), distance
 
 
 def shot_exploded(scene, an: Anatomy, out: Path) -> None:
-    an.show_only(layers=LAYERS)
-    style_heart(an, close_up=False)
-    assign(an.objects["Skin_Torso"], mat_film("R_Skin", (0.70, 0.50, 0.42), 0.012, 0.32))
-    for n in ("Pectoralis_L", "Pectoralis_R", "Diaphragm"):
-        assign(an.objects[n], mat_muscle())
-    bone = mat_bone()
-    for n in ("Ribs_L", "Ribs_R", "Sternum", "Clavicle_L", "Clavicle_R", "Spine_Thoracic"):
-        assign(an.objects[n], bone)
-    assign(an.objects["CostalCartilage"], mat_cartilage())
-    lung = mat_film("R_Lung", (0.90, 0.46, 0.50), 0.06, 0.6, rough=0.2)
-    for n in ("Lung_L", "Lung_R"):
-        assign(an.objects[n], lung)
-    assign(an.objects["Trachea_Bronchi"], _principled("R_Airway", Base_Color=(0.42, 0.34, 0.30, 1), Roughness=0.45,
-                                                       Subsurface_Weight=0.3, Subsurface_Scale=0.01, Coat_Weight=0.3))
+    an.show_only(layers=LAYERS, hide=("Skin_Torso",))
+    an.style()
     an.explode(1.0)
-    # The skin is an enclosing shell: any translation sweeps it through the organs, so the viewer fades
-    # it out when it peels — the render leaves it out too.
-    an.objects["Skin_Torso"].hide_render = True
-    setup_world(scene, top=(0.02, 0.024, 0.034), bottom=(0.002, 0.002, 0.003))
-    # The head-on view the radial layout is designed for (like the viewer's `camera.exploded` preset),
-    # cropped to the thorax — the diaphragm and costal margin run off the bottom edge — so the opened
-    # heart stays prominent.
+    # the viewer can trim the pulmonary trees at the hilum with _DIST_HILUM: do the same so the layers read
+    for n in PULMONARY_TREES:
+        an.cropped_copy(n, max_hilum=0.012)
+    for ob in an.extra:
+        base = ob.name.split(".")[0]
+        if base in an.objects:
+            ob.matrix_world = an.objects[base].matrix_world.copy()
+    manifest_cam = an.manifest["camera"]["exploded"]
+    target = gltf_to_blender(manifest_cam["target"]) + Vector((0.0, 0.0, 0.05))
     az, el, dist = EXPLODE_VIEW
-    target = gltf_to_blender(EXPLODE_TARGET)
-    cam = camera("CamExplode", orbit(target, az, el, dist), target, lens=EXPLODE_LENS)
+    cam = camera("CamExplode", orbit(target, az, el, dist), target, lens=50)
     cam.data.sensor_fit = "VERTICAL"
-    cam.data.angle_y = math.radians(an.manifest["camera"]["exploded"]["fov"])
-    area_light("Key", orbit(target, -35.0, 50.0, 14.0), target, power=4200, size=7, color=(1.0, 0.95, 0.9))
-    area_light("Rim", orbit(target, 160.0, 25.0, 12.0), target, power=8000, size=5, color=(0.6, 0.78, 1.0))
-    area_light("Fill", orbit(target, 80.0, 5.0, 12.0), target, power=1400, size=8, color=(0.8, 0.85, 1.0))
-
-    compositor_glow(scene, strength=0.25, threshold=1.2, size=0.6, vignette=0.35)
+    cam.data.angle_y = math.radians(manifest_cam["fov"] * 0.92)
+    setup_world(scene, top=(0.02, 0.024, 0.034), bottom=(0.002, 0.002, 0.003))
+    area_light("Key", orbit(target, -30.0, 45.0, 14.0), target, power=5200, size=8, color=(1.0, 0.95, 0.9))
+    area_light("Rim", orbit(target, 165.0, 25.0, 12.0), target, power=7000, size=6, color=(0.6, 0.78, 1.0))
+    area_light("Fill", orbit(target, 55.0, 0.0, 12.0), target, power=1800, size=9, color=(0.85, 0.88, 1.0))
+    compositor_glow(scene, strength=0.15, threshold=1.2, size=0.6, vignette=0.3)
     render_to(scene, out / "exploded_torso.jpg")
 
 
 def shot_territories(scene, an: Anatomy, out: Path, samples: int) -> None:
     """Heart walls tinted by COLOR_0 territory weights x risk colours, anterior + posterior-inferior."""
-    style_heart(an, glow={"LAD": 0.8, "LCX": 0.8, "RCA": 0.8})
     an.show_only(nodes=("Heart_Wall_Anterior", "Heart_Wall_Posterior"), layers=("Layer_Coronary",))
-    for ob in an.extra:
-        ob.hide_render = True
+    an.style(glow=0.4)
     terr = mat_territory()
     for n in ("Heart_Wall_Anterior", "Heart_Wall_Posterior"):
         assign(an.objects[n], terr)
@@ -723,9 +704,6 @@ def shot_territories(scene, an: Anatomy, out: Path, samples: int) -> None:
 
 
 def _side_by_side(left: Path, right: Path, dest: Path, width: int, height: int) -> None:
-    """Compose two half-width renders into one image using Blender's image API."""
-    import numpy as np
-
     a = bpy.data.images.load(str(left))
     b = bpy.data.images.load(str(right))
     pa = np.array(a.pixels[:]).reshape(a.size[1], a.size[0], 4)
@@ -735,8 +713,7 @@ def _side_by_side(left: Path, right: Path, dest: Path, width: int, height: int) 
     img.pixels = combo.ravel().tolist()
     img.filepath_raw = str(dest)
     img.file_format = "JPEG"
-    scene = bpy.context.scene
-    img.save_render(str(dest), scene=scene)
+    img.save_render(str(dest), scene=bpy.context.scene)
     for im in (a, b, img):
         bpy.data.images.remove(im)
     left.unlink()
@@ -751,7 +728,7 @@ def shot_xray(scene, an: Anatomy, out: Path, vessels: dict) -> None:
     """Fresnel hologram torso; the coronary tree and flow particles are the only strong emitters."""
     an.show_only(layers=LAYERS, hide=PULMONARY_TREES)
     cyan = (0.22, 0.62, 1.0)
-    looks = {
+    holo = {
         "Layer_Skin": mat_hologram("H_Skin", cyan, rim=0.9, power=3.0),
         "Layer_Muscle": mat_hologram("H_Muscle", (0.25, 0.5, 1.0), rim=0.22, power=2.5),
         "Layer_Skeleton": mat_hologram("H_Bone", (0.7, 0.85, 1.0), rim=0.26, core=0.008, power=2.4),
@@ -760,16 +737,18 @@ def shot_xray(scene, an: Anatomy, out: Path, vessels: dict) -> None:
         "Layer_Heart": mat_hologram("H_Heart", (1.0, 0.32, 0.28), rim=0.75, core=0.012, power=2.0),
     }
     vessels_look = mat_hologram("H_Vessels", (0.9, 0.3, 0.32), rim=0.32, core=0.005, power=2.0)
+    fat_look = mat_hologram("H_Fat", (1.0, 0.75, 0.35), rim=0.18, core=0.0, power=2.0)
     for n, o in an.objects.items():
         layer = an.layer_of[n]
         if layer == "Layer_Coronary":
             group = GROUP_OF.get(n)
-            # Moderate strength keeps the hue: AgX desaturates very bright emitters towards white.
             assign(o, mat_emissive(f"H_{n}", RISK[group] if group else (1.0, 0.55, 0.5), 4.0 if group else 2.4))
         elif n.startswith("GreatVessel_") or n == "CardiacVeins":
             assign(o, vessels_look)
+        elif n.startswith("EpicardialFat"):
+            assign(o, fat_look)
         else:
-            assign(o, looks[layer])
+            assign(o, holo[layer])
     flow_particles(vessels, every=2, radius=0.0045, strength=6.0, anatomy=an)
     setup_world(scene, top=(0.002, 0.005, 0.01), bottom=(0.0, 0.0, 0.0))
     scene.cycles.transparent_max_bounces = 64
@@ -782,22 +761,20 @@ def shot_xray(scene, an: Anatomy, out: Path, vessels: dict) -> None:
 
 def shot_turntable(scene, an: Anatomy, out: Path, samples: int, frames: int | None = None) -> None:
     an.show_only(layers=("Layer_Heart", "Layer_Coronary"))
-    style_heart(an)
+    an.style(glow=0.25)
+    an.stage_heart()
     setup_world(scene, top=(0.010, 0.013, 0.02), bottom=(0.0008, 0.0008, 0.0012))
     pivot = bpy.data.objects.new("Turntable", None)
     pivot["ct_rig"] = True
     scene.collection.objects.link(pivot)
     moving = [o for n, o in an.objects.items() if not o.hide_render] + [o for o in an.extra if not o.hide_render]
-    parents = {o.name: (o.parent, o.matrix_world.copy()) for o in moving}
     for o in moving:
         mw = o.matrix_world.copy()
         o.parent = pivot
         o.matrix_world = mw
     target = Vector((0.1, 0.0, 0.18))
     camera("CamTurn", (0.1, -6.2, 1.1), target, lens=58)
-    area_light("Key", (-2.8, -3.6, 3.4), target, power=950, size=2.6, color=(1.0, 0.94, 0.88))
-    area_light("Rim", (2.4, 3.2, 2.2), target, power=1400, size=1.6, color=(0.62, 0.8, 1.0))
-    area_light("Fill", (3.6, -2.2, -1.2), target, power=200, size=3.5, color=(0.75, 0.82, 1.0))
+    studio_rig(target, dist=5.0)
     fps, seconds = 24, 7
     scene.frame_start, scene.frame_end = 1, fps * seconds
     scene.render.fps = fps
@@ -808,7 +785,7 @@ def shot_turntable(scene, an: Anatomy, out: Path, samples: int, frames: int | No
     for fc in _fcurves(pivot):
         for kp in fc.keyframe_points:
             kp.interpolation = "LINEAR"
-    if frames:  # quick timing / look tests
+    if frames:
         scene.frame_end = min(scene.frame_end, frames)
     scene.cycles.samples = samples
     scene.render.resolution_x, scene.render.resolution_y = 1280, 720
@@ -818,16 +795,12 @@ def shot_turntable(scene, an: Anatomy, out: Path, samples: int, frames: int | No
     scene.render.ffmpeg.codec = "H264"
     scene.render.ffmpeg.constant_rate_factor = "HIGH"
     scene.render.ffmpeg.ffmpeg_preset = "GOOD"
-    compositor_glow(scene, strength=0.3, threshold=1.0, size=0.6, vignette=0.35)
+    compositor_glow(scene, strength=0.2, threshold=1.0, size=0.6, vignette=0.35)
     path = out / "heart_turntable.mp4"
     scene.render.filepath = str(path)
     t = time.perf_counter()
     bpy.ops.render.render(animation=True)
     log(f"wrote {path.name} ({path.stat().st_size / 1e6:.1f} MB, {time.perf_counter() - t:.0f}s)")
-    for o in moving:
-        parent, mw = parents[o.name]
-        o.parent = parent
-        o.matrix_world = mw
     scene.render.image_settings.media_type = "IMAGE"
     scene.render.image_settings.file_format = "JPEG"
 
@@ -839,7 +812,6 @@ def _fcurves(ob):
     action = ad.action
     if hasattr(action, "fcurves"):
         return list(action.fcurves)
-    # Blender 5.x layered actions
     curves = []
     for layer in action.layers:
         for strip in layer.strips:
@@ -852,8 +824,8 @@ def _fcurves(ob):
 def main() -> None:
     argv = sys.argv[sys.argv.index("--") + 1:] if "--" in sys.argv else []
     ap = argparse.ArgumentParser(prog="render_heroes.py")
-    ap.add_argument("--shots", default="hero_heart,exploded_torso,territories,xray,turntable")
-    ap.add_argument("--samples", type=int, default=256)
+    ap.add_argument("--shots", default="hero_heart,heart_posterior,coronary_detail,open_heart,exploded_torso,xray,territories")
+    ap.add_argument("--samples", type=int, default=160)
     ap.add_argument("--turntable-samples", type=int, default=48)
     ap.add_argument("--scale", type=float, default=1.0, help="resolution scale (0.5 for drafts)")
     ap.add_argument("--frames", type=int, default=None, help="limit turntable frames (tests)")
@@ -866,6 +838,8 @@ def main() -> None:
     scene = bpy.context.scene
     manifest = json.loads((PUBLIC_DIR / "manifest.json").read_text(encoding="utf-8"))
     vessels = json.loads((PUBLIC_DIR / "vessels.json").read_text(encoding="utf-8"))
+    report = read_json(BUILD_REPORT)
+    looks.ensure_heart_frame(gltf_to_blender(report["heart"]["base_center"]), gltf_to_blender(report["heart"]["apex"]))
     an = Anatomy(manifest)
 
     for shot in args.shots.split(","):
@@ -873,7 +847,13 @@ def main() -> None:
         an.reset()
         log(f"--- {shot}")
         if shot == "hero_heart":
-            shot_hero_heart(scene, an, out)
+            shot_hero_heart(scene, an, out, vessels)
+        elif shot == "heart_posterior":
+            shot_heart_posterior(scene, an, out, vessels)
+        elif shot == "coronary_detail":
+            shot_coronary_detail(scene, an, out, vessels)
+        elif shot == "open_heart":
+            shot_open_heart(scene, an, out, report)
         elif shot == "exploded_torso":
             shot_exploded(scene, an, out)
         elif shot == "territories":
@@ -887,22 +867,19 @@ def main() -> None:
 
     if args.save_scene:
         an.reset()
-        shot_hero_heart_rig_only(scene, an)
+        an.show_only(layers=("Layer_Heart", "Layer_Coronary"))
+        an.style(glow=0.25)
+        setup_world(scene, top=(0.010, 0.012, 0.018), bottom=(0.0008, 0.0008, 0.0012))
+        t = Vector(HERO_TARGET)
+        camera("CamHero", orbit(t, *HERO_VIEW), t, lens=70)
+        studio_rig(t)
         bpy.ops.wm.save_as_mainfile(filepath=str(SCENE_BLEND), compress=True)
         mb = SCENE_BLEND.stat().st_size / 1e6
         if mb > MAX_SCENE_MB:
             SCENE_BLEND.unlink()
-            log(f"scene is {mb:.1f} MB (> {MAX_SCENE_MB} MB) — not saved")
+            log(f"scene is {mb:.1f} MB (> {MAX_SCENE_MB} MB) - not saved")
         else:
             log(f"saved {SCENE_BLEND} ({mb:.1f} MB)")
-
-
-def shot_hero_heart_rig_only(scene, an: Anatomy) -> None:
-    """Leave the hero-heart look (materials, lights, camera) set up in the saved scene."""
-    an.show_only(layers=("Layer_Heart", "Layer_Coronary"))
-    style_heart(an)
-    setup_world(scene, top=(0.010, 0.013, 0.02), bottom=(0.0008, 0.0008, 0.0012))
-    hero_rig(scene)
 
 
 if __name__ == "__main__":
