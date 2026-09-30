@@ -1,0 +1,120 @@
+# CardioTwin training & validation protocol. Every number that influences results lives here.
+# A rerun with the same config, data and library versions reproduces metrics.json exactly
+# (except the generated_at timestamp).
+
+seed: 42
+
+holdout:
+  test_size: 0.20          # locked test set, touched exactly once after all decisions are frozen
+  min_stratum_count: 5     # joint label patterns rarer than this are merged (see splits.py)
+
+cv:                        # development-set leaderboard: repeated stratified k-fold, per target
+  n_splits: 5
+  n_repeats: 10
+
+tuning:                    # nested CV: inner search inside every outer training fold
+  inner_splits: 5
+  scoring: roc_auc
+
+final_tuning:              # hyper-parameters of the deployed components, searched on the full dev set
+  inner_splits: 5
+  inner_repeats: 3
+
+ensemble:
+  logistic_candidates: [lr_l2, lr_l1, lr_elasticnet]   # best nested-CV ROC-AUC per target is used
+  tree_component: xgboost
+  weight_grid_step: 0.05   # w in {0, 0.05, ..., 1}; chosen by pooled out-of-fold log-loss after Platt
+
+threshold:
+  rule: youden             # decision threshold on out-of-fold calibrated probabilities (F1-optimal also reported)
+
+bootstrap:
+  n_resamples: 2000
+  confidence: 0.95
+
+curves:
+  calibration_bins: 6      # quantile bins on the test set (~10 patients each)
+  dca_start: 0.05
+  dca_stop: 0.95
+  dca_step: 0.01
+  roc_band_points: 101
+
+explain:
+  beeswarm_top: 15
+
+# Clinically meaningful baseline: what a clinician knows before any test (pre-test probability style).
+baseline:
+  model: lr_l2
+  features: [Age, Sex, Typical Chest Pain, DM, HTN]
+
+# Evidence-driven extras, each adopted only if it improves development-set CV ROC-AUC by >= min_gain
+# (mean over the affected targets, same folds, fixed hyper-parameters -> paired comparison).
+ablations:
+  min_gain: 0.005
+  n_repeats: 10
+  fixed_params:
+    logistic: { C: 0.1, l1_ratio: 0.0 }
+    xgboost: { n_estimators: 200, max_depth: 3, learning_rate: 0.05, subsample: 0.8,
+               colsample_bytree: 0.6, min_child_weight: 2.0, reg_lambda: 1.0 }
+  selection_k: 20          # in-fold univariate selection (ANOVA F) keeps this many encoded columns
+
+# Model zoo. kind -> estimator factory in models.py; params fixed; search = RandomizedSearchCV space.
+# Distributions: {loguniform: [lo, hi]}, {uniform: [lo, hi]}, {int: [lo, hi]} (inclusive), {choice: [...]}
+models:
+  dummy_prior:
+    kind: dummy
+    label: Dummy (prior)
+  lr_l2:
+    kind: logistic
+    label: Logistic regression (L2)
+    params: { l1_ratio: 0.0, solver: lbfgs, max_iter: 5000 }
+    n_iter: 16
+    search: { C: { loguniform: [0.001, 10.0] } }
+  lr_l1:
+    kind: logistic
+    label: Logistic regression (L1)
+    params: { l1_ratio: 1.0, solver: liblinear, max_iter: 5000 }
+    n_iter: 16
+    search: { C: { loguniform: [0.01, 10.0] } }
+  lr_elasticnet:
+    kind: logistic
+    label: Logistic regression (elastic net)
+    params: { solver: saga, max_iter: 20000, tol: 0.0001 }
+    n_iter: 16
+    search: { C: { loguniform: [0.005, 5.0] }, l1_ratio: { uniform: [0.05, 0.95] } }
+  svm_rbf:
+    kind: svm
+    label: SVM (RBF kernel)
+    params: { kernel: rbf, probability: true }
+    n_iter: 16
+    search: { C: { loguniform: [0.1, 100.0] }, gamma: { loguniform: [0.0001, 0.1] } }
+  knn:
+    kind: knn
+    label: k-nearest neighbours
+    n_iter: 12
+    search: { n_neighbors: { int: [5, 45] }, weights: { choice: [uniform, distance] } }
+  random_forest:
+    kind: random_forest
+    label: Random forest
+    params: { n_estimators: 500, min_samples_leaf: 2, max_features: sqrt }
+  extra_trees:
+    kind: extra_trees
+    label: Extra trees
+    params: { n_estimators: 500, min_samples_leaf: 2, max_features: sqrt }
+  hist_gb:
+    kind: hist_gb
+    label: Histogram gradient boosting
+    params: { learning_rate: 0.05, max_iter: 200, max_leaf_nodes: 8, min_samples_leaf: 10, l2_regularization: 1.0 }
+  xgboost:
+    kind: xgboost
+    label: XGBoost
+    params: { tree_method: hist, max_bin: 256 }
+    n_iter: 16
+    search:
+      n_estimators: { int: [100, 400] }
+      max_depth: { int: [2, 4] }
+      learning_rate: { loguniform: [0.01, 0.2] }
+      subsample: { uniform: [0.6, 1.0] }
+      colsample_bytree: { uniform: [0.3, 1.0] }
+      min_child_weight: { loguniform: [1.0, 10.0] }
+      reg_lambda: { loguniform: [0.1, 20.0] }
