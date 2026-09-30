@@ -118,6 +118,11 @@
     letter-spacing: 0;
     margin-left: 0.08em;
   }
+  /* "≥95 %" / "≤5 %": the display bound, set like the % sign, before the digits. */
+  .pct-sign.pct-qual {
+    margin-left: 0;
+    margin-right: 0.06em;
+  }
   /* 45° 1 px hatch for error cells (▨): text/disabled, 6 px pitch. Never red. */
   .hatch {
     background-image: repeating-linear-gradient(

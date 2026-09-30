@@ -248,7 +248,8 @@ describe('what-if copy', () => {
     expect(deltaCopy(-0.071)).toBe(`▼ −7${THIN_SPACE}pts`);
     expect(deltaCopy(0.012)).toBe(`▲ +1${THIN_SPACE}pt`);
     expect(deltaCopy(0.002)).toBe('no change');
-    expect(counterfactualCopy(false, 'CAD', { CAD: 0.98 }, { CAD: 0.99 })).toBe(`If present: CAD 99${THIN_SPACE}% (▲ +1${THIN_SPACE}pt)`);
+    expect(counterfactualCopy(false, 'CAD', { CAD: 0.9 }, { CAD: 0.91 })).toBe(`If present: CAD 91${THIN_SPACE}% (▲ +1${THIN_SPACE}pt)`);
+    expect(counterfactualCopy(false, 'CAD', { CAD: 0.98 }, { CAD: 0.99 })).toBe(`If present: CAD ≥95${THIN_SPACE}% (▲ +1${THIN_SPACE}pt)`);
     expect(counterfactualCopy(true, 'LAD', { CAD: 0.98 }, { CAD: 0.99 })).toBeNull();
   });
 

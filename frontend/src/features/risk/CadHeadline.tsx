@@ -18,7 +18,18 @@ import { cadVerdictLine, spokenVerdict, verdictFor } from './verdict';
  */
 function ModelEstimateTag() {
   return (
-    <Tooltip content="A statistical estimate from routine clinical data: decision support, not a diagnosis.">
+    <Tooltip
+      className="max-w-[300px]"
+      content={
+        <span className="flex flex-col gap-1">
+          <span>A statistical estimate from routine clinical data: decision support, not a diagnosis.</span>
+          <span className="text-secondary">
+            Shown between ≤5&thinsp;% and ≥95&thinsp;%: on unseen patients the extreme estimates were more extreme
+            than the observed rates. The exact value is in Explain › Model.
+          </span>
+        </span>
+      }
+    >
       <span
         tabIndex={0}
         className="eyebrow inline-flex h-5 items-center rounded-sm border border-line px-1.5 text-tertiary outline-none focus-visible:shadow-focus"

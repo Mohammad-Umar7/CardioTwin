@@ -7,7 +7,7 @@ import { flaggedCount } from '@/features/risk/verdict';
 import { usePortableModel, useSchemaIndex } from '@/hooks/useData';
 import { useResource } from '@/hooks/useResource';
 import { cn } from '@/lib/cn';
-import { formatCi, formatMetricValue, formatPercent, formatShap } from '@/lib/format';
+import { formatCi, formatMetricValue, formatPercent, formatProbability, formatShap } from '@/lib/format';
 import { deployedModelName } from '@/lib/modelNames';
 import { usePatientStore } from '@/state/patientStore';
 import type { TargetId } from '@/types/contracts';
@@ -150,6 +150,7 @@ export function ModelTab({ target }: { target: TargetId }) {
   const count = flaggedCount(view.prediction, vessels.map((v) => v.id));
   const expected = view.prediction?.summary.expected_diseased_vessels;
   const nTest = facts.data?.dataset.nTest;
+  const shown = p ? formatProbability(p.probability) : null;
 
   if (facts.status === 'loading') {
     return (
@@ -233,6 +234,18 @@ export function ModelTab({ target }: { target: TargetId }) {
       {f?.modality && f.modality.steps.length > 0 && (
         <Section id="model-modality" title="What each kind of data adds" aside={<span className="text-label font-normal text-tertiary">ROC-AUC</span>}>
           <ModalitySteps facts={f} />
+        </Section>
+      )}
+
+      {shown?.capped && p && (
+        // The cards cap the display at ≤5 % / ≥95 %; this is the one place the exact value is written out.
+        <Section id="model-exact" title="This estimate, exactly">
+          <p className="text-body-s text-secondary">
+            {target} <span className="num font-semibold text-primary">p&nbsp;=&nbsp;{p.probability.toFixed(3)}</span>. The cards
+            show it as <span className="num text-primary">{shown.text}</span>: on unseen patients the calibration slope
+            is below 1{f?.calibration.slope != null ? <> (<span className="num text-primary">{formatMetricValue(f.calibration.slope)}</span>)</> : ''}, so
+            estimates this extreme overstate how certain the outcome is.
+          </p>
         </Section>
       )}
 

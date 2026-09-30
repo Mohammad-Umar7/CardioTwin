@@ -1,6 +1,7 @@
 /**
  * Number and value formatting (DESIGN_SYSTEM.md §3 "Numeric treatment").
- *   probabilities → "72 %" (integer + thin space), "<1 %", ">99 %"; exact p only in tooltips
+ *   probabilities → "72 %" (integer + thin space), capped at "≤5 %" / "≥95 %"; exact p only in tooltips
+ *                   and Explain › Model
  *   metrics       → "0.94" + "[0.88–0.98]"
  *   deltas        → "▲ +12 pts" / "▼ −4 pts"
  *   SHAP          → "+0.94" / "−0.18" (true minus U+2212)
@@ -17,29 +18,46 @@ const isFiniteNumber = (v: unknown): v is number => typeof v === 'number' && Num
 
 // ------------------------------------------------------------------------------ probabilities
 
+/**
+ * Display bounds for probabilities. The held-out calibration slope is below 1 (0.62 for CAD, 0.47 for LAD):
+ * the model's extreme estimates are more extreme than the observed rates, so the UI never claims more
+ * certainty than "≥95 %" or "≤5 %". Every value that would round to 95 or more (5 or less) shows the bound;
+ * the exact p stays in the tooltip (`exact`) and in Explain › Model.
+ */
+export const PROBABILITY_DISPLAY_MIN = 5;
+export const PROBABILITY_DISPLAY_MAX = 95;
+
 export interface FormattedProbability {
-  /** "<", ">" or "" */
-  qualifier: '' | '<' | '>';
+  /** "≤", "≥" or "" */
+  qualifier: '' | '≤' | '≥';
   /** Integer percent as a string, e.g. "72". */
   value: string;
-  /** Full text with thin space: "72 %", "<1 %". */
+  /** Full text with thin space: "72 %", "≥95 %". */
   text: string;
-  /** Screen-reader text: "72 percent", "less than 1 percent". */
+  /** Screen-reader text: "72 percent", "95 percent or more". */
   spoken: string;
   /** Exact probability for tooltips: "p = 0.719". */
   exact: string;
+  /** The display is a bound, not the rounded value. */
+  capped: boolean;
 }
 
 export function formatProbability(p: number | null | undefined): FormattedProbability {
   if (!isFiniteNumber(p)) {
-    return { qualifier: '', value: '–', text: '–', spoken: 'unavailable', exact: 'p unavailable' };
+    return { qualifier: '', value: '–', text: '–', spoken: 'unavailable', exact: 'p unavailable', capped: false };
   }
   const exact = `p = ${p.toFixed(3)}`;
-  if (p < 0.01) return { qualifier: '<', value: '1', text: `<1${THIN_SPACE}%`, spoken: 'less than 1 percent', exact };
-  if (p > 0.99)
-    return { qualifier: '>', value: '99', text: `>99${THIN_SPACE}%`, spoken: 'more than 99 percent', exact };
-  const value = String(Math.round(p * 100));
-  return { qualifier: '', value, text: `${value}${THIN_SPACE}%`, spoken: `${value} percent`, exact };
+  const rounded = Math.round(p * 100);
+  if (rounded <= PROBABILITY_DISPLAY_MIN) {
+    const value = String(PROBABILITY_DISPLAY_MIN);
+    return { qualifier: '≤', value, text: `≤${value}${THIN_SPACE}%`, spoken: `${value} percent or less`, exact, capped: true };
+  }
+  if (rounded >= PROBABILITY_DISPLAY_MAX) {
+    const value = String(PROBABILITY_DISPLAY_MAX);
+    return { qualifier: '≥', value, text: `≥${value}${THIN_SPACE}%`, spoken: `${value} percent or more`, exact, capped: true };
+  }
+  const value = String(rounded);
+  return { qualifier: '', value, text: `${value}${THIN_SPACE}%`, spoken: `${value} percent`, exact, capped: false };
 }
 
 /** Plain percentage for thresholds and prevalences: 0.46 → "46 %". */

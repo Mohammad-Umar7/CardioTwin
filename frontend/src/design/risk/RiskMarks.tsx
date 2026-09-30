@@ -121,7 +121,8 @@ export function Probability({ p, target, baseline = false, size = 'l', stale, cl
     >
       <span className="sr-only">{f.spoken}</span>
       <span aria-hidden>
-        {f.qualifier}
+        {/* "≥95 %": the bound sign is set like the % sign (0.6 em, text/secondary), so the digits stay the answer. */}
+        {f.qualifier && <span className="pct-sign pct-qual">{f.qualifier}</span>}
         {f.value}
         {f.value !== '–' && <span className="pct-sign">%</span>}
       </span>

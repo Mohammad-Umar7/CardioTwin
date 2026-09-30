@@ -71,9 +71,9 @@ describe('decisionTexts', () => {
     expect(decisionTexts(0.7476, 0.7474)).toEqual({ pctText: `74.8${T}%`, thresholdText: `74.7${T}%` });
   });
 
-  it('keeps the <1 % / >99 % qualifiers', () => {
-    expect(decisionTexts(0.004, 0.3).pctText).toBe(`<1${T}%`);
-    expect(decisionTexts(0.995, 0.75).pctText).toBe(`>99${T}%`);
+  it('keeps the ≤5 % / ≥95 % display bounds', () => {
+    expect(decisionTexts(0.004, 0.3).pctText).toBe(`≤5${T}%`);
+    expect(decisionTexts(0.995, 0.75).pctText).toBe(`≥95${T}%`);
   });
 });
 

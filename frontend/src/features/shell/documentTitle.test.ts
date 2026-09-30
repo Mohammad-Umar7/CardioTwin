@@ -13,14 +13,14 @@ const base: TitleInput = {
 
 describe('documentTitle', () => {
   it('reads the patient, the CAD estimate and its band word', () => {
-    expect(documentTitle(base)).toBe('P-011 · CAD 98 % Very high — CardioTwin');
+    expect(documentTitle(base)).toBe('P-011 · CAD ≥95 % Very high — CardioTwin');
   });
 
   it('marks what-if edits, but not while holding to compare (the recorded estimate is shown)', () => {
     expect(documentTitle({ ...base, edits: 2, cad: { probability: 0.91, band: 'critical' } })).toBe(
       'P-011 (what-if) · CAD 91 % Very high — CardioTwin',
     );
-    expect(documentTitle({ ...base, edits: 2, comparing: true })).toBe('P-011 · CAD 98 % Very high — CardioTwin');
+    expect(documentTitle({ ...base, edits: 2, comparing: true })).toBe('P-011 · CAD ≥95 % Very high — CardioTwin');
   });
 
   it('never shows a stale estimate as current, and omits a missing one', () => {
@@ -29,7 +29,7 @@ describe('documentTitle', () => {
   });
 
   it('uses <1 % / >99 % and the page name off the workstation', () => {
-    expect(documentTitle({ ...base, cad: { probability: 0.004, band: 'low' } })).toBe('P-011 · CAD <1 % Low — CardioTwin');
+    expect(documentTitle({ ...base, cad: { probability: 0.004, band: 'low' } })).toBe('P-011 · CAD ≤5 % Low — CardioTwin');
     expect(documentTitle({ ...base, pathname: '/performance' })).toBe('Model performance — CardioTwin');
     expect(documentTitle({ ...base, pathname: '/methodology' })).toBe('Methodology — CardioTwin');
     expect(documentTitle({ ...base, pathname: '/' })).toBe(LANDING_TITLE);

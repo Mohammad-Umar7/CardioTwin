@@ -30,12 +30,19 @@ const numeric = (over: Partial<FeatureSpec> = {}): FeatureSpec => ({
 });
 
 describe('formatProbability', () => {
-  it('shows integers with a thin space and clamps the extremes', () => {
+  it('shows integers with a thin space and caps the display at ≤5 % / ≥95 % (calibration slope < 1)', () => {
     expect(formatProbability(0.719).text).toBe(`72${THIN_SPACE}%`);
     expect(formatProbability(0.719).exact).toBe('p = 0.719');
-    expect(formatProbability(0.004).text).toBe(`<1${THIN_SPACE}%`);
-    expect(formatProbability(0.996).text).toBe(`>99${THIN_SPACE}%`);
-    expect(formatProbability(0.99).value).toBe('99');
+    expect(formatProbability(0.719).capped).toBe(false);
+    expect(formatProbability(0.004).text).toBe(`≤5${THIN_SPACE}%`);
+    expect(formatProbability(0.054).text).toBe(`≤5${THIN_SPACE}%`);
+    expect(formatProbability(0.056).text).toBe(`6${THIN_SPACE}%`);
+    expect(formatProbability(0.944).text).toBe(`94${THIN_SPACE}%`);
+    expect(formatProbability(0.946).text).toBe(`≥95${THIN_SPACE}%`);
+    expect(formatProbability(0.996).text).toBe(`≥95${THIN_SPACE}%`);
+    expect(formatProbability(0.996).spoken).toBe('95 percent or more');
+    expect(formatProbability(0.996).exact).toBe('p = 0.996');
+    expect(formatProbability(0.99).capped).toBe(true);
     expect(formatProbability(Number.NaN).text).toBe('–');
   });
 });

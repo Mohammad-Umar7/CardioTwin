@@ -1,7 +1,7 @@
 import { Probability, RiskPip, RiskTrack, Skeleton } from '@/design';
 import { useSchemaIndex } from '@/hooks/useData';
 import { cn } from '@/lib/cn';
-import { formatDeltaPts } from '@/lib/format';
+import { formatDeltaPts, formatProbability } from '@/lib/format';
 import { usePatientStore } from '@/state/patientStore';
 import { useViewerStore } from '@/state/viewerStore';
 import type { TargetSpec } from '@/types/contracts';
@@ -39,7 +39,7 @@ export function VesselRow({ spec, covered = false }: VesselRowProps) {
   const viewer = useViewerStore.getState;
 
   const label = p
-    ? `${spec.label}, ${Math.round(p.probability * 100)} percent, ${view.stale ? 'updating' : spokenVerdict(p)}${
+    ? `${spec.label}, ${formatProbability(p.probability).spoken}, ${view.stale ? 'updating' : spokenVerdict(p)}${
         delta && delta.direction !== 'none' ? `, ${delta.spoken} from the recorded value` : ''
       }`
     : `${spec.label}, estimate unavailable`;
