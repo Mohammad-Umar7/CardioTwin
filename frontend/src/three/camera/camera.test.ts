@@ -7,7 +7,8 @@ import { angleLabel, presetLabel, useCameraState } from './cameraState';
 import {
   WORKSTATION_HEART_SHARE,
   easeOutCubic,
-  explodedThoraxBox,
+  opaqueThoraxBox,
+  peelModeFor,
   framingDistance,
   freeArea,
   glide,
@@ -147,15 +148,35 @@ describe('heart framing (V2 §4.1: 62 % of the free-area height)', () => {
 });
 
 describe('thorax view of the peel', () => {
-  it('bounds the opaque thorax (half-exploded ribs, lungs, diaphragm) around the heart', () => {
-    const box = explodedThoraxBox(manifest)!;
-    expect(box).not.toBeNull();
-    // Contains the heart and the ribs swung half-way out; excludes the fully swung-out (ghosted) halves.
-    expect(box.containsBox(heartBox(manifest))).toBe(true);
-    expect(box.max.x).toBeGreaterThan(1.14 + 0.9);
-    expect(box.max.x).toBeLessThan(1.14 + 1.95);
-    expect(explodedThoraxBox(manifest, 1)!.max.x).toBeGreaterThan(box.max.x);
-    expect(explodedThoraxBox(null)).toBeNull();
+  it('bounds what is opaque at each detent: the diaphragm under the heart at Ribs open, the whole chest when closed', () => {
+    const ribs = opaqueThoraxBox(manifest, 0.45)!;
+    expect(ribs).not.toBeNull();
+    expect(ribs.containsBox(heartBox(manifest))).toBe(true);
+    // The ribs are ghosts by then (their window ends at 0.45): the box is the heart over the diaphragm dome.
+    expect(ribs.min.y).toBeLessThan(-2);
+    expect(ribs.max.x).toBeLessThan(1.2);
+    const closed = opaqueThoraxBox(manifest, 0)!;
+    // Closed: the ribs are solid at rest (and never framed as far as their swung-out halves).
+    expect(closed.max.x).toBeGreaterThan(ribs.max.x);
+    expect(closed.max.x).toBeLessThan(1.14 + 1.95);
+    // Lungs count only when their layer is shown.
+    expect(opaqueThoraxBox(manifest, 0.2, () => true)!.min.x).toBeLessThanOrEqual(opaqueThoraxBox(manifest, 0.2)!.min.x);
+    expect(opaqueThoraxBox(null, 0)).toBeNull();
+  });
+
+  it('derives the framing mode from the peel value, whatever the path (hysteresis, no threshold crossings)', () => {
+    expect(peelModeFor(0.6, 'heart')).toBe('heart');
+    // Ribs open (0.45) and anything where the diaphragm is solid again: the thorax.
+    expect(peelModeFor(0.45, 'heart')).toBe('thorax');
+    expect(peelModeFor(0.57, 'heart')).toBe('thorax');
+    expect(peelModeFor(0.59, 'thorax')).toBe('thorax');
+    expect(peelModeFor(0.6, 'thorax')).toBe('heart');
+    expect(peelModeFor(0.7, 'heart')).toBe('open');
+    expect(peelModeFor(0.67, 'open')).toBe('open');
+    expect(peelModeFor(0.62, 'open')).toBe('heart');
+    // A jump from Open heart straight to Closed frames the thorax; from Closed straight to Open, the open heart.
+    expect(peelModeFor(0, 'open')).toBe('thorax');
+    expect(peelModeFor(1, 'thorax')).toBe('open');
   });
 });
 
