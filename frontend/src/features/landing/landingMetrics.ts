@@ -72,7 +72,14 @@ export interface TargetPerformance {
   specificity: number | null;
   threshold: number | null;
   /** Repeated random re-split distribution of held-out ROC-AUC, when the ML analysis produced it. */
-  robustness: { median: number; p05: number | null; p95: number | null; nSplits: number | null } | null;
+  robustness: {
+    median: number;
+    p05: number | null;
+    p95: number | null;
+    nSplits: number | null;
+    /** Where the locked test split ranks among the re-splits (0–100). */
+    percentile: number | null;
+  } | null;
 }
 
 export interface LandingMetrics {
@@ -107,6 +114,23 @@ const toCv = (m: { mean: number; std: number } | undefined) =>
 
 const valueOf = (m: { value: number } | undefined): number | null => (m && isNum(m.value) ? m.value : null);
 
+/**
+ * Repairs UTF-8 text that a producer decoded as Windows-1252 and re-encoded ("Â±" for "±", "â€“" for
+ * "–"), so prose from the artifacts never shows mojibake. Clean strings pass through unchanged.
+ */
+export function repairText(s: string | null | undefined): string | null {
+  if (!s) return null;
+  return s
+    .replace(/Â±/g, '±')
+    .replace(/â€“/g, '–')
+    .replace(/â€”/g, '—')
+    .replace(/Ã—/g, '×')
+    .replace(/â‰¥/g, '≥')
+    .replace(/â‰¤/g, '≤')
+    .replace(/\u00c2\u00a0/g, '\u00a0')
+    .replace(/\u00e2\u20ac\u2030/g, '\u2009');
+}
+
 /** Normalise `metrics_summary.json`. Throws on a file that is not a summary (caller falls back). */
 export function fromSummary(s: MetricsSummaryFile, labels: Partial<Record<string, string>> = {}): LandingMetrics {
   if (!s || typeof s !== 'object' || !s.dataset || !isNum(s.dataset.n) || !s.targets) {
@@ -130,6 +154,7 @@ export function fromSummary(s: MetricsSummaryFile, labels: Partial<Record<string
               p05: isNum(rob.p05) ? rob.p05 : null,
               p95: isNum(rob.p95) ? rob.p95 : null,
               nSplits: isNum(t.robustness?.n_splits) ? (t.robustness?.n_splits ?? null) : null,
+              percentile: isNum(t.robustness?.fixed_split_percentile) ? (t.robustness?.fixed_split_percentile ?? null) : null,
             }
           : null,
     };
@@ -140,7 +165,7 @@ export function fromSummary(s: MetricsSummaryFile, labels: Partial<Record<string
     n: s.dataset.n,
     nDev: isNum(s.dataset.n_dev) ? s.dataset.n_dev : null,
     nTest: s.dataset.n_test,
-    protocol: { test: s.protocol?.test ?? null, cv: s.protocol?.cv ?? null },
+    protocol: { test: repairText(s.protocol?.test), cv: repairText(s.protocol?.cv) },
     targets,
   };
 }
@@ -148,8 +173,11 @@ export function fromSummary(s: MetricsSummaryFile, labels: Partial<Record<string
 /** Normalise the full `metrics.json` (fallback when the summary is absent). */
 export function fromMetricsReport(m: MetricsReport, labels: Partial<Record<string, string>> = {}): LandingMetrics {
   const raw = m as MetricsReport & { model_version?: string };
-  const robustness = (m as unknown as { robustness?: Record<string, { n_splits?: number; roc_auc?: SummaryDistribution }> })
-    .robustness;
+  const robustness = (
+    m as unknown as {
+      robustness?: Record<string, { n_splits?: number; fixed_split_percentile?: number; roc_auc?: SummaryDistribution }>;
+    }
+  ).robustness;
   const targets = orderIds(Object.keys(m.targets)).map((id): TargetPerformance => {
     const t = m.targets[id]!;
     const rob = robustness?.[id];
@@ -168,6 +196,7 @@ export function fromMetricsReport(m: MetricsReport, labels: Partial<Record<strin
               p05: isNum(rob.roc_auc.p05) ? rob.roc_auc.p05 : null,
               p95: isNum(rob.roc_auc.p95) ? rob.roc_auc.p95 : null,
               nSplits: isNum(rob.n_splits) ? rob.n_splits : null,
+              percentile: isNum(rob.fixed_split_percentile) ? rob.fixed_split_percentile : null,
             }
           : null,
     };
@@ -216,12 +245,30 @@ export function reconcileTestAndCv(t: TargetPerformance | null, nTest: number | 
   const ciText = ci ? `CI ${formatMetricValue(ci[0])}${EN_DASH}${formatMetricValue(ci[1])}` : 'no CI';
   const relation = t.testAuc.value < t.cvAuc.mean ? 'below' : t.testAuc.value > t.cvAuc.mean ? 'above' : 'equal to';
   const contains = ci ? ci[0] <= t.cvAuc.mean && t.cvAuc.mean <= ci[1] : false;
+  const r = t.robustness;
+  const resplits =
+    r && r.nSplits
+      ? ` Across ${r.nSplits} random re-splits the median held-out ROC-AUC is ${formatMetricValue(r.median)}` +
+        (r.p05 !== null && r.p95 !== null
+          ? ` (90${THIN_SPACE}% of splits ${formatMetricValue(r.p05)}${EN_DASH}${formatMetricValue(r.p95)})`
+          : '') +
+        (r.percentile !== null ? `; this locked split ranks at the ${ordinal(Math.round(r.percentile))} percentile.` : '.')
+      : '';
   return (
     `Test ROC-AUC ${test} (${n}${ciText}) is ${relation} cross-validation (${cv}). ` +
     (contains
       ? 'That is expected with a small held-out set, and the CI includes the CV value.'
-      : 'The CI does not include the CV value, so read the test estimate as the more conservative one.')
+      : 'The CI does not include the CV value, so read the test estimate as the more conservative one.') +
+    resplits
   );
+}
+
+/** 1 → "1st", 3 → "3rd", 12 → "12th", 58 → "58th". */
+export function ordinal(n: number): string {
+  const v = Math.abs(Math.trunc(n));
+  const teen = v % 100 >= 11 && v % 100 <= 13;
+  const suffix = teen ? 'th' : v % 10 === 1 ? 'st' : v % 10 === 2 ? 'nd' : v % 10 === 3 ? 'rd' : 'th';
+  return `${n}${suffix}`;
 }
 
 // ------------------------------------------------------------------------------ ROC thumbnail

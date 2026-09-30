@@ -50,6 +50,7 @@ const Caption = ({ children }: { children: ReactNode }) => (
 );
 
 function AucTable({ lm }: { lm: LandingMetrics }) {
+  const resplits = lm.targets.some((t) => t.robustness);
   return (
     <div className="flex flex-col gap-2">
       <table className="num text-label font-normal">
@@ -58,6 +59,7 @@ function AucTable({ lm }: { lm: LandingMetrics }) {
             <th className="pb-1 pr-3 text-left font-medium">Target</th>
             <th className="pb-1 pr-3 text-right font-medium">Test ROC-AUC [95&thinsp;% CI]</th>
             <th className="pb-1 text-right font-medium">CV mean ± sd</th>
+            {resplits && <th className="pb-1 pl-3 text-right font-medium">Re-split median</th>}
           </tr>
         </thead>
         <tbody className="text-secondary">
@@ -68,6 +70,7 @@ function AucTable({ lm }: { lm: LandingMetrics }) {
                 {formatMetricValue(t.testAuc?.value)} <span className="text-tertiary">{formatCi(t.testAuc?.ci)}</span>
               </td>
               <td className="text-right">{formatCv(t.cvAuc)}</td>
+              {resplits && <td className="pl-3 text-right">{formatMetricValue(t.robustness?.median)}</td>}
             </tr>
           ))}
         </tbody>
@@ -152,7 +155,7 @@ export function KpiStrip({ className }: { className?: string }) {
         <Tooltip
           content={
             lm ? (
-              <div className="flex max-w-[340px] flex-col gap-2">
+              <div className="flex max-w-[380px] flex-col gap-2">
                 {reconcile && <p>{reconcile}</p>}
                 <AucTable lm={lm} />
               </div>

@@ -4,10 +4,12 @@ import { jsonResponse, sampleMetrics } from '@/test/fixtures';
 import {
   formatCv,
   fromMetricsReport,
+  ordinal,
   fromSummary,
   landingMetricsResource,
   performanceFor,
   reconcileTestAndCv,
+  repairText,
   rocThumbnail,
   type MetricsSummaryFile,
 } from './landingMetrics';
@@ -49,7 +51,7 @@ describe('fromSummary', () => {
     expect(cad.cvAuc).toEqual({ mean: 0.9367, std: 0.0345 });
     expect(cad.sensitivity).toBe(0.84);
     expect(cad.specificity).toBe(0.76);
-    expect(cad.robustness).toEqual({ median: 0.91, p05: 0.84, p95: 0.96, nSplits: 200 });
+    expect(cad.robustness).toEqual({ median: 0.91, p05: 0.84, p95: 0.96, nSplits: 200, percentile: 12 });
     expect(performanceFor(lm, 'RCA')!.robustness).toBeNull();
   });
 
@@ -136,5 +138,24 @@ describe('honest test vs CV text', () => {
     const t = { ...performanceFor(fromSummary(summary), 'CAD')!, testAuc: { value: 0.7, ci: [0.6, 0.8] as [number, number] } };
     expect(reconcileTestAndCv(t, 61)).toMatch(/does not include the CV value/);
     expect(reconcileTestAndCv(null, 61)).toBeNull();
+  });
+});
+
+describe('producer text and re-split robustness', () => {
+  it('repairs Windows-1252 mojibake in artifact prose and leaves clean text alone', () => {
+    expect(repairText('mean Â± sd, 0.86â€“0.97')).toBe('mean ± sd, 0.86–0.97');
+    expect(repairText('clean ± text')).toBe('clean ± text');
+    expect(repairText(null)).toBeNull();
+  });
+
+  it('adds the re-split median and the locked split percentile to the reconciliation', () => {
+    const lm = fromSummary({
+      ...summary,
+      targets: { CAD: { ...summary.targets.CAD!, robustness: { n_splits: 200, fixed_split_percentile: 3, roc_auc: { p05: 0.86, p50: 0.93, p95: 0.97 } } } },
+    });
+    const cad = performanceFor(lm, 'CAD')!;
+    expect(cad.robustness?.percentile).toBe(3);
+    expect(reconcileTestAndCv(cad, 61)).toMatch(/Across 200 random re-splits the median held-out ROC-AUC is 0\.93 \(90\u2009% of splits 0\.86–0\.97\); this locked split ranks at the 3rd percentile\.$/);
+    expect([1, 2, 3, 4, 11, 12, 13, 21, 58].map(ordinal)).toEqual(['1st', '2nd', '3rd', '4th', '11th', '12th', '13th', '21st', '58th']);
   });
 });
