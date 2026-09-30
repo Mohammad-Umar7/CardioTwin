@@ -96,10 +96,10 @@ export function TopNav() {
           aria-label="CardioTwin home"
         >
           <BrandMark />
-          <span className="font-display tracking-[-0.02em]">CardioTwin</span>
+          <span className="font-display tracking-[-0.02em] max-[899.98px]:sr-only">CardioTwin</span>
         </NavLink>
 
-        <nav aria-label="Primary" className="flex h-full shrink-0 items-stretch">
+        <nav aria-label="Primary" className="flex h-full shrink-0 items-stretch max-[639.98px]:hidden">
           {NAV.map((item) => (
             <NavLink
               key={item.to}
@@ -107,7 +107,7 @@ export function TopNav() {
               onMouseEnter={item.to === ROUTES.workstation ? () => void loadWorkstation() : undefined}
               className={({ isActive }) =>
                 cn(
-                  'relative flex items-center px-3 text-body-s font-medium transition-colors duration-fast',
+                  'relative flex items-center px-3 text-body-s font-medium transition-colors duration-fast max-[899.98px]:px-2',
                   isActive ? 'text-primary' : 'text-secondary hover:text-primary',
                 )
               }
@@ -141,7 +141,7 @@ export function TopNav() {
                 aria-label="Guided demo"
               >
                 <span className="hidden min-[1440px]:inline">Guided demo</span>
-                <span className="min-[1440px]:hidden">Demo</span>
+                <span className="hidden min-[1100px]:max-[1439.98px]:inline">Demo</span>
               </Button>
               <IconButton
                 label="Keyboard shortcuts"
@@ -150,6 +150,7 @@ export function TopNav() {
                 size="md"
                 onClick={() => useUiStore.getState().setShortcutsOpen(true)}
                 aria-haspopup="dialog"
+                className="max-[639.98px]:hidden"
               />
             </>
           )}

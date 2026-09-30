@@ -158,3 +158,10 @@
     --status-h: 24px;
   }
 }
+
+/* Phones: the status line wraps to two lines (sentence, then credit + Details), never one crushed line. */
+@media (max-width: 639.98px) {
+  :root {
+    --status-h: 40px;
+  }
+}

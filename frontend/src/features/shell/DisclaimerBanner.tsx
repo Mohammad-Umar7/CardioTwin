@@ -34,7 +34,7 @@ export function StatusLine() {
       className="fixed inset-x-0 bottom-0 z-status flex min-h-[var(--status-h)] items-center border-t border-hairline bg-app px-3 min-[1440px]:px-4"
     >
       <div className="flex w-full flex-wrap items-center gap-x-4 gap-y-0.5 py-0.5 text-label font-normal text-secondary min-[1100px]:flex-nowrap">
-        <p className="flex min-w-0 flex-1 items-center gap-2">
+        <p className="flex min-w-0 flex-1 items-center gap-2 max-[1099.98px]:basis-full">
           <Info aria-hidden className="size-3.5 shrink-0 stroke-[1.5]" />
           <span className="min-w-0 min-[1100px]:truncate">
             Decision support &amp; education only — <strong className="font-medium text-primary">not a diagnosis</strong>
