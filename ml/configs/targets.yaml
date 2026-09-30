@@ -46,7 +46,7 @@ targets:
     source_column: RCA
     positive_values: [Stenotic]
     anatomy: [Coronary_RCA, Coronary_RCA_Marginal, Coronary_RCA_PDA, Coronary_RCA_PL, Coronary_RCA_Septal]
-    territory: Right ventricle, inferior wall and inferior septum (via the posterior descending artery in right-dominant hearts), sinus and AV nodes
+    territory: Right ventricle, inferior wall and inferior septum (via the posterior descending artery in right-dominant hearts) and, in most hearts, the sinus and AV nodes
     description: Probability of >= 50 % narrowing somewhere in the right coronary artery or its branches.
 
 # Columns that encode the angiography result. They are NEVER model inputs (target leakage);

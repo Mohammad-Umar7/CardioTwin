@@ -445,8 +445,8 @@ features:
     raw: number
     unit: '%'
     step: 5
-    normal: { low: 55, high: 70 }
-    description: Share of blood the left ventricle pumps out with each beat, measured by transthoracic echocardiography. 55 % or more is normal; 40 % or less means a weak heart muscle.
+    normal: { low: 52, high: 72 }
+    description: Share of blood the left ventricle pumps out with each beat, measured by transthoracic echocardiography. Normal is about 52-72 % (ASE/EACVI 2015; the lower limit is 54 % in women); 41-49 % is mildly reduced and 40 % or less is reduced (a weak heart muscle). This dataset records EF in 5 % steps.
   - key: Region RWMA
     label: Regional wall-motion abnormality
     group: echo
