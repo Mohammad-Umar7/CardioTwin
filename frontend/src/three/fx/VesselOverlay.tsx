@@ -18,6 +18,28 @@ interface Entry {
   overlay: Mesh;
   material: OverlayMaterial;
   slot: number;
+  /** Arc-length range of the mesh, for skipping draws the pulse / sweep cannot reach this frame. */
+  arcMin: number;
+  arcMax: number;
+}
+
+/** Where the pulse crest + wake and the ignition band + afterglow put visible light (arc length). */
+const PULSE_REACH: [number, number] = [-0.6, 0.12];
+const IGNITE_REACH: [number, number] = [-1.2, 0.15];
+
+const overlaps = (min: number, max: number, front: number, [behind, ahead]: [number, number]) =>
+  max >= front + behind && min <= front + ahead;
+
+function arcRange(geometry: BufferGeometry, attribute: string): [number, number] {
+  const a = geometry.getAttribute(attribute);
+  let min = Infinity;
+  let max = -Infinity;
+  for (let i = 0; i < a.count; i += 1) {
+    const v = a.getX(i);
+    if (v < min) min = v;
+    if (v > max) max = v;
+  }
+  return Number.isFinite(min) ? [min, max] : [0, 1];
 }
 
 const arclenAttributeOf = (geometry: BufferGeometry): string | null =>
@@ -110,7 +132,8 @@ export function VesselOverlay({ tier, treeLengthOf, restOffsetOf }: VesselOverla
         overlay.matrixWorld.copy(object.matrixWorld);
       };
       root.add(overlay);
-      entries.current.set(object, { source: object, overlay, material, slot: slotOf(slots, target) });
+      const [arcMin, arcMax] = arcRange(object.geometry as BufferGeometry, attribute);
+      entries.current.set(object, { source: object, overlay, material, slot: slotOf(slots, target), arcMin, arcMax });
     });
   };
 
@@ -126,9 +149,14 @@ export function VesselOverlay({ tier, treeLengthOf, restOffsetOf }: VesselOverla
     shared.uIgnite.value = f.ignite;
     shared.uIgniteAmp.value = f.igniteAmp;
     shared.uDashAmp.value = dashes;
-    const active = f.pulseAmp > 0 || f.igniteAmp > 0 || dashes > 0;
+    const pulsing = f.pulseAmp > 0 && f.pulseFront >= 0;
+    const igniting = f.igniteAmp > 0;
     for (const entry of entries.current.values()) {
-      const visible = active && isEffectivelyVisible(entry.source);
+      const lit =
+        dashes > 0 ||
+        (pulsing && overlaps(entry.arcMin, entry.arcMax, f.pulseFront, PULSE_REACH)) ||
+        (igniting && overlaps(entry.arcMin, entry.arcMax, f.ignite, IGNITE_REACH));
+      const visible = lit && isEffectivelyVisible(entry.source);
       entry.overlay.visible = visible;
       if (!visible) continue;
       const s = Math.min(entry.slot, MAX_TARGET_SLOTS - 1);

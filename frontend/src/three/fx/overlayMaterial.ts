@@ -129,8 +129,12 @@ export function createOverlayMaterial(shared: OverlayShared, arclenAttribute: st
         // Pulse: sharp leading edge, exponential wake, fading distally.
         if (uPulseAmp > 0.0) {
           float x = uPulseFront - vArc;
-          float band = x >= 0.0 ? exp(-x / 0.12) : exp(-(x * x) / (0.02 * 0.02));
-          col += mix(hue, vec3(1.0), 0.35) * (1.1 * uPulseAmp * band * (1.0 - 0.4 * clamp(vArc, 0.0, 1.0)));
+          // a bright crest AT the front (it must survive Neutral tone mapping on an already lit vessel and
+          // reach the bloom threshold) plus a softer wake behind it
+          float crest = exp(-(x * x) / (0.035 * 0.035));
+          float wake = x > 0.0 ? exp(-x / 0.14) : 0.0;
+          float band = 1.7 * crest + 0.45 * wake;
+          col += mix(hue, vec3(1.0), 0.4) * (uPulseAmp * band * (1.0 - 0.4 * clamp(vArc, 0.0, 1.0)));
         }
 
         // Ignition: bright trace band at the front plus a short afterglow behind it.
