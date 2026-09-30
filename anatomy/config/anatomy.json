@@ -631,7 +631,7 @@
         0.0
       ],
       "target": null,
-      "description": "Pulmonary trunk and its right and left branches carrying deoxygenated blood from the right ventricle to the lungs."
+      "description": "Pulmonary trunk, its right and left branches and the intrapulmonary arterial tree, carrying deoxygenated blood from the right ventricle to the lungs."
     },
     {
       "node": "GreatVessel_PulmonaryVeins",
@@ -649,7 +649,7 @@
         0.0
       ],
       "target": null,
-      "description": "Pulmonary veins returning oxygenated blood from the lungs to the left atrium."
+      "description": "Pulmonary veins and their intrapulmonary tributaries, returning oxygenated blood from the lungs to the left atrium."
     },
     {
       "node": "GreatVessel_SVC",
