@@ -308,10 +308,10 @@ export function GlbAnatomy({ url }: { url: string }) {
     // Landing hero: ghosts (the fresnel lungs) fade out over the copy column, so the headline keeps its
     // contrast; the workstation keeps them everywhere (faint anyway).
     const mask = GHOST_MASK.uGhostMask.value;
-    if (hero) {
-      const px = state.gl.getPixelRatio();
-      const left = useUiStore.getState().stageInsets.left;
-      mask.set(left * px, Math.max(1, left * 0.35 * px));
+    const width = state.size.width;
+    if (hero && width > 0) {
+      const left = useUiStore.getState().stageInsets.left / width;
+      mask.set(left, Math.max(0.01, left * 0.35));
     } else mask.set(-1, 1);
     // Labels follow the wall they sit on through the peel and the assembly (never the beat).
     for (const a of anchorRest.current) {

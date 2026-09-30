@@ -540,9 +540,10 @@ export interface GhostUniforms extends Record<string, IUniform> {
 export type GhostMaterial = MeshBasicMaterial & { userData: { ct: { uniforms: GhostUniforms; ghost: true } } };
 
 /**
- * Screen-space mask shared by every ghost (by reference): ghosts fade out left of `x` (drawing-buffer px),
- * over `y` px — on the landing hero the copy column sits there, and a fresnel lung behind the headline
- * costs the text its contrast. (−1, 1) = no mask.
+ * Screen-space mask shared by every ghost (by reference): ghosts fade out left of `x` over `y`, both as a
+ * share of the canvas width — on the landing hero the copy column sits there, and a fresnel lung behind the
+ * headline costs the text its contrast. (−1, 1) = no mask. Measured in NDC (not gl_FragCoord), so it holds
+ * whatever the pixel ratio or the post chain's buffer size.
  */
 export const GHOST_MASK = { uGhostMask: { value: new Vector2(-1, 1) } as IUniform<Vector2> };
 
@@ -613,14 +614,18 @@ export function createGhostMaterial(kind: TissueKind, look: SceneLookId, restOff
   material.onBeforeCompile = (shader) => {
     Object.assign(shader.uniforms, uniforms);
     shader.vertexShader = shader.vertexShader
-      .replace('#include <common>', '#include <common>\nuniform vec3 uRestOffset;\nvarying vec3 vCtNormal;\nvarying vec3 vCtView;\nvarying vec3 vCtRest;\nvarying float vCtDepth;')
+      .replace(
+        '#include <common>',
+        '#include <common>\nuniform vec3 uRestOffset;\nvarying vec3 vCtNormal;\nvarying vec3 vCtView;\nvarying vec3 vCtRest;\nvarying float vCtDepth;\nvarying vec2 vCtClip;',
+      )
       .replace('#include <begin_vertex>', '#include <begin_vertex>\nvCtRest = transformed + uRestOffset;')
       .replace(
         '#include <project_vertex>',
         `#include <project_vertex>
         vCtNormal = normalize(normalMatrix * normal);
         vCtView = normalize(-mvPosition.xyz);
-        vCtDepth = -mvPosition.z;`,
+        vCtDepth = -mvPosition.z;
+        vCtClip = gl_Position.xw;`,
       );
     shader.fragmentShader = shader.fragmentShader
       .replace(
@@ -636,6 +641,7 @@ varying vec3 vCtNormal;
 varying vec3 vCtView;
 varying vec3 vCtRest;
 varying float vCtDepth;
+varying vec2 vCtClip;
 ${IGN}
 ${clip ? 'uniform vec3 uClipCentre;\nuniform float uClipRadius;\nuniform float uClipFeather;' : ''}`,
       )
@@ -643,7 +649,7 @@ ${clip ? 'uniform vec3 uClipCentre;\nuniform float uClipRadius;\nuniform float u
         '#include <opaque_fragment>',
         `float ctF = pow(1.0 - abs(dot(normalize(vCtNormal), normalize(vCtView))), uPower);
         diffuseColor.a = (uBase + uRim * ctF) * uFade * smoothstep(uNearFade * 0.35, uNearFade, vCtDepth);
-        diffuseColor.a *= smoothstep(uGhostMask.x - uGhostMask.y, uGhostMask.x, gl_FragCoord.x);
+        diffuseColor.a *= smoothstep(uGhostMask.x - uGhostMask.y, uGhostMask.x, 0.5 + 0.5 * vCtClip.x / vCtClip.y);
         ${clip ? 'diffuseColor.a *= 1.0 - smoothstep(uClipRadius - uClipFeather, uClipRadius, distance(vCtRest, uClipCentre));' : ''}
         if (diffuseColor.a < 0.002) discard;
         #include <opaque_fragment>`,

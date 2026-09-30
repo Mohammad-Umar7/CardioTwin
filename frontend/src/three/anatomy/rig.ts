@@ -605,6 +605,9 @@ export class AnatomyRig {
         solidT = 0;
         ghostT = isVessel ? 0.7 : entry.kind === 'myocardium' ? 1 : 0.6;
       }
+      // Landing hero (V2 §6.1): the heart unboxed with the lungs as its only fresnel ghost — no skin, muscle,
+      // rib, cartilage, diaphragm or bronchial-tree ghosts drifting in front of the lens or behind the copy.
+      if (inp.stage === 'hero' && outer && entry.kind !== 'lung') ghostT = 0;
       entry.solidAmt += (solidT - entry.solidAmt) * fadeK;
       entry.ghostAmt += (ghostT - entry.ghostAmt) * fadeK;
       if (Math.abs(entry.solidAmt - solidT) < 2e-3) entry.solidAmt = solidT;
