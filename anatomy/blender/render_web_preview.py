@@ -8,7 +8,8 @@
 2. the copy is imported into an empty scene: every material is the glTF material with its baked baseColor,
    normal and occlusion/roughness maps; nothing procedural is added;
 3. the coronary arteries are recoloured with the example risk profile, exactly as the viewer does in its
-   Realistic look (they carry no textures); the pulmonary-vein tree is hidden and the pulmonary artery,
+   Realistic look (they carry no textures), and the cardiac veins and the fat step back (darker, desaturated) while
+   the risk colours are on, so no ramp colour sits on a tissue of its own hue; the pulmonary-vein tree is hidden and the pulmonary artery,
    descending aorta and arch branches are trimmed like the hero shot, so the two images compare 1:1;
 4. EEVEE renders ``docs/media/renders/web_preview.jpg`` from the hero camera with the hero lights.
 """
@@ -141,6 +142,25 @@ def main() -> None:
                 tex = next((nd for nd in mat.node_tree.nodes if nd.type == "TEX_IMAGE" and nd.image and "_base" in nd.image.name), None)
                 if bsdf is not None and tex is not None:
                     mat.node_tree.links.new(tex.outputs["Color"], bsdf.inputs["Base Color"])
+    # risk colouring on: the veins and the fat step back (darker, less saturated), so no ramp colour sits next to a
+    # tissue of the same hue (the ramp's low end is blue like the atlas veins, its high end apricot like the fat)
+    for name, o in obs.items():
+        k = 0.45 if name == "CardiacVeins" else 0.78 if name.startswith("EpicardialFat") else None
+        if k is None:
+            continue
+        for mat in o.data.materials:
+            if not (mat and mat.node_tree):
+                continue
+            nt = mat.node_tree
+            bsdf = next((nd for nd in nt.nodes if nd.type == "BSDF_PRINCIPLED"), None)
+            if bsdf is None or not bsdf.inputs["Base Color"].is_linked:
+                continue
+            src = bsdf.inputs["Base Color"].links[0].from_socket
+            hsv = nt.nodes.new("ShaderNodeHueSaturation")
+            hsv.inputs["Saturation"].default_value = 0.45 if name == "CardiacVeins" else 0.7
+            hsv.inputs["Value"].default_value = k
+            nt.links.new(src, hsv.inputs["Color"])
+            nt.links.new(hsv.outputs["Color"], bsdf.inputs["Base Color"])
     # coronary arteries: the viewer's risk ramp (risk.ts, OKLab) for the example profile, as its Realistic look (untextured nodes)
     for name, o in obs.items():
         if not name.startswith("Coronary_"):
@@ -151,9 +171,9 @@ def main() -> None:
         mat.use_nodes = True
         bsdf = next(nd for nd in mat.node_tree.nodes if nd.type == "BSDF_PRINCIPLED")
         bsdf.inputs["Base Color"].default_value = (*color, 1.0)
-        bsdf.inputs["Roughness"].default_value = 0.32
-        bsdf.inputs["Coat Weight"].default_value = 0.5
-        bsdf.inputs["Coat Roughness"].default_value = 0.08
+        bsdf.inputs["Roughness"].default_value = 0.4
+        bsdf.inputs["Coat Weight"].default_value = 0.25
+        bsdf.inputs["Coat Roughness"].default_value = 0.2
         o.data.materials.clear()
         o.data.materials.append(mat)
 
