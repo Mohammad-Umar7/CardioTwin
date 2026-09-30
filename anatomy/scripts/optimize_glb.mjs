@@ -22,20 +22,24 @@
  *    the left-main ostium, right tree from the RCA ostium), for flow / ripple effects along the vessels.
  *    The centreline stage therefore runs before this one.
  */
-import { readFileSync, statSync } from 'node:fs';
-import { dirname, resolve } from 'node:path';
+import { existsSync, readFileSync, statSync } from 'node:fs';
+import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 import { NodeIO, PropertyType } from '@gltf-transform/core';
-import { ALL_EXTENSIONS, EXTMeshoptCompression, KHRMeshQuantization } from '@gltf-transform/extensions';
+import { ALL_EXTENSIONS, EXTMeshoptCompression, EXTTextureWebP, KHRMeshQuantization } from '@gltf-transform/extensions';
 import { prune, quantize, reorder } from '@gltf-transform/functions';
 import { MeshoptDecoder, MeshoptEncoder } from 'meshoptimizer';
+import sharp from 'sharp';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const REPO = resolve(HERE, '..', '..');
 const input = resolve(process.argv[2] ?? resolve(REPO, 'anatomy/build/cardiotwin_anatomy.raw.glb'));
 const output = resolve(process.argv[3] ?? resolve(REPO, 'frontend/public/anatomy/cardiotwin_anatomy.glb'));
 const vesselsPath = resolve(REPO, 'frontend/public/anatomy/vessels.json');
+const bakeDir = resolve(REPO, 'anatomy/build/bake');
+/** WebP quality per map (normal maps need more bits: block artefacts read as facets). */
+const WEBP = { base: { quality: 84, effort: 6 }, normal: { quality: 90, effort: 6 }, orm: { quality: 86, effort: 6 } };
 
 /**
  * Arc length from the tree's ostium for every centreline point, normalised per tree to [0, 1].
@@ -224,6 +228,42 @@ if (!Object.keys(labelCounts).some((n) => n.startsWith('Coronary_'))) {
   process.exit(1);
 }
 
+// 1d. Baked PBR textures (anatomy/build/bake, from anatomy/blender/bake_textures.py): WebP (EXT_texture_webp) on each
+//     node's own material: baseColor (sRGB), normal (tangent space), occlusion + metallicRoughness from one ORM map.
+//     Factors become neutral (the colour lives in the texture); the viewer's Clinical look ignores the maps.
+const bakeManifestPath = join(bakeDir, 'bake_manifest.json');
+let textured = 0;
+let textureBytes = 0;
+if (existsSync(bakeManifestPath)) {
+  const bake = JSON.parse(readFileSync(bakeManifestPath, 'utf8'));
+  doc.createExtension(EXTTextureWebP).setRequired(true);
+  const encode = async (file, opts) => sharp(readFileSync(join(bakeDir, file))).removeAlpha().webp(opts).toBuffer();
+  for (const node of root.listNodes()) {
+    const entry = bake.nodes[node.getName()];
+    const mesh = node.getMesh();
+    if (!entry || !mesh) continue;
+    const prim = mesh.listPrimitives()[0];
+    if (!prim.getAttribute('TEXCOORD_0')) throw new Error(`${node.getName()}: baked maps but no TEXCOORD_0`);
+    const mat = prim.getMaterial();
+    const tex = async (kind) => {
+      const data = await encode(entry.files[kind], WEBP[kind]);
+      textureBytes += data.byteLength;
+      return doc.createTexture(`${node.getName()}_${kind}`).setImage(new Uint8Array(data)).setMimeType('image/webp').setURI(`${node.getName()}_${kind}.webp`);
+    };
+    const alpha = mat.getBaseColorFactor()[3];
+    mat.setBaseColorTexture(await tex('base')).setBaseColorFactor([1, 1, 1, alpha]);
+    mat.setNormalTexture(await tex('normal')).setNormalScale(1.0);
+    const orm = await tex('orm');
+    mat.setOcclusionTexture(orm).setOcclusionStrength(1.0);
+    mat.setMetallicRoughnessTexture(orm).setMetallicFactor(0.0).setRoughnessFactor(1.0);
+    mat.setExtras({ ...mat.getExtras(), ct_baked: true, ct_look: entry.look });
+    textured++;
+  }
+  console.log(`[optimize] baked textures on ${textured} nodes: ${(textureBytes / 1e6).toFixed(2)} MB of WebP`);
+} else {
+  console.log('[optimize] no baked textures (anatomy/build/bake/bake_manifest.json missing): geometry-only GLB');
+}
+
 // 2. Cleanup, vertex-cache reorder, attribute quantisation (never POSITION).
 await doc.transform(
   prune({ keepAttributes: true, keepLeaves: true, keepIndices: true }),
@@ -278,5 +318,5 @@ for (const mesh of check.getRoot().listMeshes()) {
 }
 const inMB = statSync(input).size / 1e6;
 const outMB = statSync(output).size / 1e6;
-console.log(`[optimize] ${converted} territory attribute(s) converted to RGB, _ARCLEN on ${withArclen} coronary nodes`);
+console.log(`[optimize] ${converted} territory attribute(s) converted to RGB, _ARCLEN on ${withArclen} coronary nodes, textures on ${textured} nodes`);
 console.log(`[optimize] ${input} (${inMB.toFixed(2)} MB) -> ${output} (${outMB.toFixed(2)} MB)`);
