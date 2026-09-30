@@ -7,9 +7,10 @@ import { LIGHTS } from '@/theme/tokens';
 import type { SceneLook } from './sceneControls';
 
 /**
- * Camera-attached rig per look. Clinical = LUMEN §7.2 exactly. Realistic (§7.9) = a warmer, stronger key
- * for the wet highlights, a cool rim that backlights the silhouette (it also drives the subsurface
- * back-scatter in the tissue shader) and a slightly lower hemisphere so the creases stay deep.
+ * Camera-attached rig per look. Clinical = LUMEN §7.2 exactly. Realistic (§7.9) = a warm key that models
+ * the form (the baked albedo carries the colour, so the key no longer has to punch through a dark base), a
+ * cool rim that separates the silhouette from the stage (it also drives the subsurface back-scatter in the
+ * tissue shader), a soft warm fill and a slightly lower hemisphere so the creases stay deep.
  */
 interface DirLight {
   color: string;
@@ -28,18 +29,18 @@ export const RIGS: Record<SceneLook, LightRig> = {
   clinical: LIGHTS,
   realistic: {
     hemisphere: { sky: '#DCE6F2', ground: '#3A2522', intensity: 0.42 },
-    key: { color: '#FFE8D8', intensity: 2.7, position: [-3, 4, 5] },
-    rim: { color: '#A6C6FF', intensity: 2.3, position: [2.5, 2, -4] },
-    fill: { color: '#FFF3EC', intensity: 0.32, position: [4, -1, 3] },
-    envMapIntensity: 0.75,
+    key: { color: '#FFEBDD', intensity: 2.5, position: [-3, 4, 5] },
+    rim: { color: '#B4CCF2', intensity: 1.7, position: [2.5, 2, -4] },
+    fill: { color: '#FFF1E6', intensity: 0.45, position: [4, -1, 3] },
+    envMapIntensity: 0.5,
   },
 };
 
 /**
  * A photographic studio in code (no HDRI file, no network): a dark cyclorama with a large warm softbox
- * above-left, a tall cool strip behind-right, a soft top panel and a dim warm bounce from below. Its
- * reflections are what make the clearcoat read as a wet epicardium — long soft highlights instead of the
- * room's small box lights.
+ * above-left, a tall neutral strip behind-right, a soft top panel and a dim warm bounce from below. Its
+ * reflections are what make the clearcoat read as a wet epicardium — broad soft highlights instead of the
+ * room's small box lights. Kept moderate and warm-neutral: bright or blue panels read as lacquer.
  */
 export function buildStudioScene(): Scene {
   const scene = new Scene();
@@ -51,8 +52,8 @@ export function buildStudioScene(): Scene {
     m.lookAt(0, 0, 0);
     scene.add(m);
   };
-  panel(9, 6, '#FFF1E4', 7, [-6, 7, 8]); // key softbox
-  panel(2.2, 12, '#B9D2FF', 6, [9, 2, -7]); // rim strip
+  panel(9, 6, '#FFF1E4', 5, [-6, 7, 8]); // key softbox
+  panel(2.2, 12, '#EEE8E2', 3, [9, 2, -7]); // rim strip
   panel(10, 10, '#FFFFFF', 1.6, [0, 12, 0]); // top
   panel(12, 5, '#7A4034', 0.5, [0, -9, 4]); // warm bounce
   panel(3, 8, '#FFE9DA', 2.2, [10, 1, 6]); // fill card

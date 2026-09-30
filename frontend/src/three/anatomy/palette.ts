@@ -9,12 +9,19 @@
  *  - Atlas colour coding is kept but muted: systemic veins in a dusty atlas blue (darker and greyer than
  *    the ramp's low end, and never emissive), arteries as pale adventitia (not red), so no anatomical colour
  *    can be read as a risk colour.
+ *  - These are the colours BEFORE the baked GLB maps arrive (and for a GLB without maps). Once a mesh's
+ *    baked albedo is uploaded it carries the colour itself, multiplied by a light tint (tissue.ts `baked`).
  */
 export const REAL = {
   myocardium: '#5A2622',
   myocardiumDeep: '#3F1A1B',
   interior: '#3A1716',
   fat: '#8E7A5C',
+  /** Epicardial fat meshes (EpicardialFat_*), close to the mean of their baked albedo. */
+  fatMesh: '#C99A4E',
+  fatDeep: '#9C7434',
+  /** Cardiac veins: dark plum-grey, never the ramp's blue. */
+  cardiacVein: '#4A3E48',
   wrapTint: '#E0503C',
   sss: '#B8322A',
   papillary: '#5A2926',

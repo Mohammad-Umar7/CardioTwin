@@ -103,6 +103,11 @@ export interface TissueOptions {
 
 /** Absolute display inflation of coronary walls (≈ the spec's 1.3×, documented in §7.3). */
 export { VESSEL_INFLATE } from './materials';
+/**
+ * Depth bias of the coronary tree toward the camera (scene units; 0.03 = 3 mm): enough to show through the
+ * epicardial fat over the arteries in their grooves, far less than the ventricular wall.
+ */
+export const VESSEL_DEPTH_PULL = 0.03;
 
 interface Look {
   color: string;
@@ -120,6 +125,15 @@ interface Look {
   rim?: { color: string; strength: number };
   fat?: number;
   transparent?: { opacity: number };
+  /**
+   * With a baked albedo (CONTRACTS §7.1) the map IS the tissue colour: the colour factor becomes this light
+   * tint (default white) instead of `color`, so the bake is never multiplied into a second, darker copy of
+   * itself. `saturation` < 1 greys the bake (great vessels and veins must never out-shout the coronary
+   * ramp, V2 §5.15).
+   */
+  baked?: { tint?: string; saturation?: number };
+  /** Depth bias toward the camera (epicardial fat lying on the wall it covers). */
+  polygonOffset?: boolean;
 }
 
 const CLINICAL: Partial<Record<TissueKind, Look>> = {
@@ -133,46 +147,72 @@ const CLINICAL: Partial<Record<TissueKind, Look>> = {
   pulmonaryVeins: { color: ANATOMY.vein, roughness: 0.65, env: 0.2, interior: ANATOMY.cutFace },
   systemicVein: { color: ANATOMY.greatVessel, roughness: 0.45, env: LIGHTS.envMapIntensity, interior: ANATOMY.cutFace },
   cardiacVein: { color: ANATOMY.vein, roughness: 0.6, env: 0.2 },
+  fat: { color: ANATOMY.clay, roughness: 0.72, env: 0.2, polygonOffset: true },
   bone: { color: ANATOMY.bone, roughness: 0.85, env: LIGHTS.envMapIntensity },
   cartilage: { color: ANATOMY.bone, roughness: 0.7, env: LIGHTS.envMapIntensity },
   muscle: { color: ANATOMY.muscle, roughness: 0.7, env: LIGHTS.envMapIntensity },
   diaphragm: { color: ANATOMY.diaphragm, roughness: 0.6, env: LIGHTS.envMapIntensity, transparent: { opacity: 0.5 } },
   airway: { color: ANATOMY.bone, roughness: 0.7, env: 0.2 },
+  oesophagus: { color: ANATOMY.muscle, roughness: 0.7, env: 0.2 },
 };
 
+/**
+ * Realistic look. Gloss is a soft, broad wet sheen (clearcoat ≤ 0.35 at roughness ≥ 0.35 over the baked
+ * roughness), never lacquer: highlights stay small and warm, and the baked albedo carries the colour.
+ */
 const REALISTIC: Partial<Record<TissueKind, Look>> = {
   myocardium: {
     color: REAL.myocardium,
-    roughness: 0.52,
-    env: 0.75,
-    clearcoat: 0.9,
-    clearcoatRoughness: 0.16,
+    roughness: 0.55,
+    env: 0.5,
+    clearcoat: 0.3,
+    clearcoatRoughness: 0.38,
     sheen: 0.2,
     sheenColor: '#8E3A34',
     sheenRoughness: 0.6,
-    detail: { freq: 5.5, bump: 0.0035, colorVar: 0.22, roughVar: 0.14, deep: REAL.myocardiumDeep, fibre: { axis: 'heart', stretch: 2.2 } },
+    detail: { freq: 5.5, bump: 0.0035, colorVar: 0.22, roughVar: 0.12, deep: REAL.myocardiumDeep, fibre: { axis: 'heart', stretch: 2.2 } },
     sss: { wrap: 0.55, tint: REAL.wrapTint, color: REAL.sss, strength: 0.28 },
     interior: REAL.interior,
     fat: 0.5,
+    baked: { tint: '#FFFFFF', saturation: 0.94 },
+  },
+  fat: {
+    // Epicardial adipose tissue: soft, yellow, faintly translucent lobules in the grooves.
+    color: REAL.fatMesh,
+    roughness: 0.5,
+    env: 0.45,
+    clearcoat: 0.4,
+    clearcoatRoughness: 0.34,
+    sheen: 0.3,
+    sheenColor: '#FFE9B8',
+    sheenRoughness: 0.5,
+    detail: { freq: 16, bump: 0.004, colorVar: 0.14, roughVar: 0.1, deep: REAL.fatDeep },
+    sss: { wrap: 0.3, tint: '#FFE0A6', color: '#C8902E', strength: 0.16 },
+    // The bake is a saturated ochre: grey it toward the pale cream-yellow of real epicardial fat.
+    baked: { tint: '#FFF6E4', saturation: 0.7 },
+    polygonOffset: true,
   },
   papillary: {
     color: REAL.papillary,
-    roughness: 0.4,
-    env: 0.8,
-    clearcoat: 0.7,
-    clearcoatRoughness: 0.2,
+    roughness: 0.5,
+    env: 0.5,
+    clearcoat: 0.3,
+    clearcoatRoughness: 0.38,
     detail: { freq: 12, bump: 0.005, colorVar: 0.18, roughVar: 0.1, deep: REAL.myocardiumDeep },
     sss: { wrap: 0.5, tint: REAL.wrapTint, color: REAL.sss, strength: 0.25 },
+    baked: { tint: '#FFFFFF', saturation: 0.94 },
   },
   valve: {
+    // Thin pale leaflets: a toned-down bake so the valves read as tissue, not bright tan combs.
     color: REAL.valve,
-    roughness: 0.48,
-    env: 0.7,
-    clearcoat: 0.45,
-    clearcoatRoughness: 0.3,
+    roughness: 0.55,
+    env: 0.45,
+    clearcoat: 0.25,
+    clearcoatRoughness: 0.4,
     detail: { freq: 22, bump: 0.003, colorVar: 0.12, roughVar: 0.1, deep: '#A88E72' },
     sss: { wrap: 0.5, tint: '#FFD2B0', color: '#C07A58', strength: 0.3 },
-    interior: '#B89E84',
+    interior: '#8E7866',
+    baked: { tint: '#BFB0A4', saturation: 0.8 },
   },
   coronary: {
     // Glossy but not mirror-like: at low risk the thin tube must still read as its ramp blue, not as a
@@ -188,110 +228,132 @@ const REALISTIC: Partial<Record<TissueKind, Look>> = {
   },
   leftMain: {
     color: REAL.leftMain,
-    roughness: 0.34,
-    env: 0.8,
-    clearcoat: 1,
-    clearcoatRoughness: 0.12,
+    roughness: 0.4,
+    env: 0.6,
+    clearcoat: 0.5,
+    clearcoatRoughness: 0.25,
     detail: { freq: 45, bump: 0.0015, colorVar: 0.06, roughVar: 0.06, deep: '#5E4C46' },
     interior: '#1A0C0C',
   },
   aorta: {
+    // Pale adventitia (a real specimen's cream-pink), greyed so its chroma stays under the coronary ramp.
     color: REAL.adventitia,
-    roughness: 0.56,
-    env: 0.55,
-    clearcoat: 0.35,
-    clearcoatRoughness: 0.3,
+    roughness: 0.6,
+    env: 0.45,
+    clearcoat: 0.25,
+    clearcoatRoughness: 0.4,
     detail: { freq: 14, bump: 0.004, colorVar: 0.14, roughVar: 0.12, deep: REAL.adventitiaDeep },
     sss: { wrap: 0.35, tint: '#FFC2B0', color: '#9A4C3E', strength: 0.12 },
     interior: '#4A2322',
+    baked: { tint: '#EADCD4', saturation: 0.3 },
   },
   pulmonaryArtery: {
     color: REAL.adventitia,
-    roughness: 0.56,
-    env: 0.55,
-    clearcoat: 0.35,
-    clearcoatRoughness: 0.3,
+    roughness: 0.6,
+    env: 0.45,
+    clearcoat: 0.25,
+    clearcoatRoughness: 0.4,
     detail: { freq: 14, bump: 0.004, colorVar: 0.14, roughVar: 0.12, deep: REAL.adventitiaDeep },
     sss: { wrap: 0.35, tint: '#FFC2B0', color: '#9A4C3E', strength: 0.12 },
     interior: '#4A2322',
+    baked: { tint: '#E2D2CA', saturation: 0.3 },
   },
   pulmonaryVeins: {
     color: REAL.pulmonaryVein,
-    roughness: 0.45,
-    env: 0.7,
-    clearcoat: 0.5,
-    clearcoatRoughness: 0.3,
+    roughness: 0.5,
+    env: 0.45,
+    clearcoat: 0.3,
+    clearcoatRoughness: 0.4,
     detail: { freq: 16, bump: 0.003, colorVar: 0.12, roughVar: 0.1, deep: '#4A2424' },
     interior: '#3A1716',
+    baked: { tint: '#D2C0BC', saturation: 0.35 },
   },
   systemicVein: {
+    // Dark plum-grey: venous, and never confusable with the ramp's low (blue) end.
     color: REAL.atlasVein,
-    roughness: 0.42,
-    env: 0.7,
-    clearcoat: 0.6,
-    clearcoatRoughness: 0.25,
+    roughness: 0.5,
+    env: 0.45,
+    clearcoat: 0.3,
+    clearcoatRoughness: 0.38,
     detail: { freq: 16, bump: 0.003, colorVar: 0.12, roughVar: 0.1, deep: REAL.atlasVeinDeep },
     interior: '#1B2233',
+    baked: { tint: '#B8A8B2', saturation: 0.22 },
   },
   cardiacVein: {
-    color: REAL.atlasVein,
-    roughness: 0.42,
-    env: 0.7,
-    clearcoat: 0.6,
-    clearcoatRoughness: 0.25,
+    color: REAL.cardiacVein,
+    roughness: 0.5,
+    env: 0.4,
+    clearcoat: 0.3,
+    clearcoatRoughness: 0.38,
     detail: { freq: 30, bump: 0.002, colorVar: 0.1, roughVar: 0.08, deep: REAL.atlasVeinDeep },
+    baked: { tint: '#F2DCE8', saturation: 0.3 },
   },
   bone: {
     color: REAL.bone,
     roughness: 0.62,
-    env: 0.55,
+    env: 0.45,
     clearcoat: 0.08,
     clearcoatRoughness: 0.5,
     detail: { freq: 38, bump: 0.0035, colorVar: 0.16, roughVar: 0.14, deep: REAL.boneDeep },
     sss: { wrap: 0.2, tint: '#FFE8CC', color: '#6E5A3A', strength: 0.05 },
+    baked: {},
   },
   cartilage: {
     color: REAL.cartilage,
-    roughness: 0.34,
-    env: 0.7,
-    clearcoat: 0.5,
-    clearcoatRoughness: 0.2,
+    roughness: 0.4,
+    env: 0.5,
+    clearcoat: 0.3,
+    clearcoatRoughness: 0.35,
     detail: { freq: 20, bump: 0.002, colorVar: 0.1, roughVar: 0.08, deep: '#98A6AA' },
     sss: { wrap: 0.4, tint: '#E8F4F6', color: '#7E9298', strength: 0.18 },
+    baked: {},
   },
   muscle: {
     color: REAL.muscle,
-    roughness: 0.5,
-    env: 0.7,
-    clearcoat: 0.4,
-    clearcoatRoughness: 0.3,
+    roughness: 0.55,
+    env: 0.45,
+    clearcoat: 0.22,
+    clearcoatRoughness: 0.42,
     detail: { freq: 14, bump: 0.005, colorVar: 0.22, roughVar: 0.12, deep: REAL.muscleDeep, fibre: { axis: [1, 0.15, 0], stretch: 0.22 } },
     sss: { wrap: 0.45, tint: REAL.wrapTint, color: REAL.sss, strength: 0.2 },
+    baked: { saturation: 0.85 },
   },
   diaphragm: {
     color: REAL.diaphragm,
-    roughness: 0.5,
-    env: 0.7,
-    clearcoat: 0.35,
-    clearcoatRoughness: 0.3,
+    roughness: 0.55,
+    env: 0.45,
+    clearcoat: 0.2,
+    clearcoatRoughness: 0.42,
     detail: { freq: 12, bump: 0.004, colorVar: 0.2, roughVar: 0.12, deep: REAL.muscleDeep },
     sss: { wrap: 0.45, tint: REAL.wrapTint, color: REAL.sss, strength: 0.2 },
+    baked: { saturation: 0.8 },
   },
   lung: {
     color: REAL.lung,
     roughness: 0.62,
-    env: 0.5,
+    env: 0.4,
     detail: { freq: 34, bump: 0.01, colorVar: 0.32, roughVar: 0.1, deep: REAL.lungDeep },
     rim: { color: '#F2C7C2', strength: 0.35 },
     transparent: { opacity: 0.42 },
+    baked: {},
   },
   airway: {
     color: REAL.airway,
-    roughness: 0.45,
-    env: 0.6,
-    clearcoat: 0.4,
-    clearcoatRoughness: 0.25,
+    roughness: 0.5,
+    env: 0.45,
+    clearcoat: 0.25,
+    clearcoatRoughness: 0.35,
     detail: { freq: 24, bump: 0.003, colorVar: 0.12, roughVar: 0.1, deep: '#A8927E' },
+    baked: {},
+  },
+  oesophagus: {
+    color: REAL.muscle,
+    roughness: 0.55,
+    env: 0.4,
+    clearcoat: 0.2,
+    clearcoatRoughness: 0.42,
+    detail: { freq: 14, bump: 0.004, colorVar: 0.18, roughVar: 0.12, deep: REAL.muscleDeep },
+    baked: { saturation: 0.8 },
   },
 };
 
@@ -332,13 +394,17 @@ export function createSharedUniforms(lut: Texture | null): SharedUniforms {
 export function createTissueMaterial(o: TissueOptions): TissueMaterial {
   const L = lookFor(o.kind, o.look);
   const realistic = o.look === 'realistic';
-  // The wet clearcoat is the single strongest realism cue, so it survives down to tier C; tier C instead
-  // drops to one noise octave (and sheen is tier A only).
-  const physical = realistic && o.tier !== 'D';
+  // Tiers A/B: MeshPhysical (soft wet clearcoat, sheen at A). Tier C: MeshStandard over the baked maps — no
+  // clearcoat, no procedural noise on textured meshes — so a machine without a dedicated GPU keeps its
+  // frame rate (the bake already carries the detail).
+  const physical = realistic && (o.tier === 'A' || o.tier === 'B');
   const maps = realistic ? o.maps ?? null : null;
+  const baked = !!maps?.map;
   const params = {
-    color: L.color,
-    roughness: L.roughness,
+    // A baked albedo IS the colour: multiply it by a light tint, never by the dark procedural base.
+    color: baked ? L.baked?.tint ?? '#FFFFFF' : L.color,
+    // The baked ORM map drives roughness (three multiplies its green channel by this factor).
+    roughness: maps?.roughnessMap ? 1 : L.roughness,
     metalness: L.metalness ?? 0,
     envMapIntensity: L.env,
     side: L.interior || o.kind === 'myocardium' ? DoubleSide : FrontSide,
@@ -364,10 +430,16 @@ export function createTissueMaterial(o: TissueOptions): TissueMaterial {
   if (maps?.roughnessMap) material.roughnessMap = maps.roughnessMap;
   if (maps?.aoMap) material.aoMap = maps.aoMap;
   if (o.clippingPlanes) material.clippingPlanes = o.clippingPlanes;
+  if (L.polygonOffset) {
+    material.polygonOffset = true;
+    material.polygonOffsetFactor = -1;
+    material.polygonOffsetUnits = -1;
+  }
+  const saturation = baked ? L.baked?.saturation ?? 1 : 1;
 
   const flags: PatchFlags = {
     ...NO_PATCH,
-    detail: !!L.detail && o.tier !== 'D',
+    detail: !!L.detail && o.tier !== 'D' && (o.tier !== 'C' || !baked),
     fibre: !!L.detail?.fibre,
     fat: !!L.fat && !!L.detail && !maps?.map,
     sss: !!L.sss,
@@ -375,7 +447,7 @@ export function createTissueMaterial(o: TissueOptions): TissueMaterial {
     territory: o.kind === 'myocardium' ? o.territoryAttribute ?? null : null,
     rim: !!L.rim,
     clipSphere: !!clipOf(o.kind, o.shared),
-    desaturateMap: !!maps?.map && o.kind === 'myocardium',
+    desaturateMap: saturation < 0.995,
     cavity: !!o.cavity,
     octaves: TIER_OCTAVES[o.tier],
   };
@@ -414,7 +486,7 @@ export function createTissueMaterial(o: TissueOptions): TissueMaterial {
   if (L.rim) Object.assign(uniforms, { uRimColor: { value: new Color(L.rim.color) }, uRimStrength: { value: L.rim.strength } });
   if (flags.territory) Object.assign(uniforms, o.shared.territory);
   if (flags.clipSphere) Object.assign(uniforms, clipOf(o.kind, o.shared));
-  if (flags.desaturateMap) uniforms.uSaturation = { value: 0.72 };
+  if (flags.desaturateMap) uniforms.uSaturation = { value: saturation };
   if (flags.cavity) {
     Object.assign(uniforms, {
       uCavityAO: { value: realistic ? 0.55 : 0.4 },
@@ -429,9 +501,20 @@ export function createTissueMaterial(o: TissueOptions): TissueMaterial {
   material.onBeforeCompile = (shader) => {
     patchTissueShader(shader, uniforms, flags);
     if (inflate) {
+      // Coronaries lie in their grooves under the epicardial fat: pull their DEPTH (not their screen
+      // position) toward the camera so the risk-coloured artery reads through the thin fat over it, while
+      // the heart wall itself still hides the far side.
       shader.vertexShader = shader.vertexShader
-        .replace('#include <common>', '#include <common>\nuniform float uInflate;')
-        .replace('vCtRest = transformed + uRestOffset;', 'transformed += normalize(objectNormal) * uInflate;\nvCtRest = transformed + uRestOffset;');
+        .replace('#include <common>', `#include <common>\nuniform float uInflate;\nconst float CT_DEPTH_PULL = ${VESSEL_DEPTH_PULL.toFixed(4)};`)
+        .replace('vCtRest = transformed + uRestOffset;', 'transformed += normalize(objectNormal) * uInflate;\nvCtRest = transformed + uRestOffset;')
+        .replace(
+          '#include <project_vertex>',
+          `#include <project_vertex>
+{
+  vec4 ctPulled = projectionMatrix * vec4(mvPosition.xy, mvPosition.z + CT_DEPTH_PULL, 1.0);
+  gl_Position.z = ctPulled.z / ctPulled.w * gl_Position.w;
+}`,
+        );
     }
   };
   const key = `ct-tissue-${physical ? 'P' : 'S'}-${patchKey(flags)}-${inflate ? 'inf' : ''}`;
