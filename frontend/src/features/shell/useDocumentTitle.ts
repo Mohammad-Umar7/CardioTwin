@@ -9,7 +9,13 @@ export function useDocumentTitle(): void {
   const { pathname } = useLocation();
   const id = usePatientStore((s) => s.selectedPatientId);
   const mode = usePatientStore((s) => s.mode);
-  const cad = usePatientStore((s) => selectDisplayedPrediction(s)?.predictions.CAD ?? null);
+  // With no edits the inputs ARE the recorded ones, whose estimate is already known: use it, so the moment
+  // after Reset never reads the what-if value without the what-if mark ("P-011 · CAD 62 % High").
+  const cad = usePatientStore((s) =>
+    selectEditCount(s) === 0 && s.recordedPrediction
+      ? (s.recordedPrediction.predictions.CAD ?? null)
+      : (selectDisplayedPrediction(s)?.predictions.CAD ?? null),
+  );
   const status = usePatientStore((s) => s.status);
   const comparing = usePatientStore((s) => s.comparing);
   const edits = usePatientStore(selectEditCount);
