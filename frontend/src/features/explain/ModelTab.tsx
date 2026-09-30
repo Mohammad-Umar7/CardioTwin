@@ -6,9 +6,10 @@ import { useRiskView } from '@/features/risk/useRiskView';
 import { flaggedCount } from '@/features/risk/verdict';
 import { usePortableModel, useSchemaIndex } from '@/hooks/useData';
 import { useResource } from '@/hooks/useResource';
+import { ASSOCIATION_MARK, isAssociationOnly } from '@/lib/associations';
 import { cn } from '@/lib/cn';
 import { formatCi, formatMetricValue, formatPercent, formatProbability, formatShap, printedDifference } from '@/lib/format';
-import { deployedModelName } from '@/lib/modelNames';
+import { deployedModelName, featureName } from '@/lib/modelNames';
 import { usePatientStore } from '@/state/patientStore';
 import type { TargetId } from '@/types/contracts';
 import { predictionId } from './explainUi';
@@ -131,6 +132,22 @@ function ModalitySteps({ facts }: { facts: TargetFacts }) {
 }
 
 /**
+ * When a quarter or more of this estimate's evidence (Σ|SHAP|) comes from inputs with no established causal
+ * role (routine labs such as ESR or lymphocytes), their names, largest first; else null. Said in words, not
+ * as a share, so it never needs a number the reader cannot check.
+ */
+function associationLean(
+  contributions: readonly { feature: string; shap: number }[],
+  byKey: Parameters<typeof featureName>[1],
+): string[] | null {
+  const total = contributions.reduce((acc, c) => acc + Math.abs(c.shap), 0);
+  const marked = contributions.filter((c) => isAssociationOnly(c.feature)).sort((a, b) => Math.abs(b.shap) - Math.abs(a.shap));
+  const share = marked.reduce((acc, c) => acc + Math.abs(c.shap), 0);
+  if (total <= 0 || share / total < 0.25) return null;
+  return marked.slice(0, 3).map((c) => featureName(c.feature, byKey).toLowerCase().replace(/^esr$/, 'ESR'));
+}
+
+/**
  * Explain › Model (WORKSTATION_V2 §5.10): how this estimate is made — the model's human name, the decision
  * threshold and how it was tuned, test ROC-AUC with CI and n, calibration, robustness over re-splits, what each
  * data modality adds, the expected-vessels reconciliation (§3.2) and this estimate's provenance.
@@ -154,6 +171,7 @@ export function ModelTab({ target }: { target: TargetId }) {
   const expected = view.prediction?.summary.expected_diseased_vessels;
   const nTest = facts.data?.dataset.nTest;
   const shown = p ? formatProbability(p.probability) : null;
+  const leans = associationLean(view.prediction?.explanations[target]?.contributions ?? [], index?.byKey);
 
   if (facts.status === 'loading') {
     return (
@@ -173,6 +191,13 @@ export function ModelTab({ target }: { target: TargetId }) {
           One model per target, trained on routine clinical data only. Probabilities are Platt-calibrated; every
           estimate is explained exactly (linear SHAP for the logistic part, TreeSHAP for the trees).
         </p>
+        {leans && (
+          <p className="text-body-s text-secondary" data-association-lean={target}>
+            This {target} estimate leans noticeably on inputs with no established causal role (
+            {leans.map((n) => `${n}${ASSOCIATION_MARK}`).join(', ')}): associations in this cohort of 303, not
+            physiology. Read it with that in mind.
+          </p>
+        )}
       </Section>
 
       <Section id="model-threshold" title="Decision threshold">
