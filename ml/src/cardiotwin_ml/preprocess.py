@@ -86,8 +86,10 @@ def normalise_categorical(value: Any, spec: FeatureSpec) -> str:
     if not isinstance(value, str):
         raise ValueError(f"{spec.key}: expected one of {list(spec.option_values)}, got {value!r}")
     s = value.strip()
-    if spec.raw_map and s in spec.raw_map:
-        s = spec.raw_map[s]
+    for alias, target in (spec.raw_map or {}).items():
+        if s.lower() == alias.lower():
+            s = target
+            break
     for option in spec.option_values:
         if s == option or s.lower() == option.lower():
             return option
