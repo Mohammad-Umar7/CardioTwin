@@ -9,7 +9,7 @@ import { buildTracks, heartAxisFrame, restToDisplayed } from './anchorTracks';
 import { clip, hoverContent } from './hoverContent';
 import { nearestPeelStage, sceneSummaryText } from './sceneSummaryText';
 import { ANCHOR_PERIOD_MS, AnchorChooser, bestCandidate, buildCandidates, facing, mainTrunk } from './dynamicAnchor';
-import { LABEL_MIN_GAP, labelShowsProbability, laneFor, layoutLanes, resolveLane, stackLane, type LaneItem } from './labelRegistry';
+import { LABEL_MIN_GAP, coverFade, labelShowsProbability, laneFor, layoutLanes, resolveLane, stackLane, type LaneItem } from './labelRegistry';
 
 const read = <T,>(file: string) => JSON.parse(readFileSync(resolve(__dirname, '../../../public/anatomy', file), 'utf8')) as T;
 const manifest = read<AnatomyManifest>('manifest.json');
@@ -243,5 +243,17 @@ describe('scene summary (DESIGN_SYSTEM §10.4, V2 §3.2)', () => {
     expect(t).toMatch(/Updating\. Selected: LAD\. Heart opened\.$/);
     expect(nearestPeelStage(0.6)).toBeNull();
     expect(sceneSummaryText({ ...base, prediction: null, status: 'error' })).toBe('Vessel estimates are unavailable.');
+  });
+});
+
+describe('label cover fade (labels never point at a closed chest)', () => {
+  it('hides the labels below "Ribs open" and restores them by the rest state', () => {
+    expect(coverFade(0)).toBe(0);
+    expect(coverFade(0.25)).toBe(0);
+    expect(coverFade(0.45)).toBe(1);
+    expect(coverFade(0.6)).toBe(1);
+    const mid = coverFade(0.375);
+    expect(mid).toBeGreaterThan(0.3);
+    expect(mid).toBeLessThan(0.7);
   });
 });

@@ -141,3 +141,13 @@ export function layoutLanes(
   }
   return out;
 }
+
+/**
+ * Labels point at vessels the viewer can see: below "Ribs open" the chest wall still covers the heart, so
+ * they fade out as the peel closes (and back in on the way to "Lungs aside"). Pure.
+ */
+export const LABEL_COVER = [0.3, 0.45] as const;
+export function coverFade(peel: number): number {
+  const t = Math.min(1, Math.max(0, (peel - LABEL_COVER[0]) / (LABEL_COVER[1] - LABEL_COVER[0])));
+  return t * t * (3 - 2 * t);
+}

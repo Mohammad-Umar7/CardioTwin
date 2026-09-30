@@ -13,7 +13,7 @@ import { freeArea, heartBox } from '../camera/framing';
 import { sceneRuntime } from '../stage/sceneRuntime';
 import { buildTracks, restToDisplayed, type AnchorTrack } from './anchorTracks';
 import { facing } from './dynamicAnchor';
-import { dotEls, labelEls, labelSizes, layoutLanes, lineEls, resolveLane, type LaneItem } from './labelRegistry';
+import { coverFade, dotEls, labelEls, labelSizes, layoutLanes, lineEls, resolveLane, type LaneItem } from './labelRegistry';
 
 const DEFAULT_TARGETS = ['LAD', 'LCX', 'RCA'];
 /** Labels fade in LAD → LCX → RCA, 60 ms apart, once the coronaries ignite (V2 §5.14). */
@@ -42,6 +42,8 @@ function put(el: Element, key: string, value: string, write: () => void) {
   c[key] = value;
   write();
 }
+/** Opacity as a short, stable string ("0.4", not "0.39999…"), so the write cache hits. */
+const fmt = (v: number) => String(Math.round(v * 1000) / 1000);
 const setStyle = (el: HTMLElement | SVGElement, prop: 'transform' | 'opacity' | 'transitionDelay', value: string) =>
   put(el, prop, value, () => {
     el.style[prop] = value;
@@ -61,7 +63,10 @@ interface Resolved {
   anchor: Vector3;
   /** Facing of the anchor point toward the camera (> 0 = front side). */
   facing: number;
+  /** How visible the vessel itself is (its node's solid share: isolate, ghosting, assembly). */
+  solid: number;
 }
+
 
 /**
  * Canvas-side half of the vessel labels (WORKSTATION_V2 §5.14). Every frame it
@@ -188,7 +193,8 @@ export function LabelProjector() {
       const shown = s.shown.get(id);
       if (!shown || !visible) s.shown.set(id, anchor);
       else shown.lerp(anchor, 1 - Math.exp(-ANCHOR_GLIDE * Math.min(0.1, delta)));
-      resolved.push({ id, anchor: s.shown.get(id)!, facing: face });
+      const node = track?.node ? sceneRuntime.nodes[track.node] : undefined;
+      resolved.push({ id, anchor: s.shown.get(id)!, facing: face, solid: node ? Math.min(1, node.solid) : 1 });
     }
 
     // 2. Free area (stage insets) and the heart's silhouette on screen.
@@ -226,6 +232,7 @@ export function LabelProjector() {
 
     // 4. States and DOM writes.
     const selected = viewer.selectedStructure;
+    const cover = viewer.stage === 'workstation' ? coverFade(sceneRuntime.peel.e) : 1;
     resolved.forEach((r) => {
       const label = labelEls.get(r.id);
       const line = lineEls.get(r.id);
@@ -237,10 +244,12 @@ export function LabelProjector() {
       const isSelected = selected === r.id;
       const dimmed = selected !== null && !isSelected;
       const behind = !isSelected && r.facing < 0;
-      const opacity = !revealed ? 0 : isSelected ? 1 : dimmed ? 0.4 : behind ? 0.55 : 1;
+      // Covered by the closed chest or hidden (isolate, ghosting): the label fades with its vessel.
+      const seen = Math.min(cover, r.solid);
+      const opacity = (!revealed ? 0 : isSelected ? 1 : dimmed ? 0.4 : behind ? 0.55 : 1) * seen;
 
       setStyle(label, 'transform', `translate3d(${at.left.toFixed(1)}px, ${at.top.toFixed(1)}px, 0)`);
-      setStyle(label, 'opacity', String(opacity));
+      setStyle(label, 'opacity', fmt(opacity));
       setData(label, 'selected', String(isSelected));
       setData(label, 'dimmed', String(dimmed));
       setData(label, 'behind', String(behind));
@@ -253,13 +262,13 @@ export function LabelProjector() {
       setAttr(line, 'y2', p.y.toFixed(1));
       setAttr(line, 'stroke-dasharray', dimmed || behind ? '3 3' : '');
       setAttr(line, 'data-selected', String(isSelected));
-      setStyle(line, 'opacity', !revealed ? '0' : isSelected ? '0.9' : dimmed || behind ? '0.35' : '0.6');
+      setStyle(line, 'opacity', fmt((!revealed ? 0 : isSelected ? 0.9 : dimmed || behind ? 0.35 : 0.6) * seen));
       const dot = dotEls.get(r.id);
       if (dot) {
         setAttr(dot, 'cx', p.x.toFixed(1));
         setAttr(dot, 'cy', p.y.toFixed(1));
         setAttr(dot, 'data-selected', String(isSelected));
-        setStyle(dot, 'opacity', !revealed || behind ? '0' : dimmed ? '0.5' : '1');
+        setStyle(dot, 'opacity', fmt((!revealed || behind ? 0 : dimmed ? 0.5 : 1) * seen));
       }
     });
 
