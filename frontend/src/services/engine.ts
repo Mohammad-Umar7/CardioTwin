@@ -95,11 +95,20 @@ export function isServerDownError(error: unknown): boolean {
 }
 
 export interface ServerEngineOptions {
-  /** Engine used while the server is unreachable; created on first need. */
+  /** Engine used while the server is unreachable; created on first need (again if it failed to load). */
   fallback?: () => PredictionEngine;
   /** After a failover, keep using the fallback this long before trying the server again (ms). */
   retryAfterMs?: number;
+  /**
+   * Give up on a server that does not answer a prediction within this time (ms). Defaults to
+   * `FAILOVER_TIMEOUT_MS` when there is a fallback (a hung server should not freeze the UI for the API
+   * client's 15 s), else to the API client's default.
+   */
+  timeoutMs?: number;
 }
+
+/** Prediction timeout of a server engine that can fail over (a prediction normally takes < 100 ms). */
+export const FAILOVER_TIMEOUT_MS = 6_000;
 
 export class ServerEngine implements PredictionEngine {
   readonly kind = 'server' as const;
@@ -108,6 +117,7 @@ export class ServerEngine implements PredictionEngine {
   private readonly client: Pick<ApiClient, 'predict'>;
   private readonly createFallback: (() => PredictionEngine) | null;
   private readonly retryAfterMs: number;
+  private readonly timeoutMs: number | undefined;
   private fallback: PredictionEngine | null = null;
   private fallbackUntil = 0;
 
@@ -118,6 +128,7 @@ export class ServerEngine implements PredictionEngine {
       : 'FastAPI server';
     this.createFallback = options.fallback ?? null;
     this.retryAfterMs = options.retryAfterMs ?? 15_000;
+    this.timeoutMs = options.timeoutMs ?? (this.createFallback ? FAILOVER_TIMEOUT_MS : undefined);
   }
 
   /** True while predictions are being served by the fallback engine. */
@@ -128,16 +139,22 @@ export class ServerEngine implements PredictionEngine {
   async predict(features: FeatureVector, options: PredictOptions = {}): Promise<PredictResponse> {
     if (this.failedOver && this.fallback?.available) return this.fallback.predict(features, options);
     try {
-      const response = await this.client.predict(sanitizeFeatures(features), { signal: options.signal });
+      const response = await this.client.predict(sanitizeFeatures(features), { signal: options.signal, timeoutMs: this.timeoutMs });
       assertPredictResponse(response);
       this.fallbackUntil = 0;
       return response;
     } catch (error) {
       if (options.signal?.aborted || isAbortError(error) || !this.createFallback || !isServerDownError(error)) throw error;
-      this.fallback ??= this.createFallback();
-      if (!(await whenEngineReady(this.fallback))) throw error;
+      const fallback = this.fallback ?? this.createFallback();
+      if (!(await whenEngineReady(fallback))) {
+        // Forget a fallback that could not load, so the next outage builds a fresh one instead of
+        // failing forever on a transient model.json error.
+        this.fallback = null;
+        throw error;
+      }
+      this.fallback = fallback;
       this.fallbackUntil = Date.now() + this.retryAfterMs;
-      return this.fallback.predict(features, options);
+      return fallback.predict(features, options);
     }
   }
 }
