@@ -841,11 +841,12 @@ def calibrate_shares(per_half: dict, target: np.ndarray, iterations: int = 14) -
 # --------------------------------------------------------------------------------------------
 FAT = {
     # The fat forms the bed of the atrioventricular and interventricular grooves: along every groove vessel its surface
-    # rises to ``embed`` x the vessel radius above the vessel centreline (so about a third of the vessel stays exposed,
-    # REFERENCE.md 5.8: vessels half-buried in epicardial fat), and falls off smoothly across the groove. The inner
-    # surface is sunk into the myocardium, so the visible margin is a feathered line where the fat meets the wall.
-    "embed": 0.75,
-    "min_bed_mm": {"av": 3.0, "iv": 2.2},  # a minimum bed thickness along each groove vessel
+    # rises to ``embed`` x the vessel radius above the vessel centreline (so the crown of the vessel stays exposed as a
+    # ridge, REFERENCE.md 5.8: vessels half-buried in epicardial fat), and falls off smoothly across the groove. The
+    # inner surface is sunk into the myocardium, so the visible margin is a feathered line where the fat meets the wall.
+    "embed": 0.6,
+    "min_bed_mm": {"av": 2.6, "iv": 1.6},  # a minimum bed thickness along each groove vessel
+    "branch_min_radius_mm": 0.6,           # twigs thinner than this run on the bare epicardium (no fat net)
     "half_width_mm": {"av": (3.5, 10.5), "iv": (2.6, 7.5), "branch": (1.0, 3.4)},  # full height up to a, none beyond b (beside the vessel)
     "apex_thinning": 0.45,                  # interventricular fat thins towards the apex
     "lobule_mm": 4.0,                       # smooth lobulation (value noise), amplitude:
@@ -857,7 +858,9 @@ FAT = {
 FAT_GROOVE = {
     "av": {"arteries": {"LM", "pCx", "RCA"}, "veins": {"CS", "GCV", "SCV"}},
     "iv": {"arteries": {"LAD", "R-PDA"}, "veins": {"AIV", "MCV"}},
-    "branch": {"arteries": {"D", "D2", "OM1", "OM2", "AM", "R-PLB", "CB"}, "veins": {"PVLV", "LMV", "ACV"}},
+    # branch arteries get a narrow bed; their companion veins lie in it (a vein alone on the free wall gets none, so the
+    # right-ventricular and lateral walls are not netted with fat)
+    "branch": {"arteries": {"D", "D2", "OM1", "OM2", "AM", "R-PLB", "CB"}, "veins": set()},
 }
 
 
@@ -907,8 +910,13 @@ def groove_vessels(origin_mm: np.ndarray, scale: float) -> dict[str, tuple[np.nd
         for sg in node["segments"]:
             for kind, sel in FAT_GROOVE.items():
                 if sg["code"] in sel["arteries"]:
-                    out[kind][0].append((np.array(sg["points_mm"]) - origin_mm) * scale)
-                    out[kind][1].append(np.array(sg["radius_mm"]) * scale)
+                    P, R = np.array(sg["points_mm"]), np.array(sg["radius_mm"])
+                    if kind == "branch":
+                        keep = R >= FAT["branch_min_radius_mm"]
+                        P, R = P[keep], R[keep]
+                    if len(P):
+                        out[kind][0].append((P - origin_mm) * scale)
+                        out[kind][1].append(R * scale)
     veins = json.loads((SYNTH_DIR / "vein_centerlines.json").read_text(encoding="utf-8"))
     for sg in veins["paths"]:
         for kind, sel in FAT_GROOVE.items():
