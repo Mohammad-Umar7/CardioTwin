@@ -126,7 +126,7 @@ export function HeroHud({ attract, vessels, leaving }: HeroHudProps) {
         )}
       >
         {/* Free-area centre (published with the stage insets); the middle when the landing stacks. */}
-        <div className="absolute left-1/2 top-4 flex -translate-x-1/2 justify-center min-[1100px]:left-[var(--landing-free-cx,66%)]" aria-live="off">
+        <div className="absolute left-1/2 top-6 flex -translate-x-1/2 justify-center min-[1100px]:left-[var(--landing-free-cx,66%)]" aria-live="off">
           {attract && <AttractCaption target={attract} index={Math.max(0, vessels.indexOf(attract))} />}
         </div>
         {anatomySource === 'procedural' && (
