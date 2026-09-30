@@ -152,10 +152,10 @@ interface Look {
 }
 
 /**
- * Epicardial fat pulled 1.8 mm in along its normals: the synthetic lumps read as flush, lobulated fat in the
+ * Epicardial fat pulled 1.2 mm in along its normals: the synthetic lumps read as flush, lobulated fat in the
  * grooves with the arteries partly embedded, not as raised piping the coronaries sit on.
  */
-export const FAT_DEFLATE = 0.018;
+export const FAT_DEFLATE = 0.012;
 
 /**
  * The pulmonary trunk fades along its own wall (`_dist_heart`, from the pulmonary valve) — opaque from the
@@ -225,9 +225,11 @@ const REALISTIC: Partial<Record<TissueKind, Look>> = {
     // Lobules: a coarser, deeper bump than the bake's fine grain, and the bake's own normals at 1.5×.
     detail: { freq: 24, bump: 0.02, colorVar: 0.2, roughVar: 0.12, deep: REAL.fatDeep },
     sss: { wrap: 0.5, tint: '#F4ECD4', color: '#6E6038', strength: 0.18 },
-    // The bake (anatomy 1.1.0) is a golden butter yellow: a near-white multiplier keeps its gold (a flat khaki
-    // decal otherwise), clearly lighter than the maroon wall it lies on.
-    baked: { tint: '#F2ECE0', saturation: 0.78 },
+    // The bake (anatomy 1.1.0) is a golden butter yellow: a light warm multiplier keeps its gold (a flat khaki
+    // decal otherwise), clearly lighter than the maroon wall it lies on (lum ≥ wall + 0.15) yet a step below
+    // the risk-coloured coronaries in luminance and chroma (V2 §5.15 figure / ground; `__ct.stats` at P-011
+    // home: fat 0.51 / 0.37 against the LAD's 0.53 / 0.38 and the wall's 0.18).
+    baked: { tint: '#D8CDB5', saturation: 0.6 },
     normalScale: 1.5,
     recede: 0.008,
     deflate: FAT_DEFLATE,
@@ -256,14 +258,15 @@ const REALISTIC: Partial<Record<TissueKind, Look>> = {
     baked: { tint: '#A89088', saturation: 0.7 },
   },
   coronary: {
-    // Glossy but not mirror-like: at low risk the thin tube must still read as its ramp blue, not as a
-    // white highlight.
+    // A wet adventitia, lit (not self-lit): glossy but not mirror-like, with a fine fibrous surface grain
+    // (bump and a little colour and roughness variation) so the tube reads as tissue next to the baked walls,
+    // while its flat risk colour stays readable (at low risk the thin tube is still its ramp blue).
     color: ANATOMY.vesselPending,
-    roughness: 0.34,
+    roughness: 0.38,
     env: 0.5,
-    clearcoat: 0.55,
-    clearcoatRoughness: 0.2,
-    detail: { freq: 45, bump: 0.0015, colorVar: 0.05, roughVar: 0.06, deep: '#000000' },
+    clearcoat: 0.5,
+    clearcoatRoughness: 0.24,
+    detail: { freq: 60, bump: 0.0026, colorVar: 0.08, roughVar: 0.12, deep: '#000000' },
     interior: '#1A0C0C',
     edgeShade: 0.42,
   },
