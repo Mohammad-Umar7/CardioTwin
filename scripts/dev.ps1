@@ -45,7 +45,6 @@ param(
 
 Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
-$ProgressPreference = 'SilentlyContinue'   # Invoke-WebRequest progress bars are slow on Windows PowerShell 5.1
 
 $Root = (Resolve-Path (Join-Path $PSScriptRoot '..')).Path
 $VenvPython = Join-Path $Root '.venv\Scripts\python.exe'
@@ -125,19 +124,13 @@ function Confirm-NodeModules {
 # Process management
 # ---------------------------------------------------------------------------------------------
 
+# Network probes run through scripts\probe.py (Python, stdlib): identical behaviour to dev.sh, and some Windows
+# antivirus products quarantine PowerShell scripts that download content with Invoke-WebRequest.
+$Probe = Join-Path $PSScriptRoot 'probe.py'
+
 function Test-PortInUse([int] $PortNumber) {
-    foreach ($address in @('127.0.0.1', '::1')) {
-        $client = New-Object System.Net.Sockets.TcpClient($(if ($address -eq '::1') { 'InterNetworkV6' } else { 'InterNetwork' }))
-        try {
-            $pending = $client.BeginConnect($address, $PortNumber, $null, $null)
-            if ($pending.AsyncWaitHandle.WaitOne(300) -and $client.Connected) { return $true }
-        } catch {
-            # address family not available, refused, ... -> not in use on this address
-        } finally {
-            $client.Close()
-        }
-    }
-    return $false
+    & $VenvPython $Probe port $PortNumber
+    return ($LASTEXITCODE -eq 0)
 }
 
 function Assert-PortFree([int] $PortNumber, [string] $Label, [string] $Option) {
@@ -146,17 +139,17 @@ function Assert-PortFree([int] $PortNumber, [string] $Label, [string] $Option) {
     }
 }
 
-function Get-Url([string] $Url) {
-    try {
-        $response = Invoke-WebRequest -Uri $Url -UseBasicParsing -TimeoutSec 3
-        if ($response.StatusCode -ge 200 -and $response.StatusCode -lt 300) { return [string] $response.Content }
-    } catch { }
-    return $null
+# True on HTTP 2xx (and, with -Field, when the JSON body has that top-level field value, e.g. status=ok).
+function Test-Url([string] $Url, [string] $Field = '') {
+    $arguments = @('get', $Url, '--quiet')
+    if ($Field) { $arguments += @('--json-field', $Field) }
+    & $VenvPython $Probe @arguments
+    return ($LASTEXITCODE -eq 0)
 }
 
 function Wait-Ready([string] $Url, [string] $Label, [int] $TimeoutSeconds, [System.Diagnostics.Process] $Process) {
     $deadline = (Get-Date).AddSeconds($TimeoutSeconds)
-    while ($null -eq (Get-Url $Url)) {
+    while (-not (Test-Url $Url)) {
         if ($Process.HasExited) { Fail "$Label exited during startup (exit code $($Process.ExitCode))" }
         if ((Get-Date) -gt $deadline) { Fail "$Label did not answer $Url within $TimeoutSeconds s" }
         Start-Sleep -Milliseconds 700
@@ -249,8 +242,7 @@ function Invoke-Dev {
         '--port', "$FrontendPort", '--strictPort')
     Wait-Ready "http://${BindHost}:$BackendPort/api/health" 'API' 180 $api
     Wait-Ready "http://${BindHost}:$FrontendPort/" 'Vite' 120 $vite
-    $proxied = Get-Url "http://${BindHost}:$FrontendPort/api/health"
-    if ($null -eq $proxied -or $proxied -notmatch '"status":"ok"') { Fail 'Vite does not proxy /api to the API' }
+    if (-not (Test-Url "http://${BindHost}:$FrontendPort/api/health" 'status=ok')) { Fail 'Vite does not proxy /api to the API' }
     Write-Ok 'Vite proxies /api -> API'
     Write-Urls $FrontendPort $BackendPort
     if ($Smoke) { Write-Ok 'smoke test passed'; return }

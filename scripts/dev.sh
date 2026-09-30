@@ -1,15 +1,15 @@
 #!/usr/bin/env bash
 # CardioTwin developer entry point (Linux, macOS, Git Bash on Windows). `make <target>` calls this script.
 #
-#   scripts/dev.sh setup                      create ./.venv (Python 3.11), install ML + API + test deps, npm ci
-#   scripts/dev.sh dev                        API (uvicorn --reload) + Vite dev server, Ctrl+C stops both
-#   scripts/dev.sh serve                      one process: uvicorn serving frontend/dist + the API (builds dist if missing)
-#   scripts/dev.sh build [--base /CardioTwin/] production build of the SPA into frontend/dist
-#   scripts/dev.sh test                       ML, anatomy, API and tooling tests + frontend typecheck, lint, unit tests
-#   scripts/dev.sh lint                       ruff + mypy (backend, scripts) and eslint (frontend)
-#   scripts/dev.sh train [args]               retrain the models (python -m cardiotwin_ml.train [args])
-#   scripts/dev.sh anatomy [args]             rebuild the 3D anatomy assets (needs Blender 5.1, see anatomy/README.md)
-#   scripts/dev.sh e2e [args]                 end-to-end check of a running API (scripts/e2e_check.py)
+#   bash scripts/dev.sh setup                 create ./.venv (Python 3.11), install ML + API + test deps, npm ci
+#   bash scripts/dev.sh dev                   API (uvicorn --reload) + Vite dev server, Ctrl+C stops both
+#   bash scripts/dev.sh serve                 one process: uvicorn serving frontend/dist + the API (builds dist if missing)
+#   bash scripts/dev.sh build [--base PATH]   production build of the SPA into frontend/dist
+#   bash scripts/dev.sh test                  ML, anatomy, API and tooling tests + frontend typecheck, lint, unit tests
+#   bash scripts/dev.sh lint                  ruff + mypy (backend, scripts) and eslint (frontend)
+#   bash scripts/dev.sh train [args]          retrain the models (python -m cardiotwin_ml.train [args])
+#   bash scripts/dev.sh anatomy [args]        rebuild the 3D anatomy assets (needs Blender 5.1, see anatomy/README.md)
+#   bash scripts/dev.sh e2e [args]            end-to-end check of a running API (scripts/e2e_check.py)
 #
 # Options (or the environment variables in brackets):
 #   --backend-port N   [BACKEND_PORT, default 8000]    API port for `dev`
@@ -83,22 +83,8 @@ ensure_node_modules() {
 
 PIDS=()
 
-port_in_use() {
-  "$VENV_PY" - "$1" <<'PY'
-import socket, sys
-port = int(sys.argv[1])
-for host in ("127.0.0.1", "::1"):
-    family = socket.AF_INET6 if ":" in host else socket.AF_INET
-    with socket.socket(family, socket.SOCK_STREAM) as s:
-        s.settimeout(0.3)
-        try:
-            if s.connect_ex((host, port)) == 0:
-                sys.exit(0)
-        except OSError:
-            pass
-sys.exit(1)
-PY
-}
+# Network probes go through scripts/probe.py so this runner and scripts/dev.ps1 behave identically.
+port_in_use() { "$VENV_PY" scripts/probe.py port "$1"; }
 
 assert_port_free() { # port label option
   if port_in_use "$1"; then
@@ -106,21 +92,12 @@ assert_port_free() { # port label option
   fi
 }
 
-# GET a URL; prints the body. Exit status 0 only for HTTP 2xx.
-http_get() {
-  "$VENV_PY" - "$1" <<'PY'
-import sys, urllib.request
-try:
-    with urllib.request.urlopen(sys.argv[1], timeout=3) as r:
-        sys.stdout.write(r.read().decode("utf-8", "replace"))
-except Exception:
-    sys.exit(1)
-PY
-}
+# Exit status 0 only for HTTP 2xx (and, with a second argument KEY=VALUE, that top-level JSON field).
+url_ok() { "$VENV_PY" scripts/probe.py get "$1" --quiet ${2:+--json-field "$2"}; }
 
 wait_for() { # url label timeout_s pid
   local url=$1 label=$2 timeout=$3 pid=$4 waited=0
-  until http_get "$url" >/dev/null 2>&1; do
+  until url_ok "$url"; do
     kill -0 "$pid" 2>/dev/null || die "$label exited during startup"
     [ "$waited" -lt "$timeout" ] || die "$label did not answer $url within ${timeout}s"
     sleep 1
@@ -215,9 +192,8 @@ cmd_dev() {
     start_bg "Vite" npm --prefix frontend run dev -- --host "$HOST" --port "$FRONTEND_PORT" --strictPort
   wait_for "http://$HOST:$BACKEND_PORT/api/health" "API" 180 "${PIDS[0]}"
   wait_for "http://$HOST:$FRONTEND_PORT/" "Vite" 120 "${PIDS[1]}"
-  local proxied
-  proxied="$(http_get "http://$HOST:$FRONTEND_PORT/api/health")" || die "Vite does not proxy /api to the API"
-  case "$proxied" in *'"status":"ok"'*) ok "Vite proxies /api -> API" ;; *) die "unexpected proxied health: $proxied" ;; esac
+  url_ok "http://$HOST:$FRONTEND_PORT/api/health" status=ok || die "Vite does not proxy /api to the API"
+  ok "Vite proxies /api -> API"
   printf '\n  %sApp%s  http://%s:%s\n  %sAPI%s  http://%s:%s/docs\n\n' \
     "$BOLD" "$RESET" "$HOST" "$FRONTEND_PORT" "$BOLD" "$RESET" "$HOST" "$BACKEND_PORT"
   if [ "$SMOKE" = 1 ]; then
