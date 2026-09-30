@@ -32,6 +32,8 @@ export { Toggle } from './Toggle';
 export { Tooltip } from './Tooltip';
 export {
   BandChip,
+  DirectionMark,
+  type DirectionMarkProps,
   Probability,
   type ProbabilityProps,
   RiskLegend,

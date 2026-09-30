@@ -484,7 +484,7 @@ export default function MethodologyPage() {
               </Note>
               <Note term="Calibration">
                 <span className="font-mono text-mono-s text-secondary">
-                  p = 1 / (1 + e<sup className="text-[0.625rem]">−(a·m + b)</sup>)
+                  p = 1 / (1 + e<sup className="text-[0.75em]">−(a·m + b)</sup>)
                 </span>
                 <br />
                 maps the blended log-odds to a probability; a and b fitted on out-of-fold predictions.

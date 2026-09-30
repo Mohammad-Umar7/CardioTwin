@@ -1,5 +1,5 @@
 import { motion } from 'framer-motion';
-import { Skeleton, Tooltip } from '@/design';
+import { DirectionMark, Skeleton, Tooltip } from '@/design';
 import { useIsReducedMotion } from '@/hooks/useMediaQuery';
 import { cn } from '@/lib/cn';
 import { NEGLIGIBLE_SHAP, sortedContributions } from '@/lib/explain';
@@ -93,9 +93,7 @@ export function ContributionRow({ c, spec, target, max, unit, scale, changed, in
               changed ? 'opacity-100 duration-fast' : 'opacity-0 duration-[600ms]',
             )}
           />
-          <span aria-hidden className="text-[10px] leading-none" style={{ color: up ? SHAP_RAISES : SHAP_LOWERS }}>
-            {negligible ? '' : up ? '▶' : '◀'}
-          </span>
+          <DirectionMark direction={negligible ? null : up ? 'raises' : 'lowers'} />
           <span className="truncate text-body-s text-secondary">{label}</span>
           <span className="num whitespace-nowrap text-right text-label font-normal text-tertiary">{value}</span>
           <span aria-hidden className="relative h-3">

@@ -103,14 +103,14 @@ export function WebGLFallback() {
                 x={path.label[0]}
                 y={path.label[1] + 15}
                 textAnchor={path.anchor}
-                className="fill-[#A3ADBA] text-[10px] font-semibold uppercase tracking-[0.08em]"
+                className="fill-[#A3ADBA] text-[12px] font-semibold uppercase tracking-[0.08em]"
               >
                 {band}
               </text>
             </g>
           );
         })}
-        <text x="200" y="385" textAnchor="middle" className="fill-[#8792A1] text-[10px]">
+        <text x="200" y="385" textAnchor="middle" className="fill-[#8792A1] text-[12px]">
           2D schematic · 3D view unavailable on this device · LM not predicted
         </text>
       </svg>

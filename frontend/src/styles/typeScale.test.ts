@@ -5,8 +5,7 @@
  * CSS `font-size: 11px` / `10px`. The overline token (`.eyebrow`, Tailwind `text-overline`) is the
  * sanctioned 11 px style and is not matched.
  *
- * KNOWN_DEBT is a ratchet for files other owners are still converting: a file may never exceed its
- * budget and a new file may never start. The integration pass empties the list.
+ * KNOWN_DEBT was a ratchet for files other owners were still converting; the integration pass emptied it.
  */
 import { readdirSync, readFileSync, statSync } from 'node:fs';
 import { join, relative, resolve } from 'node:path';
@@ -14,27 +13,24 @@ import { describe, expect, it } from 'vitest';
 
 const SRC = resolve(__dirname, '..');
 
-/** The three sanctioned 11 px uses, plus the overline token's own definition. */
+/**
+ * The three sanctioned 11 px uses, plus the overline token's own definition, plus the printed report: its
+ * sheet is typeset in print units for A4/Letter paper (11 px ≈ 8 pt), which is not screen UI.
+ */
 const ALLOWED: Record<string, string> = {
   'design/Kbd.tsx': 'Kbd (mono 11/16)',
   'design/Badge.tsx': 'overline tag (TEST / DEV)',
   'features/shell/DisclaimerBanner.tsx': 'anatomy credit on the status line',
   'styles/globals.css': 'the .eyebrow overline token',
+  'features/report/report.css': 'print typography of the A4/Letter sheet',
+  'features/report/marks.tsx': 'print typography of the A4/Letter sheet',
 };
 
-/** Files still being converted by their owners (path → allowed match count). Never raise a budget. */
-const KNOWN_DEBT: Record<string, number> = {
-  'features/risk/VesselInspector.tsx': 1, // C: ▶/◀ direction glyph at 10 px
-  'features/risk/VesselList.tsx': 1, // C: legacy list (deleted with the 3-column grid)
-  'features/explain/PhysiologyTable.tsx': 1, // C: direction glyph
-  'features/explain/ShapWaterfall.tsx': 1, // C: direction glyph
-  'three/WebGLFallback.tsx': 2, // D: SVG labels in the 2D fallback
-  'features/landing/HeroHud.tsx': 2, // E: hero watermark and caption
-  'features/methodology/MethodologyPage.tsx': 1, // F: superscript in a formula
-  'features/performance/AnalysisModules.tsx': 1, // F: chart annotation
-  'features/report/marks.tsx': 1, // report: printed sheet
-  'features/report/report.css': 17, // report: print typography (A4 sheet)
-};
+/**
+ * Files still being converted by their owners (path → allowed match count). Never raise a budget. Emptied
+ * by the integration pass: any new 11 px text now fails outright.
+ */
+const KNOWN_DEBT: Record<string, number> = {};
 
 const PATTERN =
   /text-\[(?:0\.6875rem|0\.625rem|11px|10(?:\.5)?px)\]|fontSize:\s*['"]?(?:11|10)(?:px)?['"]?(?![\d.])|font-size:\s*(?:11|10(?:\.5)?)px/g;

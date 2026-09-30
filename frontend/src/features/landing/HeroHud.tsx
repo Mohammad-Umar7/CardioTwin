@@ -19,30 +19,6 @@ export function HeroPoster() {
   );
 }
 
-/**
- * Canvas watermark (DESIGN_SYSTEM §9). V2 §2 removes it from the live canvas; kept exported for the
- * legacy workstation HUD until that is replaced, and for exports.
- */
-export function Watermark({ className = '' }: { className?: string }) {
-  return (
-    <span
-      aria-hidden
-      className={`pointer-events-none select-none text-[0.6875rem] font-semibold uppercase tracking-[0.12em] text-tertiary/60 ${className}`}
-    >
-      Not for diagnostic use
-    </span>
-  );
-}
-
-/** BodyParts3D credit (11 px, always visible wherever anatomy is shown). */
-export function Credits({ className = '' }: { className?: string }) {
-  return (
-    <span className={`pointer-events-none text-[0.6875rem] leading-4 text-tertiary ${className}`}>
-      BodyParts3D © DBCLS · CC BY-SA 2.1 JP
-    </span>
-  );
-}
-
 const splitCaption = (split: string | null, mode: string): string =>
   split === 'test'
     ? 'held-out test patient'

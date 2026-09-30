@@ -263,14 +263,23 @@ export function CumulativeModule({
                   {r.delta ? (
                     <span className="inline-flex w-12 items-center justify-end gap-1 text-secondary">
                       {signed(r.delta.mean)}
-                      <span
+                      <svg
+                        role="img"
                         aria-label={
                           excludesZero(r.delta.ci) ? 'interval excludes zero' : 'interval includes zero'
                         }
-                        className="text-[0.625rem] leading-none text-tertiary"
+                        viewBox="0 0 8 8"
+                        className="size-2 shrink-0 text-tertiary"
                       >
-                        {excludesZero(r.delta.ci) ? '●' : '○'}
-                      </span>
+                        <circle
+                          cx="4"
+                          cy="4"
+                          r="3.25"
+                          fill={excludesZero(r.delta.ci) ? 'currentColor' : 'none'}
+                          stroke="currentColor"
+                          strokeWidth="1.2"
+                        />
+                      </svg>
                     </span>
                   ) : (
                     <span className="inline-block w-12" />

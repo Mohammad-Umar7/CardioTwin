@@ -8,7 +8,7 @@
 import type { CSSProperties } from 'react';
 import { cn } from '@/lib/cn';
 import { formatPercent, formatProbability } from '@/lib/format';
-import { RISK_BAND_STYLES, RISK_PENDING, riskGradientCss, riskHex, type RiskBandId } from '@/theme/risk';
+import { RISK_BAND_STYLES, RISK_PENDING, SHAP_LOWERS, SHAP_RAISES, riskGradientCss, riskHex, type RiskBandId } from '@/theme/risk';
 import type { TargetId } from '@/types/contracts';
 
 // ------------------------------------------------------------------------------------ RiskPip
@@ -251,5 +251,28 @@ export function RiskLegend({ threshold, width = 160, caption = 'P(stenosis)', cl
       </div>
       {caption && <span className="text-label font-normal text-tertiary">{caption}</span>}
     </div>
+  );
+}
+
+// ------------------------------------------------------------------------------- DirectionMark
+
+export interface DirectionMarkProps {
+  /** Which way the input pushes the estimate; null keeps the 8 px slot empty (negligible effect). */
+  direction: 'raises' | 'lowers' | null;
+  className?: string;
+}
+
+/**
+ * The ▶ / ◀ contribution mark (SHAP raises / lowers colours, never the Ember ramp) as an 8 px vector
+ * triangle, so it is a mark and not 10 px text (V2 §5: 11 px only for overline, Kbd and credits). Always
+ * decorative: the row's text or aria-label carries the direction in words.
+ */
+export function DirectionMark({ direction, className }: DirectionMarkProps) {
+  if (!direction) return <span aria-hidden className={cn('inline-block size-2 shrink-0', className)} />;
+  const up = direction === 'raises';
+  return (
+    <svg aria-hidden viewBox="0 0 8 8" className={cn('size-2 shrink-0', className)}>
+      <path d={up ? 'M1 0.5 L7.5 4 L1 7.5 Z' : 'M7 0.5 L0.5 4 L7 7.5 Z'} fill={up ? SHAP_RAISES : SHAP_LOWERS} />
+    </svg>
   );
 }

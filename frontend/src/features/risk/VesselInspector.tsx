@@ -1,6 +1,6 @@
 import { AnimatePresence, motion } from 'framer-motion';
 import { X } from 'lucide-react';
-import { Button, IconButton, Kbd, RiskPip, StageCard, Tooltip } from '@/design';
+import { Button, DirectionMark, IconButton, Kbd, RiskPip, StageCard, Tooltip } from '@/design';
 import { NarrativeSentence } from '@/features/explain/NarrativeSentence';
 import { useSchemaIndex } from '@/hooks/useData';
 import { useIsReducedMotion, useMediaQuery } from '@/hooks/useMediaQuery';
@@ -11,7 +11,7 @@ import { SHORTCUT } from '@/state/commandIds';
 import { usePatientStore } from '@/state/patientStore';
 import { selectPatientCardExpanded, useUiStore } from '@/state/uiStore';
 import { useViewerStore } from '@/state/viewerStore';
-import { riskHex, SHAP_LOWERS, SHAP_RAISES } from '@/theme/risk';
+import { riskHex } from '@/theme/risk';
 import { EASE, MOTION } from '@/theme/tokens';
 import type { TargetId } from '@/types/contracts';
 import { RevealControl } from './RevealControl';
@@ -77,8 +77,8 @@ function TopDrivers({ target }: { target: TargetId }) {
                 aria-label={`${spec?.label ?? c.feature}, ${spec ? formatFeatureValue(spec, c.value as never) : c.value}, ${up ? 'raises' : 'lowers'} ${target} risk. Edit this input.`}
                 className="flex h-7 w-full items-center gap-2 rounded-sm px-1 text-left outline-none hover:bg-surface-1 focus-visible:shadow-focus"
               >
-                <span aria-hidden className="w-3 text-[10px] leading-none" style={{ color: up ? SHAP_RAISES : SHAP_LOWERS }}>
-                  {up ? '▶' : '◀'}
+                <span aria-hidden className="flex w-3 items-center">
+                  <DirectionMark direction={up ? 'raises' : 'lowers'} />
                 </span>
                 <span className="min-w-0 flex-1 truncate text-body-s text-secondary">{spec?.label ?? c.feature}</span>
                 <span className="num whitespace-nowrap text-body-s font-medium text-primary">

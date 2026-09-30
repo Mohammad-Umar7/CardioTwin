@@ -1,11 +1,10 @@
 import { useMemo } from 'react';
-import { Skeleton, Toggle, Tooltip } from '@/design';
+import { DirectionMark, Skeleton, Toggle, Tooltip } from '@/design';
 import { cn } from '@/lib/cn';
 import { NEGLIGIBLE_SHAP } from '@/lib/explain';
 import { formatFeatureValue, formatNormalRange, rangeStatus, type RangeStatus } from '@/lib/format';
 import { usePatientStore } from '@/state/patientStore';
 import { useUiStore } from '@/state/uiStore';
-import { SHAP_LOWERS, SHAP_RAISES } from '@/theme/risk';
 import type { FeatureSpec } from '@/types/contracts';
 import { setExplainPrefs, useExplainPrefs } from './explainPrefs';
 import { formatContribution, unitLabel, useExplainData } from './useExplainData';
@@ -200,9 +199,7 @@ export function PhysiologyTable({ target }: { target: string }) {
                     )}
                   >
                     {Math.abs(shap) >= NEGLIGIBLE_SHAP && (
-                      <span aria-hidden className="text-[10px] leading-none" style={{ color: up ? SHAP_RAISES : SHAP_LOWERS }}>
-                        {up ? '▶' : '◀'}
-                      </span>
+                      <DirectionMark direction={up ? 'raises' : 'lowers'} />
                     )}
                     {s.label}
                     <span className="num font-normal text-tertiary">{Math.abs(shap) >= NEGLIGIBLE_SHAP ? f.text : ''}</span>
