@@ -106,19 +106,20 @@ export function flippedValue(recorded: FeatureValue | undefined): FeatureValue |
 }
 
 export interface ExecuteDeps {
-  navigate(to: string): void;
+  /** Navigates when needed; returns true when the route actually changed. */
+  navigate(to: string): boolean | void;
   reduced: boolean;
   peel: PeelAnimator;
 }
 
-export function executeAction(action: TourAction, deps: ExecuteDeps): void {
+/** Runs one planned action. Returns true when it changed the route (callers then wait for the stage). */
+export function executeAction(action: TourAction, deps: ExecuteDeps): boolean {
   const ui = useUiStore.getState();
   const viewer = useViewerStore.getState();
   const patient = usePatientStore.getState();
   switch (action.kind) {
     case 'route':
-      deps.navigate(action.to === 'performance' ? ROUTES.performance : ROUTES.workstation);
-      break;
+      return deps.navigate(action.to === 'performance' ? ROUTES.performance : ROUTES.workstation) === true;
     case 'select':
       if (viewer.selectedStructure !== action.target) viewer.select(action.target);
       break;
@@ -151,6 +152,7 @@ export function executeAction(action: TourAction, deps: ExecuteDeps): void {
       if (patient.split === 'test' && patient.revealed !== action.revealed) patient.setRevealed(action.revealed);
       break;
   }
+  return false;
 }
 
 // ------------------------------------------------------------------------------ showcase patient

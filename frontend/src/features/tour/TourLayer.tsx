@@ -27,8 +27,14 @@ const CARD_W = 360;
 
 const routeOf = (loc: { pathname: string; search: string }) => `${loc.pathname}${loc.search}`;
 
-/** Route in the address bar (HashRouter). Unlike `useLocation`, it already reflects a pending navigation. */
-const currentRoute = (): string => (typeof window !== 'undefined' ? window.location.hash.replace(/^#/, '') : '') || '/';
+/**
+ * The route right now. Under the HashRouter the address bar is authoritative (unlike `useLocation`, it
+ * already reflects a navigation still pending in a transition); other routers fall back to `location`.
+ */
+const routeNow = (loc: { pathname: string; search: string }): string => {
+  const hash = typeof window !== 'undefined' ? window.location.hash.replace(/^#/, '') : '';
+  return hash.startsWith('/') ? hash : routeOf(loc);
+};
 
 /**
  * Puts the app back exactly as it was before the demo (V2 §6.3 "restores the prior state on exit"): the
@@ -169,7 +175,9 @@ function TourView() {
     reduced,
     peel: getSession()?.peel ?? new PeelAnimator(),
     navigate: (to) => {
-      if (!currentRoute().startsWith(to)) navigate(to);
+      if (routeNow(locationRef.current).startsWith(to)) return false;
+      navigate(to);
+      return true;
     },
   };
 
@@ -187,7 +195,7 @@ function TourView() {
       if (s) {
         void restoreSession(s, {
           navigate: (to) => navigate(to),
-          currentRoute: currentRoute(),
+          currentRoute: routeNow(locationRef.current),
           reduced,
         });
       }
@@ -215,8 +223,8 @@ function TourView() {
     void (async () => {
       for (const action of actions) {
         if (getSession() !== session || session.epoch !== epoch) return;
-        if (deps.current) executeAction(action, deps.current);
-        if (action.kind === 'route' && action.to === 'workstation') await waitForStage('workstation', 3000);
+        const moved = deps.current ? executeAction(action, deps.current) : false;
+        if (moved && action.kind === 'route' && action.to === 'workstation') await waitForStage('workstation', 3000);
       }
     })();
     setEnded(false);
@@ -229,7 +237,7 @@ function TourView() {
       const s = endSession();
       useUiStore.getState().closeTour(completed);
       if (s) {
-        void restoreSession(s, { navigate: (to) => navigate(to), currentRoute: currentRoute(), reduced });
+        void restoreSession(s, { navigate: (to) => navigate(to), currentRoute: routeNow(locationRef.current), reduced });
       }
     },
     [navigate, reduced],

@@ -18,7 +18,7 @@ export function takeTourOrigin(): string | null {
 
 /**
  * Opens the guided demo on the workstation. `from` is the current route (pathname + search), restored
- * when the demo ends. `chapter` resumes at a chapter's first beat.
+ * when the demo ends. `step` starts (or resumes) at that beat, e.g. `CHAPTER_START[c]` for chapter c.
  */
 export function startGuidedDemo(navigate: NavigateFunction, from: string, step = 0): void {
   origin = from;
