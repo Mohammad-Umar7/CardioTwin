@@ -1,0 +1,211 @@
+# Continuous integration: every layer of CardioTwin is tested on its own, then the running system is checked
+# end to end (API serving the built SPA, and the Docker image) against the ML package's reference fixtures.
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+env:
+  PYTHONUNBUFFERED: "1"
+  PIP_DISABLE_PIP_VERSION_CHECK: "1"
+  FORCE_COLOR: "1"
+  NODE_VERSION: "22"
+
+jobs:
+  ml:
+    name: ML pipeline (tests + lint)
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v7
+      - uses: ./.github/actions/setup-python-env
+      - name: Lint (ruff)
+        working-directory: ml
+        run: python -m ruff check .
+      - name: Test suite (leakage guard, encoding, calibration, TreeSHAP, portable parity, artifacts)
+        run: python -m pytest ml/tests -q -ra --durations=10
+
+  ml-reproducibility:
+    name: ML reproducibility (two fast runs, bit-identical artifacts)
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v7
+      - uses: ./.github/actions/setup-python-env
+      - name: Train twice from the raw dataset and compare every artifact
+        env:
+          CARDIOTWIN_SLOW: "1"
+        run: python -m pytest ml/tests/test_determinism.py -q -ra --durations=5
+
+  anatomy:
+    name: Anatomy assets (contracts, centrelines, mesh QA)
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v7
+      - uses: ./.github/actions/setup-python-env
+      - uses: actions/setup-node@v7
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+          cache-dependency-path: anatomy/package-lock.json
+      - name: Install glTF decoding tools (mesh QA decodes the meshopt GLB)
+        run: npm ci --prefix anatomy --no-audit --no-fund
+      - name: Test suite (no Blender needed)
+        run: python -m pytest anatomy -q -ra
+
+  backend:
+    name: API (tests + ruff + mypy)
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v7
+      - uses: ./.github/actions/setup-python-env
+      - name: Lint (ruff)
+        run: python -m ruff check backend scripts
+      - name: Types (mypy --strict)
+        run: |
+          (cd backend && python -m mypy app)
+          python -m mypy --strict --ignore-missing-imports scripts/e2e_check.py
+      - name: Unit, contract and real-model integration tests
+        run: python -m pytest backend -q -ra
+
+  frontend:
+    name: Frontend (typecheck, lint, tests, build)
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    defaults:
+      run:
+        working-directory: frontend
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - run: npm ci --no-audit --no-fund
+      - name: Typecheck
+        run: npm run typecheck
+      - name: Lint
+        run: npm run lint
+      - name: Unit tests
+        run: npm test
+      - name: Production build
+        run: npm run build
+      - name: Bundle report
+        run: |
+          {
+            echo "### Frontend bundle"
+            echo ""
+            echo "| File | Size |"
+            echo "| --- | --- |"
+            find dist -type f \( -name '*.js' -o -name '*.css' -o -name '*.glb' -o -name '*.json' \) -printf '%s %P\n' \
+              | sort -rn | head -15 | awk '{ printf "| `%s` | %.1f KiB |\n", $2, $1 / 1024 }'
+            echo ""
+            echo "Total: $(du -sh dist | cut -f1)"
+          } >> "$GITHUB_STEP_SUMMARY"
+      - uses: actions/upload-artifact@v7
+        with:
+          name: frontend-dist
+          path: frontend/dist
+          retention-days: 7
+          if-no-files-found: error
+
+  e2e:
+    name: End-to-end (API serving the SPA)
+    needs: [frontend]
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v7
+      - uses: ./.github/actions/setup-python-env
+      - uses: actions/download-artifact@v8
+        with:
+          name: frontend-dist
+          path: frontend/dist
+      - name: Tests of the end-to-end checker
+        run: python -m pytest scripts/tests -q -ra
+      - name: Boot the API (real model, serving frontend/dist)
+        env:
+          CARDIOTWIN_SERVE_FRONTEND: "1"
+          CARDIOTWIN_LOG_FORMAT: text
+        run: |
+          nohup python -m uvicorn app.main:app --app-dir backend --host 127.0.0.1 --port 8000 > api.log 2>&1 &
+          echo $! > api.pid
+      - name: End-to-end check (server = native = portable, cohort, batch, SPA, latency)
+        run: python scripts/e2e_check.py --url http://127.0.0.1:8000 --wait 120 --latency-n 60 --json-report e2e-report.json
+      - name: Latency summary
+        if: always()
+        run: |
+          python - <<'PY' >> "$GITHUB_STEP_SUMMARY"
+          import json, pathlib
+          path = pathlib.Path("e2e-report.json")
+          if not path.exists():
+              raise SystemExit(0)
+          report = json.loads(path.read_text())
+          print(f"### End-to-end check: {report['verdict']} (model {report['model_version']})\n")
+          print("| Check | Status | Summary |\n| --- | --- | --- |")
+          for check in report["checks"]:
+              print(f"| {check['name']} | {check['status']} | {check['summary'].replace('|', '/')} |")
+          PY
+      - name: API log
+        if: failure()
+        run: cat api.log
+      - name: Stop the API
+        if: always()
+        run: kill "$(cat api.pid)" 2>/dev/null || true
+      - uses: actions/upload-artifact@v7
+        if: always()
+        with:
+          name: e2e-report
+          path: |
+            e2e-report.json
+            api.log
+          retention-days: 14
+          if-no-files-found: ignore
+
+  docker:
+    name: Docker image (build, boot, end-to-end)
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v7
+      - uses: docker/setup-buildx-action@v4
+      - name: Build the image (SPA stage + Python runtime)
+        uses: docker/build-push-action@v7
+        with:
+          context: .
+          file: backend/Dockerfile
+          tags: cardiotwin:ci
+          load: true
+          push: false
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+      - name: Run the container
+        run: |
+          docker run -d --name cardiotwin -p 8000:8000 cardiotwin:ci
+          docker image ls cardiotwin:ci --format 'image size: {{.Size}}'
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.11"
+      - name: End-to-end check against the container (stdlib client, portable reference)
+        run: python scripts/e2e_check.py --url http://127.0.0.1:8000 --wait 180 --no-native --latency-n 30
+      - name: Container health and logs
+        if: always()
+        run: |
+          docker inspect --format 'health: {{.State.Health.Status}}' cardiotwin || true
+          docker logs cardiotwin 2>&1 | tail -n 200
+      - name: Stop the container
+        if: always()
+        run: docker rm -f cardiotwin || true
