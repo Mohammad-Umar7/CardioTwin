@@ -101,6 +101,20 @@
 .rp-sheet.rp-measure {
   min-height: 0 !important;
 }
+/* Screen-only page caption above each sheet, like a print preview. */
+.rp-sheet[data-label]::before {
+  content: attr(data-label);
+  position: absolute;
+  left: 0;
+  bottom: 100%;
+  margin-bottom: 8px;
+  font-size: 11px;
+  line-height: 16px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: rgb(var(--c-text-tertiary));
+}
 .rp-sheet ::selection {
   background: rgba(86, 194, 230, 0.35);
   color: rgb(var(--ink-1));
@@ -984,7 +998,8 @@
     background: #fff;
   }
   .rp-toolbar,
-  .rp-screen-only {
+  .rp-screen-only,
+  .rp-sheet[data-label]::before {
     display: none !important;
   }
   .rp-stack {

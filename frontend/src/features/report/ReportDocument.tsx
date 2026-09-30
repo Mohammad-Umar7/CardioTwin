@@ -288,7 +288,7 @@ function PageOne({ model, perf }: { model: ReportModel; perf: PerformanceSummary
     : ['LAD', 'LCX', 'RCA'].map((id) => ({ id, p: null, flagged: null }));
   const unit = model.drivers[0]?.unit ?? 'points';
   return (
-    <article className="rp-sheet" aria-label={`Report page 1 of ${PAGES}`}>
+    <article className="rp-sheet" aria-label={`Report page 1 of ${PAGES}`} data-label={`Page 1 of ${PAGES}`}>
       <ReportHead model={model} />
       <MetaStrip model={model} />
       <SafetyNotice prevalence={perf?.prevalence.CAD} />
@@ -551,7 +551,7 @@ function PageTwo({ model, perf }: { model: ReportModel; perf: PerformanceSummary
     t.edited > 0 ? `${t.edited} changed` : null,
   ].filter(Boolean);
   return (
-    <article className="rp-sheet" aria-label={`Report page 2 of ${PAGES}`}>
+    <article className="rp-sheet" aria-label={`Report page 2 of ${PAGES}`} data-label={`Page 2 of ${PAGES}`}>
       <div className="rp-runhead">
         <span>
           <span className="rp-strong">CardioTwin</span> <span className="rp-ink-3">· Coronary risk report ·</span>{' '}
