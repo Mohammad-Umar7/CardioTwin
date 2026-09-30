@@ -1,0 +1,214 @@
+import { AnimatePresence, motion } from 'framer-motion';
+import { AlertCircle, Info } from 'lucide-react';
+import { BandChip, Probability, RiskTrack, Skeleton, Tooltip } from '@/design';
+import { useSchemaIndex } from '@/hooks/useData';
+import { useIsReducedMotion } from '@/hooks/useMediaQuery';
+import { cn } from '@/lib/cn';
+import { formatDeltaPts, formatPercent, formatProbability } from '@/lib/format';
+import { RISK_BAND_STYLES } from '@/theme/risk';
+import { EASE, MOTION } from '@/theme/tokens';
+import { Collapse } from './Collapse';
+import { useFlipAnnouncement } from './useFlipAnnouncement';
+import { useRiskView } from './useRiskView';
+import { cadVerdictLine, spokenVerdict, verdictFor } from './verdict';
+
+/**
+ * "Model estimate" status tag (§3.2, §5.8): sits beside the numbers it qualifies; replaces the live-canvas
+ * watermark and the old "Model estimate, not a diagnosis" microcopy.
+ */
+function ModelEstimateTag() {
+  return (
+    <Tooltip content="A statistical estimate from routine clinical data: decision support, not a diagnosis.">
+      <span
+        tabIndex={0}
+        className="eyebrow inline-flex h-5 items-center rounded-sm border border-line px-1.5 text-tertiary outline-none focus-visible:shadow-focus"
+      >
+        Model estimate
+      </span>
+    </Tooltip>
+  );
+}
+
+export interface CadHeadlineProps {
+  /** id of the overline heading (for the card's `aria-labelledby`). */
+  titleId: string;
+  /** The Explain drawer covers the numeral: omit `data-prob` (the drawer title is P(CAD)'s home then). */
+  covered?: boolean;
+  /** Show the threshold track (hidden by the compact variant). */
+  showTrack?: boolean;
+}
+
+/**
+ * The CAD answer (WORKSTATION_V2 §5.8 items 1–4): header with the "Model estimate" tag, the numeral
+ * (`data-prob="CAD"`) with its band chip, the "was … · ▼ −7 pts" line while edits exist, the threshold track
+ * (its scale lives in a tooltip, not in numerals) and the verdict line in the §3.2 vocabulary. Two encodings
+ * of the result (numeral + band chip), the track as their scale. States: skeleton, value, stale ("Updating",
+ * achromatic marks), unavailable (never a stale number presented as current).
+ */
+export function CadHeadline({ titleId, covered = false, showTrack = true }: CadHeadlineProps) {
+  const index = useSchemaIndex();
+  const view = useRiskView();
+  const reduced = useIsReducedMotion();
+  const cad = view.prediction?.predictions.CAD;
+  const base = view.baseline?.predictions.CAD;
+  const spec = index?.targetById.get('CAD');
+  const verdict = cad ? verdictFor(cad) : null;
+  const verdictText = cad ? cadVerdictLine(cad) : null;
+  const delta = cad && base ? formatDeltaPts(cad.probability - base.probability) : null;
+  const band = cad ? RISK_BAND_STYLES[cad.risk_band] : null;
+  const announcement = useFlipAnnouncement(
+    cad && band
+      ? `CAD ${formatProbability(cad.probability).spoken}, ${band.label}. ${spokenVerdict(cad)}.`
+      : null,
+    cad ? `${cad.risk_band}-${verdict?.flagged}` : null,
+  );
+
+  return (
+    <>
+      <header className="flex h-6 items-center gap-1">
+        <h2 id={titleId} className="eyebrow min-w-0 truncate text-secondary">
+          {spec?.label ?? 'Coronary artery disease'}
+        </h2>
+        <Tooltip
+          content={
+            spec?.description ??
+            'Probability that angiography would show at least one major coronary artery narrowed by 50 % or more.'
+          }
+        >
+          <button
+            type="button"
+            aria-label="About this estimate"
+            className="grid size-6 shrink-0 place-items-center rounded-sm text-tertiary outline-none hover:text-primary focus-visible:shadow-focus"
+          >
+            <Info aria-hidden className="size-4 stroke-[1.5]" />
+          </button>
+        </Tooltip>
+      </header>
+
+      {view.unavailable ? (
+        <div
+          role="status"
+          className="mt-2 flex items-start gap-2 rounded-md border border-line bg-surface-1 p-3"
+        >
+          <AlertCircle aria-hidden className="mt-px size-4 shrink-0 stroke-[1.5] text-danger" />
+          <div className="flex min-w-0 flex-col gap-0.5">
+            <span className="text-body-s font-semibold text-primary">Estimate unavailable</span>
+            <span className="text-label font-normal text-secondary">
+              {view.error ?? 'No prediction engine is reachable.'}
+            </span>
+            <span className="text-label font-normal text-tertiary">
+              Start the API (<span className="mono">uvicorn app.main:app --app-dir backend</span>) or reload
+              to use the in-browser model.
+            </span>
+          </div>
+        </div>
+      ) : !cad || !verdict ? (
+        <div aria-busy="true" aria-label="Computing the estimate" className="flex flex-col">
+          <div className="mt-2 flex h-14 items-end justify-between pb-1">
+            <Skeleton className="h-12 w-32" />
+            <Skeleton className="mb-1 h-[18px] w-20" />
+          </div>
+          {showTrack && <Skeleton className="mt-2 h-4" />}
+          <Skeleton className="mt-2 h-5 w-56" />
+        </div>
+      ) : (
+        <>
+          <div className="mt-2 flex items-end justify-between gap-3">
+            <div className="flex min-w-0 flex-col">
+              <Probability
+                p={cad.probability}
+                target={covered ? undefined : 'CAD'}
+                size="xl"
+                stale={view.stale}
+                className="[&_.pct-sign]:ml-0.5 [&_.pct-sign]:text-numeral-l"
+              />
+              {view.edits > 0 && (
+                <span className="mt-1 h-4 whitespace-nowrap text-label font-normal text-secondary">
+                  {view.comparing || !base ? (
+                    'Showing the recorded inputs'
+                  ) : (
+                    <>
+                      was{' '}
+                      <span
+                        className="num"
+                        data-baseline="CAD"
+                        title={formatProbability(base.probability).exact}
+                      >
+                        {formatProbability(base.probability).text}
+                      </span>
+                      {delta && delta.direction !== 'none'
+                        ? ` · ${delta.glyph} ${delta.text}`
+                        : ' · no change'}
+                    </>
+                  )}
+                </span>
+              )}
+            </div>
+            <div className="mb-1.5 flex shrink-0 flex-col items-end gap-2">
+              <ModelEstimateTag />
+              <div className="relative h-[18px]">
+                <AnimatePresence initial={false} mode="popLayout">
+                  <motion.span
+                    key={view.stale ? 'pending' : cad.risk_band}
+                    initial={{ opacity: 0 }}
+                    animate={{ opacity: 1 }}
+                    exit={{ opacity: 0 }}
+                    transition={{ duration: reduced ? 0 : MOTION.fast / 1000, ease: EASE.out }}
+                    className="block"
+                  >
+                    <BandChip band={cad.risk_band} pending={view.stale} size="sm" showMeter={false} />
+                  </motion.span>
+                </AnimatePresence>
+              </div>
+            </div>
+          </div>
+
+          <Collapse show={showTrack}>
+            <Tooltip content={`0 · 25 · 50 · 75 · 100 % · threshold ${formatPercent(cad.threshold)}`}>
+              <div
+                tabIndex={0}
+                role="img"
+                aria-label={`Probability scale from 0 to 100 percent; decision threshold ${Math.round(cad.threshold * 100)} percent`}
+                className="mt-2 rounded-xs outline-none focus-visible:shadow-focus"
+              >
+                <RiskTrack
+                  p={cad.probability}
+                  threshold={cad.threshold}
+                  ghost={base?.probability ?? null}
+                  pending={view.stale}
+                />
+              </div>
+            </Tooltip>
+          </Collapse>
+
+          <div className="relative mt-2 h-5 overflow-clip">
+            <AnimatePresence initial={false} mode="popLayout">
+              <motion.p
+                key={view.stale ? 'updating' : verdictText}
+                initial={reduced ? { opacity: 0 } : { opacity: 0, y: 6 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={reduced ? { opacity: 0 } : { opacity: 0, y: -6 }}
+                transition={{ duration: reduced ? 0 : MOTION.fast / 1000, ease: EASE.out }}
+                className={cn('text-body-s font-semibold', view.stale ? 'text-tertiary' : 'text-primary')}
+              >
+                {view.stale ? (
+                  'Updating'
+                ) : (
+                  <>
+                    <span aria-hidden className="mr-1.5">
+                      {verdict.glyph}
+                    </span>
+                    {verdictText}
+                  </>
+                )}
+              </motion.p>
+            </AnimatePresence>
+          </div>
+        </>
+      )}
+      <p className="sr-only text-body-s" aria-live="polite">
+        {announcement}
+      </p>
+    </>
+  );
+}
