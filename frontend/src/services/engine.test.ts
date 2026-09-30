@@ -42,7 +42,7 @@ describe('ServerEngine', () => {
   });
 });
 
-describe('EdgeEngine stub', () => {
+describe('EdgeEngine without a portable model', () => {
   it('is honest about being unavailable', async () => {
     const edge = new EdgeEngine();
     expect(edge.kind).toBe('edge');
@@ -54,7 +54,7 @@ describe('EdgeEngine stub', () => {
 describe('resolveEngine', () => {
   it('picks the server when /api/health answers ok', async () => {
     const client = { health: vi.fn().mockResolvedValue(sampleHealth), predict: vi.fn() };
-    const res = await resolveEngine({ client });
+    const res = await resolveEngine({ client, override: null });
     expect(res.engine.kind).toBe('server');
     expect(res.health?.model_version).toBe('1.0.0');
     expect(client.health).toHaveBeenCalledWith(expect.objectContaining({ timeoutMs: expect.any(Number) }));
@@ -62,7 +62,7 @@ describe('resolveEngine', () => {
 
   it('falls back to the edge engine when the server is unreachable', async () => {
     const client = { health: vi.fn().mockRejectedValue(new NetworkError('down')), predict: vi.fn() };
-    const res = await resolveEngine({ client, timeoutMs: 10 });
+    const res = await resolveEngine({ client, timeoutMs: 10, createEdge: () => new EdgeEngine(), override: null });
     expect(res.engine.kind).toBe('edge');
     expect(res.health).toBeNull();
   });
