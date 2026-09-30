@@ -19,8 +19,8 @@ import { FLOW_WHITE, TRACE } from './fxState';
 
 /** Extra outward offset over the vessel's display inflation (scene units ≈ 0.12 mm). */
 export const OVERLAY_EPSILON = 0.0012;
-/** Tier-C dash period along the vessel (scene units; 6 mm). */
-export const DASH_PERIOD = 0.06;
+/** Tier-C bead period along the vessel (scene units; 9 mm). */
+export const DASH_PERIOD = 0.09;
 
 export interface OverlayShared {
   [name: string]: { value: unknown };
@@ -133,7 +133,7 @@ export function createOverlayMaterial(shared: OverlayShared, arclenAttribute: st
           // reach the bloom threshold) plus a softer wake behind it
           float crest = exp(-(x * x) / (0.035 * 0.035));
           float wake = x > 0.0 ? exp(-x / 0.14) : 0.0;
-          float band = 1.7 * crest + 0.45 * wake;
+          float band = 1.3 * crest + 0.4 * wake;
           col += mix(hue, vec3(1.0), 0.4) * (uPulseAmp * band * (1.0 - 0.4 * clamp(vArc, 0.0, 1.0)));
         }
 
@@ -145,11 +145,12 @@ export function createOverlayMaterial(shared: OverlayShared, arclenAttribute: st
           col += uTrace * (uIgniteAmp * (1.6 * front + glow));
         }
 
-        // Tier-C flow dashes, moving distally at the integrated flow speed.
+        // Tier-C flow beads, moving distally at the integrated flow speed: short, soft, only along the
+        // tube's axis (facing³), so they read as particles rather than stripes.
         if (uDashAmp > 0.0) {
           float u = fract(vArc * uTreeLength / ${DASH_PERIOD.toFixed(4)} - uDashPhase);
-          float dash = smoothstep(0.55, 0.85, u) * (1.0 - smoothstep(0.85, 1.0, u));
-          col += mix(uFlowWhite, ramp, uTintMix) * (0.5 * uDashAmp * uDensity * dash);
+          float bead = smoothstep(0.72, 0.9, u) * (1.0 - smoothstep(0.9, 1.0, u));
+          col += mix(uFlowWhite, ramp, uTintMix) * (0.7 * uDashAmp * uDensity * bead * facing * facing);
         }
 
         col *= core * (1.0 - 0.7 * uDim);

@@ -12,8 +12,8 @@ export const FLOW_CAPTION_DETAIL =
 
 /**
  * The caption that must accompany the flow particles wherever they are shown in the workstation
- * (clinical-safety wording). A plain DOM chip anchored top-centre over the canvas — the only free edge of
- * the canvas HUD — created imperatively because this component lives inside the R3F tree. It follows the
+ * (clinical-safety wording). A plain DOM caption anchored top-right over the canvas, directly under the HUD
+ * watermark, created imperatively because this component lives inside the R3F tree. It follows the
  * Flow toggle, Calm / reduced motion and the stage, and carries the full explanation as its accessible
  * description and hover title.
  */
@@ -26,15 +26,17 @@ export function FlowCaption() {
     const host = gl.domElement.parentElement?.parentElement ?? gl.domElement.parentElement;
     if (!host) return;
     const chip = document.createElement('div');
+    // Right-aligned under the canvas HUD's "NOT FOR DIAGNOSTIC USE" watermark (projections 24 px + gap +
+    // watermark line), in the same quiet disclaimer voice, so the two caveats read as one block.
     chip.className =
-      'hud-chip pointer-events-auto absolute left-1/2 top-3 z-hud flex h-6 -translate-x-1/2 items-center gap-1.5 whitespace-nowrap px-2 text-label font-normal text-tertiary';
+      'pointer-events-auto absolute right-3 top-[62px] z-hud flex cursor-help select-none items-center gap-1.5 whitespace-nowrap text-[0.6875rem] font-medium leading-4 text-tertiary/80';
     chip.setAttribute('role', 'note');
     chip.setAttribute('aria-label', `${FLOW_CAPTION}. ${FLOW_CAPTION_DETAIL}`);
     chip.title = FLOW_CAPTION_DETAIL;
     chip.dataset.fxCaption = 'flow';
     const dot = document.createElement('span');
     dot.setAttribute('aria-hidden', 'true');
-    dot.className = 'inline-block h-1.5 w-1.5 rounded-full';
+    dot.className = 'inline-block h-1 w-1 rounded-full';
     dot.style.background = 'rgb(var(--c-text-primary) / 0.85)';
     const text = document.createElement('span');
     text.textContent = FLOW_CAPTION;
