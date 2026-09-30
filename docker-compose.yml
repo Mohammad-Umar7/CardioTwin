@@ -1,0 +1,21 @@
+# One command, one URL:  docker compose up --build   ->  http://localhost:8000
+# (the 3D app at /, the REST API at /api, interactive API docs at /docs)
+services:
+  cardiotwin:
+    build:
+      context: .
+      dockerfile: backend/Dockerfile
+    image: cardiotwin:latest
+    container_name: cardiotwin
+    ports:
+      - "${CARDIOTWIN_PORT:-8000}:8000"
+    environment:
+      CARDIOTWIN_LOG_LEVEL: ${CARDIOTWIN_LOG_LEVEL:-INFO}
+      CARDIOTWIN_CACHE_SIZE: ${CARDIOTWIN_CACHE_SIZE:-2048}
+      # Only needed when the SPA is served from another origin (e.g. `npm run dev` on :5173).
+      CARDIOTWIN_CORS_ORIGINS: ${CARDIOTWIN_CORS_ORIGINS:-http://localhost:5173,http://127.0.0.1:5173}
+    restart: unless-stopped
+    security_opt:
+      - no-new-privileges:true
+    tmpfs:
+      - /tmp
