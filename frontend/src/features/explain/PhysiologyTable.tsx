@@ -1,5 +1,6 @@
 import { useMemo } from 'react';
 import { DirectionMark, Skeleton, Toggle, Tooltip } from '@/design';
+import { abnormality, cardLabel } from '@/features/patient/lib/values';
 import { cn } from '@/lib/cn';
 import { NEGLIGIBLE_SHAP } from '@/lib/explain';
 import { formatFeatureValue, formatNormalRange, rangeStatus, type RangeStatus } from '@/lib/format';
@@ -72,9 +73,16 @@ export function PhysiologyTable({ target }: { target: string }) {
   const rows = (prefs.abnormalOnly ? abnormal : numeric).sort(
     (a, b) => Math.abs(shapOf.get(b.spec.key) ?? 0) - Math.abs(shapOf.get(a.spec.key) ?? 0),
   );
+  // One definition of a finding everywhere (patient card, Inputs drawer, report): a binary input that is
+  // present, or a categorical one away from its "none" option (valve disease: Mild, bundle branch block …).
   const present = d.index.features
-    .filter((s) => s.type === 'binary' && (features[s.key] === 1 || features[s.key] === '1'))
+    .filter((s) => {
+      const a = abnormality(s, features[s.key]);
+      return a === 'present' || a === 'finding';
+    })
     .sort((a, b) => Math.abs(shapOf.get(b.key) ?? 0) - Math.abs(shapOf.get(a.key) ?? 0));
+  const findingLabel = (s: FeatureSpec) =>
+    s.type === 'categorical' ? `${s.label}: ${formatFeatureValue(s, features[s.key] as never)}` : s.label;
 
   return (
     <div className={cn('flex flex-col gap-6', d.stale && 'opacity-50')}>
@@ -134,7 +142,13 @@ export function PhysiologyTable({ target }: { target: string }) {
                   )}
                 >
                   <th scope="row" className="truncate pl-1 text-left font-normal">
-                    <Tooltip content={[spec.description, range].filter(Boolean).join(' · ') || spec.label}>
+                    {/* The card's short label where the full one cannot fit the 440 px drawer ("Wall-motion abn."). */}
+                    <Tooltip
+                      content={
+                        [cardLabel(spec) !== spec.label ? spec.label : null, spec.description, range].filter(Boolean).join(' · ') ||
+                        spec.label
+                      }
+                    >
                       <button
                         type="button"
                         onClick={(e) => {
@@ -146,7 +160,7 @@ export function PhysiologyTable({ target }: { target: string }) {
                         aria-label={`${spec.label}, ${valueText(spec, value)}${status && status !== 'within' ? `, ${status} normal` : ''}${range ? `, ${range}` : ''}${f ? `, ${f.spoken} for ${target}` : ''}. Edit this input.`}
                         className="max-w-full truncate rounded-xs text-left text-body-s text-secondary outline-none focus-visible:shadow-focus"
                       >
-                        {spec.label}
+                        {cardLabel(spec)}
                       </button>
                     </Tooltip>
                   </th>
@@ -191,7 +205,7 @@ export function PhysiologyTable({ target }: { target: string }) {
                     onClick={() => open(s.key)}
                     onMouseEnter={() => highlight(s.key)}
                     onMouseLeave={() => highlight(null)}
-                    aria-label={`${s.label}: present, ${Math.abs(shap) < NEGLIGIBLE_SHAP ? 'negligible effect' : `${up ? 'raises' : 'lowers'} ${target}, ${f.spoken}`}. Edit this input.`}
+                    aria-label={`${findingLabel(s)}: present, ${Math.abs(shap) < NEGLIGIBLE_SHAP ? 'negligible effect' : `${up ? 'raises' : 'lowers'} ${target}, ${f.spoken}`}. Edit this input.`}
                     className={cn(
                       'inline-flex h-7 items-center gap-1.5 rounded-sm border border-line bg-surface-1 px-2 text-label text-primary outline-none transition-colors duration-instant',
                       'hover:bg-surface-2 focus-visible:shadow-focus',
@@ -201,7 +215,7 @@ export function PhysiologyTable({ target }: { target: string }) {
                     {Math.abs(shap) >= NEGLIGIBLE_SHAP && (
                       <DirectionMark direction={up ? 'raises' : 'lowers'} />
                     )}
-                    {s.label}
+                    {findingLabel(s)}
                     <span className="num font-normal text-tertiary">{Math.abs(shap) >= NEGLIGIBLE_SHAP ? f.text : ''}</span>
                   </button>
                 </li>
