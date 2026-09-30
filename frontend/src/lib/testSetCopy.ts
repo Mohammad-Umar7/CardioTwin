@@ -25,11 +25,11 @@ const RESCORE =
 
 export const TEST_SET = {
   /** Check-mark item on the landing protocol line. */
-  check: 'Locked test, 1 disclosed re-score',
+  check: 'Locked test, re-score disclosed',
   /** Its tooltip. */
   hint: `The held-out split was locked before development and scored only after every modelling decision was frozen. ${RESCORE}`,
   /** Stat sub-line (Methodology). */
-  stat: 'locked · 1 disclosed re-score',
+  stat: 'locked · one disclosed re-score',
   /** Validate pillar sentence (landing). */
   pillar: 'Tested on locked, unseen patients.',
   /** Segmented-control tooltip (Model performance). */

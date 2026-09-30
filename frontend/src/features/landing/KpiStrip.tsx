@@ -88,7 +88,7 @@ const PROTOCOL = [
   { anchor: 'engines', text: 'Server/edge parity', hint: 'The in-browser engine reproduces the server to |Δp| < 1e-6 on every fixture case.' },
 ] as const;
 
-/** ✓ Targets never used as inputs · ✓ Locked test, 1 disclosed re-score · ✓ Server/edge parity (V2 §6.1). */
+/** ✓ Targets never used as inputs · ✓ Locked test, re-score disclosed · ✓ Server/edge parity (V2 §6.1). */
 export function ProtocolLine({ className }: { className?: string }) {
   return (
     <ul className={cn('flex flex-wrap items-center gap-x-4 gap-y-1 text-label', className)} aria-label="Validation protocol">
