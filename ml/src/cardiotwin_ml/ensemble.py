@@ -22,7 +22,7 @@ from xgboost import XGBClassifier
 
 from . import xgb_trees
 from .metrics import f1_threshold, fast_roc_auc, youden_threshold
-from .models import STEP
+from .models import STEP, SUBSET
 
 
 def sigmoid(z: np.ndarray | float) -> np.ndarray | float:
@@ -119,14 +119,24 @@ class LogisticComponent:
 
     @classmethod
     def from_pipeline(cls, name: str, pipeline: Pipeline, X_dev: np.ndarray, params: dict[str, Any]) -> LogisticComponent:
+        """Closed form of a fitted (subset ->) impute -> scale -> logistic pipeline over ALL encoded columns.
+
+        Columns outside a feature subset get coef 0, mean 0, scale 1, so they contribute nothing.
+        """
         scaler = pipeline.named_steps["scale"]
         model = pipeline.named_steps[STEP]
+        n = np.asarray(X_dev).shape[1]
+        idx = list(pipeline.named_steps[SUBSET].indices) if SUBSET in pipeline.named_steps else list(range(n))
+        mean, scale, coef = np.zeros(n), np.ones(n), np.zeros(n)
+        mean[idx] = scaler.mean_
+        scale[idx] = scaler.scale_
+        coef[idx] = model.coef_[0]
         return cls(
             name=name,
             pipeline=pipeline,
-            mean=np.asarray(scaler.mean_, dtype=np.float64),
-            scale=np.asarray(scaler.scale_, dtype=np.float64),
-            coef=np.asarray(model.coef_[0], dtype=np.float64),
+            mean=mean,
+            scale=scale,
+            coef=coef,
             intercept=float(model.intercept_[0]),
             background=np.asarray(X_dev, dtype=np.float64).mean(axis=0),
             params=params,
@@ -167,7 +177,11 @@ class XGBComponent:
         return xgb_trees.margin_from_leaves(self.trees, leaves, self.base_margin)
 
     def expected_value(self) -> float:
-        return xgb_trees.expected_value(self.trees, self.base_margin)
+        cached = self.__dict__.get("_expected")
+        if cached is None:
+            cached = xgb_trees.expected_value(self.trees, self.base_margin)
+            self.__dict__["_expected"] = cached
+        return cached
 
     def shap(self, X: np.ndarray) -> np.ndarray:
         return xgb_trees.tree_shap(self.trees, X, self.n_features)
@@ -175,6 +189,7 @@ class XGBComponent:
     def __getstate__(self) -> dict[str, Any]:
         state = dict(self.__dict__)
         state.pop("_scalar", None)
+        state.pop("_expected", None)
         return state
 
     def shap_row(self, x: np.ndarray) -> np.ndarray:

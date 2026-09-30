@@ -158,104 +158,6 @@ def expected_value(trees: list[FlatTree], base_margin: float) -> float:
     return base_margin + sum(t.expected_value() for t in trees)
 
 
-class ScalarTreeShap:
-    """Single-row TreeSHAP on plain Python lists (~10x faster than the vectorised path for n = 1).
-
-    Used by the online predictor. Numerically identical to :func:`tree_shap` (same float64 recursion).
-    """
-
-    def __init__(self, trees: list[FlatTree]):
-        self._trees = [
-            (
-                t.left.tolist(),
-                t.right.tolist(),
-                t.missing.tolist(),
-                t.feature.tolist(),
-                [float(np.float32(v)) for v in t.threshold],
-                t.value.tolist(),
-                t.cover.tolist(),
-            )
-            for t in trees
-        ]
-
-    def shap(self, x: np.ndarray, n_features: int) -> list[float]:
-        x32 = [float(v) for v in np.asarray(x, dtype=np.float32)]
-        phi = [0.0] * n_features
-        for tree in self._trees:
-            self._recurse(tree, x32, phi, 0, [], 1.0, 1.0, -1)
-        return phi
-
-    def _recurse(self, tree, x32, phi, node, path, zero, one, feature) -> None:  # noqa: ANN001
-        left, right, missing, feat, thr, value, cover = tree
-        path = _s_extend(path, zero, one, feature)
-        if left[node] < 0:
-            v = value[node]
-            for i in range(1, len(path)):
-                el = path[i]
-                phi[el[0]] += _s_unwound_sum(path, i) * (el[2] - el[1]) * v
-            return
-        split = feat[node]
-        in_zero, in_one = 1.0, 1.0
-        for k in range(1, len(path)):
-            if path[k][0] == split:
-                in_zero, in_one = path[k][1], path[k][2]
-                path = _s_unwind(path, k)
-                break
-        xv = x32[split]
-        if xv != xv:  # NaN -> missing branch
-            goes_left = missing[node] == left[node]
-        else:
-            goes_left = xv < thr[node]
-        lft, rgt, c = left[node], right[node], cover[node]
-        self._recurse(tree, x32, phi, lft, path, in_zero * cover[lft] / c, in_one if goes_left else 0.0, split)
-        self._recurse(tree, x32, phi, rgt, path, in_zero * cover[rgt] / c, 0.0 if goes_left else in_one, split)
-
-
-def _s_extend(path, zero, one, feature):  # noqa: ANN001, ANN202
-    depth = len(path)
-    new = [list(e) for e in path]
-    new.append([feature, zero, one, 1.0 if depth == 0 else 0.0])
-    for i in range(depth - 1, -1, -1):
-        new[i + 1][3] += one * new[i][3] * (i + 1) / (depth + 1)
-        new[i][3] = zero * new[i][3] * (depth - i) / (depth + 1)
-    return new
-
-
-def _s_unwind(path, index):  # noqa: ANN001, ANN202
-    depth = len(path) - 1
-    one, zero = path[index][2], path[index][1]
-    next_one = path[depth][3]
-    weights = [e[3] for e in path]
-    for i in range(depth - 1, -1, -1):
-        if one != 0:
-            tmp = weights[i]
-            weights[i] = next_one * (depth + 1) / ((i + 1) * one)
-            next_one = tmp - weights[i] * zero * (depth - i) / (depth + 1)
-        else:
-            weights[i] = weights[i] * (depth + 1) / (zero * (depth - i))
-    out = []
-    for i in range(depth):
-        src = path[i + 1] if i >= index else path[i]
-        out.append([src[0], src[1], src[2], weights[i]])
-    return out
-
-
-def _s_unwound_sum(path, index):  # noqa: ANN001, ANN202
-    depth = len(path) - 1
-    one, zero = path[index][2], path[index][1]
-    next_one = path[depth][3]
-    total = 0.0
-    if one != 0:
-        for i in range(depth - 1, -1, -1):
-            tmp = next_one / ((i + 1) * one)
-            total += tmp
-            next_one = path[i][3] - tmp * zero * (depth - i)
-    else:
-        for i in range(depth - 1, -1, -1):
-            total += path[i][3] / (zero * (depth - i))
-    return total * (depth + 1)
-
-
 # Path elements are tuples (feature, zero_fraction: float, one_fraction: array, pweight: array).
 
 
@@ -338,3 +240,93 @@ def _recurse(
     cover = tree.cover[node]
     _recurse(tree, X32, phi, lft, path, incoming_zero * tree.cover[lft] / cover, incoming_one * goes_left, split)
     _recurse(tree, X32, phi, rgt, path, incoming_zero * tree.cover[rgt] / cover, incoming_one * ~goes_left, split)
+
+
+class ScalarTreeShap:
+    """Single-row TreeSHAP on plain Python lists (~10x faster than the vectorised path for n = 1).
+
+    Used by the online predictor. Same float64 recursion as :func:`tree_shap`; the unique path is kept as
+    four parallel lists (feature, zero fraction, one fraction, permutation weight) to avoid allocations.
+    """
+
+    def __init__(self, trees: list[FlatTree]):
+        self._trees = [
+            (
+                t.left.tolist(),
+                t.right.tolist(),
+                t.missing.tolist(),
+                t.feature.tolist(),
+                [float(np.float32(v)) for v in t.threshold],
+                t.value.tolist(),
+                t.cover.tolist(),
+            )
+            for t in trees
+        ]
+
+    def shap(self, x: np.ndarray, n_features: int) -> list[float]:
+        x32 = [float(v) for v in np.asarray(x, dtype=np.float32)]
+        phi = [0.0] * n_features
+        for tree in self._trees:
+            _s_recurse(tree, x32, phi, 0, [], [], [], [], 1.0, 1.0, -1)
+        return phi
+
+
+def _s_recurse(tree, x32, phi, node, feats, zeros, ones, weights, zero, one, feature) -> None:  # noqa: ANN001, PLR0913
+    left, right, missing, feat, thr, value, cover = tree
+    # extend the path with (feature, zero, one)
+    depth = len(feats)
+    feats = feats + [feature]
+    zeros = zeros + [zero]
+    ones = ones + [one]
+    weights = weights + [1.0 if depth == 0 else 0.0]
+    for i in range(depth - 1, -1, -1):
+        weights[i + 1] += one * weights[i] * (i + 1) / (depth + 1)
+        weights[i] = zero * weights[i] * (depth - i) / (depth + 1)
+    if left[node] < 0:
+        v = value[node]
+        for i in range(1, len(feats)):
+            phi[feats[i]] += _s_unwound_sum(weights, zeros[i], ones[i]) * (ones[i] - zeros[i]) * v
+        return
+    split = feat[node]
+    in_zero, in_one = 1.0, 1.0
+    for k in range(1, len(feats)):
+        if feats[k] == split:
+            in_zero, in_one = zeros[k], ones[k]
+            feats, zeros, ones, weights = _s_unwind(feats, zeros, ones, weights, k)
+            break
+    xv = x32[split]
+    goes_left = (missing[node] == left[node]) if xv != xv else xv < thr[node]
+    lft, rgt, c = left[node], right[node], cover[node]
+    _s_recurse(tree, x32, phi, lft, feats, zeros, ones, weights, in_zero * cover[lft] / c, in_one if goes_left else 0.0, split)
+    _s_recurse(tree, x32, phi, rgt, feats, zeros, ones, weights, in_zero * cover[rgt] / c, 0.0 if goes_left else in_one, split)
+
+
+def _s_unwind(feats, zeros, ones, weights, index):  # noqa: ANN001, ANN202
+    depth = len(feats) - 1
+    one, zero = ones[index], zeros[index]
+    next_one = weights[depth]
+    w = list(weights)
+    for i in range(depth - 1, -1, -1):
+        if one != 0:
+            tmp = w[i]
+            w[i] = next_one * (depth + 1) / ((i + 1) * one)
+            next_one = tmp - w[i] * zero * (depth - i) / (depth + 1)
+        else:
+            w[i] = w[i] * (depth + 1) / (zero * (depth - i))
+    keep = [i for i in range(depth + 1) if i != index]
+    return [feats[i] for i in keep], [zeros[i] for i in keep], [ones[i] for i in keep], w[:depth]
+
+
+def _s_unwound_sum(weights, zero, one):  # noqa: ANN001, ANN202
+    depth = len(weights) - 1
+    next_one = weights[depth]
+    total = 0.0
+    if one != 0:
+        for i in range(depth - 1, -1, -1):
+            tmp = next_one / ((i + 1) * one)
+            total += tmp
+            next_one = weights[i] - tmp * zero * (depth - i)
+    else:
+        for i in range(depth - 1, -1, -1):
+            total += weights[i] / (zero * (depth - i))
+    return total * (depth + 1)
