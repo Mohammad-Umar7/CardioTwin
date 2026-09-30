@@ -142,3 +142,23 @@ def test_extra_fields_added_by_the_model_are_passed_through(make_client: Any) ->
     body = make_client(predictor_override=ExtendedPredictor()).post("/api/predict", json={}).json()
     assert body["calibration"] == "platt"
     assert body["predictions"]["CAD"]["ci"] == [0.1, 0.9]
+
+
+def test_values_rejected_by_the_model_are_client_errors(make_client: Any) -> None:
+    class Strict(FakePredictor):
+        def predict(self, features: Any) -> dict[str, Any]:
+            if features.get("Age") == 31:
+                raise ValueError("Age 31 is not supported by this model")
+            return super().predict(features)
+
+    client = make_client(predictor_override=Strict())
+    response = client.post("/api/predict", json={"features": {"Age": 31}})
+    assert response.status_code == 422
+    item = response.json()["detail"][0]
+    assert item["type"] == "model_rejected_input"
+    assert item["loc"] == ["body", "features"]
+    assert "Age 31 is not supported" in item["msg"]
+
+    batch = client.post("/api/predict/batch", json={"rows": [{"features": {"Age": 40}}, {"features": {"Age": 31}}]})
+    assert batch.status_code == 422
+    assert batch.json()["detail"][0]["loc"] == ["body", "rows", 1, "features"]

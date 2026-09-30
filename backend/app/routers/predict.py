@@ -108,7 +108,7 @@ def predict_batch(body: BatchPredictRequest, runtime: RuntimeDep, settings: Sett
     parts: list[bytes] = []
     hits = 0
     for index, (row, features) in enumerate(zip(body.rows, normalized, strict=True)):
-        result, hit = runtime.service.predict_normalized(features)
+        result, hit = runtime.service.predict_normalized(features, ("body", "rows", index, "features"))
         hits += hit
         parts.append(b'{"index":%d,"id":%s,"prediction":%s}' % (index, dumps(row.id), result.body))
 

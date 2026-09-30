@@ -29,7 +29,7 @@ from app.models import (
     PredictResponse,
 )
 from app.predictors.base import Predictor, PredictorContractError
-from app.validation import FeatureValidator, Loc
+from app.validation import FeatureValidationError, FeatureValidator, Issue, Loc
 
 log = get_logger("runtime")
 
@@ -89,16 +89,24 @@ class PredictionService:
 
     def predict(self, features: Mapping[str, Any], loc: Loc = ("body", "features")) -> tuple[PredictionResult, bool]:
         """Return ``(result, cache_hit)``; raises ``FeatureValidationError`` on bad input."""
-        return self.predict_normalized(self.validator.normalize(features, loc))
+        return self.predict_normalized(self.validator.normalize(features, loc), loc)
 
-    def predict_normalized(self, features: Mapping[str, Any]) -> tuple[PredictionResult, bool]:
+    def predict_normalized(
+        self, features: Mapping[str, Any], loc: Loc = ("body", "features")
+    ) -> tuple[PredictionResult, bool]:
+        """Predict already-validated features. ``loc`` locates the input in error reports."""
         key = json.dumps(features, sort_keys=True, separators=(",", ":"), default=str)
         cached = self.cache.get(key)
         if cached is not None:
             return cached, True
         started = time.perf_counter()
-        with self._lock:
-            raw = self.predictor.predict(dict(features))
+        try:
+            with self._lock:
+                raw = self.predictor.predict(dict(features))
+        except ValueError as exc:
+            # The ML package validates inputs too; a value it rejects is still a client error, not a 500.
+            log.warning("model rejected validated input", extra={"error": str(exc)})
+            raise FeatureValidationError([Issue("model_rejected_input", loc, f"The model rejected the input: {exc}")])
         result = self._conform(raw)
         self.cache.put(key, result)
         log.debug("model inference", extra={"inference_ms": round((time.perf_counter() - started) * 1000, 3)})
