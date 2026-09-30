@@ -2,8 +2,11 @@
  * WORKSTATION_V2 §9.3 F acceptance: no raw dataset key and no internal model id is visible on
  * Performance or Methodology. Both pages are rendered against the artifacts the app actually ships
  * (public/model, public/anatomy) and their DOM text is grepped, for every target and both splits.
+ * The same renders are checked with axe-core (structure and naming rules; jsdom cannot compute
+ * colour contrast, which is checked in the browser).
  */
 import { render, screen, waitFor } from '@testing-library/react';
+import axe from 'axe-core';
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { MemoryRouter } from 'react-router-dom';
@@ -68,6 +71,17 @@ function leaks(text: string): string[] {
   return out;
 }
 
+/** Serious or critical axe violations (colour contrast needs layout, so it is left to the browser pass). */
+async function axeSerious(root: HTMLElement): Promise<string[]> {
+  const res = await axe.run(root, {
+    rules: { 'color-contrast': { enabled: false } },
+    resultTypes: ['violations'],
+  });
+  return res.violations
+    .filter((v) => v.impact === 'serious' || v.impact === 'critical')
+    .map((v) => `${v.id}: ${v.nodes.map((n) => n.target.join(' ')).join(', ')}`);
+}
+
 /** Visible text plus accessible names and tooltips that a reader can reach. */
 function reachableText(root: HTMLElement): string {
   const attrs = [...root.querySelectorAll('[aria-label],[title]')].map(
@@ -95,6 +109,7 @@ describe('human names only (§6.4 rule 3)', () => {
         await waitFor(() => expect(container.querySelector('#summary-title')).not.toBeNull());
         expect(screen.getByRole('heading', { level: 1 }).textContent).toMatch(/^Separates /);
         expect(leaks(reachableText(container))).toEqual([]);
+        if (t === 'CAD' && split === 'test') expect(await axeSerious(container)).toEqual([]);
         unmount();
       });
     }
@@ -108,6 +123,7 @@ describe('human names only (§6.4 rule 3)', () => {
     );
     await waitFor(() => expect(container.querySelector('#models table')).not.toBeNull());
     expect(leaks(reachableText(container))).toEqual([]);
+    expect(await axeSerious(container)).toEqual([]);
     for (const id of [
       'pipeline',
       'data',
