@@ -289,6 +289,13 @@ class HeartGeo:
                 cache.parent.mkdir(parents=True, exist_ok=True)
                 cache.write_bytes(pickle.dumps(data, protocol=4))
         self.occ, self.origin, self.sdf = data["occ"], data["origin"], data["sdf"]
+        # The voxel field's zero level lies outside the surface it was built from: every voxel the surface touches is
+        # solid and the distance is measured from the voxel boundary (0.34 mm on this wall; the build's wall matches
+        # the seating mesh to 0.01 mm). Uncorrected, every vessel sat that much off the heart. Calibrate the offset
+        # on the mesh itself so that sd = 0 on the surface (the gradient, hence every normal, is unchanged).
+        raw = ndimage.map_coordinates(self.sdf, self._ijk(self.V).T, order=1, mode="nearest")
+        self.sdf_bias = float(np.clip(-np.median(raw), 0.0, PITCH))
+        self.sdf = (self.sdf + self.sdf_bias).astype(np.float32)
         self.grad = [g.astype(np.float32) for g in np.gradient(self.sdf.astype(np.float64), PITCH)]
         # epicardial vertices: the outward normal ray never re-enters the solid
         N = self.tm.vertex_normals
@@ -366,21 +373,26 @@ class HeartGeo:
             P = P + disp
         return P
 
-    def groove(self, key: str, thetas: np.ndarray, *, h_mm: float, R: np.ndarray | float, lift: float,
-               max_mm: float = 16.0, min_mm: float = 3.0, smooth_deg: float = 12.0) -> np.ndarray:
+    def groove(self, key: str, thetas: np.ndarray, *, h_mm: float | np.ndarray, R: np.ndarray | float, lift: float,
+               max_mm: float = 16.0, min_mm: float = 3.0, smooth_deg: float = 12.0, radial_seat: bool = False) -> np.ndarray:
         """Course of the AV groove beside ring ``key`` over the azimuths ``thetas`` (radians, in order).
 
         For every azimuth: march outward from the hinge in the ring plane shifted ``h_mm`` towards the atrium and
         take the first exit from the myocardium (the epicardial crease at the atrioventricular junction). The
         radial exit distance is median-filtered, smoothed, clamped to [min_mm, max_mm] beyond the hinge and the
-        points are seated ``R + lift`` outside the wall."""
+        points are seated ``R + lift`` outside the wall: along the SDF gradient, or (``radial_seat``) only outward
+        along the ring radius at the same height, so a vessel in a crease below a bulging atrium (the left auricle,
+        the pulmonary-vein ostia) is not slid up the atrial wall."""
+        if radial_seat:
+            return self._groove_radial(key, thetas, h_mm=h_mm, R=R, lift=lift, max_mm=max_mm, min_mm=min_mm, smooth_deg=smooth_deg)
         ring = self.rings[key]
         thetas = np.asarray(thetas, float)
+        hh_mm = np.broadcast_to(np.asarray(h_mm, float), (len(thetas),))
         steps = np.arange(-2.0, max_mm + 12.0, 0.25) * MM
         rho = np.full(len(thetas), np.nan)
         for i, t in enumerate(thetas):
             d = ring.dir(t)[0]
-            Q = ring.c + ring.n * h_mm * MM + np.outer(ring.R + steps, d)
+            Q = ring.c + ring.n * hh_mm[i] * MM + np.outer(ring.R + steps, d)
             ins = self.sd(Q) < 0
             k = np.flatnonzero(ins)
             if len(k) == 0:
@@ -399,11 +411,73 @@ class HeartGeo:
         rho = ndimage.median_filter(rho, size=win, mode="nearest")
         rho = ndimage.gaussian_filter1d(rho, win / 2.0, mode="nearest")
         rho = np.clip(rho, min_mm * MM, max_mm * MM)
-        P = np.vstack([ring.point(t, radial=r_, h=h_mm * MM)[0] for t, r_ in zip(thetas, rho)])
+        P = np.vstack([ring.point(t, radial=r_, h=hh * MM)[0] for t, r_, hh in zip(thetas, rho, hh_mm)])
         R = np.broadcast_to(np.asarray(R, float), (len(P),))
         for _ in range(2):
             P = self.seat(P, R, lift, snap=True, iterations=4, sigma=3.0)
             P = smooth(P, 4)
+        return P
+
+    def crease_h(self, key: str, thetas: np.ndarray, *, window_deg: float = 4.0, smooth_deg: float = 20.0) -> np.ndarray:
+        """Height (mm, along the ring normal; + = atrial) of the bottom of the atrioventricular groove beside ring
+        ``key`` at each azimuth: the epicardial vertex nearest the hinge ring within ``window_deg``, median-filtered and
+        smoothed along the ring. The groove vessels are placed relative to it (the circumflex on its ventricular side,
+        the great cardiac vein on its atrial side)."""
+        ring = self.rings[key]
+        thetas = np.asarray(thetas, float)
+        th_e = ring.theta_of(self.E)
+        rd = ring.dist(self.E)
+        he = ring.height(self.E)
+        h = np.full(len(thetas), np.nan)
+        for i, t in enumerate(thetas):
+            sel = np.flatnonzero(np.abs(((th_e - t + np.pi) % (2 * np.pi)) - np.pi) < math.radians(window_deg))
+            if len(sel):
+                h[i] = he[sel[np.argmin(rd[sel])]]
+        ok = np.isfinite(h)
+        h = np.interp(np.arange(len(h)), np.flatnonzero(ok), h[ok]) if ok.any() else np.zeros(len(h))
+        dth = float(np.median(np.abs(np.diff(thetas)))) if len(thetas) > 1 else 1.0
+        win = max(3, int(round(math.radians(smooth_deg) / max(dth, 1e-6))) | 1)
+        h = ndimage.median_filter(h, size=win, mode="nearest")
+        return ndimage.gaussian_filter1d(h, win / 2.0, mode="nearest") / MM
+
+    def _groove_radial(self, key, thetas, *, h_mm, R, lift, max_mm, min_mm, smooth_deg) -> np.ndarray:
+        ring = self.rings[key]
+        thetas = np.asarray(thetas, float)
+        h = np.broadcast_to(np.asarray(h_mm, float), (len(thetas),)) * MM
+        Rr = np.broadcast_to(np.asarray(R, float), (len(thetas),))
+        steps = np.arange(-2.0, max_mm + 16.0, 0.2) * MM
+        want = Rr + lift
+        rho = np.full(len(thetas), np.nan)
+        for i, t in enumerate(thetas):
+            d = ring.dir(t)[0]
+            Q = ring.c + ring.n * h[i] + np.outer(ring.R + steps, d)
+            sd = self.sd(Q)
+            ins = np.flatnonzero(sd < 0)
+            if not len(ins):
+                continue
+            j = ins[0]
+            while j + 1 < len(sd) and sd[j + 1] < 0:
+                j += 1
+            out = np.flatnonzero((np.arange(len(sd)) > j) & (sd >= want[i]))
+            if len(out):
+                rho[i] = steps[out[0]]
+        ok = np.isfinite(rho)
+        if not ok.any():
+            rho[:] = 8.0 * MM
+        rho = np.interp(np.arange(len(rho)), np.flatnonzero(ok), rho[ok]) if (~ok).any() else rho
+        dth = float(np.median(np.abs(np.diff(thetas)))) if len(thetas) > 1 else 1.0
+        win = max(3, int(round(math.radians(smooth_deg) / max(dth, 1e-6))) | 1)
+        rho = ndimage.median_filter(rho, size=win, mode="nearest")
+        rho = ndimage.gaussian_filter1d(rho, win / 2.0, mode="nearest")
+        rho = np.clip(rho, min_mm * MM, (max_mm + 3.0) * MM)
+        P = np.vstack([ring.point(t, radial=r_, h=hh)[0] for t, r_, hh in zip(thetas, rho, h)])
+        # never inside: a last outward nudge along the ring radius where smoothing pulled a point into the wall
+        for _ in range(8):
+            short = np.maximum(0.0, want - self.sd(P))
+            if short.max() < 0.05 * MM:
+                break
+            rho = rho + ndimage.maximum_filter1d(short, 3)
+            P = np.vstack([ring.point(t, radial=r_, h=hh)[0] for t, r_, hh in zip(thetas, rho, h)])
         return P
 
     def grow(self, start: np.ndarray, direction: np.ndarray, length: float, *, R: float, lift: float,
@@ -436,6 +510,117 @@ class HeartGeo:
             d = mo.unit(q - p)
             P.append(q)
         return resample(np.array(P), step)
+
+
+#: A centreline point this far inside the myocardial solid is not in a crease but under a fused structure (in
+#: BodyParts3D the tip of the left auricle is fused onto the ventricle over the proximal LAD, the circumflex and the
+#: great cardiac vein): it is not pushed out (it would jump over the auricle) but tunnelled - the build carves the
+#: channel of the vessel out of the wall (``tunnel_cutter``), so the auricle overlies it as in vivo.
+TUNNEL_SD = -2.1 * MM  # on the calibrated field (the uncorrected field read -1.8 mm here)
+
+
+def tunnel_mask(geo: "HeartGeo", P: np.ndarray, *, grow: int = 3) -> np.ndarray:
+    """Centreline points buried under a fused structure (centre inside the solid by more than -TUNNEL_SD), dilated."""
+    m = geo.sd(P) < TUNNEL_SD
+    return ndimage.binary_dilation(m, iterations=grow) if m.any() else m
+
+
+#: The lift out of a crease never moves a centreline point further than this (deeper stretches are tunnelled).
+MAX_LIFT = 3.5 * MM
+
+
+def clear_tube(geo: "HeartGeo", P: np.ndarray, R: np.ndarray, *, margin: float, pin_start: int = 0,
+               iterations: int = 40) -> np.ndarray:
+    """Push a tube out of the myocardium: sample a ring of the tube wall at every centreline point and move the point
+    along the wall's outward normal wherever the ring still dips below ``margin`` outside the epicardium (a groove
+    vessel is lifted out of the crease instead of cutting into both of its walls). The first ``pin_start`` points (an
+    origin on the parent) and tunnelled stretches (``tunnel_mask``) stay; the correction is smoothed along the path."""
+    P = np.asarray(P, float).copy()
+    P0 = P.copy()
+    R = np.asarray(R, float)
+    ang = np.linspace(0, 2 * np.pi, 16, endpoint=False)
+    w = np.ones(len(P))
+    if pin_start:
+        w[:pin_start] = 0.0
+        ramp = min(len(P) - pin_start, 4)
+        w[pin_start:pin_start + ramp] = np.linspace(0.3, 1.0, ramp)
+    tun = tunnel_mask(geo, P)
+    if tun.any():
+        w = w * (1.0 - ndimage.uniform_filter1d(tun.astype(float), 5, mode="nearest"))
+    for _ in range(iterations):
+        T, N, B = frames(P)
+        ring = P[:, None, :] + R[:, None, None] * (np.cos(ang)[None, :, None] * N[:, None, :] + np.sin(ang)[None, :, None] * B[:, None, :])
+        sd = geo.sd(ring.reshape(-1, 3)).reshape(len(P), -1)
+        depth = np.maximum(0.0, margin - sd)
+        if (depth.max(axis=1) * w).max() < 0.03 * MM:
+            break
+        nrm = geo.normal(ring.reshape(-1, 3)).reshape(len(P), -1, 3)
+        disp = (nrm * depth[..., None]).sum(axis=1)
+        mag = depth.max(axis=1)
+        u = disp / np.maximum(np.linalg.norm(disp, axis=1, keepdims=True), 1e-12)
+        disp = ndimage.maximum_filter1d(mag, 3)[:, None] * u
+        disp = ndimage.gaussian_filter1d(disp * w[:, None], 1.5, axis=0, mode="nearest") if len(P) > 4 else disp * w[:, None]
+        step = np.linalg.norm(disp, axis=1, keepdims=True)
+        P = P + disp * np.minimum(1.0, 1.0 * MM / np.maximum(step, 1e-12))
+        off = P - P0
+        mag = np.linalg.norm(off, axis=1, keepdims=True)
+        P = P0 + off * np.minimum(1.0, MAX_LIFT / np.maximum(mag, 1e-12))
+    return P
+
+
+def tunnel_cutter(geo: "HeartGeo", paths: list, *, clearance: float = 0.7 * MM, extend: float = 4.0 * MM,
+                  residual: float = 0.25 * MM, skip_start: float = 6.0 * MM):
+    """Closed tubes (radius + ``clearance``) over every tunnelled stretch of the given (points, radii) centrelines,
+    extended ``extend`` on both sides: the build subtracts them from the heart wall. Stretches whose tube wall still
+    reaches more than ``residual`` into the myocardium after the lift (a lift capped at ``MAX_LIFT`` over a ridge of the
+    wall) get the same channel, a shallow bed, so no vessel is left half inside the wall. The first ``skip_start`` of
+    every path is never carved: an origin on its parent vessel, or a vein's ostium that opens through the atrial wall."""
+    tubes, stretches = [], []
+    for P, R in paths:
+        s = arclen(P)
+        m = tunnel_mask(geo, P)
+        td = tube_depth(geo, P, np.asarray(R, float))
+        bed = td > residual
+        bed[: int(np.searchsorted(s, skip_start))] = False
+        bed &= ~m
+        m = m | bed
+        if not m.any():
+            continue
+        idx = np.flatnonzero(m)
+        for run in np.split(idx, np.flatnonzero(np.diff(idx) > 1) + 1):
+            a = int(np.searchsorted(s, s[run[0]] - extend))
+            b = int(np.searchsorted(s, s[run[-1]] + extend))
+            only_bed = bool(bed[run].all())
+            # a bed hugs the vessel (it lies on the wall beside it); a tunnel keeps room for the Boolean
+            Q, Rq = P[a:b + 1], R[a:b + 1] + (0.5 * clearance if only_bed else clearance)
+            if len(Q) < 3:
+                continue
+            tubes.append(sweep(Q, Rq, start="round", end="round", adaptive=True, spacing=0.8))
+            stretches.append({"kind": "bed" if only_bed else "tunnel",
+                              "length_mm": round(float(s[run[-1]] - s[run[0]]) / MM, 1),
+                              "depth_mm": round(float(-geo.sd(P[run]).min()) / MM, 1),
+                              "wall_depth_mm": round(float(td[run].max()) / MM, 1)})
+    if not tubes:
+        return (np.zeros((0, 3)), np.zeros((0, 3), dtype=np.int64)), {"stretches": []}
+    return mo.concat(tubes), {"stretches": stretches}
+
+
+def resample_n(P: np.ndarray, n: int) -> np.ndarray:
+    """``n`` points at uniform arc length along the polyline ``P`` (both ends kept)."""
+    P = np.asarray(P, float)
+    s = arclen(P)
+    if s[-1] <= 0:
+        return P.copy()
+    t = np.linspace(0.0, s[-1], n)
+    return np.column_stack([np.interp(t, s, P[:, k]) for k in range(3)])
+
+
+def tube_depth(geo: "HeartGeo", P: np.ndarray, R: np.ndarray) -> np.ndarray:
+    """Deepest penetration of the tube wall into the myocardium at every centreline point (scene units, > 0 inside)."""
+    ang = np.linspace(0, 2 * np.pi, 16, endpoint=False)
+    T, N, B = frames(P)
+    ring = P[:, None, :] + R[:, None, None] * (np.cos(ang)[None, :, None] * N[:, None, :] + np.sin(ang)[None, :, None] * B[:, None, :])
+    return -geo.sd(ring.reshape(-1, 3)).reshape(len(P), -1).min(axis=1)
 
 
 # =============================================================================================
