@@ -11,7 +11,7 @@ import type { BestView, CameraPose, TargetId } from '@/types/contracts';
 import { buildTracks } from '../labels/anchorTracks';
 import { visibleBestView } from './bestView';
 import { collectOccluders, isOccluded } from './occlusion';
-import { angleLabel, useCameraState } from './cameraState';
+import { angleLabel, useCameraState, type ViewKind } from './cameraState';
 import { cameraRigApi } from './controlsApi';
 import {
   HERO_HEART_SHARE,
@@ -107,6 +107,8 @@ export function CameraRig() {
   const history = useRef(new CameraHistory());
   const replaying = useRef(false);
   const readyFrames = useRef(0);
+  /** The View-menu state that goes with `viewerStore.cameraReturn`. */
+  const returnView = useRef<{ kind: ViewKind; presetId: string | null; label: string } | null>(null);
   /** A vessel flown to before its centrelines loaded (re-checked when they arrive). */
   const pendingVessel = useRef<{ target: TargetId; at: number } | null>(null);
   /** Visible best view per vessel (the search raycasts, so it runs once per anatomy). */
@@ -342,6 +344,8 @@ export function CameraRig() {
         if (!controls || s.stage !== 'workstation') return;
         if (s.selectedStructure && !prev.selectedStructure && !s.cameraReturn) {
           const pose = poseOf(controls);
+          const cam = useCameraState.getState();
+          returnView.current = { kind: cam.viewKind, presetId: cam.presetId, label: cam.viewLabel };
           s.setCameraReturn({ position: pose.position, target: pose.target });
         } else if (!s.selectedStructure && prev.selectedStructure) {
           const homeCommand = s.cameraCommand !== prev.cameraCommand && s.cameraCommand?.kind === 'home';
@@ -349,7 +353,10 @@ export function CameraRig() {
           if (back) s.setCameraReturn(null);
           if (!homeCommand && back) {
             flyToPose(back, !reducedRef.current);
-            useCameraState.getState().setView('custom');
+            const view = returnView.current;
+            // Back where it was: the View menu names that view again ("Home", "LAO 45"…).
+            useCameraState.getState().setView(view?.kind ?? 'custom', view ? { presetId: view.presetId, label: view.label } : {});
+            returnView.current = null;
           }
         }
       }),
