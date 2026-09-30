@@ -5,7 +5,7 @@ CardioTwin's 3D viewer:
 
 | Output | What it is |
 | --- | --- |
-| `frontend/public/anatomy/cardiotwin_anatomy.glb` | 41 named anatomical nodes under 7 `Layer_*` groups (CONTRACTS §6.2 + v1.1 additive nodes), 399,683 triangles, baked PBR textures (WebP), **8.4 MB** (meshopt) |
+| `frontend/public/anatomy/cardiotwin_anatomy.glb` | 41 named anatomical nodes under 7 `Layer_*` groups (CONTRACTS §6.2 + v1.1 additive nodes), 399,683 triangles, baked PBR textures (WebP), **8.3 MB** (meshopt) |
 | `frontend/public/anatomy/manifest.json` | Layers, structures (with FMA id, definition, clinical relevance, provenance), SCCT segment table, vein table, attribute docs, model-target mapping, explode vectors, camera presets (§6.3, §7.1) |
 | `frontend/public/anatomy/vessels.json` | Coronary centrelines, proximal → distal, with lumen radius and SCCT labels; labelled cardiac-vein centrelines (§6.4, §7.1) |
 | `docs/media/renders/*.jpg`, `heart_turntable.mp4` | Cycles portfolio renders and an EEVEE preview of the published GLB (`web_preview.jpg`) |
@@ -205,7 +205,7 @@ LAD + LCX).
 
 `optimize_glb.mjs` (glTF-Transform 4 + meshoptimizer + sharp) attaches the baked maps (WebP, `EXT_texture_webp`:
 baseColor, normal, and one ORM map used as occlusion R + metallicRoughness G/B; 2048² on the heart walls, 1024² or
-512² elsewhere, 2.3 MB in total) to each node's own material, writes `_SEGMENT` / `_VEIN`, reorders vertex caches,
+512² elsewhere, 2.2 MB in total) to each node's own material, writes `_SEGMENT` / `_VEIN`, reorders vertex caches,
 quantises `NORMAL` (10-bit), `TEXCOORD_0` (14-bit) and `COLOR_0` (8-bit RGB; Blender's constant alpha is dropped so
 three.js does not enable vertex alpha) and compresses every buffer with `EXT_meshopt_compression`. It deliberately **does not** quantise `POSITION` (KHR_mesh_quantization
 would fold dequantisation into node matrices, breaking `node.scale` and explode offsets), join, flatten, instance or
