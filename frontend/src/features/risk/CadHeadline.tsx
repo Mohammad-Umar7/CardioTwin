@@ -42,6 +42,9 @@ function ModelEstimateTag() {
   );
 }
 
+/** Fills the reserved slot when nothing needs reconciling any more: true for every estimate, never blank. */
+const RECONCILE_FALLBACK = 'CAD and each artery are judged at their own thresholds.';
+
 export interface CadHeadlineProps {
   /** id of the overline heading (for the card's `aria-labelledby`). */
   titleId: string;
@@ -81,9 +84,13 @@ export function CadHeadline({ titleId, covered = false, showTrack = true }: CadH
   // While an update is pending the sentence stays (dimmed like the numerals) instead of collapsing and
   // re-opening on every edit; it follows the numbers it reconciles.
   const reconcile = cad ? cadReconciliation(cad, vesselPs) : null;
-  // While inputs are edited the sentence keeps a fixed two-line slot, so it can come and go with the
-  // numbers without the card growing and shrinking under the pointer (no layout shift, V2 §8.6).
-  const reserveReconcile = view.edits > 0;
+  // Once the sentence has been shown during a what-if, it keeps a fixed two-line slot until the edits are
+  // reset, so it can come and go with the numbers without the card growing and shrinking under the pointer
+  // (no layout shift, V2 §8.6). A what-if that never needs it reserves nothing (no empty band in the card).
+  const reservedSlot = useRef(false);
+  if (view.edits === 0) reservedSlot.current = false;
+  else if (reconcile) reservedSlot.current = true;
+  const reserveReconcile = view.edits > 0 && reservedSlot.current;
   // Keep the last sentence while the line collapses, so it never empties before it closes.
   const lastReconcile = useRef<string | null>(null);
   if (reconcile) lastReconcile.current = reconcile;
@@ -253,7 +260,7 @@ export function CadHeadline({ titleId, covered = false, showTrack = true }: CadH
               )}
               data-reconcile="CAD"
             >
-              {reconcile ?? (reserveReconcile ? null : lastReconcile.current)}
+              {reconcile ?? (reserveReconcile ? RECONCILE_FALLBACK : lastReconcile.current)}
             </p>
           </Collapse>
         </>
