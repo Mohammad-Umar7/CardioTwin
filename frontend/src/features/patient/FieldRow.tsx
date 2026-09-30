@@ -368,7 +368,16 @@ export function NumericRow({ spec, rowId, expanded, suffix, className }: RowProp
               labelledBy={labelId}
               valueText={valueText}
               onChange={commit}
-              ice={ice ? <IceStrip result={ice} target={target} className="h-4 w-full animate-rise-in" /> : null}
+              ice={
+                ice ? (
+                  <IceStrip
+                    result={ice}
+                    target={target}
+                    at={spec.max != null && spec.min != null && spec.max > spec.min ? (value - spec.min) / (spec.max - spec.min) : undefined}
+                    className="h-4 w-full animate-rise-in"
+                  />
+                ) : null
+              }
             />
             <IconButton label={`Increase ${spec.label}`} tooltip={false} icon={<Plus />} size="xs" tabIndex={-1} onClick={() => nudge(1)} />
             {ref && <span className="num shrink-0 whitespace-nowrap pl-1 text-label font-normal text-tertiary">{ref}</span>}

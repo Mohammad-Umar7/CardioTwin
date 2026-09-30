@@ -27,3 +27,14 @@ export function counterfactualCopy(
   return `If ${present ? 'absent' : 'present'}: ${target} ${formatProbability(next).text} (${deltaCopy(next - now)})`;
 }
 
+
+/** Linear interpolation of an ICE strip at fraction `t` ∈ [0, 1] of the input's range. */
+export function iceAt(probabilities: readonly number[], t: number): number {
+  const n = probabilities.length;
+  if (n === 0) return Number.NaN;
+  if (n === 1) return probabilities[0]!;
+  const x = Math.max(0, Math.min(1, t)) * (n - 1);
+  const i = Math.min(n - 2, Math.floor(x));
+  const f = x - i;
+  return probabilities[i]! * (1 - f) + probabilities[i + 1]! * f;
+}

@@ -7,6 +7,7 @@ import { schemaDefaults } from '@/lib/patients';
 import type { CohortResponse, Explanation, FeatureSchema } from '@/types/contracts';
 import { CURATED_CASES } from '../curated';
 import { aliasesFor, INPUT_ALIASES } from './aliases';
+import { counterfactualCopy, deltaCopy, iceAt } from './copy';
 import { chestPainPhrase, describeFeatures, identityLine, identityOf } from './describe';
 import { keyInputAriaLabel, rankKeyInputs, strengthOf } from './keyInputs';
 import {
@@ -239,5 +240,22 @@ describe('share link codec', () => {
   it('builds the hash-route URL and keeps other query parameters', () => {
     const url = shareUrl('http://127.0.0.1:5173/app/#/workstation?t=LAD&w=old', 'P-011', '1_x_P-011__0-1');
     expect(url).toBe('http://127.0.0.1:5173/app/#/workstation/P-011?t=LAD&w=1_x_P-011__0-1');
+  });
+});
+
+describe('what-if copy', () => {
+  it('writes deltas in rounded points with the true minus and the counterfactual chip tooltip', () => {
+    expect(deltaCopy(-0.071)).toBe(`▼ −7${THIN_SPACE}pts`);
+    expect(deltaCopy(0.012)).toBe(`▲ +1${THIN_SPACE}pt`);
+    expect(deltaCopy(0.002)).toBe('no change');
+    expect(counterfactualCopy(false, 'CAD', { CAD: 0.98 }, { CAD: 0.99 })).toBe(`If present: CAD 99${THIN_SPACE}% (▲ +1${THIN_SPACE}pt)`);
+    expect(counterfactualCopy(true, 'LAD', { CAD: 0.98 }, { CAD: 0.99 })).toBeNull();
+  });
+
+  it('interpolates an ICE strip between samples', () => {
+    expect(iceAt([0.2, 0.4, 0.8], 0)).toBeCloseTo(0.2);
+    expect(iceAt([0.2, 0.4, 0.8], 0.75)).toBeCloseTo(0.6);
+    expect(iceAt([0.2, 0.4, 0.8], 2)).toBeCloseTo(0.8);
+    expect(Number.isNaN(iceAt([], 0.5))).toBe(true);
   });
 });

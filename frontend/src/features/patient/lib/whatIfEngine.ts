@@ -13,7 +13,7 @@ import { sanitizeFeatures } from '@/services/engine';
 import type { FeatureSpec, FeatureValue, FeatureVector, TargetId } from '@/types/contracts';
 import { flipped } from './values';
 
-export type TargetProbabilities = Record<TargetId, number>;
+export type TargetProbabilities = Partial<Record<TargetId, number>>;
 
 /** Stable key for a feature vector (sorted entries). */
 export function vectorKey(features: FeatureVector): string {

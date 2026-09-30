@@ -1,6 +1,6 @@
 import { AnimatePresence, motion } from 'framer-motion';
 import { Columns2, RotateCcw } from 'lucide-react';
-import { useEffect, type KeyboardEvent, type PointerEvent } from 'react';
+import { useEffect, useState, type KeyboardEvent, type PointerEvent } from 'react';
 import { StageCard, Tooltip } from '@/design';
 import { useIsReducedMotion } from '@/hooks/useMediaQuery';
 import { cn } from '@/lib/cn';
@@ -18,7 +18,7 @@ import { resetAllEdits } from './profileActions';
  *   • Hold to compare: press and hold (pointer, or Space while focused) to show the RECORDED prediction
  *     everywhere that reads `selectDisplayedPrediction`; release returns to the what-if. `aria-pressed`
  *     mirrors the state. Shown only once the automatic baseline exists (nothing dead on screen).
- *   • Reset asks nothing and offers Undo in a toast.
+ *   • Reset asks nothing and offers Undo in a toast; the pill leaves once the numbers have tweened back.
  */
 export interface WhatIfPillProps {
   className?: string;
@@ -124,9 +124,26 @@ function Pill({ edits, className }: { edits: number; className?: string }) {
   );
 }
 
+/** After a reset the numbers tween back over `data` (420 ms); the pill leaves once they have landed (§8.4). */
+const EXIT_AFTER_RESET_MS = MOTION.data;
+
+function useLingeringCount(edits: number, reduced: boolean): number {
+  const [shown, setShown] = useState(edits);
+  useEffect(() => {
+    if (edits > 0 || reduced) {
+      setShown(edits);
+      return;
+    }
+    const t = window.setTimeout(() => setShown(0), EXIT_AFTER_RESET_MS);
+    return () => window.clearTimeout(t);
+  }, [edits, reduced]);
+  return edits > 0 ? edits : shown;
+}
+
 export function WhatIfPill({ className }: WhatIfPillProps) {
-  const edits = usePatientStore(selectEditCount);
+  const liveEdits = usePatientStore(selectEditCount);
   const reduced = useIsReducedMotion();
+  const edits = useLingeringCount(liveEdits, reduced);
   return (
     <AnimatePresence>
       {edits > 0 && (
