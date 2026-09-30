@@ -237,6 +237,18 @@ export function CameraRig() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [stage, geo]);
 
+  // A window resize keeps the home framing (62 % of the new free area) while the camera sits at home.
+  useEffect(() => {
+    if (stage === 'hidden' || !(size.width > 0)) return;
+    const t = window.setTimeout(() => {
+      // Not while the stage-change glide runs (the canvas moving between slots also resizes it).
+      if (performance.now() - stageEnteredAt.current < 1200) return;
+      if (useCameraState.getState().viewKind === 'home') flyHome(false);
+    }, 180);
+    return () => window.clearTimeout(t);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [size.width, size.height]);
+
   // Re-frame once if the page published its free area just after the stage switched (cold load), as long
   // as nobody has touched the camera yet.
   useEffect(
