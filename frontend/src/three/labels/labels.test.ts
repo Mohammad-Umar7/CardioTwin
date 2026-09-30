@@ -9,7 +9,7 @@ import { buildTracks, heartAxisFrame, restToDisplayed } from './anchorTracks';
 import { clip, hoverContent } from './hoverContent';
 import { nearestPeelStage, sceneSummaryText } from './sceneSummaryText';
 import { ANCHOR_PERIOD_MS, AnchorChooser, bestCandidate, buildCandidates, facing, mainTrunk } from './dynamicAnchor';
-import { LABEL_MIN_GAP, labelShowsProbability, laneFor, layoutLanes, stackLane, type LaneItem } from './labelRegistry';
+import { LABEL_MIN_GAP, labelShowsProbability, laneFor, layoutLanes, resolveLane, stackLane, type LaneItem } from './labelRegistry';
 
 const read = <T,>(file: string) => JSON.parse(readFileSync(resolve(__dirname, '../../../public/anatomy', file), 'utf8')) as T;
 const manifest = read<AnatomyManifest>('manifest.json');
@@ -161,6 +161,14 @@ describe('label lanes (V2 §5.14)', () => {
     expect(laneFor('RCA', 0)).toBe('left');
     expect(laneFor('LAD', 30)).toBe('right');
     expect(laneFor('RCA', 170)).toBe('right');
+  });
+
+  it('leaves the convention only when the anchor sits well on the other side of the heart', () => {
+    const heart = { minX: 400, maxX: 800 };
+    expect(resolveLane('LAD', 0, 560, heart)).toBe('right'); // left of centre, but within a quarter
+    expect(resolveLane('LAD', 0, 450, heart)).toBe('left'); // opened heart: the LAD swung to the left
+    expect(resolveLane('RCA', 0, 760, heart)).toBe('right');
+    expect(resolveLane('RCA', 0, 700, null)).toBe('left');
   });
 
   it('shows the % only where the Risk card is hidden (one home per number)', () => {

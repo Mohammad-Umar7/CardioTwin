@@ -13,7 +13,7 @@ import { freeArea, heartBox } from '../camera/framing';
 import { sceneRuntime } from '../stage/sceneRuntime';
 import { buildTracks, restToDisplayed, type AnchorTrack } from './anchorTracks';
 import { facing } from './dynamicAnchor';
-import { dotEls, labelEls, labelSizes, laneFor, layoutLanes, lineEls, type LaneItem } from './labelRegistry';
+import { dotEls, labelEls, labelSizes, layoutLanes, lineEls, resolveLane, type LaneItem } from './labelRegistry';
 
 const DEFAULT_TARGETS = ['LAD', 'LCX', 'RCA'];
 /** Labels fade in LAD → LCX → RCA, 60 ms apart, once the coronaries ignite (V2 §5.14). */
@@ -217,7 +217,7 @@ export function LabelProjector() {
       const y = ((1 - projected.y) / 2) * height;
       screen.set(r.id, { x, y });
       const box = labelSizes.get(r.id) ?? { width: 72, height: 24 };
-      items.push({ id: r.id, lane: laneFor(r.id, viewer.carm?.azimuth), x, y, width: box.width, height: box.height });
+      items.push({ id: r.id, lane: resolveLane(r.id, viewer.carm?.azimuth, x, heart), x, y, width: box.width, height: box.height });
     }
     const placed = layoutLanes(items, bounds, heart);
 

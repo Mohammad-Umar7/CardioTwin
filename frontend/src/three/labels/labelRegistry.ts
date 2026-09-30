@@ -27,6 +27,26 @@ export const laneFor = (target: string, azimuth: number | null | undefined): Lan
   return Math.abs(azimuth ?? 0) > 90 ? (lane === 'left' ? 'right' : 'left') : lane;
 };
 
+/**
+ * The lane for a label: the radiological convention, unless its anchor sits well on the other side of the
+ * heart (beyond a quarter of the heart's width from its centre — an opened heart, an unusual angle), where
+ * following the convention would drag the leader across the whole organ.
+ */
+export function resolveLane(
+  target: string,
+  azimuth: number | null | undefined,
+  anchorX: number,
+  heart: { minX: number; maxX: number } | null,
+): Lane {
+  const lane = laneFor(target, azimuth);
+  if (!heart) return lane;
+  const cx = (heart.minX + heart.maxX) / 2;
+  const quarter = (heart.maxX - heart.minX) / 4;
+  if (lane === 'right' && anchorX < cx - quarter) return 'left';
+  if (lane === 'left' && anchorX > cx + quarter) return 'right';
+  return lane;
+}
+
 /** Minimum gap between labels (V2 §5.14: at least 28 px apart) and from the free-area edge. */
 export const LABEL_MIN_GAP = 28;
 export const LANE_MARGIN = 12;
