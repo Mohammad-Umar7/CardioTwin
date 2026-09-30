@@ -10,6 +10,7 @@ import {
   formatNormalRange,
   formatProbability,
   formatShap,
+  printedDifference,
   optionDisplay,
   rangeStatus,
 } from './format';
@@ -127,5 +128,15 @@ describe('cn + risk helpers', () => {
   it('labels the critical band "Very high"', () => {
     expect(riskBand(0.87).label).toBe('Very high');
     expect(riskBand(0.3).level).toBe(2);
+  });
+});
+
+describe('printedDifference', () => {
+  it('equals the difference of the two values as printed', () => {
+    // 0.915 → 0.941 prints "0.92 → 0.94": the gain beside it must read +0.02, not +0.03.
+    expect(printedDifference(0.9154, 0.9412)).toBeCloseTo(0.02, 10);
+    // 0.672 → 0.794 prints "0.67 → 0.79": +0.12, not +0.13.
+    expect(printedDifference(0.6724, 0.7943)).toBeCloseTo(0.12, 10);
+    expect(printedDifference(0.9, 0.9)).toBe(0);
   });
 });

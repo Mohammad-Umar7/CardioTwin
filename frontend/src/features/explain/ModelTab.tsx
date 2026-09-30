@@ -7,7 +7,7 @@ import { flaggedCount } from '@/features/risk/verdict';
 import { usePortableModel, useSchemaIndex } from '@/hooks/useData';
 import { useResource } from '@/hooks/useResource';
 import { cn } from '@/lib/cn';
-import { formatCi, formatMetricValue, formatPercent, formatProbability, formatShap } from '@/lib/format';
+import { formatCi, formatMetricValue, formatPercent, formatProbability, formatShap, printedDifference } from '@/lib/format';
 import { deployedModelName } from '@/lib/modelNames';
 import { usePatientStore } from '@/state/patientStore';
 import type { TargetId } from '@/types/contracts';
@@ -76,6 +76,9 @@ function ModalitySteps({ facts }: { facts: TargetFacts }) {
       <ul className="flex flex-col" aria-label="Development cross-validated ROC-AUC as each kind of data is added">
         {steps.map((s, i) => {
           const sig = s.delta && typeof s.delta.pHolm === 'number' && s.delta.pHolm < 0.05;
+          // The printed gain is the difference of the two printed ROC-AUCs, never a contradiction of them.
+          const prev = steps[i - 1];
+          const gain = prev ? printedDifference(prev.auc.value, s.auc.value) : null;
           return (
             <li key={s.group} className="grid h-7 grid-cols-[112px_minmax(0,1fr)_36px_48px] items-center gap-2">
               <span className="truncate text-body-s text-secondary">
@@ -95,14 +98,14 @@ function ModalitySteps({ facts }: { facts: TargetFacts }) {
               <Tooltip
                 content={
                   s.delta
-                    ? `Change from the previous step: ${formatShap(s.delta.value)} ${formatCi(s.delta.ci)}${
+                    ? `Change from the previous step: ${formatShap(gain ?? s.delta.value)} ${formatCi(s.delta.ci)}${
                         typeof s.delta.pHolm === 'number' ? ` · Holm-adjusted p = ${s.delta.pHolm < 0.001 ? '<0.001' : s.delta.pHolm.toFixed(3)}` : ''
                       }`
                     : 'Demographics alone'
                 }
               >
                 <span tabIndex={0} className={cn('num rounded-xs text-right text-label font-normal outline-none focus-visible:shadow-focus', sig ? 'text-primary' : 'text-tertiary')}>
-                  {s.delta ? formatShap(s.delta.value) : 'base'}
+                  {s.delta && gain !== null ? formatShap(gain) : 'base'}
                 </span>
               </Tooltip>
             </li>

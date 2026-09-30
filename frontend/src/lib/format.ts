@@ -115,6 +115,15 @@ export function formatMetricValue(v: number | null | undefined, digits = 2): str
   return isFiniteNumber(v) ? v.toFixed(digits) : '–';
 }
 
+/**
+ * The difference between two metrics as they are printed (each rounded first), so "0.92 → 0.94" never sits
+ * beside "+0.03": every delta a reader sees equals the difference of the two values it sits between.
+ */
+export function printedDifference(from: number, to: number, digits = 2): number {
+  const k = 10 ** digits;
+  return (Math.round(to * k) - Math.round(from * k)) / k;
+}
+
 /** "[0.88–0.98]" */
 export function formatCi(ci: readonly [number, number] | null | undefined, digits = 2): string {
   if (!ci || !isFiniteNumber(ci[0]) || !isFiniteNumber(ci[1])) return '';

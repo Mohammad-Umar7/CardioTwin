@@ -1,6 +1,6 @@
 import { Fragment, useRef } from 'react';
 import { cn } from '@/lib/cn';
-import { formatMetricValue, formatPercent, MINUS } from '@/lib/format';
+import { formatMetricValue, formatPercent, MINUS, printedDifference } from '@/lib/format';
 import { modalityName } from '@/lib/modelNames';
 import { UI } from '@/theme/tokens';
 import { ChartModule } from './charts/ChartModule';
@@ -106,7 +106,7 @@ export function MultimodalHeadline({
         : (added[0] ?? 'instrumental data');
     const clear = excludesZero(inst.delta?.ci);
     stats.push({
-      value: signed(inst.full.mean - inst.bedside.mean),
+      value: signed(printedDifference(inst.bedside.mean, inst.full.mean)),
       label: `ROC-AUC added by ${list} on top of bedside data`,
       sub: `Cross-validation, paired by fold; the interval ${clear ? 'excludes' : 'includes'} zero`,
       title: `${f2(inst.bedside.mean)} → ${f2(inst.full.mean)}${inst.delta?.ci ? `, interval ${signed(inst.delta.ci[0])} to ${signed(inst.delta.ci[1])}` : ''}${inst.delta?.shareFoldsImproved != null ? `, ${formatPercent(inst.delta.shareFoldsImproved)} of ${nFolds ?? 'all'} folds improved` : ''}`,
@@ -114,7 +114,7 @@ export function MultimodalHeadline({
   }
   if (baseline?.testAuc && testAuc !== null) {
     stats.push({
-      value: signed(testAuc - baseline.testAuc.value),
+      value: signed(printedDifference(baseline.testAuc.value, testAuc)),
       label: 'Held-out ROC-AUC over the bedside clinical baseline',
       sub: 'Baseline: age, sex, typical angina, diabetes and hypertension',
       title: `${f2(testAuc)} with all modalities vs ${f2(baseline.testAuc.value)} for the baseline`,
@@ -160,7 +160,7 @@ const MOD_GRID = 'grid-cols-[minmax(0,34%)_minmax(0,1fr)_92px]';
 
 const inSentence = modalityInSentence;
 
-function looFinding(rows: ModalityRow[]): string {
+function looFinding(rows: ModalityRow[], change: (r: ModalityRow) => number): string {
   const needed = rows
     .filter((r) => r.delta?.ci && r.delta.ci[1] < 0)
     .sort((a, b) => a.delta!.mean - b.delta!.mean);
@@ -169,7 +169,7 @@ function looFinding(rows: ModalityRow[]): string {
   const names = needed.map((r) => inSentence(r.group));
   const list = names.length > 1 ? `${names.slice(0, -1).join(', ')} and ${names.at(-1)}` : names[0];
   const worst = needed[0]!;
-  return `${list!.charAt(0).toUpperCase()}${list!.slice(1)} ${needed.length > 1 ? 'carry' : 'carries'} signal the others cannot replace (without ${inSentence(worst.group)}: ${signed(worst.delta!.mean)})`;
+  return `${list!.charAt(0).toUpperCase()}${list!.slice(1)} ${needed.length > 1 ? 'carry' : 'carries'} signal the others cannot replace (without ${inSentence(worst.group)}: ${signed(change(worst))})`;
 }
 
 export function CumulativeModule({
@@ -184,6 +184,8 @@ export function CumulativeModule({
   provenance: string;
 }) {
   const rows = a.cumulative;
+  // Each step's gain as printed: the difference of the two rounded ROC-AUCs it sits between.
+  const gain = (i: number) => (i > 0 ? printedDifference(rows[i - 1]!.auc.mean, rows[i]!.auc.mean) : null);
   const lo = Math.min(...rows.map((r) => r.auc.ci?.[0] ?? r.auc.mean));
   const hi = Math.max(...rows.map((r) => r.auc.ci?.[1] ?? r.auc.mean));
   const axis = niceAxis(lo, Math.min(1, hi), [0, 1]);
@@ -206,7 +208,7 @@ export function CumulativeModule({
           `${i === 0 ? '' : '+ '}${modalityName(r.group)}`,
           f2(r.auc.mean),
           r.auc.ci ? `${f2(r.auc.ci[0])}–${f2(r.auc.ci[1])}` : '',
-          r.delta ? signed(r.delta.mean) : '–',
+          r.delta && gain(i) !== null ? signed(gain(i)!) : '–',
           r.delta?.ci ? `${signed(r.delta.ci[0])} to ${signed(r.delta.ci[1])}` : '',
         ]),
       }}
@@ -260,9 +262,9 @@ export function CumulativeModule({
                 </svg>
                 <span className="num flex items-center justify-end gap-1.5 whitespace-nowrap">
                   <span className="text-primary">{f2(r.auc.mean)}</span>
-                  {r.delta ? (
+                  {r.delta && gain(i) !== null ? (
                     <span className="inline-flex w-12 items-center justify-end gap-1 text-secondary">
-                      {signed(r.delta.mean)}
+                      {signed(gain(i)!)}
                       <svg
                         role="img"
                         aria-label={
@@ -307,6 +309,9 @@ export function LeaveOneOutModule({
   provenance: string;
 }) {
   const rows = a.leaveOneOut.filter((r) => r.delta);
+  // The printed change equals the full panel's printed ROC-AUC minus the one printed beside it.
+  const full = a.full?.mean ?? a.cumulative.at(-1)?.auc.mean ?? null;
+  const change = (r: ModalityRow) => (full !== null ? printedDifference(full, r.auc.mean) : r.delta!.mean);
   const vals = rows.flatMap((r) => [r.delta!.mean, ...(r.delta!.ci ?? [])]);
   const axis = niceAxis(Math.min(0, ...vals), Math.max(0, ...vals));
   const pos = (v: number) => ((v - axis.domain[0]) / (axis.domain[1] - axis.domain[0])) * 100;
@@ -314,7 +319,7 @@ export function LeaveOneOutModule({
   return (
     <ChartModule
       id="chart-modality-loo"
-      title={looFinding(rows)}
+      title={looFinding(rows, change)}
       exportName={`cardiotwin-${target.toLowerCase()}-modality-leave-one-out`}
       exportImage={false}
       provenance={provenance}
@@ -327,7 +332,7 @@ export function LeaveOneOutModule({
         rows: rows.map((r) => [
           modalityName(r.group),
           f2(r.auc.mean),
-          signed(r.delta!.mean),
+          signed(change(r)),
           r.delta!.ci ? `${signed(r.delta!.ci[0])} to ${signed(r.delta!.ci[1])}` : '',
         ]),
       }}
@@ -369,7 +374,7 @@ export function LeaveOneOutModule({
                   )}
                   <line x1={`${zero}%`} x2={`${zero}%`} y1="-2" y2="16" stroke={UI.textTertiary} />
                 </svg>
-                <span className="num text-right text-primary">{signed(d.mean)}</span>
+                <span className="num text-right text-primary">{signed(change(r))}</span>
               </li>
             );
           })}
