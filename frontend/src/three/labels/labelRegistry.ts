@@ -151,3 +151,63 @@ export function coverFade(peel: number): number {
   const t = Math.min(1, Math.max(0, (peel - LABEL_COVER[0]) / (LABEL_COVER[1] - LABEL_COVER[0])));
   return t * t * (3 - 2 * t);
 }
+
+/**
+ * Open-heart layout (the two halves spread across the stage): the lanes beside "the heart" would sit on the
+ * swung-out anterior half, so the vessel labels go in one row just BELOW the halves' union silhouette (or
+ * above it when there is no room below), each over its own anchor, at least `gap` px apart and in anchor
+ * order so the leaders never cross. Null when neither row fits inside the free area. Pure; unit-tested.
+ */
+export function layoutRow(
+  items: readonly LaneItem[],
+  bounds: LaneBounds,
+  union: { minX: number; maxX: number; minY: number; maxY: number },
+  gap = 12,
+  margin = LANE_MARGIN,
+  offset = LANE_OFFSET,
+): Map<string, LanePlacement> | null {
+  if (items.length === 0) return new Map();
+  const h = Math.max(...items.map((i) => i.height));
+  const below = union.maxY + offset + h / 2;
+  const above = union.minY - offset - h / 2;
+  const cy = below + h / 2 <= bounds.bottom - margin ? below : above - h / 2 >= bounds.top + margin ? above : null;
+  if (cy === null) return null;
+  const sorted = [...items].sort((a, b) => a.x - b.x);
+  const lo = bounds.left + margin;
+  const hi = bounds.right - margin;
+  // Centre each label on its anchor, push right to keep the gap, then pull back from the right edge.
+  const lefts = sorted.map((i) => Math.max(lo, i.x - i.width / 2));
+  for (let k = 1; k < sorted.length; k += 1) lefts[k] = Math.max(lefts[k]!, lefts[k - 1]! + sorted[k - 1]!.width + gap);
+  for (let k = sorted.length - 1; k >= 0; k -= 1) {
+    const limit = k === sorted.length - 1 ? hi - sorted[k]!.width : lefts[k + 1]! - gap - sorted[k]!.width;
+    lefts[k] = Math.max(lo, Math.min(lefts[k]!, limit));
+  }
+  const out = new Map<string, LanePlacement>();
+  sorted.forEach((item, k) => {
+    const left = lefts[k]!;
+    out.set(item.id, {
+      left,
+      top: cy - item.height / 2,
+      edgeX: Math.min(left + item.width, Math.max(left, item.x)),
+      edgeY: cy === below ? cy - item.height / 2 : cy + item.height / 2,
+    });
+  });
+  return out;
+}
+
+/** Chamber tags shown at Open heart (V2 §10 explode): code, full name, and the valve they point at. */
+export const CHAMBER_TAGS = [
+  { id: 'LV', name: 'Left ventricle', valve: 'mitral valve' },
+  { id: 'RV', name: 'Right ventricle', valve: 'tricuspid valve' },
+  { id: 'LA', name: 'Left atrium', valve: null },
+  { id: 'RA', name: 'Right atrium', valve: null },
+] as const;
+export type ChamberId = (typeof CHAMBER_TAGS)[number]['id'];
+/** DOM nodes of the chamber tags (positioned by the projector). */
+export const chamberEls = new Map<string, HTMLElement>();
+
+/** Chamber tags fade in over the last part of the heart's opening. Pure. */
+export const chamberFade = (heartOpen: number): number => {
+  const t = Math.min(1, Math.max(0, (heartOpen - 0.7) / 0.25));
+  return t * t * (3 - 2 * t);
+};

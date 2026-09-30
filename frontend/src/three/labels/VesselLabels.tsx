@@ -9,7 +9,7 @@ import { useUiStore } from '@/state/uiStore';
 import { useViewerStore } from '@/state/viewerStore';
 import { RISK_PENDING } from '@/theme/risk';
 import { HoverTooltip } from './HoverTooltip';
-import { dotEls, labelEls, labelShowsProbability, labelSizes, lineEls } from './labelRegistry';
+import { CHAMBER_TAGS, chamberEls, dotEls, labelEls, labelShowsProbability, labelSizes, lineEls } from './labelRegistry';
 
 const DEFAULT_VESSELS = ['LAD', 'LCX', 'RCA'];
 /** The band-change ring plays at most once per 1.2 s per label (V2 §8.3). */
@@ -154,6 +154,29 @@ function Leader({ target }: { target: string }) {
 }
 
 /**
+ * Chamber tag at Open heart: a 5 px dot ON the anchor (the projector moves the box's origin there) and a
+ * compact "LV · mitral valve" chip beside it. Decorative (the scene summary names the open state).
+ */
+function ChamberTag({ id, name, valve }: (typeof CHAMBER_TAGS)[number]) {
+  const register = useCallback(
+    (el: HTMLDivElement | null) => {
+      if (el) chamberEls.set(id, el);
+      else chamberEls.delete(id);
+    },
+    [id],
+  );
+  return (
+    <div ref={register} data-region="chamber-label" data-chamber={id} title={name} style={{ opacity: 0 }} className="absolute left-0 top-0 transition-opacity duration-fast ease-out will-change-transform">
+      <span aria-hidden className="absolute left-0 top-0 size-[5px] -translate-x-1/2 -translate-y-1/2 rounded-full bg-primary shadow-[0_0_0_1.5px_rgb(var(--c-void))]" />
+      <span className="absolute left-2 top-0 flex h-5 -translate-y-1/2 items-center whitespace-nowrap rounded-sm border border-line bg-surface-3/[0.88] px-1.5 shadow-hud">
+        <span className="eyebrow text-primary">{id}</span>
+        {valve && <span className="ml-1 text-label font-normal text-secondary">· {valve}</span>}
+      </span>
+    </div>
+  );
+}
+
+/**
  * DOM half of the vessel labels v2 (WORKSTATION_V2 §5.14): an 8 px pip + the code (overline) on a
  * surface/3 chip at 88 % with a 1 px border, h 24; with chrome focus / landing the % joins (h 28,
  * `data-prob`), crossfading over `fast`. No band word and no meter. The selected label carries an accent
@@ -193,6 +216,9 @@ export function VesselLabelsOverlay() {
       </svg>
       {targets.map((t) => (
         <Label key={t} target={t} />
+      ))}
+      {CHAMBER_TAGS.map((c) => (
+        <ChamberTag key={c.id} {...c} />
       ))}
       <HoverTooltip />
     </div>

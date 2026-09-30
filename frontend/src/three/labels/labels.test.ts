@@ -9,7 +9,7 @@ import { buildTracks, heartAxisFrame, restToDisplayed } from './anchorTracks';
 import { anatomicalTitle, clip, hoverContent } from './hoverContent';
 import { nearestPeelStage, sceneSummaryText } from './sceneSummaryText';
 import { ANCHOR_PERIOD_MS, AnchorChooser, bestCandidate, buildCandidates, facing, mainTrunk } from './dynamicAnchor';
-import { LABEL_MIN_GAP, coverFade, labelShowsProbability, laneFor, layoutLanes, resolveLane, stackLane, type LaneItem } from './labelRegistry';
+import { LABEL_MIN_GAP, chamberFade, coverFade, labelShowsProbability, laneFor, layoutLanes, layoutRow, resolveLane, stackLane, type LaneItem } from './labelRegistry';
 
 const read = <T,>(file: string) => JSON.parse(readFileSync(resolve(__dirname, '../../../public/anatomy', file), 'utf8')) as T;
 const manifest = read<AnatomyManifest>('manifest.json');
@@ -283,5 +283,39 @@ describe('label cover fade (labels never point at a closed chest)', () => {
     const mid = coverFade(0.375);
     expect(mid).toBeGreaterThan(0.3);
     expect(mid).toBeLessThan(0.7);
+  });
+});
+
+describe('open-heart label row (V2 §10 explode)', () => {
+  const bounds = { left: 304, right: 1064, top: 56, bottom: 760 };
+  const union = { minX: 380, maxX: 1000, minY: 240, maxY: 620 };
+  const item = (id: string, x: number, y: number): LaneItem => ({ id, lane: 'right', x, y, width: 64, height: 24 });
+
+  it('puts every label below both halves, over its anchor, apart and in anchor order', () => {
+    const placed = layoutRow([item('RCA', 420, 300), item('LAD', 470, 420), item('LCX', 880, 380)], bounds, union)!;
+    expect(placed).not.toBeNull();
+    const rects = ['RCA', 'LAD', 'LCX'].map((id) => placed.get(id)!);
+    for (const r of rects) {
+      // Never on a half: entirely below the union silhouette, inside the free area.
+      expect(r.top).toBeGreaterThanOrEqual(union.maxY);
+      expect(r.top + 24).toBeLessThanOrEqual(bounds.bottom);
+      expect(r.left).toBeGreaterThanOrEqual(bounds.left);
+      expect(r.left + 64).toBeLessThanOrEqual(bounds.right);
+    }
+    expect(rects[1]!.left).toBeGreaterThanOrEqual(rects[0]!.left + 64 + 12);
+    expect(rects[2]!.left).toBeGreaterThan(rects[1]!.left);
+  });
+
+  it('goes above the halves when there is no room below, and gives up when neither fits', () => {
+    const tall = { ...union, maxY: 740 };
+    const placed = layoutRow([item('LAD', 500, 400)], bounds, tall)!;
+    expect(placed.get('LAD')!.top + 24).toBeLessThanOrEqual(tall.minY);
+    expect(layoutRow([item('LAD', 500, 400)], bounds, { ...union, minY: 60, maxY: 740 })).toBeNull();
+  });
+
+  it('fades the chamber tags in only as the heart finishes opening', () => {
+    expect(chamberFade(0.5)).toBe(0);
+    expect(chamberFade(1)).toBe(1);
+    expect(chamberFade(0.8)).toBeGreaterThan(0);
   });
 });

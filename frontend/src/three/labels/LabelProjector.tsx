@@ -11,9 +11,22 @@ import { useCameraState } from '../camera/cameraState';
 import { collectOccluders, isOccluded } from '../camera/occlusion';
 import { freeArea, heartBox } from '../camera/framing';
 import { sceneRuntime } from '../stage/sceneRuntime';
-import { buildTracks, restToDisplayed, type AnchorTrack } from './anchorTracks';
+import { buildTracks, heartAxisFrame, restToDisplayed, type AnchorTrack } from './anchorTracks';
 import { facing } from './dynamicAnchor';
-import { coverFade, dotEls, labelEls, labelSizes, layoutLanes, lineEls, resolveLane, type LaneItem } from './labelRegistry';
+import {
+  chamberEls,
+  chamberFade,
+  coverFade,
+  dotEls,
+  labelEls,
+  labelSizes,
+  layoutLanes,
+  layoutRow,
+  lineEls,
+  resolveLane,
+  type ChamberId,
+  type LaneItem,
+} from './labelRegistry';
 
 const DEFAULT_TARGETS = ['LAD', 'LCX', 'RCA'];
 /** Labels fade in LAD → LCX → RCA, 60 ms apart, once the coronaries ignite (V2 §5.14). */
@@ -24,6 +37,17 @@ const CONTEXT_SLOT_ROOM = 44;
 const ANSWER_PILL_ROOM = 60;
 /** Share of the heart box's projected width that the organ's silhouette actually covers. */
 const SILHOUETTE = 0.95;
+/** The two heart halves (their union is "the heart" for the label layout while it opens). */
+const HALVES = ['Heart_Wall_Anterior', 'Heart_Wall_Posterior'] as const;
+
+interface ChamberAnchor {
+  id: ChamberId;
+  /** Valve node the anchor is defined on (it moves with that node). */
+  node: string;
+  /** Anchor in the node's local frame. */
+  local: Vector3;
+}
+
 /** Anchor glide when the chosen candidate changes (per-second rate of an exponential approach). */
 const ANCHOR_GLIDE = 14;
 
@@ -105,7 +129,9 @@ export function LabelProjector() {
     lastChrome: '' as Chrome | '',
     occluders: [] as Mesh[],
     occludersAt: -Infinity,
+    chambers: null as ChamberAnchor[] | null,
   });
+  const axis = useMemo(() => heartAxisFrame(manifest), [manifest]);
 
   /** Occluders with a ready BVH, refreshed once a second (hidden layers drop out). */
   const occludersFor = (now: number): Mesh[] => {
@@ -117,22 +143,91 @@ export function LabelProjector() {
     return s.occluders;
   };
 
-  const meshFor = (track: AnchorTrack, now: number): Object3D | null => {
+  const nodeMesh = (node: string, now: number): Object3D | null => {
     const s = state.current;
     const version = anchorsVersion();
     if (version !== s.meshVersion || (now - s.meshCheckedAt > 1000 && [...s.meshes.values()].some((m) => !m))) {
       s.meshVersion = version;
       s.meshCheckedAt = now;
       s.meshes.clear();
+      s.chambers = null;
     }
-    if (!s.meshes.has(track.node)) {
+    if (!s.meshes.has(node)) {
       let found: Object3D | null = null;
       scene.traverse((o) => {
-        if (!found && o.name === track.node && typeof o.userData.ctKind === 'string' && !o.userData.ctGhost) found = o;
+        if (!found && o.name === node && typeof o.userData.ctKind === 'string' && !o.userData.ctGhost) found = o;
       });
-      s.meshes.set(track.node, found);
+      s.meshes.set(node, found);
     }
-    return s.meshes.get(track.node) ?? null;
+    return s.meshes.get(node) ?? null;
+  };
+  const meshFor = (track: AnchorTrack, now: number): Object3D | null => nodeMesh(track.node, now);
+
+  /**
+   * Chamber anchors (local to their valve mesh): the chordae tips of the mitral / tricuspid apparatus — the
+   * lowest few percent of the valve's vertices along the long axis — name the ventricles; their annulus top,
+   * nudged toward the base, the atria.
+   */
+  const chamberAnchors = (now: number): ChamberAnchor[] => {
+    const s = state.current;
+    if (s.chambers) return s.chambers;
+    const out: ChamberAnchor[] = [];
+    for (const [node, low, high] of [
+      ['Valve_Mitral', 'LV', 'LA'],
+      ['Valve_Tricuspid', 'RV', 'RA'],
+    ] as const) {
+      const mesh = nodeMesh(node, now) as Mesh | null;
+      const pos = mesh?.geometry?.getAttribute('position');
+      if (!mesh || !pos) continue;
+      // The valve node's local frame is its rest frame translated (no rotation): heights along the long axis.
+      const ranked: { h: number; i: number }[] = [];
+      for (let i = 0; i < pos.count; i += 1) ranked.push({ h: tmpPos.fromBufferAttribute(pos, i).dot(axis.axis), i });
+      ranked.sort((a, b) => a.h - b.h);
+      const mean = (from: number, to: number) => {
+        const v = new Vector3();
+        for (let k = from; k < to; k += 1) v.add(tmpPos.fromBufferAttribute(pos, ranked[k]!.i));
+        return v.divideScalar(Math.max(1, to - from));
+      };
+      const n = Math.max(1, Math.floor(ranked.length * 0.03));
+      out.push({ id: low, node, local: mean(0, n) });
+      out.push({ id: high, node, local: mean(ranked.length - n, ranked.length).addScaledVector(axis.axis, 0.04) });
+    }
+    if (out.length > 0) s.chambers = out;
+    return out;
+  };
+
+  /** Screen box (canvas px) of both heart halves as displayed now, from their geometry bounds. */
+  const halvesExtent = (now: number) => {
+    let minX = Infinity;
+    let maxX = -Infinity;
+    let minY = Infinity;
+    let maxY = -Infinity;
+    for (const node of HALVES) {
+      const mesh = nodeMesh(node, now) as Mesh | null;
+      const g = mesh?.geometry;
+      if (!mesh || !g) continue;
+      if (!g.boundingBox) g.computeBoundingBox();
+      const b = g.boundingBox!;
+      mesh.updateWorldMatrix(true, false);
+      for (const x of [b.min.x, b.max.x])
+        for (const y of [b.min.y, b.max.y])
+          for (const z of [b.min.z, b.max.z]) {
+            projected.set(x, y, z).applyMatrix4(mesh.matrixWorld).project(camera);
+            const px = ((projected.x + 1) / 2) * size.width;
+            const py = ((1 - projected.y) / 2) * size.height;
+            minX = Math.min(minX, px);
+            maxX = Math.max(maxX, px);
+            minY = Math.min(minY, py);
+            maxY = Math.max(maxY, py);
+          }
+    }
+    if (!Number.isFinite(minX)) return null;
+    // Box corners overshoot a rotated half's silhouette: trim like the closed heart (95 %).
+    const cxx = (minX + maxX) / 2;
+    const cyy = (minY + maxY) / 2;
+    const hx = ((maxX - minX) / 2) * SILHOUETTE;
+    const hy = ((maxY - minY) / 2) * SILHOUETTE;
+    return { minX: cxx - hx, maxX: cxx + hx, minY: cyy - hy, maxY: cyy + hy };
   };
 
   useFrame((_, delta) => {
@@ -214,8 +309,13 @@ export function LabelProjector() {
     // The box corners sit a little outside the organ's silhouette; 95 % of the projected box hugs it.
     const cx = (minX + maxX) / 2;
     const half = ((maxX - minX) / 2) * SILHOUETTE;
-    const heart = Number.isFinite(minX) && maxX > minX ? { minX: cx - half, maxX: cx + half } : null;
+    let heart = Number.isFinite(minX) && maxX > minX ? { minX: cx - half, maxX: cx + half } : null;
     const compact = width < 640;
+    // While the heart opens, "the heart" is the union of both halves where they are NOW (the anterior half
+    // swings toward viewer-left): labels go outside it, never on a half.
+    const heartOpen = viewer.stage === 'workstation' ? sceneRuntime.peel.heartOpen : 0;
+    const union = heartOpen > 0.02 ? halvesExtent(now) : null;
+    if (union) heart = { minX: Math.min(heart?.minX ?? union.minX, union.minX), maxX: Math.max(heart?.maxX ?? union.maxX, union.maxX) };
 
     // 3. Lanes.
     const items: LaneItem[] = [];
@@ -228,7 +328,8 @@ export function LabelProjector() {
       const box = labelSizes.get(r.id) ?? { width: 72, height: 24 };
       items.push({ id: r.id, lane: resolveLane(r.id, viewer.carm?.azimuth, x, heart), x, y, width: box.width, height: box.height });
     }
-    const placed = layoutLanes(items, bounds, heart);
+    // Opened: one row below (or above) both halves; else the radiological lanes beside the heart.
+    const placed = (union && heartOpen > 0.5 ? layoutRow(items, bounds, union) : null) ?? layoutLanes(items, bounds, heart);
 
     // 4. States and DOM writes.
     const selected = viewer.selectedStructure;
@@ -271,6 +372,29 @@ export function LabelProjector() {
         setStyle(dot, 'opacity', fmt((!revealed || behind ? 0 : dimmed ? 0.5 : 1) * seen));
       }
     });
+
+    // 5. Chamber tags at Open heart: at their anchor (a 5 px dot + "LV · mitral valve"), faded in over the end
+    // of the opening, hidden when a wall stands in front of the anchor or while labels are off.
+    const chamberAlpha = visible ? chamberFade(heartOpen) : 0;
+    const anchors = chamberAlpha > 0 ? chamberAnchors(now) : [];
+    for (const [id, el] of chamberEls) {
+      const a = anchors.find((c) => c.id === id);
+      const mesh = a ? nodeMesh(a.node, now) : null;
+      if (!a || !mesh || chamberAlpha <= 0) {
+        setStyle(el, 'opacity', '0');
+        continue;
+      }
+      mesh.updateWorldMatrix(true, false);
+      tmpPos.copy(a.local).applyMatrix4(mesh.matrixWorld);
+      // Only a WALL in front hides a chamber (its own valve, chordae and papillary muscles are what it names).
+      const hidden = isOccluded(eye, tmpPos, occludersFor(now).filter((o) => o.userData.ctKind === 'myocardium'));
+      projected.copy(tmpPos).project(camera);
+      const x = ((projected.x + 1) / 2) * width;
+      const y = ((1 - projected.y) / 2) * height;
+      const inside = x > bounds.left && x < bounds.right && y > bounds.top && y < bounds.bottom;
+      setStyle(el, 'transform', `translate3d(${x.toFixed(1)}px, ${y.toFixed(1)}px, 0)`);
+      setStyle(el, 'opacity', fmt(hidden || !inside ? 0 : chamberAlpha));
+    }
 
     // Hide labels whose vessel has no anchor (anatomy switched, target missing).
     for (const [id, label] of labelEls) {
