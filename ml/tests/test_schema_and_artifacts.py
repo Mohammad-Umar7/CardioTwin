@@ -82,7 +82,7 @@ def test_cohort_contract(artifacts_dir) -> None:  # noqa: ANN001
 
 
 def test_frontend_mirror_is_in_sync() -> None:
-    for name in ("schema.json", "model.json", "metrics.json", "cohort.json", "fixtures.json"):
+    for name in ("schema.json", "model.json", "metrics.json", "metrics_summary.json", "cohort.json", "fixtures.json"):
         mirrored = FRONTEND_MODEL_DIR / name
         if mirrored.exists():
             assert mirrored.read_bytes() == (ARTIFACTS_DIR / name).read_bytes(), name
