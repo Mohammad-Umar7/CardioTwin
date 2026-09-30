@@ -1,83 +1,110 @@
-import { ArrowRight, Play } from 'lucide-react';
-import { useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
-import { Button } from '@/design';
+import { useEffect, useMemo, useRef } from 'react';
+import { useLocation, useNavigate } from 'react-router-dom';
+import { useSchemaIndex } from '@/hooks/useData';
+import { useReducedMotion } from '@/hooks/useMediaQuery';
+import { cn } from '@/lib/cn';
 import { ROUTES, loadWorkstation } from '@/routes';
+import { usePatientStore } from '@/state/patientStore';
 import { useUiStore } from '@/state/uiStore';
 import { CanvasSlot } from '@/three/CanvasSlot';
-import { DataAnatomyCard, IntendedUseCard } from './InfoCards';
+import { startGuidedDemo } from '@/features/tour/tourApi';
+import { waitForStage } from '@/features/tour/waitFor';
+import { HeroCopy } from './HeroCopy';
 import { HeroHud, HeroPoster } from './HeroHud';
+import { DataAnatomyCard, IntendedUseCard } from './InfoCards';
 import { KpiStrip } from './KpiStrip';
-import { Pillars } from './Pillars';
-import { useSchema } from '@/hooks/useData';
+import { Pillars, type LandingDestination } from './Pillars';
+import { useAttractMode } from './useAttractMode';
+import { useHeroInsets, useLandingChrome, useLeaveTransition } from './useLandingStage';
 
 /**
- * Landing (DESIGN_SYSTEM §4.1): 12 columns, 1200 px max, 5/7 hero split, fits above the fold at
- * 1440×900. The hero is the real engine on a held-out TEST patient (tier B, turntable 6°/s).
- * KPI values come from metrics.json / schema.json and are never hard-coded.
+ * Landing, "the heart unboxed" (WORKSTATION_V2 §6.1–6.2).
+ *
+ * The hero is the stage itself: the persistent canvas fills the same rectangle the workstation uses
+ * (between the top bar and the status line), the copy floats over its left edge behind a bg/app → clear
+ * gradient, and the KPI strip and verb pillars are opaque bands along its bottom edge. The page publishes
+ * that coverage as the stage insets, so the camera centres the heart in what is left. "Open the
+ * workstation" plays the copy exit and changes route; the canvas keeps its size, the camera glides to
+ * the workstation home, and the labels hand their % over to the Risk card as the chrome preset changes.
  */
 export default function LandingPage() {
   const navigate = useNavigate();
-  const openTour = useUiStore((s) => s.openTour);
-  const schema = useSchema();
-  const nInputs = schema.data?.features.length;
+  const location = useLocation();
+  const reduced = useReducedMotion();
+  const heroRef = useRef<HTMLElement>(null);
+  const bandsRef = useRef<HTMLDivElement>(null);
+  const schema = useSchemaIndex();
+  const vessels = useMemo(() => schema?.vessels.map((t) => t.id) ?? ['LAD', 'LCX', 'RCA'], [schema]);
+  const tourOpen = useUiStore((s) => s.tourOpen);
+  const hasPrediction = usePatientStore((s) => s.prediction !== null);
+  const { leaving, leave } = useLeaveTransition(reduced);
+
+  useLandingChrome();
+  useHeroInsets(heroRef, bandsRef);
+  const attract = useAttractMode(heroRef, vessels, !reduced && !tourOpen && !leaving && hasPrediction);
 
   useEffect(() => {
-    // The CTA keeps the same canvas; preload the workstation chunk so the glide never waits on a network hop.
+    // Same canvas, same patient: preload the workstation chunk so the glide never waits on the network.
     void loadWorkstation();
   }, []);
 
-  return (
-    <div className="mx-auto flex w-full max-w-[1248px] flex-col gap-5 px-6 pb-6 pt-6">
-      <section className="grid grid-cols-1 items-stretch gap-6 lg:grid-cols-12" aria-labelledby="hero-title">
-        <div className="flex flex-col justify-center gap-5 py-2 lg:col-span-5 animate-rise-in">
-          <p className="eyebrow text-accent">Coronary risk, vessel by vessel</p>
-          <h1 id="hero-title" className="font-display text-[2.5rem] font-semibold leading-[2.75rem] tracking-[-0.03em] text-primary min-[1440px]:text-display-1">
-            An explainable coronary digital twin.
-          </h1>
-          <p className="max-w-[34rem] text-body text-secondary min-[1440px]:text-[0.9375rem] min-[1440px]:leading-6">
-            Predicts overall coronary artery disease (CAD) and stenosis of the{' '}
-            <abbr title="Left anterior descending artery">LAD</abbr> · <abbr title="Left circumflex artery">LCX</abbr> ·{' '}
-            <abbr title="Right coronary artery">RCA</abbr> from {nInputs ?? 'routine'} routine clinical inputs, explains every
-            estimate with exact SHAP, and maps it onto real BodyParts3D anatomy.
-          </p>
-          <div className="flex flex-wrap items-center gap-3">
-            <Button
-              variant="primary"
-              size="lg"
-              iconRight={<ArrowRight className="stroke-[1.75]" />}
-              onClick={() => navigate(ROUTES.workstation)}
-            >
-              Open workstation
-            </Button>
-            <Button
-              variant="secondary"
-              size="lg"
-              iconLeft={<Play className="stroke-[1.75]" />}
-              onClick={() => {
-                navigate(ROUTES.workstation);
-                openTour(0);
-              }}
-            >
-              90-s tour
-            </Button>
-          </div>
-          <p className="text-label font-normal text-tertiary">Opens on a held-out test patient. No login.</p>
-        </div>
+  const go = (destination: LandingDestination) =>
+    leave(() => {
+      window.scrollTo({ top: 0 });
+      navigate(destination.to);
+      const after = destination.after;
+      if (after && !destination.to.startsWith(ROUTES.performance)) {
+        void waitForStage('workstation').then((ok) => ok && after());
+      }
+    });
 
+  return (
+    <div className="flex w-full flex-col">
+      <section
+        ref={heroRef}
+        aria-labelledby="hero-title"
+        data-region="landing-hero"
+        className="relative flex flex-col min-[1100px]:block min-[1100px]:h-[calc(100svh-var(--topbar-h)-var(--status-h))] min-[1100px]:min-h-[600px]"
+      >
         <CanvasSlot
           stage="hero"
-          className="h-[380px] rounded-lg border border-hairline lg:col-span-7 min-[1440px]:h-[404px]"
+          className="h-[56svh] min-h-[340px] min-[1100px]:!absolute min-[1100px]:inset-0 min-[1100px]:h-auto min-[1100px]:min-h-0"
           placeholder={<HeroPoster />}
         >
-          <HeroHud />
+          <HeroHud attract={attract} vessels={vessels} leaving={leaving} />
         </CanvasSlot>
+
+        <div
+          className="relative z-panels px-6 pb-8 pt-8 min-[1100px]:pointer-events-none min-[1100px]:absolute min-[1100px]:inset-x-0 min-[1100px]:top-0 min-[1100px]:flex min-[1100px]:items-center min-[1100px]:py-0 min-[1100px]:pl-[clamp(24px,5.4vw,88px)]"
+          style={{ bottom: 'var(--landing-bands-h, 0px)' }}
+        >
+          <HeroCopy
+            leaving={leaving}
+            className="min-[1100px]:pointer-events-auto min-[1100px]:w-[40%] min-[1100px]:max-w-[580px] min-[1100px]:pb-4"
+            onOpenWorkstation={() => go({ to: ROUTES.workstation })}
+            onGuidedDemo={() => leave(() => startGuidedDemo(navigate, `${location.pathname}${location.search}`))}
+          />
+        </div>
+
+        <div
+          ref={bandsRef}
+          data-region="landing-bands"
+          className={cn(
+            'relative z-panels border-t border-hairline bg-app transition-[opacity,transform] duration-base min-[1100px]:absolute min-[1100px]:inset-x-0 min-[1100px]:bottom-0',
+            // Soft edge: the stage melts into the bands instead of ending on a hard line.
+            'min-[1100px]:before:pointer-events-none min-[1100px]:before:absolute min-[1100px]:before:inset-x-0 min-[1100px]:before:bottom-full min-[1100px]:before:h-16 min-[1100px]:before:bg-gradient-to-t min-[1100px]:before:from-app min-[1100px]:before:to-transparent',
+            leaving ? 'translate-y-2 opacity-0 ease-exit' : 'ease-out',
+          )}
+        >
+          <KpiStrip />
+          <Pillars onNavigate={go} className="border-t border-hairline" />
+        </div>
       </section>
 
-      <KpiStrip />
-      <Pillars />
-
-      <section className="grid grid-cols-1 gap-4 md:grid-cols-2" aria-label="Intended use and sources">
+      <section
+        aria-label="Intended use and sources"
+        className="mx-auto grid w-full max-w-[1248px] grid-cols-1 gap-4 px-6 pb-12 pt-10 md:grid-cols-2"
+      >
         <IntendedUseCard />
         <DataAnatomyCard />
       </section>
