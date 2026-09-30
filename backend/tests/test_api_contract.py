@@ -50,7 +50,8 @@ def test_risk_band_and_engine_enumerations(components: dict[str, Any]) -> None:
     assert components["TargetPrediction"]["properties"]["risk_band"]["enum"] == ["low", "moderate", "high",
                                                                                  "critical"]
     assert components["PredictResponse"]["properties"]["engine"]["enum"] == ["server", "edge"]
-    assert components["PredictionSummary"]["properties"]["highest_risk_vessel"]["enum"] == ["LAD", "LCX", "RCA"]
+    # Open on purpose: vessel targets added to the schema later must not require an API change.
+    assert "enum" not in components["PredictionSummary"]["properties"]["highest_risk_vessel"]
 
 
 def test_response_models_accept_added_fields(components: dict[str, Any]) -> None:

@@ -155,8 +155,9 @@ class Explanation(_Open):
 
 
 class PredictionSummary(_Open):
-    expected_diseased_vessels: float = Field(ge=0.0, le=3.0)
-    highest_risk_vessel: Literal["LAD", "LCX", "RCA"]
+    # Deliberately open (no upper bound, no enum) so vessel targets added to the schema later flow through.
+    expected_diseased_vessels: float = Field(ge=0.0, description="Sum of vessel stenosis probabilities.")
+    highest_risk_vessel: str = Field(description="Vessel target with the highest probability, e.g. 'LAD'.")
 
 
 class PredictResponse(_Open):
