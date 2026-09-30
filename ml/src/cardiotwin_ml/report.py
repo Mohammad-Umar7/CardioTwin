@@ -139,10 +139,9 @@ def fig_calibration(metrics: dict[str, Any], path: Path) -> None:
         cal = tr["curves"]["calibration"]
         cs = tr["calibration_summary"]
         ax.plot([0, 1], [0, 1], color=NEUTRAL, lw=0.9, ls=":", label="Perfect calibration")
+        n_bin = int(round(float(np.mean(cal["count"]))))
         ax.plot(cal["mean_predicted"], cal["fraction_positive"], color=MODEL, lw=2, marker="o", markersize=6,
-                markeredgecolor="white", markeredgewidth=1.5, label="Quantile bins (test)")
-        for x, y, c in zip(cal["mean_predicted"], cal["fraction_positive"], cal["count"], strict=True):
-            ax.annotate(f"n={c}", (x, y), textcoords="offset points", xytext=(6, -10), fontsize=7, color=INK_2)
+                markeredgecolor="white", markeredgewidth=1.5, label=f"Quantile bins (~{n_bin} patients each)")
         ax.text(0.03, 0.97, f"Brier {tr['test']['brier']['value']:.3f}\nECE {cs['ece']:.3f}\nslope {cs['calibration_slope']:.2f}",
                 transform=ax.transAxes, va="top", fontsize=8, color=INK)
         ax.set(xlim=(0, 1), ylim=(0, 1.02), xlabel="Predicted probability", ylabel="Observed fraction stenotic", title=TARGET_TITLES.get(t, t))
@@ -210,7 +209,8 @@ def fig_importance(metrics: dict[str, Any], path: Path, top: int = 12) -> None:
 
 def fig_beeswarm(metrics: dict[str, Any], path: Path, top: int = 10) -> None:
     ts = _targets(metrics)
-    fig, axes = _grid(len(ts))
+    fig, axes = plt.subplots(2, 2, figsize=(11.5, 9.0), layout="constrained") if len(ts) == 4 else _grid(len(ts))
+    axes = np.atleast_1d(axes).ravel()
     rng = np.random.default_rng(0)
     sc = None
     for ax, t in zip(axes, ts, strict=False):
@@ -225,7 +225,7 @@ def fig_beeswarm(metrics: dict[str, Any], path: Path, top: int = 10) -> None:
         ax.grid(axis="y", visible=False)
         ax.set(xlabel="SHAP value (log-odds)", title=TARGET_TITLES.get(t, t))
     if sc is not None:
-        cb = fig.colorbar(sc, ax=list(axes), shrink=0.5, pad=0.02)
+        cb = fig.colorbar(sc, ax=list(axes), shrink=0.45, pad=0.01)
         cb.set_label("Feature value (low → high)", fontsize=8)
         cb.set_ticks([0, 1], labels=["low", "high"])
     fig.suptitle("SHAP beeswarm — each dot is one development-set patient", fontsize=12.5, fontweight="bold", color=INK, x=0.01, ha="left")
@@ -254,11 +254,11 @@ def fig_leaderboard(metrics: dict[str, Any], path: Path) -> None:
 
 def fig_test_forest(metrics: dict[str, Any], path: Path) -> None:
     ts = _targets(metrics)
-    fig, ax = plt.subplots(figsize=(7.2, 3.2))
+    fig, ax = plt.subplots(figsize=(7.6, 3.6))
     for i, t in enumerate(ts[::-1]):
         tr = metrics["targets"][t]
         for off, m, col, lab in ((0.14, tr["test"]["roc_auc"], MODEL, "CardioTwin"),
-                                 (-0.14, tr["baseline"]["test"]["roc_auc"], BASELINE, "Clinical baseline (age, sex, typical angina, DM, HTN)")):
+                                 (-0.14, tr["baseline"]["test"]["roc_auc"], BASELINE, "Clinical baseline (5 features)")):
             ax.plot(m["ci"], [i + off] * 2, color=col, lw=2.2, solid_capstyle="round")
             ax.scatter([m["value"]], [i + off], color=col, s=42, zorder=3, edgecolors="white", linewidths=1.2, label=lab if i == 0 else None)
         cv = tr["cv"]["roc_auc"]
@@ -267,7 +267,7 @@ def fig_test_forest(metrics: dict[str, Any], path: Path) -> None:
     ax.axvline(0.5, color=NEUTRAL, lw=0.9, ls=":")
     ax.set(xlim=(0.35, 1.0), xlabel="Test ROC-AUC with 95% bootstrap CI")
     ax.grid(axis="y", visible=False)
-    ax.legend(loc="lower left", fontsize=7.5)
+    ax.legend(loc="upper center", bbox_to_anchor=(0.5, -0.22), ncol=3, fontsize=7.5)
     _save(fig, path, "Held-out discrimination: full model vs clinical baseline")
 
 
@@ -287,8 +287,11 @@ def fig_cooccurrence(metrics: dict[str, Any], path: Path) -> None:
     items = sorted(pats.items(), key=lambda kv: -kv[1])
     labels = []
     for p, _ in items:
-        on = [n for n, b in zip(names, p, strict=True) if b == "1"]
-        labels.append(" + ".join(n for n in on if n != "CAD") or ("CAD only" if on else "none"))
+        vessels = [n for n, b in zip(names[1:], p[1:], strict=True) if b == "1"]
+        label = " + ".join(vessels) or "none"
+        if p[0] == "0" and vessels:
+            label += " (Cath normal)"
+        labels.append(label)
     ax2.bar(range(len(items)), [c for _, c in items], color=MODEL, width=0.68, edgecolor="white")
     for k, (_, c) in enumerate(items):
         ax2.text(k, c + 1, str(c), ha="center", fontsize=8, color=INK_2)
