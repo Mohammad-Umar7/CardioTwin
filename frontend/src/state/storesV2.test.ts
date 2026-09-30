@@ -238,3 +238,17 @@ describe('patientStore · blank patient, automatic baseline, compare', () => {
     expect(usePatientStore.getState()).toMatchObject({ recordedPrediction: null, comparing: false });
   });
 });
+
+describe('patientStore · patient switch never shows the previous estimate', () => {
+  it('drops the previous patient’s estimate on load, but keeps it (for "Updating") across same-patient edits', () => {
+    const ps = usePatientStore.getState();
+    ps.loadPatient(sampleCohort.patients[0]!);
+    ps.predictionSucceeded(samplePrediction, 5);
+    usePatientStore.getState().setFeature('BP', 150);
+    usePatientStore.getState().predictionStarted();
+    expect(usePatientStore.getState().prediction).toBe(samplePrediction);
+    usePatientStore.getState().loadPatient(sampleCohort.patients[1]!);
+    expect(usePatientStore.getState()).toMatchObject({ prediction: null, previous: null, recordedPrediction: null });
+    expect(selectDisplayedPrediction(usePatientStore.getState())).toBeNull();
+  });
+});

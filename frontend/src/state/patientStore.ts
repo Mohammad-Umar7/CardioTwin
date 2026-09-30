@@ -100,8 +100,20 @@ export const selectDisplayedPrediction = (
 export const selectEditCount = (s: Pick<PatientState, 'features' | 'recorded'>): number =>
   editedKeys(s.features, s.recorded).length;
 
-/** Fields reset whenever a different patient is loaded. */
-const FRESH_PATIENT = { baseline: null, recordedPrediction: null, comparing: false, revealed: false } as const;
+/**
+ * Fields reset whenever a different patient is loaded. The previous patient's estimate goes too: until the
+ * new patient's first estimate arrives every surface shows its loading state, never the old numbers under
+ * the new patient's ID (clinical safety: a stale value is never presented as current). Same-patient what-if
+ * edits keep the last estimate, dimmed as "Updating".
+ */
+const FRESH_PATIENT = {
+  baseline: null,
+  recordedPrediction: null,
+  prediction: null,
+  previous: null,
+  comparing: false,
+  revealed: false,
+} as const;
 
 export const usePatientStore = create<PatientState>()((set, get) => ({
   selectedPatientId: null,
