@@ -226,3 +226,32 @@ geodesic/Euclidean proximity to the coronary tree (documented approximation, **n
                  "segments": [ { "points": [[x,y,z], …], "radius": [r, …] } ] } ] }
 ```
 Points are ordered **proximal → distal** (direction of blood flow).
+
+---
+
+## 7. Contract v1.1 additions (additive — every field optional for consumers)
+
+### 7.1 Anatomy realism & precise anatomy
+* **Baked realism.** Any GLB mesh MAY carry `TEXCOORD_0` plus glTF PBR textures (`baseColorTexture`,
+  `normalTexture`, `metallicRoughnessTexture`, `occlusionTexture`; WebP inside the GLB). The web app's
+  **Realistic** view mode uses them; the **Clinical** (achromatic "clay") mode ignores them. `COLOR_0`
+  (territory weights) is always preserved on the heart walls. GLB size budget rises to **≤ 16 MB**.
+* **SCCT coronary segments.** Coronary meshes carry a scalar vertex attribute **`_SEGMENT`**
+  (three.js exposes it as `geometry.attributes._segment`); value = SCCT segment number (1–18), `0` = unassigned.
+  Risk remains **vessel-level** — segments are anatomical labels for inspection, never lesion locations.
+* `manifest.json` gains:
+  ```jsonc
+  "segments": [ { "scct": 7, "code": "mLAD", "name": "Mid LAD", "vessel": "LAD", "target": "LAD",
+                  "node": "Coronary_LAD", "definition": "From D1 (or first septal) to D2 / half-way to the apex",
+                  "source": "SCCT 2014 (Leipsic et al.)" } ]
+  ```
+  and every `structures[]` item may add `fma_id`, `definition` (precise anatomical definition),
+  `clinical_relevance`, and for veins `accompanies` (artery structure ids, e.g. `["lad","lcx"]`).
+* `vessels.json` segments may add `scct` (number) and `code` (e.g. `"pLAD"`).
+
+### 7.2 ML evaluation extras (`metrics.json`)
+Top-level additive keys: `robustness` (Monte-Carlo repeated hold-out distribution of the frozen recipe per
+target: `{ "n_splits", "roc_auc": {"mean","sd","p05","p50","p95"}, "f1": {…}, "fixed_split_percentile" }`),
+`modality_ablation` (per target, CV ROC-AUC when using cumulative feature groups
+demographics → +risk_factors → +symptoms → +exam → +ecg → +labs → +echo, and leave-one-group-out),
+`subgroups` (per target, test/OOF metrics by sex, age band, diabetes).
