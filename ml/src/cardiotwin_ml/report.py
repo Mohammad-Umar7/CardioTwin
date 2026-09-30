@@ -375,7 +375,7 @@ def results_markdown(metrics: dict[str, Any]) -> str:
         "Test metrics are point estimates with 95% stratified-bootstrap CIs "
         f"({metrics['protocol']['n_bootstrap']} resamples) at the deployed threshold (Youden's J on out-of-fold "
         f"development predictions). CV = development-set repeated stratified {metrics['protocol']['cv_splits']}-fold × "
-        f"{metrics['protocol']['cv_repeats']} (mean ± sd over folds).",
+        f"{metrics['protocol']['cv_repeats']} with nested tuning (mean ± sd over folds).",
         "",
         "## Held-out test set (deployed LR + XGBoost ensemble)",
         "",
@@ -390,7 +390,27 @@ def results_markdown(metrics: dict[str, Any]) -> str:
         )
     lines += [
         "",
-        "## Development-set cross-validation (same ensemble, out-of-fold)",
+        "## Calibration on the held-out test set",
+        "",
+        "Calibration slope/intercept: logistic recalibration of the test outcomes on the predicted log-odds (ideal 1 / 0); "
+        "ECE over quantile bins of ~10 patients.",
+        "",
+        "| Target | Brier | Log-loss | Calibration slope | Calibration intercept | Calibration-in-the-large | ECE |",
+        "| --- | --- | --- | --- | --- | --- | --- |",
+    ]
+    for t in ts:
+        tr = metrics["targets"][t]
+        c = tr["calibration_summary"]
+        lines.append(
+            f"| {t} | {_ci(tr['test']['brier'])} | {_ci(tr['test']['log_loss'])} | {c['calibration_slope']:.2f} | "
+            f"{c['calibration_intercept']:+.2f} | {c['calibration_in_the_large']:+.3f} | {c['ece']:.3f} |"
+        )
+    lines += [
+        "",
+        "## Development-set cross-validation (ensemble recipe, cross-fitted)",
+        "",
+        "For every outer fold the logistic variant, ensemble weight, Platt calibration and threshold are re-chosen on the "
+        "other folds of that repeat only, so the scored fold never influences a choice (no selection optimism).",
         "",
         "| Target | ROC-AUC | PR-AUC | F1 | Sensitivity | Specificity | Accuracy | Brier |",
         "| --- | --- | --- | --- | --- | --- | --- | --- |",
@@ -432,6 +452,10 @@ def results_markdown(metrics: dict[str, Any]) -> str:
             f"| {t} | {c['logistic']['name']} | {c['logistic']['weight']:.2f} | {c['platt']['a']:.3f}, {c['platt']['b']:.3f} | "
             f"{tr['threshold']:.3f} | {tr['threshold_f1']:.3f} | {top} |"
         )
+    history = metrics["protocol"].get("test_set_history") or []
+    if history:
+        lines += ["", "## Use of the locked test set", ""]
+        lines += [f"* **{h['release']}** — {' '.join(str(h['note']).split())}" for h in history]
     abl = metrics["ablations"]["variants"]
     lines += ["", "## Ablations (development CV, paired folds)", "", "| Variant | Mean Δ ROC-AUC | Adopted |", "| --- | --- | --- |"]
     for v, r in abl.items():
