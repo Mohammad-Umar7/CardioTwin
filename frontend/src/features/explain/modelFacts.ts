@@ -40,7 +40,14 @@ export interface TargetFacts {
 export interface ModelFacts {
   source: 'summary' | 'metrics';
   modelVersion: string | null;
-  dataset: { name: string | null; n: number | null; nTest: number | null; nDev: number | null };
+  dataset: {
+    name: string | null;
+    n: number | null;
+    nTest: number | null;
+    nDev: number | null;
+    /** Share of patients with each condition (whole cohort). */
+    prevalence: Partial<Record<TargetId, number>>;
+  };
   targets: Partial<Record<TargetId, TargetFacts>>;
 }
 
@@ -83,6 +90,13 @@ function modalitySteps(cumulative: unknown): ModalityStep[] {
     steps.push({ group, label: str(o.label) ?? group, auc, delta });
   }
   return steps;
+}
+
+function prevalenceOf(x: unknown): Partial<Record<TargetId, number>> {
+  const o = obj(x);
+  const out: Partial<Record<TargetId, number>> = {};
+  for (const [k, v] of Object.entries(o ?? {})) if (num(v) !== null) out[k] = v as number;
+  return out;
 }
 
 function robustnessFrom(x: unknown): TargetFacts['robustness'] {
@@ -137,7 +151,13 @@ export function factsFromSummary(summary: unknown): ModelFacts {
   return {
     source: 'summary',
     modelVersion: str(s.model_version),
-    dataset: { name: str(dataset?.name), n: num(dataset?.n), nTest: num(dataset?.n_test), nDev: num(dataset?.n_dev) },
+    dataset: {
+      name: str(dataset?.name),
+      n: num(dataset?.n),
+      nTest: num(dataset?.n_test),
+      nDev: num(dataset?.n_dev),
+      prevalence: prevalenceOf(dataset?.prevalence),
+    },
     targets,
   };
 }
@@ -174,7 +194,13 @@ export function factsFromMetrics(metrics: MetricsReport): ModelFacts {
   return {
     source: 'metrics',
     modelVersion: str(m.model_version) ?? str(metrics.version),
-    dataset: { name: metrics.dataset.name ?? null, n: metrics.dataset.n ?? null, nTest: metrics.dataset.n_test ?? null, nDev: metrics.dataset.n_dev ?? null },
+    dataset: {
+      name: metrics.dataset.name ?? null,
+      n: metrics.dataset.n ?? null,
+      nTest: metrics.dataset.n_test ?? null,
+      nDev: metrics.dataset.n_dev ?? null,
+      prevalence: prevalenceOf(metrics.dataset.prevalence),
+    },
     targets,
   };
 }
