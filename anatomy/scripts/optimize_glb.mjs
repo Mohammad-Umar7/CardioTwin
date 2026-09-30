@@ -157,11 +157,78 @@ if (withArclen !== arclen.size) {
   process.exit(1);
 }
 
+// 1c. Anatomical labels baked per vertex from the nearest labelled centreline point:
+//     coronary meshes -> _SEGMENT (SCCT 2014 number, 0 = named but unnumbered branch; CONTRACTS §7.1),
+//     CardiacVeins    -> _VEIN (manifest.veins code: 1 CS, 2 GCV, 3 AIV, 4 MCV, 5 PVLV, 6 ACV).
+//     Points of a branch that still lie inside its parent's lumen (the junction bridge) are skipped, so a
+//     parent's wall keeps the parent's label up to the branch ostium.
+const vesselsDoc = JSON.parse(readFileSync(vesselsPath, 'utf8'));
+function labelledPoints(segments, labelOf) {
+  const pts = [];
+  const lab = [];
+  segments.forEach((seg, j) => {
+    const parent = seg.parent !== null && seg.parent !== undefined ? segments[seg.parent] : null;
+    let bridging = !!parent;
+    seg.points.forEach((p, i) => {
+      if (bridging) {
+        let best = Infinity;
+        let rp = 0;
+        parent.points.forEach((q, k) => {
+          const d = (p[0] - q[0]) ** 2 + (p[1] - q[1]) ** 2 + (p[2] - q[2]) ** 2;
+          if (d < best) [best, rp] = [d, parent.radius[k]];
+        });
+        if (Math.sqrt(best) < rp) return; // still inside the parent lumen
+        bridging = false;
+      }
+      pts.push(p[0], p[1], p[2]);
+      lab.push(labelOf(seg, i, j));
+    });
+  });
+  return { pts: Float64Array.from(pts), lab: Float32Array.from(lab) };
+}
+const scctOf = (seg, i) => {
+  for (const L of seg.labels ?? []) if (i >= L.from && i < L.to) return L.scct;
+  return seg.scct ?? 0;
+};
+const labelSets = new Map();
+for (const v of vesselsDoc.vessels) labelSets.set(v.node, { name: '_SEGMENT', ...labelledPoints(v.segments, scctOf) });
+if (vesselsDoc.veins) labelSets.set(vesselsDoc.veins.node, { name: '_VEIN', ...labelledPoints(vesselsDoc.veins.segments, (seg) => seg.code) });
+const labelCounts = {};
+for (const node of root.listNodes()) {
+  const set = labelSets.get(node.getName());
+  const mesh = node.getMesh();
+  if (!set || !mesh) continue;
+  const t = node.getWorldTranslation();
+  for (const prim of mesh.listPrimitives()) {
+    const pos = prim.getAttribute('POSITION');
+    const values = new Float32Array(pos.getCount());
+    const p = [0, 0, 0];
+    const counts = {};
+    for (let i = 0; i < values.length; i++) {
+      pos.getElement(i, p);
+      const [x, y, z] = [p[0] + t[0], p[1] + t[1], p[2] + t[2]];
+      let best = Infinity;
+      for (let k = 0; k < set.lab.length; k++) {
+        const d = (set.pts[3 * k] - x) ** 2 + (set.pts[3 * k + 1] - y) ** 2 + (set.pts[3 * k + 2] - z) ** 2;
+        if (d < best) [best, values[i]] = [d, set.lab[k]];
+      }
+      counts[values[i]] = (counts[values[i]] ?? 0) + 1;
+    }
+    prim.setAttribute(set.name, doc.createAccessor(`${mesh.getName()}_${set.name.slice(1).toLowerCase()}`).setType('SCALAR').setArray(values).setBuffer(pos.getBuffer()));
+    labelCounts[node.getName()] = counts;
+  }
+}
+for (const [n, c] of Object.entries(labelCounts)) console.log(`[optimize] ${n}: ${labelSets.get(n).name} ${JSON.stringify(c)}`);
+if (!Object.keys(labelCounts).some((n) => n.startsWith('Coronary_'))) {
+  console.error('[optimize] ERROR: no _SEGMENT labels written (vessels.json without SCCT labels?)');
+  process.exit(1);
+}
+
 // 2. Cleanup, vertex-cache reorder, attribute quantisation (never POSITION).
 await doc.transform(
   prune({ keepAttributes: true, keepLeaves: true, keepIndices: true }),
   reorder({ encoder: MeshoptEncoder, target: 'size' }),
-  quantize({ pattern: /^(NORMAL|COLOR_0)$/, quantizeNormal: 10, quantizeColor: 8, cleanup: false }),
+  quantize({ pattern: /^(NORMAL|COLOR_0|TEXCOORD_0)$/, quantizeNormal: 10, quantizeColor: 8, quantizeTexcoord: 14, cleanup: false }),
   // Drop the float accessors replaced by quantisation (materials are left untouched on purpose).
   prune({ propertyTypes: [PropertyType.ACCESSOR], keepAttributes: true, keepLeaves: true, keepIndices: true }),
 );

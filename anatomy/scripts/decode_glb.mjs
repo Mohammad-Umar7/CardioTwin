@@ -5,7 +5,8 @@
  *   node anatomy/scripts/decode_glb.mjs [input.glb] <out_dir>
  *
  * Writes, per mesh node, `<node>.pos.f32` (world-space positions), `<node>.nrm.f32`, optional
- * `<node>.col.f32` (territories) and `<node>.arc.f32` (coronary arc length), `<node>.idx.u32`
+ * `<node>.col.f32` (territories), `<node>.arc.f32` (coronary arc length), `<node>.seg.f32` (SCCT _SEGMENT),
+ * `<node>.vein.f32` (_VEIN labels), `<node>.idx.u32`
  * (triangle indices), plus `index.json` with node names, parents, extras and array shapes.
  * Used by anatomy/tests/test_mesh_quality.py.
  */
@@ -57,7 +58,7 @@ for (const node of doc.getRoot().listNodes()) {
     }
     writeFileSync(join(outDir, `${entry.name}.pos.f32`), Buffer.from(pos.out.buffer));
     entry.vertices = pos.n;
-    for (const [semantic, suffix] of [['NORMAL', 'nrm'], ['COLOR_0', 'col'], ['_ARCLEN', 'arc']]) {
+    for (const [semantic, suffix] of [['NORMAL', 'nrm'], ['COLOR_0', 'col'], ['_ARCLEN', 'arc'], ['_SEGMENT', 'seg'], ['_VEIN', 'vein']]) {
       const acc = prim.getAttribute(semantic);
       if (!acc) continue;
       const { out, k } = floats(acc);

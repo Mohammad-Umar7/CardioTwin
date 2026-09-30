@@ -41,8 +41,14 @@ CONTRACT_LAYERS: dict[str, tuple[str, ...]] = {
         "Coronary_RCA_Marginal", "Coronary_RCA_PDA", "Coronary_RCA_PL", "Coronary_RCA_Septal",
     ),
 }
+#: CONTRACTS §7.1 (v1.1) additive nodes: optional for consumers, checked like contract nodes when present.
+ADDITIVE_LAYERS: dict[str, tuple[str, ...]] = {
+    "Layer_Heart": ("Valve_Aortic", "GreatVessel_Aorta_ArchBranches", "GreatVessel_SVC_BrachiocephalicVeins",
+                    "EpicardialFat_Anterior", "EpicardialFat_Posterior"),
+    "Layer_Lungs": ("Oesophagus",),
+}
 TERRITORY_NODES = ("Heart_Wall_Anterior", "Heart_Wall_Posterior")
-MAX_BYTES = 8 * 1024 * 1024
+MAX_BYTES = 16 * 1024 * 1024  # CONTRACTS §7.1: <= 16 MB with baked textures
 MAX_TRIANGLES = 400_000
 REQUIRED_EXTENSIONS = ("EXT_meshopt_compression",)
 
@@ -72,7 +78,8 @@ def verify(path: Path) -> dict:
     materials_seen: dict[int, str] = {}
     total_tris = 0
 
-    for layer, members in CONTRACT_LAYERS.items():
+    layers_all = {k: tuple(v) + tuple(n for n in ADDITIVE_LAYERS.get(k, ()) if n in by_name) for k, v in CONTRACT_LAYERS.items()}
+    for layer, members in layers_all.items():
         if layer not in by_name:
             errors.append(f"missing layer node {layer}")
             continue
@@ -104,6 +111,8 @@ def verify(path: Path) -> dict:
             else:
                 materials_seen[mat] = name
             attrs = sorted(prim["attributes"])
+            if name.startswith("Coronary_") and "_SEGMENT" not in prim["attributes"]:
+                errors.append(f"{name} lacks the _SEGMENT (SCCT) vertex attribute")
             if name in TERRITORY_NODES:
                 color = prim["attributes"].get("COLOR_0")
                 if color is None:
@@ -119,6 +128,9 @@ def verify(path: Path) -> dict:
                 "extras": node.get("extras", {}),
             }
 
+    # every mesh node counts towards the triangle budget, contract or not
+    total_tris = sum(gltf["accessors"][gltf["meshes"][n["mesh"]]["primitives"][0]["indices"]]["count"] // 3
+                     for n in nodes if "mesh" in n)
     size = path.stat().st_size
     if size > MAX_BYTES:
         errors.append(f"GLB is {size / 1e6:.2f} MB (> {MAX_BYTES / 1e6:.1f} MB)")
