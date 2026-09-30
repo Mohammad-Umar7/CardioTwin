@@ -2,17 +2,19 @@ import { useEffect } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { indexSchema, useCohort, useSchema } from '@/hooks/useData';
 import { schemaDefaults } from '@/lib/patients';
-import { selectEditCount, usePatientStore } from '@/state/patientStore';
+import { usePatientStore } from '@/state/patientStore';
 import { useUiStore } from '@/state/uiStore';
 import { decodeShareState, SHARE_PARAM } from './lib/profile';
+import { afterBaseline } from './profileActions';
 
 /** Payloads already applied this session (the hook may be mounted by more than one component). */
 const applied = new Set<string>();
 
 /**
  * Restores a shared what-if from the URL (`#/workstation/P-011?w=…`, built by "Copy share link"):
- * opens the patient, applies the edits, then removes `w` from the URL so later edits and reloads are
- * not overwritten. A link from another model version or a damaged link is refused with a toast.
+ * opens the patient, applies the edits once its recorded estimate (the what-if baseline) exists, and
+ * removes `w` from the URL so later edits and reloads are not overwritten. A link from another model
+ * version or a damaged link is refused with a toast.
  */
 export function useShareLinkRestore(): void {
   const { pathname, search } = useLocation();
@@ -53,13 +55,13 @@ export function useShareLinkRestore(): void {
         return;
       }
       store.loadPatient(patient);
-      usePatientStore.getState().setFeatures({ ...patient.features, ...edits });
+      afterBaseline(() => usePatientStore.getState().setFeatures({ ...patient.features, ...edits }));
     } else {
       const base = { ...schemaDefaults(schema.data), ...recorded };
       store.startBlank(base);
-      usePatientStore.getState().setFeatures({ ...base, ...edits });
+      afterBaseline(() => usePatientStore.getState().setFeatures({ ...base, ...edits }));
     }
-    const n = selectEditCount(usePatientStore.getState());
+    const n = Object.keys(edits).length;
     const who = patientId ?? 'Shared patient';
     toast(
       `Shared what-if opened · ${who}${n > 0 ? ` with ${n} ${n === 1 ? 'change' : 'changes'}` : ''}${

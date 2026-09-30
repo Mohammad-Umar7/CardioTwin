@@ -311,3 +311,60 @@ describe('PatientSwitcher', () => {
     expect(s.features.Age).toBe(schema.features.find((f) => f.key === 'Age')!.default);
   });
 });
+
+describe('profile workflow', () => {
+  it('restores a shared what-if from the URL once the recorded baseline exists, then drops `w`', async () => {
+    const { indexSchema } = await import('@/hooks/useData');
+    const { schemaDefaults } = await import('@/lib/patients');
+    const { encodeShareState } = await import('./lib/profile');
+    const { useShareLinkRestore } = await import('./useShareLinkRestore');
+    const p035 = cohort.patients.find((p) => p.id === 'P-035')!;
+    const w = encodeShareState(
+      { patientId: 'P-035', recorded: p035.features, features: { ...p035.features, 'Typical Chest Pain': 1, 'EF-TTE': 45 } },
+      indexSchema(schema),
+      schemaDefaults(schema),
+    );
+    let search = '';
+    function Probe() {
+      useShareLinkRestore();
+      search = window.location.search;
+      return null;
+    }
+    const { useLocation } = await import('react-router-dom');
+    function Where() {
+      search = useLocation().search;
+      return null;
+    }
+    render(
+      <MemoryRouter initialEntries={[`/workstation/P-035?w=${w}&t=LAD`]}>
+        <Probe />
+        <Where />
+      </MemoryRouter>,
+    );
+    await vi.waitFor(() => expect(usePatientStore.getState().selectedPatientId).toBe('P-035'));
+    expect(search).toBe('?t=LAD');
+    // Edits wait for the baseline prediction of the recorded inputs.
+    expect(usePatientStore.getState().features['EF-TTE']).toBe(p035.features['EF-TTE']);
+    act(() => usePatientStore.getState().predictionSucceeded(prediction(CONTRIBS), 5));
+    expect(usePatientStore.getState().features).toMatchObject({ 'Typical Chest Pain': 1, 'EF-TTE': 45 });
+    expect(usePatientStore.getState().recordedPrediction).not.toBeNull();
+    expect(useUiStore.getState().toasts.at(-1)?.message).toMatch(/P-035 with 2 changes/);
+  });
+
+  it('imports a JSON profile of a cohort patient and reports what was ignored', async () => {
+    const { importProfileFile } = await import('./profileActions');
+    const file = new File([JSON.stringify({ patient: { id: 'P-003' }, features: { 'Typical angina': 'no', LAD: 1 } })], 'p.json', {
+      type: 'application/json',
+    });
+    const navigate = vi.fn();
+    await act(async () => {
+      await importProfileFile(file, navigate);
+    });
+    expect(usePatientStore.getState().selectedPatientId).toBe('P-003');
+    act(() => usePatientStore.getState().predictionSucceeded(prediction(CONTRIBS), 5));
+    expect(usePatientStore.getState().features['Typical Chest Pain']).toBe(0);
+    const toast = useUiStore.getState().toasts.at(-1)!;
+    expect(toast.message).toMatch(/Profile imported · P-003/);
+    expect(toast.message).toMatch(/Target columns were ignored/);
+  });
+});

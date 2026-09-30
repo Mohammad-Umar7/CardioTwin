@@ -9,6 +9,7 @@ import { schemaDefaults } from '@/lib/patients';
 import { selectEditCount, usePatientStore } from '@/state/patientStore';
 import { useUiStore, type ToastTone } from '@/state/uiStore';
 import type { CohortPatient, FeatureVector } from '@/types/contracts';
+import { changedKeys } from './lib/values';
 import {
   buildProfile,
   encodeShareState,
@@ -41,6 +42,34 @@ async function loadSchemaIndex() {
 function syncRoute(patientId: string | null, navigate: Navigate) {
   if (!onWorkstation()) return;
   navigate(patientId ? `/workstation/${patientId}` : '/workstation');
+}
+
+/**
+ * Run `apply` once the automatic what-if baseline exists (the prediction for the RECORDED inputs, V2 §5.7),
+ * so a restored or imported what-if still gets its "was" lines, Δ column and hold-to-compare. The numbers
+ * then visibly move from the recorded estimate to the what-if. Gives up waiting after `timeoutMs` (no
+ * engine): the edits are applied anyway. Cancelled if another patient is opened meanwhile.
+ */
+export function afterBaseline(apply: () => void, timeoutMs = 2500): void {
+  const start = usePatientStore.getState();
+  if (start.recordedPrediction) {
+    apply();
+    return;
+  }
+  const token = `${start.mode}:${start.selectedPatientId ?? ''}`;
+  let done = false;
+  const finish = () => {
+    if (done) return;
+    done = true;
+    unsubscribe();
+    window.clearTimeout(timer);
+    const now = usePatientStore.getState();
+    if (`${now.mode}:${now.selectedPatientId ?? ''}` === token) apply();
+  };
+  const unsubscribe = usePatientStore.subscribe((s) => {
+    if (s.recordedPrediction) finish();
+  });
+  const timer = window.setTimeout(finish, timeoutMs);
 }
 
 export function openPatient(patient: CohortPatient, navigate: Navigate = hashNavigate): void {
@@ -129,17 +158,24 @@ export async function applyImportedProfile(profile: ImportedProfile, navigate: N
   const cohort = await cohortResource.get().catch(() => null);
   const patient = profile.patientId ? cohort?.patients.find((p) => p.id === profile.patientId) : undefined;
   const store = usePatientStore.getState();
-  if (patient) {
-    store.loadPatient(patient);
-    usePatientStore.getState().setFeatures(profile.features);
-    syncRoute(patient.id, navigate);
-  } else {
-    store.startBlank(profile.recorded);
-    usePatientStore.getState().setFeatures(profile.features);
-    syncRoute(null, navigate);
-  }
-  const edits = selectEditCount(usePatientStore.getState());
+  const recorded = patient ? patient.features : profile.recorded;
+  if (patient) store.loadPatient(patient);
+  else store.startBlank(profile.recorded);
+  syncRoute(patient ? patient.id : null, navigate);
+  afterBaseline(() => usePatientStore.getState().setFeatures(profile.features));
+  const edits = changedKeys(profile.features, recorded).length;
   return `${patient ? patient.id : 'Imported patient'}${edits > 0 ? ` with ${plural(edits, 'what-if change')}` : ''}`;
+}
+
+/** File contents as text (FileReader fallback for engines without `Blob.text`). */
+function readText(file: Blob): Promise<string> {
+  if (typeof file.text === 'function') return file.text();
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(String(reader.result ?? ''));
+    reader.onerror = () => reject(reader.error);
+    reader.readAsText(file);
+  });
 }
 
 /** Read, validate and apply a profile file; reports the outcome in a toast. */
@@ -148,7 +184,7 @@ export async function importProfileFile(file: File, navigate: Navigate = hashNav
     toast('That file is too large to be a patient profile (512 KB max)', 'warn');
     return false;
   }
-  const [{ index, defaults }, text] = await Promise.all([loadSchemaIndex(), file.text()]);
+  const [{ index, defaults }, text] = await Promise.all([loadSchemaIndex(), readText(file)]);
   const parsed = parseProfile(text, index, defaults);
   if (!parsed.ok) {
     toast(`Import failed: ${parsed.error}`, 'warn');
