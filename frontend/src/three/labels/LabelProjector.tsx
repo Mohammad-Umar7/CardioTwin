@@ -32,6 +32,8 @@ import {
 } from './labelRegistry';
 
 const DEFAULT_TARGETS = ['LAD', 'LCX', 'RCA'];
+/** Anchor window of the RCA's trunk (its visible acute-margin stretch included). */
+const RCA_ANCHOR_WINDOW: readonly [number, number] = [0.06, 0.85];
 /** Labels fade in LAD → LCX → RCA, 60 ms apart, once the coronaries ignite (V2 §5.14). */
 const REVEAL_STAGGER_MS = 60;
 /** Room kept free above the lanes: the context slot (selection chip / what-if pill, 12 + 32) or, in focus
@@ -115,7 +117,16 @@ export function LabelProjector() {
   const vessels = useVessels().data;
   const schema = useSchemaIndex();
   const targets = useMemo(() => schema?.vessels.map((t) => t.id) ?? DEFAULT_TARGETS, [schema]);
-  const tracks = useMemo(() => buildTracks(manifest, vessels, targets), [manifest, vessels, targets]);
+  // The RCA wraps the right AV groove: at home its proximal stretch hides behind the right atrial appendage,
+  // so its label may also anchor on the acute margin (proximal-distal 85 %) instead of flipping to "(behind)"
+  // depending on which candidate the chooser held last.
+  const tracks = useMemo(
+    () => [
+      ...buildTracks(manifest, vessels, targets.filter((t) => t !== 'RCA')),
+      ...buildTracks(manifest, vessels, targets.filter((t) => t === 'RCA'), RCA_ANCHOR_WINDOW, 16),
+    ],
+    [manifest, vessels, targets],
+  );
   const box = useMemo(() => heartBox(manifest), [manifest]);
   const corners = useMemo(() => {
     const { min, max } = box;
@@ -380,12 +391,14 @@ export function LabelProjector() {
       const order = targets.indexOf(r.id);
       const revealed = visible && now - s.revealAt >= order * REVEAL_STAGGER_MS;
       const isSelected = selected === r.id;
-      const dimmed = selected !== null && !isSelected;
+      // Hovering its row (or the vessel) brings a dimmed label up to full strength: the hover link is visible.
+      const hovered = viewer.hoveredStructure === r.id;
+      const dimmed = selected !== null && !isSelected && !hovered;
       const behind = !isSelected && r.facing < 0;
       // Covered by the closed chest or hidden (isolate, ghosting): the label fades with its vessel.
       const seen = Math.min(cover, r.solid);
       // "(behind)" labels stay legible (≥ 75 %): the chip text keeps its contrast on the dark stage.
-      const opacity = (!revealed ? 0 : isSelected ? 1 : dimmed ? 0.4 : behind ? 0.78 : 1) * seen;
+      const opacity = (!revealed ? 0 : isSelected || hovered ? 1 : dimmed ? 0.4 : behind ? 0.78 : 1) * seen;
 
       setStyle(label, 'transform', `translate3d(${at.left.toFixed(1)}px, ${at.top.toFixed(1)}px, 0)`);
       setStyle(label, 'opacity', fmt(opacity));
@@ -401,7 +414,7 @@ export function LabelProjector() {
       setAttr(line, 'y2', p.y.toFixed(1));
       setAttr(line, 'stroke-dasharray', dimmed || behind ? '3 3' : '');
       setAttr(line, 'data-selected', String(isSelected));
-      setStyle(line, 'opacity', fmt((!revealed ? 0 : isSelected ? 0.9 : dimmed || behind ? 0.35 : 0.6) * seen));
+      setStyle(line, 'opacity', fmt((!revealed ? 0 : isSelected || hovered ? 0.9 : dimmed || behind ? 0.35 : 0.6) * seen));
       const dot = dotEls.get(r.id);
       if (dot) {
         setAttr(dot, 'cx', p.x.toFixed(1));
