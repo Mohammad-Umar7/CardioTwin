@@ -446,8 +446,9 @@ export class AnatomyRig {
         this.ev = 0;
       } else moving = true;
     }
+    const heartOpen = windowProgress(this.e, [0.7, 1]);
     sceneRuntime.peel.e = this.e;
-    sceneRuntime.peel.heartOpen = windowProgress(this.e, [0.7, 1]);
+    sceneRuntime.peel.heartOpen = heartOpen;
 
     // Beat (rest frame).
     beatMatrix(this.frame, inp.beatV, this.beatM);
@@ -512,7 +513,10 @@ export class AnatomyRig {
       const isolateMember = entry.kind === 'myocardium' || selectedVessel;
       let solidT = 1;
       let ghostT = 0;
-      if (!layerVisible || (inp.isolate && sel && !isolateMember) || (entry.kind === 'cardiacVein' && !inp.showVeins)) {
+      // Valves and papillary muscles live inside the chambers: they appear as the heart opens or is cut
+      // (the pulmonary valve would otherwise poke through the BodyParts3D outflow tract).
+      const inner = (entry.kind === 'valve' || entry.kind === 'papillary') && heartOpen < 0.02 && !inp.section;
+      if (!layerVisible || inner || (inp.isolate && sel && !isolateMember) || (entry.kind === 'cardiacVein' && !inp.showVeins)) {
         solidT = 0;
       } else if (entry.kind === 'skin') {
         solidT = 0;

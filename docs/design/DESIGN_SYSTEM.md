@@ -814,7 +814,7 @@ The owner asked for anatomy that "looks real, super close to real human anatomy"
 |---|---|
 | Only the coronary targets carry risk colour | Coronary targets keep `color = emissive = LUT(p)` in both looks, one colour per target, root to tip, animated through p. |
 | The myocardium never competes with the ramp | The muscle red is desaturated and dark (`#5A2622`, OKLab L ≈ 0.33, chroma ≈ 0.07), below the p = 0 vessel's lightness and far from the coral/apricot chroma. A baked albedo, when present, is clamped to 72 % saturation. The myocardium is never emissive. |
-| Glow means high risk | The emissive gain follows `0.3·k + 2.1·smoothstep(0.5, 1, p)`. The floor k is 0.45 in Realistic so glossy low-risk tubes still read as their hue. The bloom threshold (0.80) is crossed from p ≈ 0.70 only. |
+| Glow means high risk | The emissive gain follows `0.3·k + 1.8·smoothstep(0.5, 1, p)`. The floor k is 0.45 in Realistic so glossy low-risk tubes still read as their hue. The bloom threshold (0.80) is crossed from p ≈ 0.70 only. |
 | Anatomical colour is never read as risk colour | Arteries use a pale adventitia (`#9C8274`), not red. Systemic veins use a dusty atlas blue (`#34405C`), darker and greyer than the ramp's low end and never emissive. Cardiac veins stay hidden by default ("not modelled"). |
 | Territory tint | Unchanged: `mix(albedo, Σ wᵢ·LUT(pᵢ), strength)`. The mode is Off · Selected · All, with 0.10 + 0.25·p in Selected mode and 0.10 + 0.30·Σwp in All mode, faded where COLOR_0's neutral weight dominates (atria). |
 | Pending or stale state | Achromatic `#4B5260`, exactly as §2.2 rule 6. |

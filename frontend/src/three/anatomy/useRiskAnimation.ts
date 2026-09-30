@@ -20,7 +20,7 @@ const STALE_AFTER_S = 0.45;
  * threshold (0.80, linear HDR) is crossed only around p ≈ 0.70 — high and very-high vessels glow, the rest
  * read by hue. Never on the myocardium.
  */
-export const EMISSIVE = { floor: 0.3, gain: 2.1, onset: 0.5 } as const;
+export const EMISSIVE = { floor: 0.3, gain: 1.8, onset: 0.5 } as const;
 export const emissiveFor = (p: number, floorScale = 1) => {
   const t = Math.min(1, Math.max(0, (p - EMISSIVE.onset) / (1 - EMISSIVE.onset)));
   return EMISSIVE.floor * floorScale + EMISSIVE.gain * t * t * (3 - 2 * t);
