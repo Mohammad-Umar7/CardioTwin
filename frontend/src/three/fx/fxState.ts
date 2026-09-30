@@ -146,6 +146,17 @@ export class IgnitionTrigger {
 
 // ------------------------------------------------------------------------------------ frame state
 
+/** Default vessel targets while the schema loads (CONTRACTS target order). */
+export const DEFAULT_VESSEL_TARGETS = ['LAD', 'LCX', 'RCA'] as const;
+
+/** Slot table for the schema's vessel targets: slot 0 = not predicted, then schema order. */
+export function targetSlots(vesselIds: readonly string[] = DEFAULT_VESSEL_TARGETS): string[] {
+  const slots = ['', ...vesselIds].slice(0, MAX_TARGET_SLOTS);
+  while (slots.length < MAX_TARGET_SLOTS) slots.push('');
+  return slots;
+}
+
+
 export interface FxFrameState {
   /** Slot → target id ('' for slot 0). */
   targets: string[];
@@ -182,7 +193,7 @@ export interface FxFrameState {
 export function createFxFrameState(): FxFrameState {
   const n = MAX_TARGET_SLOTS;
   return {
-    targets: Array.from({ length: n }, () => ''),
+    targets: targetSlots(),
     p: new Float32Array(n),
     available: new Float32Array(n),
     dim: new Float32Array(n),
@@ -203,6 +214,18 @@ export function createFxFrameState(): FxFrameState {
 
 /** The scene's fx state (one canvas per page). */
 export const fxFrame: FxFrameState = createFxFrameState();
+
+let ignitionRequested = false;
+/** Replay the ignition sweep on the next frame (tour steps, demos). No-op under reduced motion. */
+export function replayIgnition(): void {
+  ignitionRequested = true;
+}
+/** Driver side: consume a pending replay request. */
+export function takeIgnitionRequest(): boolean {
+  const requested = ignitionRequested;
+  ignitionRequested = false;
+  return requested;
+}
 
 /** Slot of a target id in `fxFrame.targets` (0 when unknown / not predicted). */
 export function slotOf(targets: readonly string[], target: string | null | undefined): number {
