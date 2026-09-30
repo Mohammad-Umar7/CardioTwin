@@ -30,12 +30,13 @@ export function CanvasHud() {
       <div className="pointer-events-none absolute inset-x-0 top-3 z-panels flex justify-center [&>*]:pointer-events-auto">
         <SelectionChip />
       </div>
+      {/* The canvas column is narrow here: the legend sits top-left, clear of the toolbar. */}
+      {!compact && (
+        <div className="absolute left-3 top-3 z-panels [&_[data-region=legend-expanded]]:bottom-auto [&_[data-region=legend-expanded]]:top-[calc(100%+8px)]">
+          <LegendChip />
+        </div>
+      )}
       <div className="pointer-events-none absolute inset-x-3 bottom-3 z-panels flex items-end justify-center [&>*]:pointer-events-auto">
-        {!compact && (
-          <div className="absolute bottom-0 left-0 max-[1279.98px]:hidden">
-            <LegendChip />
-          </div>
-        )}
         <CanvasToolbar compact={compact} />
       </div>
       <FirstRunHint />
