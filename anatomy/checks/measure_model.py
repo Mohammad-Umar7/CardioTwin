@@ -87,7 +87,7 @@ except ImportError:  # pragma: no cover
     skeletonize = None
 
 REPO = Path(os.environ.get("CARDIOTWIN_REPO") or Path(__file__).resolve().parents[2]).resolve()
-PUBLIC = REPO / "frontend" / "public" / "anatomy"
+PUBLIC = Path(os.environ["CARDIOTWIN_PUBLIC_DIR"]).resolve() if os.environ.get("CARDIOTWIN_PUBLIC_DIR") else REPO / "frontend" / "public" / "anatomy"
 GLB = PUBLIC / "cardiotwin_anatomy.glb"
 RAW_GLB = REPO / "anatomy" / "build" / "cardiotwin_anatomy.raw.glb"
 DECODER = REPO / "anatomy" / "scripts" / "decode_glb.mjs"
@@ -146,7 +146,8 @@ def decode_with_node(glb: Path) -> tuple[dict[str, Mesh], str]:
             meshes[n] = Mesh(n, V, F, N, C, e.get("extras") or {}, A)
     finally:
         shutil.rmtree(out, ignore_errors=True)
-    return meshes, f"{glb.relative_to(REPO)} (decoded with anatomy/scripts/decode_glb.mjs)"
+    shown = glb.relative_to(REPO) if glb.resolve().is_relative_to(REPO) else glb
+    return meshes, f"{shown} (decoded with anatomy/scripts/decode_glb.mjs)"
 
 
 _CTYPE = {5120: np.int8, 5121: np.uint8, 5122: np.int16, 5123: np.uint16, 5125: np.uint32, 5126: np.float32}
@@ -1140,7 +1141,9 @@ class Model:
             out[-1]["V"] = cv.V[(lab == vj["codes"]["GCV"]) | (lab == vj["codes"]["AIV"])]
         if by("MCV"):
             out.append(piece("MCV", main("MCV")[:1], by("MCV"), vj["codes"]["MCV"]))
-        for lb in ("PVLV", "ACV"):
+        for lb in ("PVLV", "ACV", "LMV", "SCV"):
+            if lb not in vj["codes"]:
+                continue
             roots = [j for j in by(lb) if not segs[j].get("side")]
             for rj in roots:
                 members = [j for j in by(lb) if j == rj or self._vein_ancestor(segs, j, rj)]
@@ -1268,6 +1271,49 @@ class Model:
         self.aha_theta = th
         return seg
 
+    def wall_thickness(self) -> np.ndarray:
+        """Myocardial thickness at every heart-wall vertex: distance marched along the inward vertex normal until it
+        leaves the (0.8 mm, dilated) occupancy grid of the wall."""
+        if hasattr(self, "_thick"):
+            return self._thick
+        ha, hp = self.m["Heart_Wall_Anterior"], self.m["Heart_Wall_Posterior"]
+        N = np.vstack([ha.N, hp.N])
+        N = N / np.maximum(np.linalg.norm(N, axis=1, keepdims=True), 1e-12)
+        # occupancy of the wall SURFACE without the flat caps of the long-axis cut (they would stop every inward ray
+        # at the cut plane): march inwards until the ray leaves the start surface, then until it meets the opposite
+        # surface of the wall
+        cp = self.manifest["heart"]["cut_plane"]
+        pc, nc = np.array(cp["point"], float), unit(np.array(cp["normal"], float))
+        on = np.abs((self.H - pc) @ nc) < 2e-4
+        Fnc = self.HF[~on[self.HF].all(axis=1)]
+        occ_nc = ndimage.binary_dilation(self.H_grid.rasterize(dense_points(self.H, Fnc, 0.008 * 0.7)))
+        th = np.full(len(self.H), 0.3)  # scene units: 30 mm = not found
+        left = np.zeros(len(self.H), dtype=bool)
+        done = np.zeros(len(self.H), dtype=bool)
+        for d in np.arange(0.004, 0.3, 0.004):
+            occ_ = self.H_grid.lookup(occ_nc, self.H - N * d)
+            hit = occ_ & left & ~done
+            th[hit] = d
+            done |= hit
+            left |= ~occ_
+        self._thick = th
+        return th
+
+    def rv_free_wall(self) -> np.ndarray:
+        """Right-ventricular free wall (heart-wall vertices): thin (< 6 mm) ventricular wall in the septal sector of the
+        LV frame (AHA angle 345-140 deg: between the anterior and posterior interventricular grooves), below the
+        mitral hinge. The interventricular septum there is thick; the RV free wall wraps it at a similar distance from
+        the LV axis in this heart, so a radius rule alone keeps it in the 'LV region'."""
+        if hasattr(self, "_rvfw"):
+            return self._rvfw
+        c_ma = self.rings["MA"].c
+        a = unit(self.apex - c_ma)
+        t = (self.H - c_ma) @ a / np.linalg.norm(self.apex - c_ma)
+        th = self.aha_theta
+        sector = (th >= 345) | (th <= 140)
+        self._rvfw = sector & (self.wall_thickness() < 0.06) & (t > 0.05) & (t < 1.0)
+        return self._rvfw
+
     def lv_mask(self, P: np.ndarray) -> np.ndarray:
         """LV myocardium sampling region: 0 <= t <= 1 and within the LV radius (lateral-wall based)."""
         c_ma = self.rings["MA"].c
@@ -1286,7 +1332,10 @@ class Model:
             if sel.sum() > 20:
                 Rt[(t >= bins[i]) & (t < bins[i + 1])] = np.quantile(rho[sel], 0.95) * 1.1
         Rt = np.where(np.isnan(Rt), np.nanmax(Rt), Rt)
-        return (t >= 0) & (t <= 1.0) & (rho <= Rt)
+        out = (t >= 0) & (t <= 1.0) & (rho <= Rt)
+        if P is self.H:  # the right-ventricular free wall is not LV myocardium
+            out &= ~self.rv_free_wall()
+        return out
 
     def epi_vertex_of(self, P: np.ndarray) -> np.ndarray:
         d, _ = self.epi_tree.query(P)
@@ -1979,7 +2028,10 @@ def run_checks(M: Model, yaml_checks: dict) -> list[Check]:
 
     c = new("COR-19")
     c.cond("PDA parent RCA", M.v["RCA_PDA"]["parent"] == "RCA", "RCA_PDA.parent == RCA", f"parent = {M.v['RCA_PDA']['parent']}")
-    c.cond("no L-PDA/L-PLB labels", True, "no _SEGMENT 15/18", "no _SEGMENT attribute present")
+    segvals = np.concatenate([np.round(mm_.A["seg"]) for n_, mm_ in m.items() if n_.startswith("Coronary_") and "seg" in mm_.A]) if any("seg" in mm_.A for n_, mm_ in m.items() if n_.startswith("Coronary_")) else np.zeros(0)
+    bad_lab = int(np.isin(segvals, [15, 18]).sum())
+    c.cond("no L-PDA/L-PLB labels", len(segvals) > 0 and bad_lab == 0, "no _SEGMENT 15/18",
+           f"{bad_lab} of {len(segvals)} coronary vertices carry _SEGMENT 15 or 18" if len(segvals) else "no _SEGMENT attribute present")
     c.band("lcx_end_to_crux", float(np.linalg.norm(lcx.P[-1] - crux)), 0.1, None)
     c.cond("dominance declared right", "right-dominant" in json.dumps(M.manifest.get("territories", {})), "manifest declares right dominance", "territories.interpretation mentions right-dominant")
 
@@ -1991,7 +2043,32 @@ def run_checks(M: Model, yaml_checks: dict) -> list[Check]:
         ss, rr = sg.s[sel], sg.r[sel]
         return [float(2 * np.median(rr[(ss >= s_end * a) & (ss <= s_end * b)])) for a, b in ((0, 1 / 3), (1 / 3, 2 / 3), (2 / 3, 1))]
 
-    dl, dx_, dr = thirds(lad), thirds(lcx), thirds(rca, s_crux)
+    def by_scct(vid, codes):
+        """Median diameter over the trunk points labelled with each SCCT number (vessels.json labels); a label that
+        is absent falls back to the trunk thirds."""
+        raw0 = M.v[vid]["raw"]["segments"][0]
+        sg = M.v[vid]["segments"][0]
+        out = []
+        for code in codes:
+            if isinstance(code, tuple):  # (scct, half) -> first / second half of that labelled range
+                cc, half = code
+                rng = [(L["from"], L["to"]) for L in raw0.get("labels", []) if L["scct"] == cc]
+                if not rng:
+                    return None
+                a_, b_ = rng[0]
+                mid_ = (a_ + b_) // 2
+                a_, b_ = (a_, mid_) if half == 0 else (mid_, b_)
+            else:
+                rng = [(L["from"], L["to"]) for L in raw0.get("labels", []) if L["scct"] == code]
+                if not rng:
+                    return None
+                a_, b_ = rng[0]
+            out.append(float(2 * np.median(sg.r[a_:max(a_ + 1, b_)])))
+        return out
+
+    dl = by_scct("LAD", (6, 7, 8)) or thirds(lad)
+    dx_ = by_scct("LCX", (11, (13, 0), (13, 1))) or thirds(lcx)
+    dr = by_scct("RCA", (1, 2, 3)) or thirds(rca, s_crux)
     c.band("d_pLAD", dl[0], 0.022, 0.049, typical=0.035, fmt="{:.4f}")
     c.band("d_mLAD", dl[1], 0.011, 0.037, typical=0.024, fmt="{:.4f}")
     c.band("d_dLAD", dl[2], 0.006, 0.027, typical=0.016, fmt="{:.4f}")
@@ -2032,7 +2109,7 @@ def run_checks(M: Model, yaml_checks: dict) -> list[Check]:
                     viol_c.append(f"{vid}[{j}]")
     c.cond("taper (growth <= 0.003 u / 0.1 u)", not viol_g, "no growth window violation", f"{len(viol_g)} segments grow: " + ", ".join(viol_g[:6]))
     c.cond("child < parent", not viol_c, "child d0 < parent d", f"{len(viol_c)} children not narrower: " + ", ".join(viol_c[:6]))
-    c.note("trunk thirds used (no SCCT labels); RCA thirds over ostium -> crux; the growth rule skips the first 6 mm of each segment (vessels.json bridge onto the parent)")
+    c.note("proximal / mid / distal = the SCCT-labelled trunk ranges (LAD 6/7/8, LCX 11 and the two halves of 13, RCA 1/2/3; trunk thirds only where a label is missing); the growth rule skips the first 6 mm of each segment (vessels.json bridge onto the parent)")
 
     c = new("COR-21")
     tot_in, tot, cav_n, pen_list = 0, 0, 0, []
@@ -2057,7 +2134,19 @@ def run_checks(M: Model, yaml_checks: dict) -> list[Check]:
             deep_txt.append(f"{vid} trunk {int(d_.sum())} samples ({d_.sum() * 0.8:.0f} mm) deeper than 0.5 mm, between s = {sg.s[d_].min() / MM:.0f} and {sg.s[d_].max() / MM:.0f} mm")
     if deep_txt:
         c.note("; ".join(deep_txt))
-    c.note("no epicardial-fat layer is modelled; the band tests the vessel-to-epicardium gap only")
+    if "EpicardialFat_Anterior" in m:
+        fat_tm = [m[n_].tm for n_ in ("EpicardialFat_Anterior", "EpicardialFat_Posterior") if n_ in m]
+        emb = []
+        for vid in ("LAD", "LCX", "RCA"):
+            sg = M.v[vid]["segments"][0]
+            sel_ = sg.s <= (2 / 3) * sg.L
+            ins_ = np.zeros(int(sel_.sum()), dtype=bool)
+            for ft in fat_tm:
+                ins_ |= ft.contains(sg.P[sel_])
+            emb.append((vid, float(ins_.mean())))
+        M.fat_embedding = emb
+        c.note("centreline inside the epicardial fat over the proximal two-thirds: " + ", ".join(f"{v} {f:.0%}" for v, f in emb))
+    c.note("the band tests the vessel-to-epicardium gap (the vessels lie in the epicardial fat, above the myocardium)")
 
     c = new("COR-22")
     gj = glb_json(GLB) if GLB.exists() else {}
@@ -2107,6 +2196,19 @@ def run_checks(M: Model, yaml_checks: dict) -> list[Check]:
         c.band("share_LCX", sh[1], 0.20, 0.35, "", typical=0.288)
         c.band("share_RCA", sh[2], 0.20, 0.30, "", typical=0.264)
         c.note("majority by segment: " + " ".join(maj_txt))
+        c.note(f"LV region excludes the right-ventricular free wall ({int(M.rv_free_wall().sum())} thin septal-sector vertices, see Model.rv_free_wall)")
+        c = new("COR-25")
+        rvw = M.rv_free_wall() & M.epi_vertex & (wsum > 0.05)
+        if rvw.any():
+            lad_d = cKDTree(tr["LAD"].P).query(H[rvw])[0]
+            dom = arg[rvw]
+            c.band("RCA-dominant fraction", float((dom == 2).mean()), 0.60, None, "")
+            far = lad_d > 0.015
+            c.band("LAD-dominant fraction beyond 15 mm of the LAD", float((dom[far] == 0).mean()) if far.any() else 0.0, None, 0.10, "")
+            near = lad_d <= 0.030
+            c.note(f"{int(rvw.sum())} epicardial RV free-wall vertices; within 30 mm of the LAD: {float((dom[near] == 0).mean()) if near.any() else 0:.0%} LAD-dominant")
+        else:
+            c.absent = True
         c.note(f"shares normalised over the weighted channels; un-normalised weight coverage of the LV region {float((wsum[lvm] * A[lvm]).sum() / A[lvm].sum()):.2f}")
 
     # ------------------------------------------------------------------ VEINS
@@ -2127,7 +2229,7 @@ def run_checks(M: Model, yaml_checks: dict) -> list[Check]:
     c.cond("AIV/GCV", GCV is not None, "GCV/AIV present", ok_str(GCV is not None))
     c.cond("MCV", MCV is not None, "MCV present", ok_str(MCV is not None))
     c.cond("PVLV", "PVLV" in byname, "PVLV present", ok_str("PVLV" in byname), severity="soft")
-    c.cond("LMV", "LMV" in byname, "left marginal vein present (66.7%)", "absent: BodyParts3D has no left marginal vein part", severity="soft")
+    c.cond("LMV", "LMV" in byname, "left marginal vein present (66.7%)", "present (runs with OM1, drains into the GCV)" if "LMV" in byname else "absent: BodyParts3D has no left marginal vein part", severity="soft")
     c.note(f"CardiacVeins = {len(vs)} labelled pieces: " + ", ".join(f"{v['name']} ({len(v['V'])} v, L {v['L'] / MM:.0f} mm)" for v in vs) + f"; labels from {M.vein_label_source}; the small cardiac vein (FMA4714) is listed in BodyParts3D but its mesh is not published")
 
     c = new("VEN-02")
@@ -2259,7 +2361,16 @@ def run_checks(M: Model, yaml_checks: dict) -> list[Check]:
             k = int(np.argmin(dq_all))
             c.note(f"PVLV piece joins at s = {sp[iq_all[k]] / MM:.0f} mm (gap {dq_all[k] / MM:.1f} mm)")
         c.band("s_AIV", float(sp[-1]), 0.67, 1.64)
-        c.cond("LMV", False, "s_LMV 0.41-1.13 u", "no left marginal vein", severity="soft")
+        if byname.get("LMV"):
+            dq_all, iq_all = ptree.query(byname["LMV"][0]["P"])
+            s_lmv = float(sp[iq_all[int(np.argmin(dq_all))]])
+            c.band("s_LMV", s_lmv, 0.41, 1.13, severity="soft")
+            M.s_lmv = s_lmv
+        else:
+            c.cond("LMV", False, "s_LMV 0.41-1.13 u", "no left marginal vein", severity="soft")
+        if MCV:
+            M.s_mcv = float(sp[ptree.query(MCV["sk"].pos)[1][int(np.argmin(ptree.query(MCV["sk"].pos)[0]))]])
+            M.mcv_join = path[ptree.query(MCV["sk"].pos)[1][int(np.argmin(ptree.query(MCV["sk"].pos)[0]))]]
         c.note(f"CS->GCV gap {gapCG / MM:.1f} mm; MCV length {MCV['L'] / MM:.0f} mm" if MCV else "")
         if MCV:
             c.band("L_MCV", MCV["L"], 0.35, 1.15)
@@ -2289,10 +2400,18 @@ def run_checks(M: Model, yaml_checks: dict) -> list[Check]:
     pvV = weld(m["GreatVessel_PulmonaryVeins"].V, m["GreatVessel_PulmonaryVeins"].F)[0]
     c.band("min dist(veins, pulmonary veins)", float(cKDTree(pvV).query(allVein)[0].min()), 0.005, None)
     ost = getattr(M, "cs_ostium", None)
-    cand = allVein if ost is None else allVein[np.linalg.norm(allVein - ost, axis=1) > 0.08]
+    # drainage ostia open into the right atrium through its wall: the CS ostium and the anterior cardiac veins'
+    # drainage ends are excluded within 6 mm (VEN-12 checks that they meet the wall and that no cap floats)
+    vj_ = json.loads((PUBLIC / "vessels.json").read_text(encoding="utf-8")).get("veins", {})
+    ostia_ = [np.asarray(sg["points"][0], float) for sg in vj_.get("segments", []) if sg.get("parent") is None]
+    if ost is not None:
+        ostia_.append(ost)
+    cand = allVein
+    for o_ in ostia_:
+        cand = cand[np.linalg.norm(cand - o_, axis=1) > 0.06]
     ins = M.inside_myocardium(cand)
     depth = trimesh.proximity.closest_point(M.H_tm, cand[ins])[1] if ins.any() else np.zeros(1)
-    c.band("max penetration into myocardium (excl. 8 mm around the CS ostium)", float(depth.max()), None, 0.005)
+    c.band("max penetration into myocardium (excl. 6 mm around each drainage ostium)", float(depth.max()), None, 0.005)
     c.note(f"{int(ins.sum())} vein vertices lie inside the heart-wall solid; 95th-percentile depth {np.percentile(depth, 95) / MM:.1f} mm")
     ep = []
     for vv in vs:
@@ -2316,7 +2435,7 @@ def run_checks(M: Model, yaml_checks: dict) -> list[Check]:
             if len(q):
                 below.append(p[1] < q[:, 1].min() + 0.01)
         c.cond("below the left auricle", (np.mean(below) >= 0.8) if below else True, "Y below the auricle", f"{sum(below)}/{len(below)} overlapped samples below the auricle proxy (atrial epicardium left of the MA)")
-    c.cond("SCV", False, "small cardiac vein (optional)", "not modelled (FMA4714 has no published BodyParts3D mesh; absent or tiny in ~60 %)", severity="soft")
+    c.cond("SCV", "SCV" in byname, "small cardiac vein (optional)", "present (inferior RV, drains into the CS beside its ostium)" if "SCV" in byname else "not modelled (FMA4714 has no published BodyParts3D mesh; absent or tiny in ~60 %)", severity="soft")
     acv = byname.get("ACV", [])
     if acv:
         AV_ = acv[0]["V"]
@@ -2328,6 +2447,39 @@ def run_checks(M: Model, yaml_checks: dict) -> list[Check]:
         c.band("ACV-RCA crossing distance", dca, None, 0.03)
         dcs = float(cKDTree(CS["V"]).query(AV_)[0].min()) if CS else float("nan")
         c.band("ACV clear of the CS", dcs, 0.05, None)
+
+    c = new("VEN-12")
+    vjs = json.loads((PUBLIC / "vessels.json").read_text(encoding="utf-8")).get("veins", {}).get("segments", [])
+    if vjs:
+        roots = [sg for sg in vjs if sg.get("parent") is None]
+        gaps_o = []
+        for sg in roots:
+            p0 = np.asarray(sg["points"][0], float)
+            sdo, _ = M.sd_epi(p0[None])
+            gaps_o.append((sg["label"], float(sdo[0])))
+        c.band("max ostium centre above the epicardium", max(g for _, g in gaps_o), None, 0.005)
+        starts = np.array([sg["points"][0] for sg in vjs], float)
+        # distal tips: segment ends that do not continue into another segment (CS -> GCV -> AIV are one course)
+        tips = [sg for sg in vjs if np.linalg.norm(starts - np.asarray(sg["points"][-1], float), axis=1).min() > 0.003]
+        tipP = np.array([sg["points"][-1] for sg in tips], float)
+        tipR = np.array([sg["radius"][-1] for sg in tips], float)
+        sdt, _ = M.sd_epi(tipP)
+        c.band("max tip wall gap (sd - r)", float((sdt - tipR).max()), None, 0.005)
+        c.band("max tip diameter", float(2 * tipR.max()), None, 0.008)
+        c.note("ostia (drainage ends that open into the right atrium): " + ", ".join(f"{lb} {g / MM:+.1f} mm" for lb, g in gaps_o)
+               + f"; {len(tipP)} distal tips, median tip diameter {2 * np.median(tipR) / MM:.2f} mm")
+    else:
+        c.absent = True
+
+    c = new("COR-26")
+    ost_ = getattr(M, "cs_ostium", None)
+    mj = getattr(M, "mcv_join", None)
+    if ost_ is not None and mj is not None:
+        c.band("|crux - CS ostium|", float(np.linalg.norm(crux - ost_)), None, 0.15)
+        c.band("|crux - MCV junction|", float(np.linalg.norm(crux - mj)), None, 0.15)
+        c.band("|CS ostium - MCV junction|", float(np.linalg.norm(ost_ - mj)), None, 0.15)
+    else:
+        c.absent = True
 
     # ------------------------------------------------------------------ COLOUR
     gj = glb_json(GLB) if GLB.exists() else {}
@@ -2581,7 +2733,7 @@ FIXES: dict[str, str] = {
     "POS-11": "No change.",
     "VLV-02": "No change.",
     "VLV-04": "Source geometry: the tricuspid hinge is ~1 cm more basal than the mitral hinge (should be 0-15 mm more apical). Translate Valve_Tricuspid and its hinge region ~12 mm along u_ba, or accept and document as a BodyParts3D limitation.",
-    "VLV-05": "BodyParts3D has no aortic valve and the aorta ends in an oblique cap ~29 mm above the mitral valve: loft an aortic root (annulus + three sinuses) from the GreatVessel_Aorta cap down to the anterior mitral hinge, add a Valve_Aortic node (3 cusps), re-derive AoV from it.",
+    "VLV-05": "synthesize.py build_aorta: ROOT_TO_MITRAL_MM / ROOT_MOVE_MAX_MM (the root is translated down the outflow tract to the anterior mitral hinge; the wall yields to it).",
     "VLV-06": "Pulmonary hinge ring 31 mm (sanity band 17-25 mm): scale Valve_Pulmonary radially ~0.8 about its axis, or accept (low-grade reference band). Tricuspid hinge should be >= mitral: widen the tricuspid ring or accept.",
     "GV-01": "Follows from VLV-05: extending the truncated root below the current cap lengthens the ascending aorta to ~5 cm.",
     "GV-02": "Aorta is a uniform 22 mm tube (cadaveric collapse, no sinus bulge): offset the ascending aorta wall outward by ~5 mm and sculpt a sinus-of-Valsalva bulge (D ~32 mm) over the first 2 cm above the annulus before the voxel remesh.",
@@ -2605,8 +2757,11 @@ FIXES: dict[str, str] = {
     "COR-21": "Coronary trunks are sunk into the heart wall (proximal RCA inside the right auricle, LAD/LCX origins under/inside the left auricle up to ~3 cm deep): offset each coronary tube along the epicardial normal so its centreline sits r + 0.5-1 mm outside H_epi, carve the auricle where it swallows the vessel, and add an epicardial-fat shell in the grooves.",
     "COR-22": "Implement CONTRACTS v1.1 7.1: extract_centerlines.py assigns scct/code per segment with the SCCT 2014 boundaries (REFERENCE 5.9), build_anatomy.py bakes a _SEGMENT vertex attribute on every Coronary_* mesh by nearest-centreline lookup, make_manifest.py adds manifest.segments[].",
     "COR-23": "See COR-24 (segment 2 is only just LAD-majority).",
-    "COR-24": "Territories are pure nearest-artery softmax, so RCA_PL/RCA_Marginal claim 48% of the LV: blend the softmax with the AHA-17 standard map (Cerqueira 2002, Ortiz-Perez 2008 specificities), split the septum by the septal perforators (anterior 2/3 LAD, posterior 1/3 RCA) and cap the RCA_PL reach on the inferolateral wall.",
-    "VEN-01": "CS is collapsed (4.7 mm): offset the CS wall outward to ~9-10 mm; synthesise a left marginal vein alongside OM1 (not in BodyParts3D).",
+    "COR-24": "build_anatomy.py territories: AHA-17 standard_blend alpha / target_shares (IPF re-balancing on the LV region, RV free wall excluded) and the septal split width.",
+    "COR-25": "config territories.rv_free_wall: lad_strip_mm / thin_mm (the LAD keeps a strip beside the anterior interventricular groove, the rest of the RV free wall is RCA).",
+    "COR-26": "coronary.py crux (TA groove point nearest the PDA head) and veins.py CS ostium target / MCV junction (s = 9 mm on the CS).",
+    "VEN-12": "veins.py: ostia start inside the RA wall (flat cap hidden), taper() thins every tip to TIP_MM, clear_wall seats tips on the wall.",
+    "VEN-01": "veins.py: the lateral BodyParts3D 'posterior LV vein' piece is labelled the left marginal vein (LMV, _VEIN 7).",
     "VEN-04": "Move the coronary sinus 5-8 mm toward the atrium (-u_ba) so >= 75% of it lies on the LA side of the mitral hinge (it is 73% on the ventricular side now).",
     "VEN-05": "Nudge the CS ostium ~5 mm anterior so it lies in front of the IVC orifice (Koch's triangle base).",
     "VEN-06": "Follows from COR-10/VEN-04: once the LCX follows the AV groove and the CS moves atrially, the LCX lies between CS and mitral annulus.",

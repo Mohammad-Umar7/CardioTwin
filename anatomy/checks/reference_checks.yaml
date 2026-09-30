@@ -1063,6 +1063,35 @@ checks:
       - "https://www.jacc.org/doi/10.1016/j.jcmg.2008.01.014"
       - "https://www.ahajournals.org/doi/10.1161/JAHA.124.039013"
 
+  - id: COR-25
+    title: The right-ventricular free wall is RCA territory; the LAD supplies only a strip beside the anterior groove
+    structures: [Heart_Wall_Anterior, Heart_Wall_Posterior]
+    kind: relation
+    severity: soft
+    statement: >-
+      The RV free wall is supplied by the RCA (acute-marginal, RV and conus branches); the LAD supplies a strip about
+      10-15 mm wide beside the anterior interventricular groove (and the anterior septum). RV infarction accompanies
+      proximal RCA occlusion.
+    metric: "epicardial RV free-wall vertices (thin wall in the septal sector, Model.rv_free_wall): argmax COLOR_0"
+    expect:
+      RCA-dominant fraction: {min: 0.60}
+      LAD-dominant fraction beyond 15 mm of the LAD: {max: 0.10}
+    source:
+      - "https://www.ahajournals.org/doi/10.1161/hc0402.102975"
+  - id: COR-26
+    title: The crux, the coronary-sinus ostium and the middle-cardiac-vein junction coincide
+    structures: [Coronary_RCA_PDA, CardiacVeins]
+    kind: relation
+    severity: soft
+    statement: >-
+      The PDA arises at the crux, where the posterior interventricular groove meets the AV groove; the coronary sinus
+      opens into the right atrium just above it and receives the middle cardiac vein within about 1 cm of its ostium.
+    metric: "pairwise distances between the PDA origin, the CS ostium and the point where the MCV joins the CS/GCV path"
+    expect:
+      pairwise distance: {max: 0.15}
+    source:
+      - "https://pubmed.ncbi.nlm.nih.gov/17557896/"
+
 # ---------------------------------------------------------------------------------------------
 # CARDIAC VEINS (CardiacVeins is a single mesh today; checks use its vertices or its skeleton)
 # ---------------------------------------------------------------------------------------------
@@ -1288,6 +1317,22 @@ checks:
       - "https://www.kenhub.com/en/library/anatomy/great-cardiac-vein"
       - "https://www.kenhub.com/en/library/anatomy/small-cardiac-vein"
       - "https://www.kenhub.com/en/library/anatomy/anterior-cardiac-veins"
+
+  - id: VEN-12
+    title: Venous ostia meet the atrial wall and distal tips thin out on the epicardium
+    structures: [CardiacVeins]
+    kind: shape
+    severity: soft
+    statement: >-
+      The coronary sinus and the anterior cardiac veins open through the right-atrial wall (no end cap floating off
+      the wall); tributaries taper to under 1 mm and end on the epicardium.
+    metric: "sd_epi of each drainage end (<= 0.5 mm); max over distal tips of sd_epi - r (<= 0.5 mm); max tip diameter (<= 0.8 mm)"
+    expect:
+      ostium sd: {max: 0.005}
+      tip wall gap: {max: 0.005}
+      tip diameter: {max: 0.008}
+    source:
+      - "https://pubmed.ncbi.nlm.nih.gov/17557896/"
 
 # ---------------------------------------------------------------------------------------------
 # COLOUR CONVENTIONS (glTF baseColorFactor, or the mean of baseColorTexture, converted to HSV)

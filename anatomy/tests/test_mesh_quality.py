@@ -119,9 +119,13 @@ def test_coronary_centrelines_sit_on_the_epicardium(meshes):
     wall = cKDTree(np.concatenate([meshes[n]["V"] for n in ("Heart_Wall_Anterior", "Heart_Wall_Posterior")]))
     for v in vessels["vessels"]:
         pts = np.concatenate([np.array(s["points"]) for s in v["segments"]])
+        r = np.concatenate([np.array(s["radius"]) for s in v["segments"]])
         d, _ = wall.query(pts)
-        limit = 0.06 if "SEPTAL" in v["id"] else 0.02  # septal perforators run inside the septum
-        assert np.median(d) < limit, f"{v['id']}: median {np.median(d) * 100:.1f} mm from the wall"
+        # the gap between the vessel wall and the nearest heart-wall vertex (a 4 mm left main cannot have its axis
+        # within 2 mm of the epicardium); septal perforators run inside the septum
+        gap = d - r
+        limit = 0.06 if "SEPTAL" in v["id"] else 0.02
+        assert np.median(gap) < limit, f"{v['id']}: median {np.median(gap) * 100:.1f} mm from the wall"
 
 
 def test_every_coronary_node_is_covered_by_a_centreline(meshes):
