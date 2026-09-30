@@ -342,6 +342,34 @@ def support_cap(V: np.ndarray, around: np.ndarray, axis_hint: np.ndarray, max_ti
     return n, near[near @ n >= (near @ n).max() - tol]
 
 
+def support_cap_area(tm: trimesh.Trimesh, around: np.ndarray, axis_hint: np.ndarray, max_tilt: float = 75.0,
+                     tol: float = 0.004, radius: float = 0.3) -> tuple[np.ndarray, np.ndarray]:
+    """Flat end cap of a tube by AREA: the supporting plane (outward normal within max_tilt of axis_hint) whose
+    coplanar faces cover the largest area near ``around``. A decimated flat cap keeps few vertices but all of
+    its area, so this is robust where the vertex count of :func:`support_cap` is not."""
+    fc = tm.triangles_center
+    sel = np.linalg.norm(fc - around, axis=1) < radius
+    F = tm.faces[sel]
+    A = tm.area_faces[sel]
+    V = tm.vertices
+    k = 4000
+    i = np.arange(k) + 0.5
+    phi, th = np.arccos(1 - 2 * i / k), np.pi * (1 + 5**0.5) * i
+    D = np.c_[np.cos(th) * np.sin(phi), np.sin(th) * np.sin(phi), np.cos(phi)]
+    D = D[D @ unit(axis_hint) >= math.cos(math.radians(max_tilt))]
+    best, n_best = -1.0, D[0]
+    for d in D:
+        h = V[F] @ d  # (m, 3)
+        top = h.max()
+        on = (h >= top - tol).all(axis=1)
+        a = float(A[on].sum())
+        if a > best:
+            best, n_best = a, d
+    h = V[F] @ n_best
+    capF = F[(h >= h.max() - tol).all(axis=1)]
+    return n_best, V[np.unique(capF)]
+
+
 def signed_distance(tm: trimesh.Trimesh, P: np.ndarray) -> np.ndarray:
     """Distance to the surface, positive outside (sign from the nearest face's outward normal)."""
     if len(P) == 0:
@@ -898,7 +926,7 @@ class Model:
         P = resample(smooth_path(sk.pos[path], 7), 0.01)
         # the root ends in a flat (possibly oblique) cap = the modelled aortic annulus plane
         t0 = unit(at_s(P, 0.15) - P[0])
-        n_cap, cap = support_cap(tm.vertices, P[0], -t0)
+        n_cap, cap = support_cap_area(tm, P[0], -t0, tol=0.01)
         c = cap.mean(axis=0)
         e1 = unit(np.cross(n_cap, [1.0, 0.0, 0.0] if abs(n_cap[0]) < 0.9 else [0.0, 1.0, 0.0]))
         e2 = np.cross(n_cap, e1)

@@ -66,7 +66,7 @@ def welded(V: np.ndarray, F: np.ndarray) -> mo.Mesh:
 
 def test_budgets(meshes):
     assert sum(len(m["F"]) for m in meshes.values()) <= 400_000
-    assert GLB.stat().st_size <= 8 * 1024 * 1024
+    assert GLB.stat().st_size <= 16 * 1024 * 1024  # CONTRACTS §7.1 (baked textures)
 
 
 def test_scene_frame_and_heart_orientation(meshes, manifest):

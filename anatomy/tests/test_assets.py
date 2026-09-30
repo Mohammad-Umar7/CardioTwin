@@ -50,7 +50,7 @@ def test_glb_satisfies_contract_and_web_budgets():
     report = verify(GLB)
     assert report["ok"], report["errors"]
     assert report["triangles_total"] <= 400_000
-    assert report["bytes"] <= 8 * 1024 * 1024
+    assert report["bytes"] <= 16 * 1024 * 1024  # CONTRACTS §7.1 budget with baked textures
     assert "COLOR_0" in report["nodes"]["Heart_Wall_Anterior"]["attributes"]
     assert "COLOR_0" in report["nodes"]["Heart_Wall_Posterior"]["attributes"]
 
@@ -211,3 +211,36 @@ def test_design_system_additive_fields(manifest, vessels):
     assert by_node["Coronary_LAD"]["labelNormal"][2] > 0.3
     assert by_node["Coronary_LCX"]["labelNormal"][0] > 0.3 and by_node["Coronary_LCX"]["labelNormal"][2] < 0
     assert by_node["Coronary_RCA"]["labelNormal"][0] < 0
+
+
+def test_contract_v11_labels_textures_and_definitions(manifest, vessels):
+    """CONTRACTS §7.1: SCCT segments (manifest table, vessels.json labels, _SEGMENT on every coronary mesh),
+    baked WebP PBR maps with UVs on the heart walls, and precise definitions on every structure."""
+    gltf = read_gltf_json(GLB)
+    assert "EXT_texture_webp" in gltf.get("extensionsUsed", [])
+    nodes = {n["name"]: n for n in gltf["nodes"]}
+    for node in EXPECTED_TARGET:
+        prim = gltf["meshes"][nodes[node]["mesh"]]["primitives"][0]
+        assert "_SEGMENT" in prim["attributes"], node
+    for wall in ("Heart_Wall_Anterior", "Heart_Wall_Posterior"):
+        prim = gltf["meshes"][nodes[wall]["mesh"]]["primitives"][0]
+        assert {"TEXCOORD_0", "COLOR_0"} <= set(prim["attributes"])
+        mat = gltf["materials"][prim["material"]]
+        assert {"baseColorTexture", "metallicRoughnessTexture"} <= set(mat["pbrMetallicRoughness"])
+        assert "normalTexture" in mat and "occlusionTexture" in mat
+    assert "_VEIN" in gltf["meshes"][nodes["CardiacVeins"]["mesh"]]["primitives"][0]["attributes"]
+
+    table = {s["scct"]: s for s in manifest["segments"]}
+    assert sorted(table) == list(range(1, 19))
+    present = {n for n, s in table.items() if s["present"]}
+    assert {1, 2, 3, 4, 5, 6, 7, 8, 11, 16} <= present  # the right-dominant trunk segments always exist
+    labelled = {lab["scct"] for v in vessels["vessels"] for seg in v["segments"] for lab in seg["labels"]}
+    assert present == labelled - {0}
+    for v in vessels["vessels"]:
+        for seg in v["segments"]:
+            assert seg["labels"][0]["from"] == 0 and seg["labels"][-1]["to"] == len(seg["points"])
+    assert vessels["veins"]["node"] == "CardiacVeins" and {s["label"] for s in vessels["veins"]["segments"]} >= {"CS", "GCV", "AIV", "MCV"}
+    for s in manifest["structures"]:
+        assert s.get("definition") and s.get("clinical_relevance") and "provenance" in s, s["node"]
+    veins = {v["label"]: v for v in manifest["veins"]}
+    assert veins["CS"]["accompanies"] == ["lcx"] and "lad" in veins["AIV"]["accompanies"]
