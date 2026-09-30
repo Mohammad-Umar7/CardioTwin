@@ -211,7 +211,7 @@ export function pipelinePhases(k: KeyFacts): PipelinePhase[] {
     {
       id: 'show',
       label: 'Show',
-      steps: [{ title: '3D mapping', detail: 'Vessel colour = probability', anchor: 'anatomy' }],
+      steps: [{ title: '3D mapping', detail: 'Each artery coloured by its probability', anchor: 'anatomy' }],
     },
   ];
   let n = 0;
