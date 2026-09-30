@@ -139,10 +139,10 @@ export default function WorkstationPage() {
 
   return (
     <div
-      className="relative grid min-h-0 overflow-hidden"
+      className="relative grid min-h-0 overflow-clip"
       style={{
         height: 'calc(100vh - var(--topbar-h) - var(--status-h))',
-        gridTemplateColumns: mode === 'wide' ? 'var(--left-w) minmax(0, 1fr) var(--right-w)' : 'var(--rail-w) minmax(0, 1fr) var(--right-w)',
+        gridTemplateColumns: mode === 'wide' ? 'var(--left-w) minmax(0, 1fr) var(--right-w)' : 'var(--group-rail-w) minmax(0, 1fr) var(--right-w)',
       }}
     >
       <PageTitle />

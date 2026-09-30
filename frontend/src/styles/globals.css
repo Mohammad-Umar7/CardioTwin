@@ -142,9 +142,21 @@
     border: 1px solid rgb(var(--c-border-default));
     border-radius: var(--r-sm);
   }
+  /* Every scrolling element is its own containing block (P0-1): an absolutely positioned descendant
+     (sr-only inputs, tooltips anchors) must never resolve against a clipping ancestor, or focusing it
+     scrolls that ancestor and shifts the whole workstation. Clipping ancestors use overflow: clip. */
   .panel-scroll {
+    position: relative;
     overflow-y: auto;
     overscroll-behavior: contain;
+  }
+  /* V2 stage-card material (WORKSTATION_V2 §7): bg/panel, 1 px border/default ring, e-2, r-lg, no blur. */
+  .stage-card {
+    position: relative;
+    overflow: clip;
+    background: rgb(var(--c-bg-panel));
+    border-radius: var(--r-lg);
+    box-shadow: var(--e-2);
   }
 }
 
@@ -176,6 +188,7 @@ html[data-calm='true'] *::after {
 /* Forced colours: chrome falls back to system colours; meters keep their segments. */
 @media (forced-colors: active) {
   .hud-chip,
+  .stage-card,
   .skeleton {
     border: 1px solid CanvasText;
     background: Canvas;

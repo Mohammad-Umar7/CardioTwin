@@ -61,7 +61,7 @@ export function AccordionItem({ open, onToggle, header, aside, children, id, cla
           open ? 'grid-rows-[1fr]' : 'grid-rows-[0fr]',
         )}
       >
-        <div className="min-h-0 overflow-hidden">{children}</div>
+        <div className="min-h-0 overflow-clip">{children}</div>
       </div>
     </div>
   );

@@ -104,13 +104,30 @@
   --ease-peel: cubic-bezier(0.65, 0, 0.35, 1);
   --ease-exit: cubic-bezier(0.55, 0, 1, 0.45);
 
-  /* 4 layout (≥ 1440 defaults; overridden per breakpoint in globals.css) */
+  /* 4 layout (≥ 1440 defaults; overridden per breakpoint below) */
   --topbar-h: 48px;
   --status-h: 28px;
+  /* legacy 3-column workstation (retired with GroupRail / panels.tsx) */
   --left-w: 320px;
   --right-w: 384px;
-  --rail-w: 56px;
+  --group-rail-w: 56px;
   --flyout-w: 296px;
+
+  /* V2 stage layout (WORKSTATION_V2 §2): sizes only, no colours */
+  --stage-inset: 12px;
+  --card-left-w: 280px;
+  --card-right-w: 352px;
+  --card-pad: 16px;
+  --card-gap: 8px;
+  --drawer-inputs-w: 400px;
+  --drawer-explain-w: 440px;
+  --toolbar-h: 40px;
+  --chip-h: 32px;
+  --rail-w: 40px;
+  --palette-w: 640px;
+  --palette-top: 96px;
+  /* palette scrim (V2 §4.9): 40 % bg/void, no blur */
+  --scrim-palette: rgba(7, 9, 12, 0.4);
 }
 
 @media (max-width: 1439.98px) {
@@ -118,6 +135,15 @@
     --topbar-h: 40px;
     --status-h: 24px;
     --right-w: 336px;
+
+    --card-left-w: 256px;
+    --card-right-w: 320px;
+    --card-pad: 12px;
+    --drawer-inputs-w: 360px;
+    --drawer-explain-w: 400px;
+    --toolbar-h: 36px;
+    --palette-w: 600px;
+    --palette-top: 72px;
   }
 }
 

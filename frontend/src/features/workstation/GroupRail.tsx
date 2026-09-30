@@ -83,7 +83,7 @@ export function GroupRail() {
 
   return (
     <>
-      <nav aria-label="Input groups" className="flex w-[var(--rail-w)] flex-col items-center gap-1 border-r border-hairline bg-panel py-2" data-tour="inputs">
+      <nav aria-label="Input groups" className="flex w-[var(--group-rail-w)] flex-col items-center gap-1 border-r border-hairline bg-panel py-2" data-tour="inputs">
         <RailButton label="Patient" icon={UserRound} active={flyout === PATIENT} onClick={() => open(PATIENT)} />
         <div className="my-1 h-px w-8 bg-hairline" />
         {index?.groups.map((g) => (
@@ -123,7 +123,7 @@ export function GroupRail() {
             animate={{ opacity: 1, x: 0 }}
             exit={{ opacity: 0, x: -16, transition: { duration: (MOTION.flyout * 0.7) / 1000, ease: EASE.exit } }}
             transition={{ duration: MOTION.flyout / 1000, ease: EASE.out }}
-            className="absolute bottom-0 left-[var(--rail-w)] top-0 z-flyout flex w-[var(--flyout-w)] flex-col rounded-r-lg bg-panel shadow-e3"
+            className="absolute bottom-0 left-[var(--group-rail-w)] top-0 z-flyout flex w-[var(--flyout-w)] flex-col rounded-r-lg bg-panel shadow-e3"
           >
             <header className="flex h-10 shrink-0 items-center justify-between border-b border-hairline pl-4 pr-2">
               <h2 className="eyebrow text-secondary">{title}</h2>
