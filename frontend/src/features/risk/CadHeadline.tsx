@@ -190,7 +190,8 @@ export function CadHeadline({ titleId, covered = false, showTrack = true }: CadH
           </div>
 
           <Collapse show={showTrack}>
-            <Tooltip content={`0 · 25 · 50 · 75 · 100 % · threshold ${formatPercent(cad.threshold)}`}>
+            {/* Below the scale: above it, the tooltip would cover the numeral it explains. */}
+            <Tooltip content={`0 · 25 · 50 · 75 · 100 % · threshold ${formatPercent(cad.threshold)}`} placement="bottom">
               <div
                 tabIndex={0}
                 role="img"
