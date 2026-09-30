@@ -1,15 +1,16 @@
 """CardioTwin anatomy pipeline — one entry point for every stage.
 
-    ./.venv/Scripts/python anatomy/build.py              # fetch -> blender -> optimise -> verify -> centrelines -> manifest -> explode
+    ./.venv/Scripts/python anatomy/build.py              # fetch -> blender -> centrelines -> optimise -> verify -> manifest -> explode
     ./.venv/Scripts/python anatomy/build.py --renders    # ... and the Cycles hero renders (GPU recommended)
     ./.venv/Scripts/python anatomy/build.py --only manifest,verify
 
 Stages (see anatomy/README.md):
   fetch        download BodyParts3D STLs into anatomy/raw/ and write anatomy/SOURCES.md
   blender      headless Blender build -> anatomy/build/cardiotwin_anatomy.raw.glb (+ vessel PLYs, report)
-  optimize     glTF-Transform meshopt pass -> frontend/public/anatomy/cardiotwin_anatomy.glb
+  centerlines  coronary centrelines from the vessel PLYs -> frontend/public/anatomy/vessels.json
+  optimize     glTF-Transform meshopt pass (+ coronary _ARCLEN from the centrelines)
+               -> frontend/public/anatomy/cardiotwin_anatomy.glb
   verify       contract check of the web GLB (nodes, layers, COLOR_0, budgets)
-  centerlines  coronary centrelines -> frontend/public/anatomy/vessels.json
   manifest     layers / structures / explode / cameras -> frontend/public/anatomy/manifest.json
   explode      triangle-level collision check of the exploded layout (fails on collisions at t = 1)
   renders      portfolio renders -> docs/media/renders/ (opt-in: --renders)
@@ -30,7 +31,7 @@ ANATOMY = Path(__file__).resolve().parent
 REPO = ANATOMY.parent
 PY = sys.executable
 DEFAULT_BLENDER = "C:/Program Files/Blender Foundation/Blender 5.1/blender.exe"
-STAGES = ("fetch", "blender", "optimize", "verify", "centerlines", "manifest", "explode", "renders")
+STAGES = ("fetch", "blender", "centerlines", "optimize", "verify", "manifest", "explode", "renders")
 
 
 def find_blender(explicit: str | None) -> str:

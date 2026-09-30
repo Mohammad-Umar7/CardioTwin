@@ -47,7 +47,9 @@ def meshes(tmp_path_factory) -> dict[str, dict]:
         N = np.fromfile(out / f"{name}.nrm.f32", dtype=np.float32).reshape(-1, 3)
         col = out / f"{name}.col.f32"
         C = np.fromfile(col, dtype=np.float32).reshape(-1, e["col"]) if col.exists() else None
-        result[name] = {"V": V, "F": F, "N": N, "C": C, "parent": e["parent"]}
+        arc = out / f"{name}.arc.f32"
+        A = np.fromfile(arc, dtype=np.float32) if arc.exists() else None
+        result[name] = {"V": V, "F": F, "N": N, "C": C, "A": A, "parent": e["parent"]}
     return result
 
 
@@ -127,3 +129,17 @@ def test_every_coronary_node_is_covered_by_a_centreline(meshes):
     covered = {v["node"] for v in vessels["vessels"]}
     coronary = {n for n, m in meshes.items() if m["parent"] == "Layer_Coronary"}
     assert coronary == covered
+
+
+def test_coronary_arc_length_runs_from_each_ostium(meshes):
+    arc = {n: m["A"] for n, m in meshes.items() if m["parent"] == "Layer_Coronary"}
+    assert all(a is not None and len(a) == len(meshes[n]["V"]) for n, a in arc.items()), "missing _ARCLEN"
+    assert all(a.min() >= 0.0 and a.max() <= 1.0 for a in arc.values())
+    # the left main starts the left tree, the RCA trunk the right tree; branches lie further down
+    assert arc["Coronary_LM"].min() < 0.01 and arc["Coronary_RCA"].min() < 0.01
+    assert np.median(arc["Coronary_LAD"]) > arc["Coronary_LM"].max()
+    for branch in ("Coronary_RCA_PDA", "Coronary_RCA_PL"):
+        assert arc[branch].min() > 0.3  # distal right-dominant branches beyond the crux
+    for tree in (("Coronary_LM", "Coronary_LAD", "Coronary_LAD_Septal", "Coronary_LCX"),
+                 ("Coronary_RCA", "Coronary_RCA_Marginal", "Coronary_RCA_PDA", "Coronary_RCA_PL", "Coronary_RCA_Septal")):
+        assert max(arc[n].max() for n in tree) == pytest.approx(1.0, abs=0.02)  # normalised per tree

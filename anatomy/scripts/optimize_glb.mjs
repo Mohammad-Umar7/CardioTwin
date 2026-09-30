@@ -17,8 +17,12 @@
  *    EXT_meshopt_compression (decoded by three.js' GLTFLoader via setMeshoptDecoder).
  *  - Materials are not deduplicated: every node owns its material so the viewer can restyle one
  *    structure without touching the others.
+ *  - Every coronary mesh gets `_ARCLEN` (DESIGN_SYSTEM §7.8): the normalised arc length 0 -> 1 of the
+ *    nearest centreline point in vessels.json, measured along the tree from its ostium (left tree from
+ *    the left-main ostium, right tree from the RCA ostium), for flow / ripple effects along the vessels.
+ *    The centreline stage therefore runs before this one.
  */
-import { statSync } from 'node:fs';
+import { readFileSync, statSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -31,6 +35,58 @@ const HERE = dirname(fileURLToPath(import.meta.url));
 const REPO = resolve(HERE, '..', '..');
 const input = resolve(process.argv[2] ?? resolve(REPO, 'anatomy/build/cardiotwin_anatomy.raw.glb'));
 const output = resolve(process.argv[3] ?? resolve(REPO, 'frontend/public/anatomy/cardiotwin_anatomy.glb'));
+const vesselsPath = resolve(REPO, 'frontend/public/anatomy/vessels.json');
+
+/**
+ * Arc length from the tree's ostium for every centreline point, normalised per tree to [0, 1].
+ * Returns Map<coronary node name, { pts: Float64Array (xyz), s: Float64Array }>.
+ */
+function centrelineArclength(vessels) {
+  const byId = new Map(vessels.vessels.map((v) => [v.id, v]));
+  const out = new Map();
+  const nearestS = (entry, p) => {
+    let best = Infinity;
+    let s = 0;
+    for (let i = 0; i < entry.s.length; i++) {
+      const d = (entry.pts[3 * i] - p[0]) ** 2 + (entry.pts[3 * i + 1] - p[1]) ** 2 + (entry.pts[3 * i + 2] - p[2]) ** 2;
+      if (d < best) [best, s] = [d, entry.s[i]];
+    }
+    return s;
+  };
+  const rootOf = (v) => (v.parent && v.parent !== 'aorta' ? rootOf(byId.get(v.parent)) : v.id);
+  const visit = (v) => {
+    if (out.has(v.id)) return out.get(v.id);
+    if (v.parent && v.parent !== 'aorta') visit(byId.get(v.parent));
+    const segs = [];
+    for (const seg of v.segments) {
+      let s0 = 0;
+      if (seg.parent !== null && seg.parent !== undefined) s0 = nearestS(segs[seg.parent], seg.points[0]);
+      else if (seg.attach && seg.attach !== 'aorta') s0 = nearestS(out.get(seg.attach), seg.points[0]);
+      const pts = new Float64Array(seg.points.flat());
+      const s = new Float64Array(seg.points.length);
+      s[0] = s0;
+      for (let i = 1; i < seg.points.length; i++) {
+        s[i] = s[i - 1] + Math.hypot(pts[3 * i] - pts[3 * i - 3], pts[3 * i + 1] - pts[3 * i - 2], pts[3 * i + 2] - pts[3 * i - 1]);
+      }
+      segs.push({ pts, s });
+    }
+    const entry = {
+      id: v.id,
+      node: v.node,
+      root: rootOf(v),
+      pts: Float64Array.from(segs.flatMap((g) => Array.from(g.pts))),
+      s: Float64Array.from(segs.flatMap((g) => Array.from(g.s))),
+    };
+    out.set(v.id, entry);
+    return entry;
+  };
+  vessels.vessels.forEach(visit);
+  const treeMax = new Map();
+  for (const e of out.values()) treeMax.set(e.root, Math.max(treeMax.get(e.root) ?? 0, ...e.s));
+  const byNode = new Map();
+  for (const e of out.values()) byNode.set(e.node, { pts: e.pts, s: e.s.map((x) => x / treeMax.get(e.root)) });
+  return byNode;
+}
 
 await Promise.all([MeshoptEncoder.ready, MeshoptDecoder.ready]);
 const io = new NodeIO()
@@ -69,6 +125,36 @@ for (const mesh of root.listMeshes()) {
     reference.set(mesh.getName(), { rgb, position: prim.getAttribute('POSITION').getArray().slice() });
     converted++;
   }
+}
+
+// 1b. Coronary arc length (_ARCLEN) from the published centrelines.
+const arclen = centrelineArclength(JSON.parse(readFileSync(vesselsPath, 'utf8')));
+let withArclen = 0;
+for (const node of root.listNodes()) {
+  const line = arclen.get(node.getName());
+  const mesh = node.getMesh();
+  if (!line || !mesh) continue;
+  const t = node.getWorldTranslation();
+  for (const prim of mesh.listPrimitives()) {
+    const pos = prim.getAttribute('POSITION');
+    const values = new Float32Array(pos.getCount());
+    const p = [0, 0, 0];
+    for (let i = 0; i < values.length; i++) {
+      pos.getElement(i, p);
+      const [x, y, z] = [p[0] + t[0], p[1] + t[1], p[2] + t[2]];
+      let best = Infinity;
+      for (let k = 0; k < line.s.length; k++) {
+        const d = (line.pts[3 * k] - x) ** 2 + (line.pts[3 * k + 1] - y) ** 2 + (line.pts[3 * k + 2] - z) ** 2;
+        if (d < best) [best, values[i]] = [d, line.s[k]];
+      }
+    }
+    prim.setAttribute('_ARCLEN', doc.createAccessor(`${mesh.getName()}_arclen`).setType('SCALAR').setArray(values).setBuffer(pos.getBuffer()));
+  }
+  withArclen++;
+}
+if (withArclen !== arclen.size) {
+  console.error(`[optimize] ERROR: _ARCLEN written for ${withArclen} of ${arclen.size} coronary nodes`);
+  process.exit(1);
 }
 
 // 2. Cleanup, vertex-cache reorder, attribute quantisation (never POSITION).
@@ -125,5 +211,5 @@ for (const mesh of check.getRoot().listMeshes()) {
 }
 const inMB = statSync(input).size / 1e6;
 const outMB = statSync(output).size / 1e6;
-console.log(`[optimize] ${converted} territory attribute(s) converted to RGB`);
+console.log(`[optimize] ${converted} territory attribute(s) converted to RGB, _ARCLEN on ${withArclen} coronary nodes`);
 console.log(`[optimize] ${input} (${inMB.toFixed(2)} MB) -> ${output} (${outMB.toFixed(2)} MB)`);

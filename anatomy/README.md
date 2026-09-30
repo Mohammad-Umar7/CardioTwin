@@ -15,7 +15,7 @@ CardioTwin's 3D viewer:
 ## Quick start
 
 ```bash
-./.venv/Scripts/python anatomy/build.py             # fetch → blender → optimise → verify → centrelines → manifest (~1.5 min)
+./.venv/Scripts/python anatomy/build.py             # fetch → blender → centrelines → optimise → verify → manifest → explode check (~1.5 min)
 ./.venv/Scripts/python anatomy/build.py --renders   # … plus the Cycles renders (GPU recommended)
 ./.venv/Scripts/python -m pytest anatomy            # 37 tests: geometry utilities, centreline graphs, asset contracts, mesh QA
 ```
@@ -39,10 +39,11 @@ the committed GLB, manifest and centrelines unchanged; `anatomy/SOURCES.md` pins
 | --- | --- | --- | --- |
 | 1 | Fetch | `./.venv/Scripts/python anatomy/scripts/fetch_bodyparts3d.py` | `anatomy/raw/*.stl`, `anatomy/SOURCES.md` |
 | 2–4 | Blender build | `blender --background --factory-startup --python anatomy/blender/build_anatomy.py` | `anatomy/build/cardiotwin_anatomy.raw.glb`, `build_report.json`, `vessels/*.ply`, `cardiotwin_build.blend` |
-| 4b | Web optimisation | `node anatomy/scripts/optimize_glb.mjs` | `frontend/public/anatomy/cardiotwin_anatomy.glb` |
+| 4b | Web optimisation (after stage 5: needs `vessels.json` for `_ARCLEN`) | `node anatomy/scripts/optimize_glb.mjs` | `frontend/public/anatomy/cardiotwin_anatomy.glb` |
 | 4c | Contract check | `./.venv/Scripts/python anatomy/scripts/verify_glb.py` | pass/fail + per-node report |
 | 5 | Centrelines | `./.venv/Scripts/python anatomy/scripts/extract_centerlines.py` | `vessels.json`, `anatomy/build/centerline_report.json` |
 | 6 | Manifest | `./.venv/Scripts/python anatomy/scripts/make_manifest.py` | `manifest.json` |
+| 6b | Explode check | `blender --background --factory-startup --python anatomy/blender/check_explode.py` | pass/fail + `anatomy/build/explode_report.json` |
 | 7 | Renders | `blender --background --factory-startup --python anatomy/blender/render_heroes.py -- [--shots …] [--save-scene]` | `docs/media/renders/` |
 | QA | Decode for QA | `node anatomy/scripts/decode_glb.mjs [glb] OUT_DIR` | plain per-node arrays (used by `tests/test_mesh_quality.py`) |
 | QA | Previews | `blender --background --factory-startup --python anatomy/blender/preview.py -- --views torso,heart,open,territory,qa` | `anatomy/build/preview/*.png` |
@@ -172,7 +173,8 @@ LAD + LCX).
 every buffer with `EXT_meshopt_compression`. It deliberately **does not** quantise `POSITION` (KHR_mesh_quantization
 would fold dequantisation into node matrices, breaking `node.scale` and explode offsets), join, flatten, instance or
 deduplicate materials. It fails if any node name, transform or hierarchy changes, and re-reads its output to check
-territory weights and positions. The Khronos validator reports no errors or warnings.
+territory weights and positions. It also writes the coronary `_ARCLEN` attribute (see *Notes for the viewer*), which is why the
+centreline stage runs first. The Khronos validator reports no errors or warnings.
 
 ## Coronary centrelines (`vessels.json`)
 
@@ -228,6 +230,14 @@ staggered peel windows hide most of that.
   `ct_id`, `ct_layer`, `ct_label`, `ct_target` (`"LAD"`, … or `""`), `ct_category` (`Coronary`, `Myocardium`, …).
 * Closed meshes are single-sided; only `Skin_Torso` (an open shell) is double-sided.
 * `vessels.json` points are in the scene / rest frame — add a vessel node's explode offset when it is displaced.
+* Coronary meshes carry `_ARCLEN` (float, 0 → 1 along each tree from its ostium: left tree from the left-main
+  ostium, right tree from the RCA ostium), taken from the nearest `vessels.json` point. **three.js lower-cases
+  custom attribute names**, so read `geometry.attributes._arclen` in a shader.
+* DESIGN_SYSTEM §7.8 additive manifest fields: `structures[].rides` (the heart-wall node a coronary branch, the
+  cardiac veins or the pulmonary valve moves with; their `explode` equals that wall's), `labelAnchor` /
+  `labelNormal` on `Coronary_LAD` / `_LCX` / `_RCA` (a centreline point at 30 / 35 / 25 % of the trunk and the
+  outward direction from the heart centre) and `bestView` (LAD RAO 30 / CRA 25, LCX RAO 30 / CAU 25, RCA LAO 40).
+  Not provided: layer `pivot` / `hingeAxis` / `hingeDeg` (the peel is translation-only) and a baked-AO `COLOR_1`.
 
 ## Renders
 
