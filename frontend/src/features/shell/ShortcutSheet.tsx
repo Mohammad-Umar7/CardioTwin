@@ -5,10 +5,9 @@ import { SHEET_COLUMNS, sheetRows, type SheetRow } from './shortcutSections';
 
 function Row({ row }: { row: SheetRow }) {
   return (
-    <div className="flex min-h-7 items-center justify-between gap-4">
-      <dt className="min-w-0 truncate text-body-s text-secondary" title={row.action}>
-        {row.action}
-      </dt>
+    <div className="flex min-h-7 items-center justify-between gap-4 py-0.5">
+      {/* Wraps instead of truncating: every action is read in full at 1280 (no ellipsis anywhere). */}
+      <dt className="min-w-0 text-pretty text-body-s leading-5 text-secondary">{row.action}</dt>
       <dd className="flex shrink-0 items-center gap-1">
         {row.shortcuts.map((s) => (
           <Shortcut key={s} shortcut={s} all />
