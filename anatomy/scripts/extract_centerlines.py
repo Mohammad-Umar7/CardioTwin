@@ -43,7 +43,10 @@ from skimage.morphology import skeletonize
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "blender"))
 import meshops as mo  # noqa: E402
-from common import CENTERLINE_REPORT, PUBLIC_DIR, VESSEL_MESH_DIR, load_config, write_json  # noqa: E402
+import scct  # noqa: E402
+from common import (  # noqa: E402
+    BUILD_REPORT, CENTERLINE_REPORT, PUBLIC_DIR, RAW_DIR, SYNTH_DIR, VESSEL_MESH_DIR, load_config, read_json, write_json,
+)
 
 VESSELS_JSON = PUBLIC_DIR / "vessels.json"
 MM = 0.01  # scene units per millimetre
@@ -325,6 +328,67 @@ def validate(mesh: trimesh.Trimesh, segments: list[Segment], parent_mesh: trimes
 
 
 # ---------------------------------------------------------------------------------------------
+#: The LCX trunk ends where its centreline leaves the left AV groove (> this distance from the mitral hinge).
+LCX_GROOVE_MM = 15.0
+VEIN_NAMES = {"CS": "Coronary sinus", "GCV": "Great cardiac vein", "AIV": "Anterior interventricular vein",
+              "MCV": "Middle cardiac vein", "PVLV": "Posterior vein of the left ventricle", "ACV": "Anterior cardiac vein"}
+
+
+def mitral_hinge(origin_mm: np.ndarray) -> np.ndarray:
+    """Mitral hinge points (valve vertices touching the heart wall, basal quartile) in the glTF frame."""
+    wall, _ = mo.read_stl(RAW_DIR / "FMA7274.stl")
+    mv, _ = mo.read_stl(RAW_DIR / "FMA7235.stl")
+    tv, _ = mo.read_stl(RAW_DIR / "FMA7234.stl")
+
+    def g(X):
+        return mo.to_gltf((X - origin_mm) * MM)
+
+    wall, mv, tv = g(wall), g(mv), g(tv)
+    touch = cKDTree(wall).query(mv)[0] <= 1.0 * MM
+    base = np.vstack([mv, tv]).mean(axis=0)
+    u = mo.unit(np.array(read_json(BUILD_REPORT)["heart"]["apex"]) - base)
+    proj = (mv - base) @ u
+    sel = touch & (proj <= np.quantile(proj, 0.25))
+    return mv[sel] if sel.sum() > 20 else mv[touch]
+
+
+def vein_centrelines(origin_mm: np.ndarray) -> tuple[dict, dict]:
+    """Labelled cardiac-vein centrelines (from the synthesis stage) with radii re-measured on the built mesh."""
+    src = read_json(SYNTH_DIR / "vein_centerlines.json")
+    V, F = mo.read_ply(VESSEL_MESH_DIR / "CardiacVeins.ply")
+    mesh = trimesh.Trimesh(V, F, process=False)
+    segs, allP = [], []
+    design = [(mo.to_gltf((np.array(pth["points_mm"]) - origin_mm) * MM), np.array(pth["radius_mm"]) * MM) for pth in src["paths"]]
+    for path, (P, r_design) in zip(src["paths"], design):
+        _, r, _ = trimesh.proximity.closest_point(mesh, P)
+        if path["parent"] is not None:
+            # points bridging from the parent vein into this one lie inside the parent's lumen, where the
+            # distance to the wall is the parent's radius: carry the first own-lumen radius back across them
+            Pp, Rp = design[path["parent"]]
+            dpar = np.linalg.norm(P[:, None, :] - Pp[None, :, :], axis=2)
+            inside = dpar.min(axis=1) < Rp[dpar.argmin(axis=1)]
+            bridge = int(np.argmin(inside)) if not inside.all() else len(P) - 1
+            if 0 < bridge < len(r):
+                r[:bridge] = r[bridge]
+        r = ndimage.uniform_filter1d(r, size=5, mode="nearest") if len(r) >= 5 else r
+        segs.append({"label": path["label"], "code": path["code"], "name": VEIN_NAMES[path["label"]],
+                     "parent": path["parent"], "side": bool(path.get("side")),
+                     "points": np.round(P, 5).tolist(), "radius": np.round(r, 5).tolist()})
+        allP.append(P)
+    allP = np.vstack(allP)
+    inside = mesh.contains(allP)
+    rep_ = {"segments": len(segs), "points": int(len(allP)), "inside_fraction": round(float(inside.mean()), 4)}
+    print(f"[centerline] veins: {len(segs)} labelled segments, {inside.mean():.1%} of points inside CardiacVeins", flush=True)
+    return {
+        "node": "CardiacVeins",
+        "ordering": "points run from the drainage end (the coronary-sinus ostium, or a tributary's junction with the vein "
+                    "it drains into) towards the periphery, i.e. against the venous blood flow; 'parent' indexes that vein "
+                    "segment",
+        "codes": src["codes"],
+        "segments": segs,
+    }, rep_
+
+
 def main() -> int:
     cfg = load_config()
     nodes = {n["node"]: n for n in cfg["nodes"]}
@@ -355,6 +419,38 @@ def main() -> int:
             flush=True,
         )
 
+    # --- anatomical decomposition and SCCT 2014 labels ------------------------------------------------
+    build = read_json(BUILD_REPORT)
+    origin_mm = np.array(build["frame"]["origin_mm_bodyparts3d"])
+    apex = np.array(build["heart"]["apex"])
+    hinge = mitral_hinge(origin_mm)
+    hinge_tree = cKDTree(hinge)
+    lcx = results["Coronary_LCX"]
+    dMA = hinge_tree.query(lcx.segments[0].points)[0]
+    k_min = int(np.argmin(dMA))
+    leave = np.flatnonzero((np.arange(len(dMA)) > k_min) & (dMA > LCX_GROOVE_MM * MM))
+    decomposition: dict = {"lcx_groove_exit_mm": None}
+    if len(leave):
+        k = int(leave[0])
+        s_arc = scct.arclen(lcx.segments[0].points)
+        decomposition["lcx_groove_exit_mm"] = round(float(s_arc[k]) / MM, 1)
+        lcx.segments = scct.split_at(lcx.segments, 0, k, lambda P, R, parent: Segment(P, R, parent))
+        print(f"[centerline] LCX leaves the left AV groove at s = {s_arc[k] / MM:.0f} mm (> {LCX_GROOVE_MM:.0f} mm from the "
+              f"mitral hinge): trunk = pCx, the apical run is relabelled OM1", flush=True)
+    labels: dict[str, list] = {}
+    lad_l, sept_l, lad_info = scct.label_lad(results["Coronary_LAD"].segments, results["Coronary_LAD_Septal"].segments, apex)
+    labels["Coronary_LAD"], labels["Coronary_LAD_Septal"] = lad_l, sept_l
+    labels["Coronary_LCX"], lcx_info = scct.label_lcx(lcx.segments, apex, lambda P: hinge_tree.query(P)[0])
+    labels["Coronary_RCA"], rca_info = scct.label_rca(results["Coronary_RCA"].segments, results["Coronary_RCA_PDA"].segments,
+                                                     results["Coronary_RCA_Marginal"].segments)
+    labels["Coronary_LM"] = scct.whole(results["Coronary_LM"].segments, (5, "LM"))
+    labels["Coronary_RCA_PDA"] = scct.whole(results["Coronary_RCA_PDA"].segments, (4, "R-PDA"))
+    labels["Coronary_RCA_PL"] = scct.whole(results["Coronary_RCA_PL"].segments, (16, "R-PLB"))
+    labels["Coronary_RCA_Marginal"] = scct.whole(results["Coronary_RCA_Marginal"].segments, (0, "AM"))
+    labels["Coronary_RCA_Septal"] = scct.whole(results["Coronary_RCA_Septal"].segments, (0, "IS"))
+    decomposition.update({"LAD": lad_info, "LCX": lcx_info, "RCA": rca_info})
+    print(f"[centerline] SCCT: {decomposition}", flush=True)
+
     vessels = []
     for node, res in results.items():
         spec = nodes[node]
@@ -371,10 +467,16 @@ def main() -> int:
                     "radius": np.round(s.radius, 5).tolist(),
                     "parent": s.parent,
                     **({"attach": s.attach} if s.attach else {}),
+                    # SCCT 2014 label at the segment's origin, plus point-index ranges when a trunk spans several
+                    "scct": labels[node][j][0].scct,
+                    "code": labels[node][j][0].code,
+                    "labels": [lab.as_dict() for lab in labels[node][j]],
                 }
-                for s in res.segments
+                for j, s in enumerate(res.segments)
             ],
         })
+
+    veins, vein_report = vein_centrelines(origin_mm)
 
     summary = {
         "points_total": int(sum(r["points"] for r in report.values())),
@@ -392,10 +494,17 @@ def main() -> int:
         "ordering": "points run proximal -> distal (direction of blood flow); a segment whose 'attach' is set "
                     "starts on its parent (aortic wall for ostial vessels); 'parent' indexes the parent segment "
                     "within the same vessel",
+        "segment_labels": "each coronary segment carries 'scct' / 'code' (SCCT 2014 label at its origin; 0 = a named but "
+                          "unnumbered branch such as a septal or acute-marginal branch) and 'labels' = [{scct, code, from, to}] "
+                          "point-index ranges [from, to) when a trunk spans several SCCT segments. The same labels are baked "
+                          "into the coronary meshes as the _SEGMENT vertex attribute. Anatomical labels only: risk stays "
+                          "vessel-level.",
+        "decomposition": decomposition,
         "vessels": vessels,
+        "veins": veins,
     }
     write_json(VESSELS_JSON, out, indent=None)
-    write_json(CENTERLINE_REPORT, {"summary": summary, "vessels": report})
+    write_json(CENTERLINE_REPORT, {"summary": summary, "vessels": report, "veins": vein_report, "decomposition": decomposition})
     print(f"[centerline] wrote {VESSELS_JSON} ({VESSELS_JSON.stat().st_size / 1e3:.0f} kB); "
           f"{summary['points_total']} points, {summary['inside_fraction']:.1%} inside, "
           f"max outside {summary['max_outside_distance_mm']:.2f} mm")
