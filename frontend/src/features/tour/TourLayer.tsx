@@ -105,15 +105,32 @@ export default function TourLayer() {
 
   return (
     <div className="fixed inset-0 z-scrim" aria-live="polite">
-      {rect ? (
-        <div
-          aria-hidden
-          className="pointer-events-none fixed rounded-lg transition-all duration-base ease-out"
-          style={{ ...rect, boxShadow: '0 0 0 9999px var(--scrim), 0 0 0 1px rgb(var(--c-accent) / 0.6)' }}
+      {/* Scrim with a spotlight cut-out (even-odd path). An SVG keeps the overlay viewport-sized; a
+          9999 px box-shadow can make browsers drop the WebGL layer underneath. */}
+      <svg aria-hidden className="pointer-events-none fixed inset-0 h-full w-full" width={vw} height={vh}>
+        <path
+          fill="rgba(7,9,12,0.6)"
+          fillRule="evenodd"
+          d={
+            `M0 0H${vw}V${vh}H0Z` +
+            (rect
+              ? ` M${rect.left} ${rect.top}h${rect.width}v${rect.height}h${-rect.width}Z`
+              : '')
+          }
         />
-      ) : (
-        <div aria-hidden className="fixed inset-0 bg-[var(--scrim)]" />
-      )}
+        {rect && (
+          <rect
+            x={rect.left}
+            y={rect.top}
+            width={rect.width}
+            height={rect.height}
+            rx={8}
+            fill="none"
+            stroke="rgb(86 194 230 / 0.6)"
+            strokeWidth={1}
+          />
+        )}
+      </svg>
       <div
         ref={cardRef}
         role="dialog"
