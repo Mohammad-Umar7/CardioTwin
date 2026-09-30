@@ -1,6 +1,6 @@
 """Validation analyses that put the single locked test set into context (``docs/CONTRACTS.md`` §7.2).
 
-    ./.venv/Scripts/python -m cardiotwin_ml.analysis --jobs 8           # all analyses (~25 min)
+    ./.venv/Scripts/python -m cardiotwin_ml.analysis --jobs 8           # all analyses (~40 min)
     ./.venv/Scripts/python -m cardiotwin_ml.analysis --only modality     # one analysis
 
 * :mod:`.robustness` - Monte-Carlo repeated hold-out of the frozen recipe (distribution of held-out ROC-AUC,

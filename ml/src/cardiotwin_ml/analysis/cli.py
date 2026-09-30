@@ -1,7 +1,7 @@
 """Command line entry point: ``python -m cardiotwin_ml.analysis``.
 
-    ./.venv/Scripts/python -m cardiotwin_ml.analysis --jobs 8                  # everything (~25 min on 8 workers)
-    ./.venv/Scripts/python -m cardiotwin_ml.analysis --only modality subgroups  # the fast analyses (~3 min)
+    ./.venv/Scripts/python -m cardiotwin_ml.analysis --jobs 8                  # everything (~40 min on 8 workers)
+    ./.venv/Scripts/python -m cardiotwin_ml.analysis --only modality subgroups  # the fast analyses (~5 min)
     ./.venv/Scripts/python -m cardiotwin_ml.analysis --fast --out /tmp/x       # smoke run into another directory
 
 Each analysis replaces only its own keys; keys of analyses that are not re-run are kept. By default the updated

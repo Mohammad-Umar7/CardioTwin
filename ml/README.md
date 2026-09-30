@@ -35,6 +35,37 @@ together with the CV-to-test gap that the baseline shows as well. v1.1.0 fixed a
 
 ![Test ROC-AUC vs baseline](../docs/figures/test_auc_forest.png)
 
+### Beyond one 61-patient split
+
+**Robustness — Monte-Carlo repeated hold-out (200 splits).** The whole recipe (hyper-parameter search, out-of-fold
+weight/Platt/threshold fitting, refit) was re-run inside the development part of 200 random stratified 80/20 splits
+and scored once on each split's test part. Median (5th–95th percentile) held-out ROC-AUC:
+
+| Target | Locked test ROC-AUC | Monte-Carlo ROC-AUC | Locked split's percentile | Full panel beats clinical baseline |
+| --- | --- | --- | --- | --- |
+| CAD | 0.858 | 0.934 (0.864–0.975) | 3rd | 84 % of splits (mean ΔAUC +0.024) |
+| LAD | 0.742 | 0.844 (0.771–0.909) | 2nd | 92 % of splits (+0.046) |
+| LCX | 0.814 | 0.762 (0.672–0.833) | 84th | 76 % of splits (+0.010) |
+| RCA | 0.759 | 0.751 (0.660–0.828) | 58th | 69 % of splits (+0.006) |
+
+The locked split is among the hardest 3 % for CAD and LAD — the clinical baseline also scores at its 4th / 14.5th
+percentile there — while the cross-fitted CV estimates sit at the 52nd / 78.5th percentile of the Monte-Carlo
+distribution: the CV-to-test gap is split difficulty, not overfitting. Re-searching the hyper-parameters in every
+split instead of reusing the deployed ones changes the mean ROC-AUC by ≤ 0.0007 (no tuning optimism), and the median
+calibration slope is 0.97–1.04 for every target (the locked split's 0.62 / 0.47 for CAD / LAD are at its 6th / 2nd
+percentile).
+
+**Multimodality — what ECG, labs and echo add (development CV, 50 paired folds, corrected-t 95 % CIs).** Adding
+the instrumental modalities to bedside information (demographics, history, symptoms, examination) raises ROC-AUC by
+**+0.028 (+0.002 to +0.054) for CAD** and **+0.069 (+0.024 to +0.115) for LAD**; +0.028 and +0.021 for LCX and RCA
+(CIs include 0). Echocardiography carries the unique information (removing it costs −0.021 CAD, −0.047 LAD), ECG adds
+none once echo and labs are present, and the laboratory panel helps the circumflex and RCA models most (+0.041 /
++0.028, not significant after Holm correction). Symptoms (typical angina) remain the most informative single modality.
+
+![Monte-Carlo repeated hold-out](../docs/figures/robustness.png)
+
+![Modality ablation](../docs/figures/modality_ablation.png)
+
 ## Quick start
 
 Prerequisites: Python 3.11, ~1 GB RAM, any CPU (no GPU).
@@ -47,7 +78,7 @@ python -m venv .venv
 ./.venv/Scripts/python -m cardiotwin_ml.train                      # full deterministic run -> artifacts, figures, report
                                                                    # (~4 min with 12 CPU workers)
 ./.venv/Scripts/python -m cardiotwin_ml.analysis --jobs 8         # validation analyses -> metrics.json, figures, report
-                                                                   # (~30 min with 8 workers; keep --jobs <= 8)
+                                                                   # (~40 min with 8 workers; keep --jobs <= 8)
 ./.venv/Scripts/python -m pytest ml/tests -q                       # test-suite (uses the built artifacts)
 ```
 
@@ -116,6 +147,38 @@ Analysis flags: `--only robustness|modality|subgroups` (re-run a subset; other a
 7. **Test metrics** — accuracy, precision, recall, specificity, F1, ROC-AUC, PR-AUC, Brier, log-loss, MCC, balanced
    accuracy with 2000× stratified bootstrap 95 % CIs; confusion matrix; calibration slope/intercept and ECE; ROC (with
    bootstrap band), PR, reliability and decision curves; paired-bootstrap ΔAUC against the clinical baseline.
+
+## Validation analyses (`python -m cardiotwin_ml.analysis`)
+
+Descriptive analyses that put the single locked test set into context. They never refit, recalibrate or re-threshold
+the deployed model; results are added to `metrics.json` (keys documented under *Artifacts*), drawn in
+`docs/figures/{robustness,modality_ablation,subgroups}.png` and tabulated in `reports/results.md`. Settings live in
+`training.yaml → analysis`; every run is seeded and independent of `--jobs` (≈ 40 min on 8 workers, dominated by the
+200 × 4 hyper-parameter searches; `--cache DIR` memoises them).
+
+1. **Robustness** (`analysis/robustness.py`) — 200 Monte-Carlo splits (`random_state = 1000 + i`), stratified on the
+   joint label pattern like the locked split. Frozen: encoding, model families, per-target logistic variant, search
+   spaces and rules. Re-derived inside each split's development part: hyper-parameters (the deployed
+   `RandomizedSearchCV` on log-loss), 10 × 5-fold OOF margins → `w`, Platt `a, b`, Youden threshold, refit; the clinical
+   baseline likewise. The harness is validated on the locked split, where it reproduces the deployed test
+   probabilities **bit for bit** (`analysis.robustness.reproduction`). A sensitivity run reuses the deployed
+   hyper-parameters on the same splits. Output: distributions of 12 held-out metrics, the locked split's percentile,
+   the paired gain over the baseline and the per-split samples. Test parts overlap across splits, so the spread
+   describes the variability of a 61-patient evaluation, not independent replications.
+2. **Modality ablation** (`analysis/modality.py`) — development set only, the leaderboard's repeated stratified
+   5-fold × 10: cumulative (demographics → +risk factors → +symptoms → +exam → +ECG → +labs → +echo),
+   leave-one-modality-out and single-modality sets, one fixed model for all sets (equal-weight LR + XGBoost margin
+   ensemble with the `ablations.fixed_params`). Per-fold paired differences with Nadeau–Bengio corrected resampled
+   t intervals (fold estimates share training data; the naive SE would be ~3× too small) and Holm adjustment within
+   each family.
+3. **Subgroups** (`analysis/subgroups.py`) — sex, age band (< 50, 50–65, > 65 years) and diabetes, on the cross-fitted
+   development OOF predictions (recomputed exactly: they reproduce `targets.<t>.cv`) and on the locked test set;
+   stratified (OOF: patient-cluster) bootstrap CIs, `delta_roc_auc_vs_reference` against the largest level, `small_n`
+   flags (< 30 patients or < 10 per class) and `null` for metrics of classes with < 3 patients. Findings (OOF,
+   unadjusted, exploratory): CAD discrimination is similar across all subgroups (0.90–0.98); vessel-level
+   discrimination is lower in patients over 65 (LCX 0.54 vs 0.75 at 50–65, Δ −0.21, 95 % CI −0.36 to −0.05) and with
+   diabetes (LAD 0.75 vs 0.88, Δ −0.14, −0.26 to −0.02), where most patients are flagged (specificity 0.21–0.45);
+   calibration-in-the-large stays within ±0.09 in every subgroup.
 
 ## Explainability
 
