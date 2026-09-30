@@ -198,7 +198,7 @@ export default function PerformancePage() {
   return (
     <div className="flex w-full flex-col">
       <div className="sticky top-[var(--topbar-h)] z-hud border-b border-hairline bg-app">
-        <div className="mx-auto flex h-14 w-full max-w-[1280px] items-center gap-4 px-6">
+        <div className="mx-auto flex h-14 w-full max-w-[1280px] items-center gap-4 overflow-x-auto px-6 [scrollbar-width:none]">
           <Tabs
             idBase="perf-target"
             label="Target"

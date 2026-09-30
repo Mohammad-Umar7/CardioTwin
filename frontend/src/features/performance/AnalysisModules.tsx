@@ -560,7 +560,8 @@ export function SubgroupsModule({ target, s, source, height, provenance }: { tar
         ),
       }}
     >
-      <div className="flex h-full flex-col">
+      <div className="panel-scroll relative h-full overflow-x-auto overflow-y-clip">
+      <div className="flex h-full min-w-[560px] flex-col">
         <div className={cn('grid gap-3 pb-1 text-label font-normal text-tertiary', SUB_GRID)}>
           <span>Subgroup</span>
           <span className="text-right">Patients</span>
@@ -631,6 +632,7 @@ export function SubgroupsModule({ target, s, source, height, provenance }: { tar
             ))}
           </span>
         </div>
+      </div>
       </div>
     </ChartModule>
   );
