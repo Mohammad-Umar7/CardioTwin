@@ -1,7 +1,7 @@
 import { Probability, RiskPip, RiskTrack, Skeleton } from '@/design';
 import { useSchemaIndex } from '@/hooks/useData';
 import { cn } from '@/lib/cn';
-import { formatDeltaPts, formatProbability } from '@/lib/format';
+import { formatProbability, formatShownDeltaPts } from '@/lib/format';
 import { usePatientStore } from '@/state/patientStore';
 import { useViewerStore } from '@/state/viewerStore';
 import type { TargetSpec } from '@/types/contracts';
@@ -34,7 +34,7 @@ export function VesselRow({ spec, covered = false }: VesselRowProps) {
   const base = view.baseline?.predictions[spec.id];
   const verdict = p ? verdictFor(p) : null;
   const showDelta = view.edits > 0;
-  const delta = p && base ? formatDeltaPts(p.probability - base.probability) : null;
+  const delta = p && base ? formatShownDeltaPts(base.probability, p.probability) : null;
   const truth = revealed ? cathComparison(spec.id, patient?.labels[spec.id], view.recorded?.predictions[spec.id]) : null;
   const viewer = useViewerStore.getState;
 
@@ -85,7 +85,7 @@ export function VesselRow({ spec, covered = false }: VesselRowProps) {
         )}
         {showDelta && (
           <span className="num whitespace-nowrap text-right text-label font-normal text-secondary" aria-hidden>
-            {delta && delta.direction !== 'none' ? `${delta.glyph}${delta.text.replace(/[^\d]/g, '')}` : '·'}
+            {delta && delta.direction !== 'none' ? `${delta.glyph}${delta.text.replace(/[^\d≥]/g, '')}` : '·'}
           </span>
         )}
         <RiskTrack

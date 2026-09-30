@@ -5,7 +5,7 @@ import { BandChip, Probability, RiskTrack, Skeleton, Tooltip } from '@/design';
 import { useSchemaIndex } from '@/hooks/useData';
 import { useIsReducedMotion } from '@/hooks/useMediaQuery';
 import { cn } from '@/lib/cn';
-import { formatDeltaPts, formatPercent, formatProbability } from '@/lib/format';
+import { formatPercent, formatProbability, formatShownDeltaPts } from '@/lib/format';
 import { RISK_BAND_STYLES } from '@/theme/risk';
 import { EASE, MOTION } from '@/theme/tokens';
 import { Collapse } from './Collapse';
@@ -65,7 +65,7 @@ export function CadHeadline({ titleId, covered = false, showTrack = true }: CadH
   const base = view.baseline?.predictions.CAD;
   const spec = index?.targetById.get('CAD');
   const verdict = cad ? verdictFor(cad) : null;
-  const delta = cad && base ? formatDeltaPts(cad.probability - base.probability) : null;
+  const delta = cad && base ? formatShownDeltaPts(base.probability, cad.probability) : null;
   const band = cad ? RISK_BAND_STYLES[cad.risk_band] : null;
   const vesselPs = (index?.vessels ?? []).flatMap((v) => {
     const vp = view.prediction?.predictions[v.id];

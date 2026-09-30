@@ -4,7 +4,7 @@ import { useRiskView } from '@/features/risk/useRiskView';
 import { useSchemaIndex } from '@/hooks/useData';
 import { ASSOCIATION_LEGEND, ASSOCIATION_MARK, ASSOCIATION_NOTE, isAssociationOnly } from '@/lib/associations';
 import { cn } from '@/lib/cn';
-import { formatDeltaPts, formatFeatureValue, formatProbability } from '@/lib/format';
+import { formatFeatureValue, formatProbability, formatShownDeltaPts } from '@/lib/format';
 import { editedKeys, usePatientStore } from '@/state/patientStore';
 import { riskGradientCss, riskHex } from '@/theme/risk';
 import type { FeatureValue, TargetId } from '@/types/contracts';
@@ -12,7 +12,7 @@ import { useLevers } from './useLevers';
 
 /** Recorded vs what-if bar pair for one target (ACC "now vs after"). */
 function CompareRow({ target, recorded, current, edited }: { target: TargetId; recorded?: number; current?: number; edited: boolean }) {
-  const d = typeof recorded === 'number' && typeof current === 'number' ? formatDeltaPts(current - recorded) : null;
+  const d = typeof recorded === 'number' && typeof current === 'number' ? formatShownDeltaPts(recorded, current) : null;
   const bar = (p: number | undefined, tone: 'recorded' | 'current') => (
     <span className="relative block h-1.5 w-full overflow-clip rounded-full bg-line">
       {typeof p === 'number' && (
@@ -164,7 +164,7 @@ export function WhatIfTab({ target }: { target: TargetId }) {
         ) : (
           <ul className={cn('mt-2 flex flex-col', levers.status === 'loading' && 'opacity-50')}>
             {levers.levers.map((l) => {
-              const d = formatDeltaPts(l.delta);
+              const d = formatShownDeltaPts(l.now, l.then);
               const spec = specOf(l.feature);
               // Pulling an edited input back to its recorded value is an undo, and lands on the recorded estimate.
               const undo = edited.includes(l.feature) && l.to === recordedInputs[l.feature];

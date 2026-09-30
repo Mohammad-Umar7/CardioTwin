@@ -28,7 +28,7 @@ import {
   THIN_SPACE,
   formatFeatureValue,
   formatNormalRange,
-  formatDeltaPts,
+  formatShownDeltaPts,
   formatProbability,
   rangeStatus,
   type FormattedDelta,
@@ -315,7 +315,7 @@ const targetShort = (t: TargetSpec | undefined, id: TargetId) => t?.short || id;
 
 function recordedResult(recordedP: number | undefined, p: number): TargetResult['recorded'] {
   if (!isNum(recordedP)) return null;
-  return { p: recordedP, pctText: formatProbability(recordedP).text, delta: formatDeltaPts(p - recordedP) };
+  return { p: recordedP, pctText: formatProbability(recordedP).text, delta: formatShownDeltaPts(recordedP, p) };
 }
 
 export function targetResult(

@@ -92,6 +92,35 @@ export function formatDeltaPts(delta: number): FormattedDelta {
   };
 }
 
+/**
+ * The change between two probabilities as they are displayed: the difference of the two printed integers,
+ * so "was 67 %" and "79 %" never sit beside "+11 pts". When either end is capped (≤5 % / ≥95 %) the exact
+ * value stays hidden and the change reads as a bound: "was ≥95 %" → 62 % is "▼ ≥33 pts", not the exact
+ * "−36 pts" that would give the capped value away.
+ */
+export function formatShownDeltaPts(from: number, to: number): FormattedDelta {
+  const shown = (p: number) => {
+    const f = formatProbability(p);
+    return { v: Number(f.value), capped: f.capped };
+  };
+  const a = shown(from);
+  const b = shown(to);
+  const pts = b.v - a.v;
+  if (!Number.isFinite(pts) || pts === 0) {
+    return { direction: 'none', glyph: '', text: `0${THIN_SPACE}pts`, spoken: 'no change' };
+  }
+  const up = pts > 0;
+  const abs = Math.abs(pts);
+  // A capped end moves the true value further out, so the displayed difference is a lower bound.
+  const bound = a.capped || b.capped;
+  return {
+    direction: up ? 'up' : 'down',
+    glyph: up ? '▲' : '▼',
+    text: bound ? `≥${abs}${THIN_SPACE}pts` : `${up ? '+' : MINUS}${abs}${THIN_SPACE}pts`,
+    spoken: `${up ? 'up' : 'down'} ${bound ? 'at least ' : ''}${abs} ${abs === 1 ? 'point' : 'points'}`,
+  };
+}
+
 // --------------------------------------------------------------------------------------- SHAP
 
 /** Signed log-odds with the true minus: "+0.94", "−0.18", "0.00". */

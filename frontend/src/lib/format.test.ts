@@ -10,6 +10,7 @@ import {
   formatNormalRange,
   formatProbability,
   formatShap,
+  formatShownDeltaPts,
   printedDifference,
   optionDisplay,
   rangeStatus,
@@ -138,5 +139,17 @@ describe('printedDifference', () => {
     // 0.672 → 0.794 prints "0.67 → 0.79": +0.12, not +0.13.
     expect(printedDifference(0.6724, 0.7943)).toBeCloseTo(0.12, 10);
     expect(printedDifference(0.9, 0.9)).toBe(0);
+  });
+});
+
+describe('formatShownDeltaPts', () => {
+  it('is the difference of the two printed percentages', () => {
+    expect(formatShownDeltaPts(0.674, 0.786).text).toBe(`+12${THIN_SPACE}pts`);
+    expect(formatShownDeltaPts(0.5, 0.5).direction).toBe('none');
+  });
+  it('reads as a bound, never the exact change, when an end is capped at ≥95 % or ≤5 %', () => {
+    const d = formatShownDeltaPts(0.979, 0.62);
+    expect(d).toMatchObject({ direction: 'down', glyph: '▼', text: `≥33${THIN_SPACE}pts` });
+    expect(formatShownDeltaPts(0.03, 0.3).text).toBe(`≥25${THIN_SPACE}pts`);
   });
 });
