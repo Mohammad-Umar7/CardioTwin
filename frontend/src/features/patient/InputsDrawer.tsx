@@ -29,8 +29,8 @@ import { copyShareLink, exportProfile, importProfileFile, pickProfileFile, reset
  *   footer   "2 changes · applied instantly" + Done (the only filled button on screen)
  *
  * Stability: the lower sections are laid out once per opening (and when the target or patient changes),
- * so nothing under the pointer disappears while editing. "Changed" is a live summary at the top that
- * picks up an edit 1.2 s after it lands (the edited row flashes where it is first).
+ * so nothing under the pointer disappears while editing. "Changed" is a fixed-height tray under the list
+ * (reserved from the moment the drawer opens), so an edit never shrinks the list or covers the row in use.
  *
  * Open state, the row to focus (`focusField`) and the section to scroll to (`inputsSection`) come from
  * `uiStore.openDrawer('inputs', { field, section })`. A JSON profile can be dropped anywhere on the drawer.
@@ -138,9 +138,11 @@ function InputList({
 }
 
 /**
- * The live "Changed" tray, docked between the list and the footer. It sits outside the scrolling list, so
- * an edit never moves the list under the pointer (no layout shift, V2 §8.6): growing it only shortens the
- * list's viewport from the bottom. It follows the edits in the same frame.
+ * The live "Changed" tray, docked between the list and the footer at a FIXED height from the moment the
+ * drawer opens (an empty state until the first edit). It sits outside the scrolling list and never grows, so
+ * an edit can neither move the list under the pointer nor cover the row being edited (no layout shift,
+ * V2 §8.6): the list's viewport is the same before and after every edit. More edits than fit scroll inside
+ * the tray. It follows the edits in the same frame.
  */
 function ChangedTray({
   keys,
@@ -156,58 +158,58 @@ function ChangedTray({
   const reduced = useIsReducedMotion();
   const specs = keys.map((k) => index.byKey.get(k)).filter((s): s is FeatureSpec => !!s);
   const t = { duration: reduced ? 0.12 : MOTION.base / 1000, ease: EASE.out };
+  const empty = specs.length === 0;
   return (
-    <AnimatePresence initial={false}>
-      {specs.length > 0 && (
-        <motion.section
-          key="changed"
-          aria-label="Changed inputs"
-          data-section="changed"
-          initial={reduced ? { opacity: 0 } : { height: 0, opacity: 0 }}
-          animate={reduced ? { opacity: 1 } : { height: 'auto', opacity: 1 }}
-          exit={reduced ? { opacity: 0 } : { height: 0, opacity: 0 }}
-          transition={t}
-          className="relative shrink-0 overflow-clip border-t border-hairline bg-panel"
-          onFocusCapture={(e) => onHold((e.target as HTMLElement).closest<HTMLElement>('[data-feature]')?.dataset.feature ?? null)}
-          onBlurCapture={(e) => {
-            if (!e.currentTarget.contains(e.relatedTarget as Node | null)) onHold(null);
-          }}
-        >
-          <SectionHeader
-            title="Changed"
-            count={specs.length}
-            action={
-              <button
-                type="button"
-                onClick={resetAllEdits}
-                className="rounded-sm px-1.5 py-0.5 text-label font-medium text-secondary transition-colors duration-instant hover:bg-surface-2 hover:text-primary"
-              >
-                Reset all
-              </button>
-            }
-          />
-          <div className="panel-scroll flex max-h-[min(30vh,172px)] flex-col px-3 pb-2 pt-1">
-            <AnimatePresence initial={false}>
-              {specs.map((spec) => {
-                const rowId = `changed:${spec.key}`;
-                return (
-                  <motion.div
-                    key={spec.key}
-                    initial={reduced ? { opacity: 0 } : { height: 0, opacity: 0 }}
-                    animate={reduced ? { opacity: 1 } : { height: 'auto', opacity: 1 }}
-                    exit={reduced ? { opacity: 0 } : { height: 0, opacity: 0 }}
-                    transition={t}
-                    className="shrink-0 overflow-clip"
-                  >
-                    <FieldRow spec={spec} rowId={rowId} expanded={expanded === rowId} />
-                  </motion.div>
-                );
-              })}
-            </AnimatePresence>
-          </div>
-        </motion.section>
-      )}
-    </AnimatePresence>
+    <section
+      aria-label="Changed inputs"
+      data-section="changed"
+      className="relative flex h-[clamp(104px,18vh,152px)] shrink-0 flex-col border-t border-hairline bg-panel"
+      onFocusCapture={(e) => onHold((e.target as HTMLElement).closest<HTMLElement>('[data-feature]')?.dataset.feature ?? null)}
+      onBlurCapture={(e) => {
+        if (!e.currentTarget.contains(e.relatedTarget as Node | null)) onHold(null);
+      }}
+    >
+      <SectionHeader
+        title="Changed"
+        count={empty ? undefined : specs.length}
+        action={
+          empty ? undefined : (
+            <button
+              type="button"
+              onClick={resetAllEdits}
+              className="rounded-sm px-1.5 py-0.5 text-label font-medium text-secondary transition-colors duration-instant hover:bg-surface-2 hover:text-primary"
+            >
+              Reset all
+            </button>
+          )
+        }
+      />
+      <div className="panel-scroll flex min-h-0 flex-1 flex-col px-3 pb-2 pt-1">
+        {empty ? (
+          <p className="m-0 px-1 pt-1.5 text-label font-normal text-tertiary">
+            Edits appear here, each with its recorded value and an undo.
+          </p>
+        ) : (
+          <AnimatePresence initial={false}>
+            {specs.map((spec) => {
+              const rowId = `changed:${spec.key}`;
+              return (
+                <motion.div
+                  key={spec.key}
+                  initial={reduced ? { opacity: 0 } : { height: 0, opacity: 0 }}
+                  animate={reduced ? { opacity: 1 } : { height: 'auto', opacity: 1 }}
+                  exit={reduced ? { opacity: 0 } : { height: 0, opacity: 0 }}
+                  transition={t}
+                  className="shrink-0 overflow-clip"
+                >
+                  <FieldRow spec={spec} rowId={rowId} expanded={expanded === rowId} />
+                </motion.div>
+              );
+            })}
+          </AnimatePresence>
+        )}
+      </div>
+    </section>
   );
 }
 
