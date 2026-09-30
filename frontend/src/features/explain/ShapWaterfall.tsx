@@ -13,7 +13,7 @@ import type { Contribution, FeatureSpec, TargetId } from '@/types/contracts';
 import type { PointsScale } from './attribution';
 import type { ContributionUnit } from './explainPrefs';
 import { ROW_GRID, useChangedFeatures } from './explainUi';
-import { formatContribution, useExplainData } from './useExplainData';
+import { formatContribution, useExplainData, type ExplainData } from './useExplainData';
 
 /** Half-width of the diverging bar, as a share of the bar column (the column is 80 or 104 px wide). */
 const HALF_PCT = 50;
@@ -31,6 +31,8 @@ export interface ContributionRowProps {
   changed?: boolean;
   /** Indent (rows under a modality header). */
   inset?: boolean;
+  /** The printed-value formatter of the tab (largest-remainder rounded, so the rows add up to their totals). */
+  fmt?: ExplainData['fmt'];
 }
 
 /**
@@ -39,7 +41,7 @@ export interface ContributionRowProps {
  * the input (`highlightFeature`, never anatomy); click opens the Inputs drawer at that field. Negligible
  * rows (|shap| < 0.02) sit at 40 %.
  */
-export function ContributionRow({ c, spec, target, max, unit, scale, changed, inset }: ContributionRowProps) {
+export function ContributionRow({ c, spec, target, max, unit, scale, changed, inset, fmt }: ContributionRowProps) {
   const lit = useUiStore((s) => s.highlightedFeature === c.feature);
   const highlight = useUiStore((s) => s.highlightFeature);
   const reduced = useIsReducedMotion();
@@ -50,9 +52,9 @@ export function ContributionRow({ c, spec, target, max, unit, scale, changed, in
   const label = spec?.label ?? c.feature;
   // The short card label ("Wall-motion abn.") in the row; the full one in the tooltip and aria-label.
   const shortLabel = spec ? cardLabel(spec) : c.feature;
-  const f = formatContribution(c.shap, unit, scale);
-  const logodds = formatContribution(c.shap, 'logodds', null).text;
-  const pts = formatContribution(c.shap, 'points', scale);
+  const f = fmt ? fmt(c.feature, c.shap, unit) : formatContribution(c.shap, unit, scale);
+  const logodds = (fmt ? fmt(c.feature, c.shap, 'logodds') : formatContribution(c.shap, 'logodds', null)).text;
+  const pts = fmt && scale ? fmt(c.feature, c.shap, 'points') : formatContribution(c.shap, 'points', scale);
   const range = spec?.normal ? formatNormalRange(spec.normal, spec.step) : '';
   const association = isAssociationOnly(c.feature);
 
@@ -128,7 +130,7 @@ export function ContributionRow({ c, spec, target, max, unit, scale, changed, in
  * the viewer's unit. The Explain drawer's Why tab builds its grouped lists from `ContributionRow` directly.
  */
 export function ShapWaterfall({ target, limit = 8 }: { target: string; limit?: number; compact?: boolean }) {
-  const { index, explanation, scale, unit } = useExplainData(target);
+  const { index, explanation, scale, unit, fmt } = useExplainData(target);
   const changed = useChangedFeatures(explanation?.contributions);
   if (!explanation) {
     return (
@@ -153,6 +155,7 @@ export function ShapWaterfall({ target, limit = 8 }: { target: string; limit?: n
           unit={unit}
           scale={scale}
           changed={changed.has(c.feature)}
+          fmt={fmt}
         />
       ))}
     </ul>

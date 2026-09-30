@@ -154,3 +154,41 @@ export function splitDrivers(e: Explanation | null | undefined, n = 5): DriverSp
 /** Largest |SHAP| in an explanation: the shared bar scale for one target (§5.10). */
 export const shapScale = (e: Explanation | null | undefined): number =>
   Math.max(1e-6, ...(e?.contributions ?? []).map((c) => Math.abs(c.shap)));
+
+// ------------------------------------------------------------------------------ display rounding
+
+/**
+ * Largest-remainder rounding: integers, each the floor or the ceiling of its value, that add up exactly to
+ * round(Σ values). Signs are kept (a positive value never rounds below 0, a negative one never above 0).
+ */
+export function largestRemainder(values: readonly number[]): number[] {
+  const total = Math.round(values.reduce((a, v) => a + v, 0));
+  const floors = values.map((v) => Math.floor(v + 1e-9));
+  let extra = total - floors.reduce((a, v) => a + v, 0);
+  const order = values.map((v, i) => ({ i, r: v - floors[i]! })).sort((a, b) => b.r - a.r || a.i - b.i);
+  const out = [...floors];
+  for (let j = 0; j < order.length && extra > 0; j += 1, extra -= 1) out[order[j]!.i]! += 1;
+  // Never a negative zero.
+  return out.map((v) => (Object.is(v, -0) ? 0 : v));
+}
+
+/**
+ * Every input's contribution as PRINTED, in display quanta: whole percentage points (`points`, null without
+ * a points scale) and hundredths of log-odds (`logodds`). Rounded together with the largest-remainder rule,
+ * so any printed total (a modality column, a group header, the raising / lowering footer) is exactly the sum
+ * of the printed rows under it, and all of them add up to the printed net change.
+ */
+export interface RoundedContributions {
+  points: ReadonlyMap<string, number> | null;
+  logodds: ReadonlyMap<string, number>;
+}
+
+export function roundContributions(e: Explanation | null | undefined, scale: PointsScale | null): RoundedContributions {
+  const list = e?.contributions ?? [];
+  const keys = list.map((c) => c.feature);
+  const zip = (q: number[]) => new Map(keys.map((k, i) => [k, q[i]!]));
+  return {
+    points: scale ? zip(largestRemainder(list.map((c) => c.shap * scale.perLogOdds * 100))) : null,
+    logodds: zip(largestRemainder(list.map((c) => c.shap * 100))),
+  };
+}

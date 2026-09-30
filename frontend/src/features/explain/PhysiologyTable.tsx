@@ -9,7 +9,7 @@ import { usePatientStore } from '@/state/patientStore';
 import { useUiStore } from '@/state/uiStore';
 import type { FeatureSpec } from '@/types/contracts';
 import { setExplainPrefs, useExplainPrefs } from './explainPrefs';
-import { formatContribution, unitLabel, useExplainData } from './useExplainData';
+import { unitLabel, useExplainData } from './useExplainData';
 
 
 /**
@@ -130,7 +130,7 @@ export function PhysiologyTable({ target }: { target: string }) {
           <tbody>
             {rows.map(({ spec, value, status }) => {
               const shap = shapOf.get(spec.key);
-              const f = typeof shap === 'number' ? formatContribution(shap, d.unit, d.scale) : null;
+              const f = typeof shap === 'number' ? d.fmt(spec.key, shap) : null;
               const range = formatNormalRange(spec.normal, spec.step);
               return (
                 <tr
@@ -209,7 +209,7 @@ export function PhysiologyTable({ target }: { target: string }) {
             {present.map((s) => {
               const shap = shapOf.get(s.key) ?? 0;
               const up = shap > 0;
-              const f = formatContribution(shap, d.unit, d.scale);
+              const f = d.fmt(s.key, shap);
               return (
                 <li key={s.key}>
                   <button

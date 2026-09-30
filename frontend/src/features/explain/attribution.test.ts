@@ -7,7 +7,7 @@ import type { CohortResponse, FeatureSchema } from '@/types/contracts';
 import cohortRaw from '../../../public/model/cohort.json?raw';
 import modelRaw from '../../../public/model/model.json?raw';
 import schemaRaw from '../../../public/model/schema.json?raw';
-import { modalityAttribution, pointsScale, shapScale, splitDrivers, toPoints, typicalProbability } from './attribution';
+import { largestRemainder, modalityAttribution, pointsScale, roundContributions, shapScale, splitDrivers, toPoints, typicalProbability } from './attribution';
 
 const spec = JSON.parse(modelRaw) as PortableModelSpec;
 const model = new EdgeModel(spec);
@@ -78,5 +78,36 @@ describe('modalities and drivers', () => {
     expect(split.raising.length + split.lowering.length + split.hidden).toBe(e.contributions.length);
     expect(Math.abs(split.raising[0]!.shap)).toBeGreaterThanOrEqual(Math.abs(split.raising.at(-1)!.shap));
     expect(shapScale(e)).toBe(Math.max(...e.contributions.map((c) => Math.abs(c.shap))));
+  });
+});
+
+describe('largest-remainder display rounding', () => {
+  it('keeps each value within 1 of itself and its sign, and adds up to the rounded total', () => {
+    const values = [17.6, -3.4, 0.45, 0.45, -0.3, 2.49, -11.51];
+    const q = largestRemainder(values);
+    expect(q.reduce((a, v) => a + v, 0)).toBe(Math.round(values.reduce((a, v) => a + v, 0)));
+    q.forEach((v, i) => {
+      expect(Math.abs(v - values[i]!)).toBeLessThan(1);
+      if (values[i]! > 0) expect(v).toBeGreaterThanOrEqual(0);
+      if (values[i]! < 0) expect(v).toBeLessThanOrEqual(0);
+    });
+  });
+
+  it('prints totals that are the sums of their printed parts', () => {
+    const e = {
+      space: 'log-odds',
+      base_value: 0,
+      output_value: 0.9,
+      contributions: [
+        { feature: 'a', value: 1, shap: 0.456 },
+        { feature: 'b', value: 1, shap: 0.444 },
+        { feature: 'c', value: 1, shap: -0.004 },
+        { feature: 'd', value: 1, shap: 0.004 },
+      ],
+    };
+    const r = roundContributions(e, { typical: 0.5, probability: 0.7, perLogOdds: 0.2222 });
+    const pts = [...r.points!.values()];
+    expect(pts.reduce((a, v) => a + v, 0)).toBe(Math.round(0.9 * 0.2222 * 100));
+    expect([...r.logodds.values()].reduce((a, v) => a + v, 0)).toBe(90);
   });
 });

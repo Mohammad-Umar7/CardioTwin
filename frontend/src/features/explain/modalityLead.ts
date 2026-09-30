@@ -1,30 +1,31 @@
 import { MINUS } from '@/lib/format';
-import { toPoints, type ModalityRow, type PointsScale } from './attribution';
+import type { ModalityRow } from './attribution';
 import type { ContributionUnit } from './explainPrefs';
 
-/** A column's value exactly as printed under it: whole points, or log-odds to 2 decimals. */
-export function shownValue(sum: number, unit: ContributionUnit, scale: PointsScale | null): number {
-  const pts = unit === 'points' ? toPoints(sum, scale) : null;
-  return pts === null ? Number(sum.toFixed(2)) : Math.round(pts);
-}
-
-const signed = (v: number, unit: ContributionUnit, scale: PointsScale | null) => {
-  const digits = unit === 'points' && scale ? 0 : 2;
+const signed = (v: number, unit: ContributionUnit) => {
+  const digits = unit === 'points' ? 0 : 2;
   return `${v > 0 ? '+' : v < 0 ? MINUS : ''}${Math.abs(v).toFixed(digits)}`;
 };
 
 /**
- * The lead modality in the columns' own printed numbers, so a reader can check it by adding them up:
- * "Symptoms: +12 of the +27 pts raising LAD" (the +27 is the sum of the positive columns).
+ * The lead modality in the columns' own printed numbers (`values`, parallel to `rows`: whole points or
+ * log-odds to 2 decimals), so a reader can check it by adding the columns up. These are NET sums per
+ * modality (each column nets its raising and lowering inputs), which the wording says, so it never reads
+ * as the gross input-level totals under the lists:
+ *   several columns on the lead's side  "Symptoms: +12 of the +27 net pts raising LAD"
+ *   the lead is alone on its side       "Echocardiography carries the whole net rise: +53 pts on LAD"
  */
-export function leadSentence(rows: readonly ModalityRow[], target: string, unit: ContributionUnit, scale: PointsScale | null): string | null {
-  const shown = rows.map((r) => ({ r, v: shownValue(r.sum, unit, scale) }));
+export function leadSentence(rows: readonly ModalityRow[], values: readonly number[], target: string, unit: ContributionUnit): string | null {
+  const shown = rows.map((r, i) => ({ r, v: values[i] ?? 0 }));
   const lead = [...shown].sort((a, b) => Math.abs(b.v) - Math.abs(a.v))[0];
   if (!lead || lead.v === 0) return null;
   const up = lead.v > 0;
-  const total = shown.filter((x) => (up ? x.v > 0 : x.v < 0)).reduce((acc, x) => acc + x.v, 0);
-  const unitText = unit === 'points' && scale ? 'pts' : 'log-odds';
+  const side = shown.filter((x) => (up ? x.v > 0 : x.v < 0));
+  const total = side.reduce((acc, x) => acc + x.v, 0);
+  const unitText = unit === 'points' ? 'pts' : 'log-odds';
   const name = lead.r.label.replace(/^Resting ECG$/, 'ECG');
-  return `${name}: ${signed(lead.v, unit, scale)} of the ${signed(total, unit, scale)} ${unitText} ${up ? 'raising' : 'lowering'} ${target}`;
+  if (side.length === 1) {
+    return `${name} carries the whole net ${up ? 'rise' : 'fall'}: ${signed(lead.v, unit)} ${unitText} on ${target}`;
+  }
+  return `${name}: ${signed(lead.v, unit)} of the ${signed(total, unit)} net ${unitText} ${up ? 'raising' : 'lowering'} ${target}`;
 }
-

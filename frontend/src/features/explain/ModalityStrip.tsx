@@ -2,10 +2,10 @@ import { Tooltip } from '@/design';
 import { cn } from '@/lib/cn';
 import { SHAP_LOWERS, SHAP_RAISES } from '@/theme/risk';
 import type { TargetId } from '@/types/contracts';
-import type { ModalityRow, PointsScale } from './attribution';
+import type { ModalityRow } from './attribution';
 import type { ContributionUnit } from './explainPrefs';
 import { leadSentence } from './modalityLead';
-import { formatContribution } from './useExplainData';
+import type { ExplainData } from './useExplainData';
 
 /** Column captions: short enough for seven columns in a 400 px drawer. */
 const SHORT: Record<string, string> = {
@@ -25,9 +25,11 @@ export interface ModalityStripProps {
   rows: ModalityRow[];
   target: TargetId;
   unit: ContributionUnit;
-  scale: PointsScale | null;
   /** Feature labels for the tooltips. */
   labelOf(feature: string): string;
+  /** Printed values of the tab (largest-remainder rounded): a column is the sum of its inputs' printed values. */
+  fmt: ExplainData['fmt'];
+  total: ExplainData['total'];
   /** A column was chosen: show the evidence grouped by modality, at that modality. */
   onPick?(group: string): void;
   active?: string | null;
@@ -39,32 +41,33 @@ export interface ModalityStripProps {
  * (raises, SHAP raise colour) or down (lowers) from one zero line on a scale shared by the seven, with the
  * value under it: "ECG +0.42". The tooltip names the inputs behind it.
  */
-export function ModalityStrip({ rows, target, unit, scale, labelOf, onPick, active }: ModalityStripProps) {
+export function ModalityStrip({ rows, target, unit, labelOf, fmt, total, onPick, active }: ModalityStripProps) {
   const max = Math.max(1e-6, ...rows.map((r) => Math.abs(r.sum)));
-  const lead = leadSentence(rows, target, unit, scale);
+  const totals = rows.map((r) => total(r.contributions, unit));
+  const lead = leadSentence(rows, totals.map((t) => (unit === 'points' ? t.q : t.q / 100)), target, unit);
   return (
     <section aria-labelledby="modality-title" className="flex flex-col gap-2">
       <div className="flex min-h-6 items-center justify-between gap-3">
         <h3 id="modality-title" className="eyebrow shrink-0 text-secondary">
-          By data modality
+          By data modality <span className="text-tertiary">· net</span>
         </h3>
-        {lead && <span className="min-w-0 text-right text-label font-normal leading-4 text-tertiary">{lead}</span>}
+        {lead && <span className="min-w-0 text-balance text-right text-label font-normal leading-4 text-tertiary">{lead}</span>}
       </div>
       <ul className="-mx-1 flex justify-between" aria-label={`Contribution of each data modality to ${target}`}>
-        {rows.map((r) => {
+        {rows.map((r, i) => {
           const up = r.sum >= 0;
           const h = r.abs === 0 ? 0 : Math.max(2, (Math.abs(r.sum) / max) * HALF);
-          const f = formatContribution(r.sum, unit, scale);
+          const f = totals[i]!;
           const top = r.contributions.filter((c) => Math.abs(c.shap) >= 0.005).slice(0, 4);
           const tip = (
             <div className="flex flex-col gap-1">
               <span className="font-semibold text-primary">
-                {r.label}: {r.abs === 0 ? 'no effect' : `${up ? 'raises' : 'lowers'} ${target} by ${formatContribution(Math.abs(r.sum), unit, scale).text.replace('+', '')} ${unit === 'points' ? 'pts' : 'log-odds'}`}
+                {r.label}: {r.abs === 0 ? 'no effect' : `${up ? 'raises' : 'lowers'} ${target} by ${f.text.replace(/^[+−]/, '')} ${unit === 'points' ? 'pts' : 'log-odds'} (net)`}
               </span>
               {top.map((c) => (
                 <span key={c.feature} className="flex justify-between gap-3 text-secondary">
                   <span>{labelOf(c.feature)}</span>
-                  <span className="num text-primary">{formatContribution(c.shap, unit, scale).text}</span>
+                  <span className="num text-primary">{fmt(c.feature, c.shap, unit).text}</span>
                 </span>
               ))}
               {r.contributions.length === 0 && <span className="text-tertiary">No inputs of this kind</span>}

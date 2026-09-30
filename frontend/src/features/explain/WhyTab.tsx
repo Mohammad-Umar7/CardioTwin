@@ -6,12 +6,12 @@ import { cn } from '@/lib/cn';
 import { NEGLIGIBLE_SHAP, sortedContributions } from '@/lib/explain';
 import { formatSigned } from '@/lib/format';
 import type { Contribution, TargetId } from '@/types/contracts';
-import { modalityAttribution, splitDrivers, toPoints } from './attribution';
+import { modalityAttribution, splitDrivers } from './attribution';
 import { setExplainPrefs, useExplainPrefs, type ContributionUnit, type WhyGrouping } from './explainPrefs';
 import { ROW_GRID, useChangedFeatures } from './explainUi';
 import { ModalityStrip } from './ModalityStrip';
 import { ContributionRow } from './ShapWaterfall';
-import { formatContribution, unitLabel, useExplainData, type ExplainData } from './useExplainData';
+import { unitLabel, useExplainData, type ExplainData } from './useExplainData';
 
 const TOP = 5;
 
@@ -43,9 +43,27 @@ function Rows({ list, d, changed, inset }: { list: Contribution[]; d: ExplainDat
           scale={d.scale}
           changed={changed.has(c.feature)}
           inset={inset}
+          fmt={d.fmt}
         />
       ))}
     </>
+  );
+}
+
+/**
+ * The hidden negligible inputs of a modality as one printed row, so the header total is exactly the sum of
+ * the rows printed under it.
+ */
+function NegligibleRow({ list, d }: { list: Contribution[]; d: ExplainData }) {
+  const f = d.total(list);
+  return (
+    <li className={cn('grid min-h-7 items-center gap-x-2 py-0.5 pl-3 pr-1 opacity-60', ROW_GRID)}>
+      <span />
+      <span className="col-span-3 text-body-s leading-4 text-tertiary">
+        {list.length} negligible {list.length === 1 ? 'input' : 'inputs'}
+      </span>
+      <span className="num text-right text-numeral-m text-tertiary">{f.text}</span>
+    </li>
   );
 }
 
@@ -84,10 +102,10 @@ export function WhyTab({ target }: { target: TargetId }) {
   const loweringAll = all.filter((c) => c.shap <= -NEGLIGIBLE_SHAP).length;
   const hidden = expanded ? 0 : all.length - split.raising.length - split.lowering.length;
 
-  const up = all.filter((c) => c.shap > 0).reduce((a, c) => a + c.shap, 0);
-  const down = all.filter((c) => c.shap < 0).reduce((a, c) => a + c.shap, 0);
-  const upPts = toPoints(up, d.scale);
-  const downPts = toPoints(down, d.scale);
+  // Gross, input by input: the sums of the printed rows (largest-remainder rounded), never re-rounded totals.
+  const upTotal = d.total(all.filter((c) => c.shap > 0), 'points');
+  const downTotal = d.total(all.filter((c) => c.shap < 0), 'points');
+  const netTotal = d.total(all, 'points');
 
   const pickGroup = (g: string) => {
     setFocusGroup(g);
@@ -139,8 +157,9 @@ export function WhyTab({ target }: { target: TargetId }) {
         rows={modalities}
         target={target}
         unit={d.unit}
-        scale={d.scale}
         labelOf={labelOf}
+        fmt={d.fmt}
+        total={d.total}
         onPick={pickGroup}
         active={prefs.grouping === 'modality' ? focusGroup : null}
       />
@@ -194,7 +213,9 @@ export function WhyTab({ target }: { target: TargetId }) {
             .filter((m) => m.contributions.length > 0)
             .map((m) => {
               const shown = expanded ? m.contributions : m.contributions.filter((c) => Math.abs(c.shap) >= NEGLIGIBLE_SHAP);
-              const f = formatContribution(m.sum, d.unit, d.scale);
+              const rest = expanded ? [] : m.contributions.filter((c) => Math.abs(c.shap) < NEGLIGIBLE_SHAP);
+              // The column's printed value (net for the modality): the sum of the printed rows below.
+              const f = d.total(m.contributions);
               return (
                 <section
                   key={m.group}
@@ -210,13 +231,10 @@ export function WhyTab({ target }: { target: TargetId }) {
                     <span />
                     <span className="num text-right text-numeral-m text-primary">{m.abs === 0 ? '–' : f.text}</span>
                   </div>
-                  {shown.length > 0 ? (
-                    <ul className="mt-1 flex flex-col">
-                      <Rows list={shown} d={d} changed={changed} />
-                    </ul>
-                  ) : (
-                    <p className="px-1 pt-2 text-label font-normal text-tertiary">All negligible.</p>
-                  )}
+                  <ul className="mt-1 flex flex-col">
+                    <Rows list={shown} d={d} changed={changed} inset />
+                    {rest.length > 0 && <NegligibleRow list={rest} d={d} />}
+                  </ul>
                 </section>
               );
             })}
@@ -234,13 +252,15 @@ export function WhyTab({ target }: { target: TargetId }) {
       )}
 
       <p className="border-t border-hairline pt-3 text-label font-normal text-tertiary">
-        {d.unit === 'points' && upPts !== null && downPts !== null ? (
+        {d.unit === 'points' && d.scale ? (
           <>
-            Points rescale the exact SHAP log-odds so they add up from the typical patient to this estimate:{' '}
+            Points rescale the exact SHAP log-odds so they add up from the typical patient to this estimate. Gross,
+            input by input:{' '}
             <span className="num text-secondary">
-              {formatContribution(up, 'points', d.scale).text} raising, {formatContribution(down, 'points', d.scale).text} lowering
+              {upTotal.text} raising, {downTotal.text} lowering, net {netTotal.text} pts
             </span>
-            . Log-odds are the model’s own additive scale.
+            ; the modality columns above are the same inputs netted per modality. Log-odds are the model’s own
+            additive scale.
           </>
         ) : (
           <>
