@@ -11,7 +11,7 @@ import { EASE, MOTION } from '@/theme/tokens';
 import { Collapse } from './Collapse';
 import { useFlipAnnouncement } from './useFlipAnnouncement';
 import { useRiskView } from './useRiskView';
-import { cadReconciliation, cadVerdictLine, spokenVerdict, verdictFor } from './verdict';
+import { cadReconciliation, cadVerdictDisplay, spokenVerdict, verdictFor } from './verdict';
 
 /**
  * "Model estimate" status tag (§3.2, §5.8): sits beside the numbers it qualifies; replaces the live-canvas
@@ -65,22 +65,26 @@ export function CadHeadline({ titleId, covered = false, showTrack = true }: CadH
   const base = view.baseline?.predictions.CAD;
   const spec = index?.targetById.get('CAD');
   const verdict = cad ? verdictFor(cad) : null;
-  const verdictText = cad ? cadVerdictLine(cad) : null;
   const delta = cad && base ? formatDeltaPts(cad.probability - base.probability) : null;
   const band = cad ? RISK_BAND_STYLES[cad.risk_band] : null;
   const vesselPs = (index?.vessels ?? []).flatMap((v) => {
     const vp = view.prediction?.predictions[v.id];
     return vp ? [{ id: v.id, p: vp }] : [];
   });
+  const display = cad ? cadVerdictDisplay(cad, vesselPs) : null;
+  const verdictText = display?.text ?? null;
   // While an update is pending the sentence stays (dimmed like the numerals) instead of collapsing and
   // re-opening on every edit; it follows the numbers it reconciles.
   const reconcile = cad ? cadReconciliation(cad, vesselPs) : null;
+  // While inputs are edited the sentence keeps a fixed two-line slot, so it can come and go with the
+  // numbers without the card growing and shrinking under the pointer (no layout shift, V2 §8.6).
+  const reserveReconcile = view.edits > 0;
   // Keep the last sentence while the line collapses, so it never empties before it closes.
   const lastReconcile = useRef<string | null>(null);
   if (reconcile) lastReconcile.current = reconcile;
   const announcement = useFlipAnnouncement(
     cad && band
-      ? `CAD ${formatProbability(cad.probability).spoken}, ${band.label}. ${spokenVerdict(cad)}.`
+      ? `CAD ${formatProbability(cad.probability).spoken}, ${band.label}. ${display?.glyph === null ? display.text : spokenVerdict(cad)}.`
       : null,
     cad ? `${cad.risk_band}-${verdict?.flagged}` : null,
   );
@@ -217,9 +221,11 @@ export function CadHeadline({ titleId, covered = false, showTrack = true }: CadH
                   'Updating'
                 ) : (
                   <>
-                    <span aria-hidden className="mr-1.5">
-                      {verdict.glyph}
-                    </span>
+                    {display?.glyph && (
+                      <span aria-hidden className="mr-1.5">
+                        {display.glyph}
+                      </span>
+                    )}
                     {verdictText}
                   </>
                 )}
@@ -227,12 +233,16 @@ export function CadHeadline({ titleId, covered = false, showTrack = true }: CadH
             </AnimatePresence>
           </div>
           {/* CAD and the arteries are judged against their own thresholds: say so when they seem to disagree. */}
-          <Collapse show={showTrack && reconcile !== null}>
+          <Collapse show={showTrack && (reconcile !== null || reserveReconcile)}>
             <p
-              className={cn('mt-1 text-label font-normal text-secondary transition-opacity duration-fast', view.stale && 'opacity-50')}
+              className={cn(
+                'mt-1 text-label font-normal text-secondary transition-opacity duration-fast',
+                reserveReconcile && 'line-clamp-2 h-8',
+                view.stale && 'opacity-50',
+              )}
               data-reconcile="CAD"
             >
-              {reconcile ?? lastReconcile.current}
+              {reconcile ?? (reserveReconcile ? null : lastReconcile.current)}
             </p>
           </Collapse>
         </>

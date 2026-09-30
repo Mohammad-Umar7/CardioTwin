@@ -8,6 +8,7 @@ import modelRaw from '../../../public/model/model.json?raw';
 import {
   bandSentence,
   cadReconciliation,
+  cadVerdictDisplay,
   cadVerdictLine,
   cathComparison,
   flaggedCount,
@@ -117,18 +118,18 @@ describe('cadReconciliation', () => {
 
   it('explains a flagged vessel under an unflagged CAD (P-035 with EF 55: CAD 66 % High, LAD 60 % flagged)', () => {
     expect(cadReconciliation(tp(0.66, 0.75), vessels(0.6, 0.17, 0.23))).toBe(
-      'High probability, but below CAD’s threshold; LAD is flagged at its own, lower threshold. Each target is judged separately.',
+      'LAD is flagged at its own, lower threshold; each target is judged separately.',
     );
     expect(cadReconciliation(tp(0.4, 0.75), vessels(0.6, 0.4, 0.23))).toBe(
-      'Below CAD’s threshold; LAD and LCX are flagged at their own, lower thresholds. Each target is judged separately.',
+      'LAD and LCX are flagged at their own, lower thresholds; each target is judged separately.',
     );
   });
 
   it('explains a High band that is not flagged, and a flagged CAD with no flagged artery', () => {
     expect(cadReconciliation(tp(0.62, 0.75), vessels(0.3, 0.2, 0.2))).toBe(
-      'High probability, yet below CAD’s decision threshold, so not flagged.',
+      'High probability band, yet under CAD’s threshold, so not flagged.',
     );
-    expect(cadReconciliation(tp(0.8, 0.75), vessels(0.3, 0.2, 0.2))).toMatch(/^Flagged for CAD, yet no single artery/);
+    expect(cadReconciliation(tp(0.8, 0.75), vessels(0.3, 0.2, 0.2))).toMatch(/^No single artery reaches its own threshold/);
   });
 
   it('stays silent when the answers agree, and never repeats a number', () => {
@@ -140,5 +141,26 @@ describe('cadReconciliation', () => {
       cadReconciliation(tp(0.8, 0.75), vessels(0.3, 0.2, 0.2)),
     ].join(' ');
     expect(all).not.toMatch(/\d/);
+  });
+});
+
+describe('cadVerdictDisplay', () => {
+  const vessels = (lad: number, lcx: number, rca: number) => [
+    { p: tp(lad, 0.55) },
+    { p: tp(lcx, 0.33) },
+    { p: tp(rca, 0.32) },
+  ];
+  it('keeps the hollow "Not flagged" only when the band is Low or Moderate and no artery is flagged', () => {
+    const low = cadVerdictDisplay(tp(0.3, 0.75), vessels(0.1, 0.1, 0.1));
+    expect(low.glyph).toBe('○');
+    expect(low.text).toMatch(/^Not flagged — below the 75\s%\sthreshold$/);
+    expect(cadVerdictDisplay(tp(0.98, 0.75), vessels(0.9, 0.9, 0.9)).glyph).toBe('●');
+  });
+  it('reads neutral at a High band or beside a flagged artery (P-015: CAD 65 %, LCX and RCA flagged)', () => {
+    const p015 = cadVerdictDisplay(tp(0.65, 0.75), vessels(0.3, 0.39, 0.37));
+    expect(p015.glyph).toBeNull();
+    expect(p015.text).toMatch(/^Below CAD’s 75\s%\sdecision threshold$/);
+    expect(cadVerdictDisplay(tp(0.62, 0.75), vessels(0.1, 0.1, 0.1)).glyph).toBeNull();
+    expect(cadVerdictDisplay(tp(0.4, 0.75), vessels(0.6, 0.1, 0.1)).glyph).toBeNull();
   });
 });

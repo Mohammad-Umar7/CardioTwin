@@ -53,6 +53,31 @@ export function cadVerdictLine(p: Pick<TargetPrediction, 'probability' | 'thresh
   return `${v.word} — ${side(v)} the ${formatPercent(p.threshold)} threshold`;
 }
 
+export interface CadVerdictDisplay {
+  /** ● flagged, ○ not flagged; null for the neutral wording (no hollow dot that reads as "all clear"). */
+  glyph: '●' | '○' | null;
+  text: string;
+}
+
+/**
+ * The CAD verdict as shown on the card (§3.2). "○ Not flagged" only when nothing points the other way (band
+ * Low or Moderate and no artery flagged). A High band or a flagged artery under an unflagged CAD reads
+ * neutral, "Below CAD's 75 % decision threshold", so a clinician's eye never stops on "Not flagged" next to
+ * flagged vessels (false reassurance); the reconciling sentence says why.
+ */
+export function cadVerdictDisplay(
+  cad: Pick<TargetPrediction, 'probability' | 'threshold' | 'risk_band'> & { label?: number | null },
+  vessels: readonly { p: Pick<TargetPrediction, 'probability' | 'threshold'> & { label?: number | null } }[],
+): CadVerdictDisplay {
+  const v = verdictFor(cad);
+  if (v.flagged) return { glyph: '●', text: cadVerdictLine(cad) };
+  const bandHigh = cad.risk_band === 'high' || cad.risk_band === 'critical';
+  if (bandHigh || vessels.some((x) => isFlagged(x.p))) {
+    return { glyph: null, text: `${v.marginal ? 'Just below' : 'Below'} CAD’s ${formatPercent(cad.threshold)} decision threshold` };
+  }
+  return { glyph: '○', text: cadVerdictLine(cad) };
+}
+
 /** Inspector clause: "Flagged: above LAD's 55 % threshold." */
 export function vesselDecisionSentence(target: TargetId, p: Pick<TargetPrediction, 'probability' | 'threshold'> & { label?: number | null }): string {
   const v = verdictFor(p);
@@ -103,20 +128,20 @@ export function cadReconciliation(
   const flagged = vessels.filter((v) => isFlagged(v.p));
   const band = RISK_BAND_STYLES[cad.risk_band]?.label ?? 'High';
   const bandHigh = cad.risk_band === 'high' || cad.risk_band === 'critical';
+  // Short enough for two lines of the 1280 card (the slot keeps a fixed height while inputs are edited).
   if (!cadFlagged && flagged.length > 0) {
     const one = flagged.length === 1;
     const lower = flagged.every((v) => v.p.threshold < cad.threshold);
-    const lead = bandHigh ? `${band} probability, but below CAD’s threshold` : 'Below CAD’s threshold';
     return (
-      `${lead}; ${listIds(flagged.map((v) => v.id))} ${one ? 'is' : 'are'} flagged at ${one ? 'its' : 'their'} own` +
-      `${lower ? ', lower' : ''} threshold${one ? '' : 's'}. Each target is judged separately.`
+      `${listIds(flagged.map((v) => v.id))} ${one ? 'is' : 'are'} flagged at ${one ? 'its' : 'their'} own` +
+      `${lower ? ', lower' : ''} threshold${one ? '' : 's'}; each target is judged separately.`
     );
   }
   if (cadFlagged && vessels.length > 0 && flagged.length === 0) {
-    return 'Flagged for CAD, yet no single artery reaches its own threshold. Each target is judged separately.';
+    return 'No single artery reaches its own threshold; each target is judged separately.';
   }
-  if (!cadFlagged && bandHigh) return `${band} probability, yet below CAD’s decision threshold, so not flagged.`;
-  if (cadFlagged && !bandHigh) return `${band} probability, yet above CAD’s decision threshold, so flagged.`;
+  if (!cadFlagged && bandHigh) return `${band} probability band, yet under CAD’s threshold, so not flagged.`;
+  if (cadFlagged && !bandHigh) return `${band} probability band, yet above CAD’s threshold, so flagged.`;
   return null;
 }
 
