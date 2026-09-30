@@ -389,7 +389,10 @@ def remesh_seamless(ob: bpy.types.Object, voxel: float) -> None:
     apply_modifiers(ob)
 
 
-def decimate_to(ob: bpy.types.Object, budget: int) -> None:
+def decimate_to(ob: bpy.types.Object, budget: int, protect: np.ndarray | None = None, factor: float = 0.85) -> None:
+    """Collapse-decimate to ``budget`` triangles. ``protect`` (per-vertex weight 0-1) keeps detail where it is 1
+    (Blender's Decimate vertex-group weighting), e.g. the extrapulmonary pulmonary trunk of the whole
+    pulmonary arterial tree."""
     n = tri_count(ob)
     if n <= budget:
         return
@@ -397,7 +400,20 @@ def decimate_to(ob: bpy.types.Object, budget: int) -> None:
     mod.decimate_type = "COLLAPSE"
     mod.ratio = budget / n
     mod.use_collapse_triangulate = True
+    if protect is not None:
+        vg = ob.vertex_groups.new(name="_protect")
+        for i, w in enumerate(np.asarray(protect, dtype=float).tolist()):
+            if w > 0:
+                vg.add([i], float(w), "REPLACE")
+        mod.vertex_group = vg.name
+        mod.invert_vertex_group = True  # weight 1 = protected
+        mod.vertex_group_factor = factor
     apply_modifiers(ob)
+    if protect is not None and "_protect" in ob.vertex_groups:
+        ob.vertex_groups.remove(ob.vertex_groups["_protect"])
+    m = tri_count(ob)
+    if m > budget * 1.05:  # the vertex-group weighting can undershoot the ratio: a plain pass takes it to budget
+        decimate_to(ob, budget)
 
 
 def taubin_object(ob: bpy.types.Object, iterations: int) -> None:
@@ -406,6 +422,28 @@ def taubin_object(ob: bpy.types.Object, iterations: int) -> None:
     V = mo.taubin_smooth(V, F, iterations=iterations)
     ob.data.vertices.foreach_set("co", V.astype(np.float32).ravel())
     ob.data.update()
+
+
+def drop_loose_fragments(ob: bpy.types.Object, min_faces: int = 40) -> int:
+    """Delete connected pieces of fewer than ``min_faces`` triangles. The voxel remesh breaks the sub-voxel distal
+    tips of thin tubes (the cardiac-vein tributaries end at ~0.5 mm) into crumbs, which decimation then reduces to
+    loose, open, randomly wound triangles; the tube itself ends a fraction of a millimetre earlier."""
+    V, F = mesh_arrays(ob.data)
+    labels = mo.face_components(F, len(V))
+    _, inv, counts = np.unique(labels, return_inverse=True, return_counts=True)
+    small = counts[inv] < min_faces
+    if not small.any():
+        return 0
+    doomed = np.zeros(len(V), dtype=bool)
+    doomed[F[small].ravel()] = True
+    bm = bmesh.new()
+    bm.from_mesh(ob.data)
+    bm.verts.ensure_lookup_table()
+    bmesh.ops.delete(bm, geom=[bm.verts[i] for i in np.nonzero(doomed)[0]], context="VERTS")
+    bm.to_mesh(ob.data)
+    bm.free()
+    ob.data.update()
+    return int(small.sum())
 
 
 def reorient_after_decimation(ob: bpy.types.Object) -> None:
@@ -468,6 +506,29 @@ def orient_open_shell_outward(ob: bpy.types.Object) -> None:
 MAX_OPEN_CAP_EDGES = 8
 
 
+def heal_small_defects(bm: bmesh.types.BMesh, iterations: int = 3) -> int:
+    """Close the sub-millimetre defects that collapse decimation leaves on thin wall regions (and that a cap can
+    inherit on the cutting plane): open slits, fins and edges shared by three faces. The faces round each defect
+    are removed and the clean hole left behind is filled and triangulated. Returns the number of vertices removed."""
+    removed = 0
+    for _ in range(iterations):
+        bad = {v for e in bm.edges if e.is_boundary or len(e.link_faces) > 2 for v in e.verts}
+        if not bad:
+            break
+        removed += len(bad)
+        bmesh.ops.delete(bm, geom=list(bad), context="VERTS")
+        loose = [v for v in bm.verts if not v.link_faces]
+        if loose:
+            bmesh.ops.delete(bm, geom=loose, context="VERTS")
+        edges = [e for e in bm.edges if e.is_boundary]
+        if edges:
+            filled = bmesh.ops.holes_fill(bm, edges=edges, sides=0)
+            faces = [f for f in filled["faces"] if f.is_valid]
+            if faces:
+                bmesh.ops.triangulate(bm, faces=faces)
+    return removed
+
+
 def split_heart(ob: bpy.types.Object, plane_co, plane_no) -> dict[str, tuple[bpy.types.Object, set[int]]]:
     """Cut the heart wall into anterior / posterior halves, capping each opening.
 
@@ -484,6 +545,9 @@ def split_heart(ob: bpy.types.Object, plane_co, plane_no) -> dict[str, tuple[bpy
         # Scan-fill leaves zero-area slivers where cut points are collinear.
         bmesh.ops.dissolve_degenerate(bm, dist=1e-7, edges=bm.edges[:])
         bmesh.ops.triangulate(bm, faces=bm.faces[:])
+        healed = heal_small_defects(bm)
+        if healed:
+            log(f"  heart {side}: healed {healed} vertices of decimation slits / non-manifold edges")
         open_edges = sum(1 for e in bm.edges if e.is_boundary)
         if open_edges > MAX_OPEN_CAP_EDGES:
             # A cut loop that could not be capped means the wall touches itself on the cutting plane
@@ -504,6 +568,10 @@ def split_heart(ob: bpy.types.Object, plane_co, plane_no) -> dict[str, tuple[bpy
         is_cap = on_plane[tris].all(axis=1)
         cap_idx = set(np.nonzero(is_cap)[0].tolist())
         me.edges.foreach_set("use_edge_sharp", rim_edge_mask(me, tris, is_cap))
+        # face attribute read by the tissue look (anatomy/blender/looks.py): the cut faces get a cut-muscle look
+        # (no leading underscore: Blender-only, not exported to glTF)
+        cap_attr = me.attributes.new(name="ct_cap", type="FLOAT", domain="FACE")
+        cap_attr.data.foreach_set("value", is_cap.astype(np.float32))
         half = new_object(f"Heart_Wall_{side.title()}", me)
         halves[side] = (half, cap_idx)
         log(f"  heart {side}: {len(me.polygons)} tris, cap {len(cap_idx)} tris (from {len(caps)} filled)")
@@ -637,7 +705,7 @@ AHA_STANDARD = {1: 0, 2: 0, 7: 0, 8: 0, 13: 0, 14: 0, 17: 0, 3: 2, 4: 2, 9: 2, 1
 
 
 def aha_segments(P: np.ndarray, *, ma_c: np.ndarray, apex: np.ndarray, pap_V: np.ndarray, lad_V: np.ndarray,
-                 pda_V: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
+                 pda_V: np.ndarray, with_angle: bool = False):
     """AHA-17 segment (0 = outside the LV sampling region) and axial position t for points of the LV.
 
     Same construction as ``anatomy/checks/measure_model.py`` (Model.aha): rings along the mitral-centre ->
@@ -704,6 +772,8 @@ def aha_segments(P: np.ndarray, *, ma_c: np.ndarray, apex: np.ndarray, pap_V: np
             Rt[(t >= lo_) & (t < hi_)] = np.quantile(rho[sel], 0.95) * 1.1
     Rt = np.where(np.isnan(Rt), np.nanmax(Rt) if np.isfinite(Rt).any() else np.inf, Rt)
     lv_region = (t >= 0) & (t <= 1.0) & (rho <= Rt)
+    if with_angle:
+        return seg, lv_region, th, t
     return seg, lv_region
 
 
@@ -744,7 +814,7 @@ def vertex_areas(V: np.ndarray, F: np.ndarray) -> np.ndarray:
     return out
 
 
-def calibrate_shares(per_half: dict, target: np.ndarray, iterations: int = 8) -> list[float]:
+def calibrate_shares(per_half: dict, target: np.ndarray, iterations: int = 14) -> list[float]:
     """Iterative proportional fitting of the LAD / LCX / RCA weights on the LV myocardium (AHA segment > 0 and
     ventricular) of both heart halves, so their area-weighted shares approach the population values (CT
     territory mass: LAD ~42.5 %, LCX ~28.8 %, RCA ~26.4 %; REFERENCE.md §5.10). Each vertex keeps its
@@ -770,15 +840,24 @@ def calibrate_shares(per_half: dict, target: np.ndarray, iterations: int = 8) ->
 # Epicardial fat
 # --------------------------------------------------------------------------------------------
 FAT = {
-    "av_thickness_mm": 5.5,      # AV-groove fat (EAT ~7 mm mean over the heart, thickest in the grooves; REFERENCE.md §5.8)
-    "av_extent_mm": (3.5, 9.5),  # full thickness up to 3.5 mm from the groove vessels, none beyond 9.5 mm
-    "iv_thickness_mm": 3.5,      # interventricular grooves, thinning towards the apex
-    "iv_extent_mm": (2.5, 6.5),
-    "channel_mm": (0.3, 4.5),    # every coronary artery and vein lies in a channel: fat rises from 35 % beside it
-    "channel_floor": 0.35,
-    "lobule_mm": 3.6,            # lobule size (Voronoi domes)
-    "sink_mm": 0.4,              # inner surface sunk below the epicardium (no gap to the wall)
+    # The fat forms the bed of the atrioventricular and interventricular grooves: along every groove vessel its surface
+    # rises to ``embed`` x the vessel radius above the vessel centreline (so about a third of the vessel stays exposed,
+    # REFERENCE.md 5.8: vessels half-buried in epicardial fat), and falls off smoothly across the groove. The inner
+    # surface is sunk into the myocardium, so the visible margin is a feathered line where the fat meets the wall.
+    "embed": 0.75,
+    "min_bed_mm": {"av": 3.0, "iv": 2.2},  # a minimum bed thickness along each groove vessel
+    "half_width_mm": {"av": (3.5, 10.5), "iv": (2.6, 7.5), "branch": (1.0, 3.4)},  # full height up to a, none beyond b (beside the vessel)
+    "apex_thinning": 0.45,                  # interventricular fat thins towards the apex
+    "lobule_mm": 4.0,                       # smooth lobulation (value noise), amplitude:
+    "lobule_amp": 0.10,
+    "sink_mm": 1.0,                         # inner surface depth inside the myocardium
     "remesh_mm": 0.45,
+}
+#: Vessels that lie in a groove (and get a fat bed): arteries by code, veins by label.
+FAT_GROOVE = {
+    "av": {"arteries": {"LM", "pCx", "RCA"}, "veins": {"CS", "GCV", "SCV"}},
+    "iv": {"arteries": {"LAD", "R-PDA"}, "veins": {"AIV", "MCV"}},
+    "branch": {"arteries": {"D", "D2", "OM1", "OM2", "AM", "R-PLB", "CB"}, "veins": {"PVLV", "LMV", "ACV"}},
 }
 
 
@@ -800,55 +879,76 @@ def epicardial_mask(V: np.ndarray, N: np.ndarray, F: np.ndarray) -> np.ndarray:
     return out
 
 
-def surface_distance(V: np.ndarray, pts: np.ndarray, r: np.ndarray) -> np.ndarray:
-    """Distance from each vertex to the nearest tube surface given centre points ``pts`` and radii ``r``
-    (use r = 0 for points that are already on a surface)."""
-    tree = _kdtree(pts)
-    out = np.empty(len(V))
-    for i, p in enumerate(V):
-        best = np.inf
-        for _, j, d in tree.find_n(p, 6):
-            best = min(best, d - r[j])
-        out[i] = max(0.0, best)
+def value_noise(P: np.ndarray, cell: float, seed: int = 7) -> np.ndarray:
+    """Smooth 3-D value noise in [0, 1] (trilinear interpolation of a hashed lattice, smoothstep weights)."""
+    q = P / cell
+    i0 = np.floor(q).astype(np.int64)
+    f = q - i0
+    w = f * f * (3 - 2 * f)
+    rng = np.random.default_rng(seed)
+    table = rng.random(4096)
+
+    def h(ix, iy, iz):
+        return table[(ix * 73856093 ^ iy * 19349663 ^ iz * 83492791) & 4095]
+    out = np.zeros(len(P))
+    for dx in (0, 1):
+        for dy in (0, 1):
+            for dz in (0, 1):
+                wt = (w[:, 0] if dx else 1 - w[:, 0]) * (w[:, 1] if dy else 1 - w[:, 1]) * (w[:, 2] if dz else 1 - w[:, 2])
+                out += wt * h(i0[:, 0] + dx, i0[:, 1] + dy, i0[:, 2] + dz)
     return out
 
 
-def fat_thickness(V: np.ndarray, *, epi: np.ndarray, av: tuple, iv: tuple, channels: tuple,
-                  base: np.ndarray, apex: np.ndarray, scale: float) -> np.ndarray:
-    """Per-vertex fat thickness (scene units): banks along the AV and interventricular grooves, with every
-    coronary artery and vein lying in a shallow channel so it stays readable (partially embedded)."""
-    d_av = surface_distance(V, *av)
-    e0, e1 = (x * scale for x in FAT["av_extent_mm"])
-    t_av = FAT["av_thickness_mm"] * scale * (1 - mo.smoothstep(e0, e1, d_av))
-    d_iv = surface_distance(V, *iv)
-    e0, e1 = (x * scale for x in FAT["iv_extent_mm"])
+def groove_vessels(origin_mm: np.ndarray, scale: float) -> dict[str, tuple[np.ndarray, np.ndarray]]:
+    """Centreline points and radii (scene units) of the groove vessels, by groove kind."""
+    out = {k: ([], []) for k in FAT_GROOVE}
+    cor = json.loads((SYNTH_DIR / "coronary_centerlines.json").read_text(encoding="utf-8"))
+    for node in cor["nodes"].values():
+        for sg in node["segments"]:
+            for kind, sel in FAT_GROOVE.items():
+                if sg["code"] in sel["arteries"]:
+                    out[kind][0].append((np.array(sg["points_mm"]) - origin_mm) * scale)
+                    out[kind][1].append(np.array(sg["radius_mm"]) * scale)
+    veins = json.loads((SYNTH_DIR / "vein_centerlines.json").read_text(encoding="utf-8"))
+    for sg in veins["paths"]:
+        for kind, sel in FAT_GROOVE.items():
+            if sg["label"] in sel["veins"] and (kind == "branch" or not sg["side"]):
+                out[kind][0].append((np.array(sg["points_mm"]) - origin_mm) * scale)
+                out[kind][1].append(np.array(sg["radius_mm"]) * scale)
+    return {k: (np.concatenate(v[0]), np.concatenate(v[1])) for k, v in out.items() if v[0]}
+
+
+def fat_thickness(V: np.ndarray, *, epi: np.ndarray, vessels: dict, base: np.ndarray, apex: np.ndarray, scale: float,
+                  wall_sd) -> np.ndarray:
+    """Per-vertex fat thickness (scene units): a groove bed whose surface reaches ``embed`` x r above each groove
+    vessel's centreline, falling off smoothly across the groove, thinning towards the apex, with a soft lobulation."""
     axis = apex - base
     t_ax = np.clip((V - base) @ axis / (axis @ axis), 0.0, 1.0)
-    t_iv = FAT["iv_thickness_mm"] * scale * (1.0 - 0.85 * t_ax) * (1 - mo.smoothstep(e0, e1, d_iv))
-    d_ch = surface_distance(V, *channels)
-    c0, c1 = (x * scale for x in FAT["channel_mm"])
-    fl = FAT["channel_floor"]
-    t = np.maximum(t_av, t_iv) * (fl + (1 - fl) * mo.smoothstep(c0, c1, d_ch)) * epi
-    # lobulation: Voronoi domes over a jittered grid of lobule centres (deterministic)
-    rng = np.random.default_rng(7)
-    region = V[t > 0.2 * scale]
-    if len(region):
-        cell = FAT["lobule_mm"] * scale
-        keys = {}
-        for p in region[rng.permutation(len(region))]:
-            k = tuple(np.floor(p / cell).astype(int))
-            keys.setdefault(k, p)
-        centres = np.array(list(keys.values()))
-        tree = _kdtree(centres)
-        d1 = np.array([tree.find(p)[2] for p in V])
-        dome = np.clip(1.0 - (d1 / (0.75 * cell)) ** 2, 0.0, 1.0)
-        t = t * (0.72 + 0.42 * dome)
-    return t
+    t = np.zeros(len(V))
+    for kind, (P, R) in vessels.items():
+        tree = _kdtree(P)
+        h_v = wall_sd(P) + FAT["embed"] * R  # fat surface height above the wall at each vessel point
+        h_v = np.maximum(h_v, FAT["min_bed_mm"].get(kind, 0.0) * scale)
+        a, b = (x * scale for x in FAT["half_width_mm"][kind])
+        for i, p in enumerate(V):
+            if not epi[i]:
+                continue
+            best = 0.0
+            for _, j, d in tree.find_n(p, 8):
+                lat = max(0.0, d - h_v[j])  # distance beyond the vessel's footprint on the wall
+                w = 1.0 - mo.smoothstep(a, b, np.array([lat]))[0]
+                best = max(best, float(h_v[j] * w))
+            t[i] = max(t[i], best)
+    t *= 1.0 - FAT["apex_thinning"] * mo.smoothstep(0.7, 1.0, t_ax)
+    lob = value_noise(V, FAT["lobule_mm"] * scale) + 0.5 * value_noise(V, 0.45 * FAT["lobule_mm"] * scale, seed=11)
+    t *= 1.0 + FAT["lobule_amp"] * (lob / 1.5 - 0.5) * 2.0
+    return t * epi
 
 
 def build_fat_shell(V: np.ndarray, F: np.ndarray, N: np.ndarray, t: np.ndarray, scale: float) -> mo.Mesh:
-    """Closed shell: the epicardial faces with fat, offset outward by ``t`` and sunk below by FAT['sink_mm']."""
-    region = (t[F] > 0.15 * scale).any(axis=1)
+    """Closed shell: the epicardial faces with fat, offset outward by ``t`` and sunk below by FAT['sink_mm']
+    (the rim of the shell lies inside the myocardium, so the visible margin is feathered)."""
+    region = (t[F] > 0.05 * scale).any(axis=1)
     Fr = F[region]
     used = np.unique(Fr)
     remap = -np.ones(len(V), dtype=np.int64)
@@ -869,45 +969,26 @@ def build_fat_shell(V: np.ndarray, F: np.ndarray, N: np.ndarray, t: np.ndarray, 
 
 
 def make_epicardial_fat(wall, objects, fat_specs, base, apex, plane_co, plane_no, scale, flat_faces, node_stats, origin_mm) -> dict:
-    """Epicardial fat shell on the (decimated, smoothed) heart wall, split into the two heart halves.
-
-    Groove vessels: AV groove = RCA trunk, LCX, left main, coronary sinus and GCV; interventricular grooves =
-    LAD, PDA, AIV and MCV (vein surfaces from the synthesised vein centrelines, arteries from their meshes).
-    """
+    """Epicardial fat on the (decimated, smoothed) heart wall, split into the two heart halves: the bed of the
+    atrioventricular and interventricular grooves around the synthesised coronary arteries and cardiac veins
+    (``anatomy/build/synth/*_centerlines.json``)."""
     me = wall.data
     V, F = mesh_arrays(me)
     N = np.empty(len(me.vertices) * 3, dtype=np.float32)
     me.vertices.foreach_get("normal", N)
     N = N.reshape(-1, 3).astype(np.float64)
     epi = epicardial_mask(V, N, F)
-    lines = json.loads((SYNTH_DIR / "vein_centerlines.json").read_text(encoding="utf-8"))
-    # Groove sources: right AV groove = RCA trunk; left AV groove = coronary sinus + GCV (+ left main);
-    # interventricular grooves = the main AIV and MCV courses (the LAD and PDA run beside them).
-    av_pts, av_r, iv_pts, iv_r, ch_pts, ch_r = [], [], [], [], [], []
-    for name in ("Coronary_RCA", "Coronary_LM"):
-        X = world_vertices(objects[name])
-        av_pts.append(X)
-        av_r.append(np.zeros(len(X)))
-    for name in ("Coronary_LM", "Coronary_LAD", "Coronary_LCX", "Coronary_RCA", "Coronary_RCA_Marginal", "Coronary_RCA_PDA", "Coronary_RCA_PL"):
-        X = world_vertices(objects[name])
-        ch_pts.append(X)
-        ch_r.append(np.zeros(len(X)))
-    for path in lines["paths"]:
-        P = (np.array(path["points_mm"]) - origin_mm) * scale
-        R = np.array(path["radius_mm"]) * scale
-        ch_pts.append(P)
-        ch_r.append(R)
-        if path.get("side"):
-            continue
-        if path["label"] in ("CS", "GCV"):
-            av_pts.append(P)
-            av_r.append(R)
-        elif path["label"] in ("AIV", "MCV"):
-            iv_pts.append(P)
-            iv_r.append(R)
-    cat = lambda xs: np.concatenate(xs)  # noqa: E731
-    t = fat_thickness(V, epi=epi.astype(float), av=(cat(av_pts), cat(av_r)), iv=(cat(iv_pts), cat(iv_r)),
-                      channels=(cat(ch_pts), cat(ch_r)), base=base, apex=apex, scale=scale)
+    bvh = BVHTree.FromPolygons(V.tolist(), F.tolist(), all_triangles=True)
+
+    def wall_sd(P):
+        out = np.empty(len(P))
+        for i, p in enumerate(P):
+            loc, nrm, _, dist = bvh.find_nearest(Vector(p))
+            out[i] = dist if (Vector(p) - loc).dot(nrm) >= 0 else -dist
+        return out
+
+    vessels = groove_vessels(origin_mm, scale)
+    t = fat_thickness(V, epi=epi.astype(float), vessels=vessels, base=base, apex=apex, scale=scale, wall_sd=wall_sd)
     FV, FF = build_fat_shell(V, F, N, t, scale)
     fat = new_object("EpicardialFat", new_mesh("EpicardialFat", FV, FF))
     remesh_seamless(fat, FAT["remesh_mm"] * scale)
@@ -917,11 +998,12 @@ def make_epicardial_fat(wall, objects, fat_specs, base, apex, plane_co, plane_no
     old_me = fat.data
     fat.data = new_mesh("EpicardialFat", RV, RF)
     bpy.data.meshes.remove(old_me)
-    taubin_object(fat, 4)
+    taubin_object(fat, 8)
     budget = sum(s.budget for s in fat_specs)
     src = tri_count(fat)
     decimate_to(fat, budget)
     reorient_after_decimation(fat)
+    taubin_object(fat, 3)
     names = {s.raw["fat_side"]: s.node for s in fat_specs}
     halves = split_closed(fat, plane_co, plane_no, names)
     bpy.data.meshes.remove(fat.data)
@@ -930,9 +1012,10 @@ def make_epicardial_fat(wall, objects, fat_specs, base, apex, plane_co, plane_no
         flat_faces[names[side]] = caps
         node_stats[names[side]] = {"triangles_source": src, "cap_triangles": len(caps)}
     thick = t[t > 0.2 * scale] / scale
+    vol = float(np.abs(mo.signed_volume(RV, RF))) / scale ** 3 / 1000.0
     return {"epicardial_vertex_fraction": round(float(epi.mean()), 3), "fat_vertices": int((t > 0.2 * scale).sum()),
             "thickness_mm_p50_p90_max": [round(float(np.percentile(thick, 50)), 1), round(float(np.percentile(thick, 90)), 1), round(float(thick.max()), 1)] if len(thick) else [],
-            "shell_triangles": src}
+            "volume_ml": round(vol, 1), "shell_triangles": src}
 
 
 def split_closed(ob: bpy.types.Object, plane_co, plane_no, names: dict[str, str]) -> dict[str, tuple[bpy.types.Object, set[int]]]:
@@ -1234,7 +1317,8 @@ def build(args: argparse.Namespace) -> None:
     # --- origin: heart-wall bounding-box centre (after cleanup) -------------------------------
     heart_specs = [s for s in specs if s.raw.get("split")]
     heart_part = heart_specs[0].parts[0]
-    hV, _ = cache.get(heart_part)
+    # the frame origin is always the BodyParts3D heart-wall bbox centre (the synthesised wall only differs locally)
+    hV, _ = cache.get(cfg["frame"].get("origin_part", heart_part))
     origin_mm = mo.bbox_center(hV)
     log(f"origin (heart-wall bbox centre) = {np.round(origin_mm, 2).tolist()} mm")
 
@@ -1270,7 +1354,18 @@ def build(args: argparse.Namespace) -> None:
             remesh_seamless(ob, spec.raw["remesh_mm"] * scale)
         if smoothing.get("pre"):  # on the welded source, so no vertex pair can collapse into a hole
             taubin_object(ob, int(smoothing["pre"]))
-        decimate_to(ob, spec.budget)
+        protect = None
+        dense = spec.raw.get("dense_near")
+        if dense:
+            Vw = world_vertices(ob)
+            ref = to_scene(cache.get(dense["part"])[0]).mean(axis=0)
+            d = np.linalg.norm(Vw - ref, axis=1)
+            protect = 1.0 - mo.smoothstep(0.6 * dense["radius_mm"] * scale, dense["radius_mm"] * scale, d)
+        decimate_to(ob, spec.budget, protect, dense.get("factor", 0.85) if dense else 0.85)
+        if spec.raw.get("remesh_mm"):
+            dropped = drop_loose_fragments(ob)
+            if dropped:
+                log(f"  {spec.node}: dropped {dropped} triangles of loose remesh fragments")
         if closed:
             reorient_after_decimation(ob)
         if smoothing.get("post"):
@@ -1381,14 +1476,45 @@ def build(args: argparse.Namespace) -> None:
             rgb = standard_blend(rgb, seg, ventricular, alpha=std_cfg["alpha"], septal=septal)
             node_stats[spec.node]["aha_segment_vertices"] = {int(k): int(v) for k, v in zip(*np.unique(seg, return_counts=True))}
         per_half[spec.node] = [hV, hF, rgb, ventricular, qa_values, np.where(lv_region, seg, 0)]
+    rv_cfg = terr_cfg.get("rv_free_wall")
+    if rv_cfg and std_cfg:
+        # right-ventricular free wall (ventricular, outside the LV region): the LAD keeps a strip along the anterior
+        # interventricular groove, everything else is RCA (marginal / RV / conus branches) - RV infarction is RCA
+        cl = json.loads((SYNTH_DIR / "coronary_centerlines.json").read_text(encoding="utf-8"))["nodes"]
+        lad_trunk = to_scene(np.array(cl["Coronary_LAD"]["segments"][0]["points_mm"]))
+        pda_trunk = to_scene(np.array(cl["Coronary_RCA_PDA"]["segments"][0]["points_mm"]))
+        for name, (hV, hF, rgb, ventricular, _qa, lv_seg) in per_half.items():
+            _, lv_region, th, t_ax = aha_segments(hV, ma_c=ma_c, apex=apex, pap_V=pap_V, lad_V=lad_V, pda_V=pda_V, with_angle=True)
+            # RV free wall: thin ventricular wall in the septal sector (between the anterior and posterior
+            # interventricular grooves, seen from the LV axis) or outside the LV region; the septum is thick
+            thick = wall_thick[nearest_index(hV, wall_V)] / scale
+            sector = (th >= 345.0) | (th <= 140.0)
+            rv = (ventricular > 0.3) & (t_ax > -0.05) & ((sector & (thick < rv_cfg["thin_mm"])) | ~lv_region)
+            d_lad = nearest_distance(hV, lad_trunk)
+            keep = 1.0 - mo.smoothstep(rv_cfg["lad_strip_mm"][0] * scale, rv_cfg["lad_strip_mm"][1] * scale, d_lad)
+            keep = np.where(rv, keep, 1.0)
+            moved = rgb[:, 0] * (1.0 - keep) + np.where(rv, rgb[:, 1], 0.0)
+            rgb[:, 0] *= keep
+            rgb[:, 1] = np.where(rv, 0.0, rgb[:, 1])
+            rgb[:, 2] += moved
+            # the RV free wall is perfused wherever it is ventricular (confidence at least the ventricular mask)
+            conf = rgb.sum(axis=1)
+            lift = np.where(rv, np.maximum(0.0, 0.85 * ventricular - conf), 0.0)
+            rgb[:, 2] += lift
+            dom = rgb.argmax(axis=1)
+            node_stats[name]["rv_free_wall"] = {"vertices": int(rv.sum()), "rca_dominant": round(float((dom[rv] == 2).mean()) if rv.any() else 0.0, 3)}
+            log(f"  {name}: RV free wall {int(rv.sum())} vertices, RCA-dominant {node_stats[name]['rv_free_wall']['rca_dominant']:.0%}")
+            per_half[name][5] = np.where(rv, 0, lv_seg)  # the RV free wall is not LV myocardium
+    if std_cfg:  # smooth before the share calibration, so the calibrated shares are the published ones
+        for name, entry in per_half.items():
+            entry[2] = np.clip(mo.smooth_vertex_values(entry[2], entry[1], iterations=std_cfg["smooth_iterations"]), 0.0, 1.0)
     if std_cfg and std_cfg.get("target_shares"):
         shares = calibrate_shares(per_half, np.array(std_cfg["target_shares"], dtype=float))
         log(f"  territory shares of the LV region (LAD, LCX, RCA): {shares}")
     for spec in heart_specs:
         ob = objects[spec.node]
         hV, hF, rgb, ventricular, qa_values, _lv_seg = per_half[spec.node]
-        if std_cfg:
-            rgb = np.clip(mo.smooth_vertex_values(rgb, hF, iterations=std_cfg["smooth_iterations"]), 0.0, 1.0)
+        rgb = np.clip(rgb, 0.0, 1.0)
         set_color_attribute(ob, terr_cfg["attribute"], rgb)
         # QA-only attribute (not exported): R = landmark rule, G = thickness rule, B = final mask.
         qa = ob.data.color_attributes.new(name="QA_Ventricular", type="FLOAT_COLOR", domain="POINT")
@@ -1412,8 +1538,9 @@ def build(args: argparse.Namespace) -> None:
         masters = [objects[m] for m in rule["masters"] if m in objects]
         mask = None
         if rule.get("mask") == "descending_aorta":
-            def mask(Vw, _b=base):  # posterior, below the arch: the descending limb only
-                return (Vw[:, 1] > _b[1] + 0.05) & (Vw[:, 2] < _b[2] + 0.25)
+            def mask(Vw, _b=base):  # posterior, below the arch: the descending limb only (never the root, which
+                # sits in the outflow tract since the synthesis moved it to the anterior mitral hinge)
+                return (Vw[:, 1] > _b[1] + 0.35) & (Vw[:, 2] < _b[2] + 0.25)
         collisions[rule["yielder"] + " <- " + ",".join(rule["masters"])] = push_out(
             objects[rule["yielder"]], masters, rule["margin_mm"] * scale, mask=mask)
     if collisions:
