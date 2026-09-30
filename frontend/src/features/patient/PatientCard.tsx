@@ -157,7 +157,8 @@ function CardBody() {
   const identity = identityOf(features);
   const identityEdited = !comparing && (!sameValue(features.Age, recorded.Age) || !sameValue(features.Sex, recorded.Sex));
   const shown = new Set(items.map((i) => i.key));
-  const moreAbnormal = index ? abnormalKeys(index, features).filter((k) => !shown.has(k)).length : 0;
+  const abnormal = index ? abnormalKeys(index, features) : [];
+  const moreAbnormal = abnormal.filter((k) => !shown.has(k)).length;
   const layout = reduced ? { duration: 0 } : { duration: MOTION.base / 1000, ease: EASE.out };
   // Rows fade in only when they join an already-shown list, never on the card's own first paint.
   const listShown = useRef(false);
@@ -225,7 +226,8 @@ function CardBody() {
           onClick={() => openDrawer('inputs', { section: 'abnormal' })}
           className="-mx-2 mt-0.5 flex h-8 items-center gap-1 rounded-sm px-2 text-label font-medium text-secondary transition-colors duration-instant hover:bg-surface-1 hover:text-primary"
         >
-          <span className="num">+ {moreAbnormal}</span> abnormal {moreAbnormal === 1 ? 'finding' : 'findings'}
+          {/* The patient's total, not "+ n more": it must not change when another target is selected. */}
+          All <span className="num">{abnormal.length}</span> abnormal {abnormal.length === 1 ? 'finding' : 'findings'}
           <ChevronRight aria-hidden className="size-3.5 stroke-[1.5]" />
         </button>
       )}
