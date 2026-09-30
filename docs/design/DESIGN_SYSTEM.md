@@ -861,11 +861,11 @@ The owner asked for anatomy that "looks real, super close to real human anatomy"
   - A manifest `pivot` / `hingeAxis` / `hingeDeg` on a layer or structure overrides the derived hinge.
   - A structure with `rides` inherits its wall's full rigid transform (translation and hinge), so coronary branches never detach.
 - **Spring.** The displayed peel follows `viewerStore.explode` through a critically damped spring (ω = 7, about 0.7 s for the full travel, no overshoot). Scrubbing, ▶ Dissect and ⟲ Assemble all glide, and "comes back" is the same spring toward the rest detent (0.60).
-- **Cold-load assembly** (`assembly.ts`). About 2.25 s, played once per session:
+- **Cold-load assembly** (`assembly.ts`). About 2.15 s, played once per session (the outer layers overlap tightly so the heart starts assembling after 0.4 s):
   - Layers fly in from beyond their explode offsets and materialise with a temporally dithered dissolve, in the order skin → muscle → ribs → lungs → diaphragm → great vessels → posterior half → anterior half.
   - The anterior half swings shut, carrying its coronaries. The curve is a critically damped settle: monotone, zero slope at both ends.
   - Any pointer, key or wheel input compresses the rest into 150 ms. Under reduced motion or Calm mode it is skipped.
-  - The heart starts beating once it has closed. `sceneRuntime.assembly.t ≥ igniteAt` (2.05 s) is the fx layer's cue for the coronary ignition, and `useSceneControls().replayAssembly()` replays it.
+  - The heart starts beating once it has closed. `sceneRuntime.assembly.t ≥ igniteAt` (1.95 s) is the fx layer's cue for the coronary ignition, and `useSceneControls().replayAssembly()` replays it.
 - **Isolate (O)** keeps the myocardium and the selected artery (plus the left main for LAD and LCX), with its territory tinted, and fades everything else out. **Ghost others (G)** turns the myocardium, the other vessels and the great vessels into fresnel glass and keeps the selected artery solid and glowing. Every solid ↔ ghost change crossfades, because each mesh has a ghost twin.
 - **Section.** An optional clipping plane on the manifest cut plane (`useSceneControls().setSection`, with depth ±0.6) glides in. Back faces render as tissue interior, so chambers and wall thickness read as a cutaway. The planes are shared through `sceneRuntime.sectionPlanes`.
 
