@@ -107,12 +107,6 @@
   /* 4 layout (≥ 1440 defaults; overridden per breakpoint below) */
   --topbar-h: 48px;
   --status-h: 28px;
-  /* legacy 3-column workstation (retired with GroupRail / panels.tsx) */
-  --left-w: 320px;
-  --right-w: 384px;
-  --group-rail-w: 56px;
-  --flyout-w: 296px;
-
   /* V2 stage layout (WORKSTATION_V2 §2): sizes only, no colours */
   --stage-inset: 12px;
   --card-left-w: 280px;
@@ -134,7 +128,6 @@
   :root {
     --topbar-h: 40px;
     --status-h: 24px;
-    --right-w: 336px;
 
     --card-left-w: 256px;
     --card-right-w: 320px;
@@ -144,12 +137,6 @@
     --toolbar-h: 36px;
     --palette-w: 600px;
     --palette-top: 72px;
-  }
-}
-
-@media (max-width: 1279.98px) {
-  :root {
-    --right-w: 320px;
   }
 }
 

@@ -69,10 +69,10 @@ describe('uiStore', () => {
     expect(useUiStore.getState().disclaimerAccepted).toBe(true);
   });
 
-  it('exclusive accordion mode keeps one group open', () => {
-    useUiStore.getState().setPanels({ openGroups: ['demographics', 'exam'] });
-    useUiStore.getState().toggleGroup('echo', true);
-    expect(useUiStore.getState().panels.openGroups).toEqual(['echo']);
+  it('remembers the compact-layout tab', () => {
+    useUiStore.getState().setPanels({ mobileTab: 'why' });
+    expect(useUiStore.getState().panels.mobileTab).toBe('why');
+    useUiStore.getState().setPanels({ mobileTab: 'risk' });
   });
 });
 

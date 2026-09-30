@@ -15,10 +15,10 @@ export function useMediaQuery(query: string): boolean {
 }
 
 /**
- * Layout mode (DESIGN_SYSTEM §4):
- *   wide     ≥ 1440 — full left panel, right panel with pinned CAD card
- *   standard 1100–1439 (and 200 % zoom) — left rail + flyout over the canvas, tabbed right panel
- *   compact  < 1100 — stacked: canvas on top, tabs below
+ * Layout mode (WORKSTATION_V2 §4.7):
+ *   wide     ≥ 1440 — the full-bleed stage with the 1440 card and drawer sizes
+ *   standard 1100–1439 (and 200 % zoom) — the same stage with the 1280 sizes (tokens.css)
+ *   compact  < 1100 — stacked: a 50vh stage on top, Summary · Record · Why tabs below
  */
 export type LayoutMode = 'wide' | 'standard' | 'compact';
 

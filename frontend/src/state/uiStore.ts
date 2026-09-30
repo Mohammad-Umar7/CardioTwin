@@ -13,7 +13,7 @@ import { create } from 'zustand';
 import { createJSONStorage, persist } from 'zustand/middleware';
 import { safeLocalStorage } from './safeStorage';
 
-export type RightTab = 'risk' | 'why' | 'physiology';
+/** Compact-layout (< 1100 px) tabs: Summary · Record · Why (V2 §4.7). */
 export type MobileTab = 'inputs' | 'risk' | 'why';
 export type ToastTone = 'info' | 'success' | 'warn' | 'danger';
 
@@ -57,13 +57,8 @@ export interface Toast {
 }
 
 export interface PanelsState {
-  rightTab: RightTab;
+  /** Active tab of the compact (< 1100 px) workstation. */
   mobileTab: MobileTab;
-  /** Group shown in the 1280-px flyout (null = closed). */
-  flyoutGroup: string | null;
-  flyoutPinned: boolean;
-  /** Expanded accordion groups in the ≥1440 left panel. */
-  openGroups: string[];
 }
 
 export interface UiState {
@@ -103,7 +98,6 @@ export interface UiState {
   closeDetails(): void;
   setShortcutsOpen(open: boolean): void;
   setPanels(patch: Partial<PanelsState>): void;
-  toggleGroup(groupId: string, exclusive?: boolean): void;
   pushToast(toast: Omit<Toast, 'id'>): number;
   dismissToast(id: number): void;
   highlightFeature(key: string | null): void;
@@ -152,13 +146,7 @@ export const useUiStore = create<UiState>()(
       disclaimerAccepted: false,
       detailsOpen: false,
       shortcutsOpen: false,
-      panels: {
-        rightTab: 'risk',
-        mobileTab: 'risk',
-        flyoutGroup: null,
-        flyoutPinned: false,
-        openGroups: ['demographics', 'symptoms'],
-      },
+      panels: { mobileTab: 'risk' },
       toasts: [],
       highlightedFeature: null,
 
@@ -180,16 +168,6 @@ export const useUiStore = create<UiState>()(
       closeDetails: () => set({ detailsOpen: false }),
       setShortcutsOpen: (shortcutsOpen) => set({ shortcutsOpen }),
       setPanels: (patch) => set((s) => ({ panels: { ...s.panels, ...patch } })),
-      toggleGroup: (groupId, exclusive = false) =>
-        set((s) => {
-          const open = s.panels.openGroups.includes(groupId);
-          const openGroups = open
-            ? s.panels.openGroups.filter((g) => g !== groupId)
-            : exclusive
-              ? [groupId]
-              : [...s.panels.openGroups, groupId];
-          return { panels: { ...s.panels, openGroups } };
-        }),
       pushToast: (toast) => {
         toastId += 1;
         const id = toastId;
