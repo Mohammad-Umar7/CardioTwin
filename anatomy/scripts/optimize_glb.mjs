@@ -27,7 +27,7 @@ import { existsSync, readFileSync, statSync, writeFileSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-import { NodeIO, PropertyType } from '@gltf-transform/core';
+import { NodeIO, PropertyType, TextureInfo } from '@gltf-transform/core';
 import { ALL_EXTENSIONS, EXTMeshoptCompression, EXTTextureWebP, KHRMaterialsClearcoat, KHRMeshQuantization } from '@gltf-transform/extensions';
 import { prune, quantize, reorder } from '@gltf-transform/functions';
 import { MeshoptDecoder, MeshoptEncoder } from 'meshoptimizer';
@@ -204,6 +204,12 @@ const scctOf = (seg, i) => {
 const labelSets = new Map();
 for (const v of vesselsDoc.vessels) labelSets.set(v.node, { name: '_SEGMENT', ...labelledPoints(v.segments, scctOf) });
 if (vesselsDoc.veins) labelSets.set(vesselsDoc.veins.node, { name: '_VEIN', ...labelledPoints(vesselsDoc.veins.segments, (seg) => seg.code) });
+// _RADIUS (scene units): lumen radius of the nearest labelled centreline point, so a viewer can inflate each vessel in
+// proportion to its calibre (and fade sub-pixel tips) instead of adding a fixed offset.
+const radiusSets = new Map();
+const radiusOf = (seg, i) => seg.radius[i];
+for (const v of vesselsDoc.vessels) radiusSets.set(v.node, { name: '_RADIUS', ...labelledPoints(v.segments, radiusOf) });
+if (vesselsDoc.veins) radiusSets.set(vesselsDoc.veins.node, { name: '_RADIUS', ...labelledPoints(vesselsDoc.veins.segments, radiusOf) });
 const labelCounts = {};
 for (const node of root.listNodes()) {
   const set = labelSets.get(node.getName());
@@ -230,13 +236,37 @@ for (const node of root.listNodes()) {
   }
 }
 for (const [n, c] of Object.entries(labelCounts)) console.log(`[optimize] ${n}: ${labelSets.get(n).name} ${JSON.stringify(c)}`);
+let withRadius = 0;
+for (const node of root.listNodes()) {
+  const set = radiusSets.get(node.getName());
+  const mesh = node.getMesh();
+  if (!set || !mesh) continue;
+  const t = node.getWorldTranslation();
+  for (const prim of mesh.listPrimitives()) {
+    const pos = prim.getAttribute('POSITION');
+    const values = new Float32Array(pos.getCount());
+    const p = [0, 0, 0];
+    for (let i = 0; i < values.length; i++) {
+      pos.getElement(i, p);
+      const [x, y, z] = [p[0] + t[0], p[1] + t[1], p[2] + t[2]];
+      let best = Infinity;
+      for (let k = 0; k < set.lab.length; k++) {
+        const d = (set.pts[3 * k] - x) ** 2 + (set.pts[3 * k + 1] - y) ** 2 + (set.pts[3 * k + 2] - z) ** 2;
+        if (d < best) [best, values[i]] = [d, set.lab[k]];
+      }
+    }
+    prim.setAttribute('_RADIUS', doc.createAccessor(`${mesh.getName()}_radius`).setType('SCALAR').setArray(values).setBuffer(pos.getBuffer()));
+  }
+  withRadius++;
+}
+console.log(`[optimize] _RADIUS on ${withRadius} vessel nodes`);
 if (!Object.keys(labelCounts).some((n) => n.startsWith('Coronary_'))) {
   console.error('[optimize] ERROR: no _SEGMENT labels written (vessels.json without SCCT labels?)');
   process.exit(1);
 }
 
 // 1d. Baked PBR textures (anatomy/build/bake, from anatomy/blender/bake_textures.py) on each node's own material:
-//     baseColor (sRGB, lossy WebP), normal (tangent space; lossless WebP, renormalised) and occlusion + roughness
+//     baseColor (sRGB, lossy WebP), normal (tangent space; near-lossless WebP, renormalised) and occlusion + roughness
 //     from one ORM map (near-lossless WebP). A normal map whose 99th-percentile tilt is under NORMAL_MIN_TILT_DEG
 //     carries no relief (8-bit quantisation noise only) and is dropped, as is an ORM map whose occlusion and
 //     roughness channels are uniform (replaced by the roughness factor). The decoded GPU footprint (RGBA8 + mips)
@@ -244,11 +274,11 @@ if (!Object.keys(labelCounts).some((n) => n.startsWith('Coronary_'))) {
 //     standalone glTF viewers show what the app adds.
 const bakeManifestPath = join(bakeDir, 'bake_manifest.json');
 const NORMAL_MIN_TILT_DEG = 5.0;
-const GPU_BUDGET_MIB = 128;
+const GPU_BUDGET_MIB = 48;
 /** Wet serous / adventitial surfaces: clearcoat factor, clearcoat roughness (matches looks.py Coat_*). */
 const CLEARCOAT = {
-  Myocardium: [0.22, 0.16], Fat: [0.3, 0.18], Artery: [0.3, 0.2], PulmonaryArtery: [0.3, 0.2], PulmonaryVein: [0.3, 0.2],
-  Vein: [0.3, 0.2], CardiacVein: [0.35, 0.2], Valve: [0.35, 0.15], Papillary: [0.25, 0.2], Lung: [0.25, 0.2],
+  Myocardium: [0.08, 0.3], Fat: [0.12, 0.3], Artery: [0.14, 0.28], PulmonaryArtery: [0.14, 0.28], PulmonaryVein: [0.14, 0.28],
+  Vein: [0.14, 0.28], CardiacVein: [0.16, 0.28], Valve: [0.12, 0.25], Papillary: [0.08, 0.3], Lung: [0.25, 0.2],
   Airway: [0.3, 0.15], Oesophagus: [0.3, 0.15], Diaphragm: [0.3, 0.15], Cartilage: [0.3, 0.15],
 };
 /** Upload order hint for the viewer: the heart first, the ghosted outer layers last. */
@@ -328,7 +358,9 @@ if (existsSync(bakeManifestPath)) {
     const nrm = await normalStats(entry.files.normal);
     rep.normal_tilt_p50_p99 = [Number(nrm.p50.toFixed(2)), Number(nrm.p99.toFixed(2))];
     if (nrm.p99 >= NORMAL_MIN_TILT_DEG) {
-      const data = await nrm.image.webp({ lossless: true, effort: 6 }).toBuffer();
+      // near-lossless (WebP's lossless coder on slightly pre-quantised values): ~half the size of lossless, no block
+      // artefacts (lossy WebP blocks read as facets on a normal map)
+      const data = await nrm.image.webp({ nearLossless: true, quality: 60, effort: 6 }).toBuffer();
       mat.setNormalTexture(add('normal', data, nrm.width, nrm.height)).setNormalScale(1.0);
     } else {
       mat.setNormalTexture(null);
@@ -344,6 +376,10 @@ if (existsSync(bakeManifestPath)) {
       const tex = add('orm', data, orm.width, orm.height);
       mat.setOcclusionTexture(tex).setOcclusionStrength(1.0);
       mat.setMetallicRoughnessTexture(tex).setMetallicFactor(0.0).setRoughnessFactor(1.0);
+    }
+    // atlases: islands touch the 0 / 1 edges, so the samplers clamp instead of repeating
+    for (const info of [mat.getBaseColorTextureInfo(), mat.getNormalTextureInfo(), mat.getOcclusionTextureInfo(), mat.getMetallicRoughnessTextureInfo()]) {
+      if (info) info.setWrapS(TextureInfo.WrapMode.CLAMP_TO_EDGE).setWrapT(TextureInfo.WrapMode.CLAMP_TO_EDGE);
     }
     const cc = CLEARCOAT[entry.look];
     if (cc) mat.setExtension('KHR_materials_clearcoat', clearcoatExt.createClearcoat().setClearcoatFactor(cc[0]).setClearcoatRoughnessFactor(cc[1]));

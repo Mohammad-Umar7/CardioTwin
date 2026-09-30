@@ -34,30 +34,46 @@ from common import BAKE_DIR, BUILD_BLEND, BUILD_REPORT, read_json, write_json  #
 T0 = time.perf_counter()
 LAYERS = ("Layer_Skin", "Layer_Muscle", "Layer_Skeleton", "Layer_Lungs", "Layer_Diaphragm", "Layer_Heart")
 
-#: Texture sizes (base, normal, orm) per node; everything else gets DEFAULT_SIZE. Budgets: GLB <= 16 MB and <= 128 MiB
-#: of GPU memory once decoded (RGBA8 + mips); optimize_glb.mjs drops normal maps that carry no relief and ORM maps
-#: that are uniform, and asserts the GPU total. The heart walls carry the detail (2048 albedo); the ghosted outer
-#: layers only reach ~1.5 texels/mm on screen, so 512 is enough there.
+#: Texture sizes (base, normal, orm) per node; everything else gets DEFAULT_SIZE. Sized to their information content
+#: (round 3): the heart walls' albedo is visually lossless at 1024 (island-masked PSNR 47.6 dB against 2048) and their
+#: detail now lives in a 1024 normal map (subepicardial vessel network, muscle relief); the ghosted outer layers reach
+#: ~1.5 texels/mm on screen, so 256 is enough there; near-flat albedos (valves, veins, cartilage...) get 256 / 128.
+#: optimize_glb.mjs drops normal maps without relief and uniform ORM maps and asserts the GPU budget (48 MiB).
 SIZES = {
-    "Heart_Wall_Anterior": (2048, 1024, 512),
-    "Heart_Wall_Posterior": (2048, 1024, 512),
-    "EpicardialFat_Anterior": (512, 1024, 256),
-    "EpicardialFat_Posterior": (512, 1024, 256),
-    "GreatVessel_Aorta": (1024, 512, 256),
-    "GreatVessel_PulmonaryArtery": (512, 512, 256),
-    "GreatVessel_PulmonaryVeins": (512, 256, 256),
-    "CardiacVeins": (512, 512, 256),
-    "Papillary_Muscles": (512, 256, 256),
-    "Valve_Mitral": (512, 256, 256),
-    "Valve_Tricuspid": (512, 256, 256),
-    "Valve_Aortic": (512, 256, 256),
-    "Valve_Pulmonary": (512, 256, 256),
-    "Lung_L": (512, 512, 256),
-    "Lung_R": (512, 512, 256),
-    "Pectoralis_L": (512, 256, 256),
-    "Pectoralis_R": (512, 256, 256),
+    "Heart_Wall_Anterior": (1024, 1024, 256),
+    "Heart_Wall_Posterior": (1024, 1024, 256),
+    "EpicardialFat_Anterior": (512, 512, 128),
+    "EpicardialFat_Posterior": (512, 512, 128),
+    "GreatVessel_Aorta": (512, 512, 128),
+    "GreatVessel_PulmonaryArtery": (512, 512, 128),
+    "GreatVessel_PulmonaryVeins": (256, 256, 128),
+    "CardiacVeins": (256, 256, 128),
+    "Papillary_Muscles": (256, 256, 128),
+    "Valve_Mitral": (256, 256, 128),
+    "Valve_Tricuspid": (256, 256, 128),
+    "Valve_Aortic": (256, 256, 128),
+    "Valve_Pulmonary": (256, 256, 128),
+    "Lung_L": (512, 256, 128),
+    "Lung_R": (512, 256, 128),
+    "Pectoralis_L": (256, 256, 128),
+    "Pectoralis_R": (256, 256, 128),
+    "Ribs_L": (256, 256, 128),
+    "Ribs_R": (256, 256, 128),
+    "Spine_Thoracic": (256, 256, 128),
+    "Sternum": (256, 128, 128),
+    "Clavicle_L": (128, 128, 64),
+    "Clavicle_R": (128, 128, 64),
+    "CostalCartilage": (256, 128, 64),
+    "Skin_Torso": (256, 256, 128),
+    "Diaphragm": (256, 256, 128),
+    "Oesophagus": (128, 128, 64),
+    "GreatVessel_IVC": (128, 128, 64),
+    "GreatVessel_SVC": (128, 128, 64),
+    "GreatVessel_SVC_BrachiocephalicVeins": (256, 128, 64),
+    "GreatVessel_Aorta_ArchBranches": (256, 128, 64),
+    "Trachea_Bronchi": (256, 256, 128),
 }
-DEFAULT_SIZE = (512, 256, 128)
+DEFAULT_SIZE = (256, 128, 64)
 MARGIN_PX = 6
 
 
