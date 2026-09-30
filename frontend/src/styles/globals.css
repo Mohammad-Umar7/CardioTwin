@@ -1,0 +1,185 @@
+@import './tokens.css';
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  html {
+    background: rgb(var(--c-bg-app));
+    color: rgb(var(--c-text-primary));
+    color-scheme: dark;
+    -webkit-text-size-adjust: 100%;
+    text-rendering: optimizeLegibility;
+  }
+
+  body {
+    margin: 0;
+    min-height: 100vh;
+    font-family: var(--font-ui);
+    font-size: 0.875rem;
+    line-height: 1.25rem;
+    letter-spacing: -0.006em;
+    /* tailed l and serifed I, so Il1 / LBBB never blur */
+    font-feature-settings: 'cv05', 'cv08';
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    background: rgb(var(--c-bg-app));
+    overflow-x: hidden;
+  }
+
+  #root {
+    min-height: 100vh;
+  }
+
+  ::selection {
+    background: rgba(86, 194, 230, 0.28);
+    color: rgb(var(--c-text-primary));
+  }
+
+  /* Focus: 2 px accent ring with a 2 px offset, never removed. */
+  :focus {
+    outline: none;
+  }
+  :focus-visible {
+    outline: none;
+    box-shadow: var(--focus-ring);
+    border-radius: var(--r-sm);
+  }
+
+  button,
+  [role='button'] {
+    cursor: pointer;
+  }
+  button:disabled {
+    cursor: not-allowed;
+  }
+
+  abbr[title] {
+    text-decoration: underline dotted rgb(var(--c-text-tertiary));
+    text-underline-offset: 3px;
+    cursor: help;
+  }
+
+  a {
+    color: inherit;
+    text-decoration: none;
+  }
+
+  /* Instrument-like thin scrollbars on panels. */
+  * {
+    scrollbar-width: thin;
+    scrollbar-color: rgb(var(--c-border-strong)) transparent;
+  }
+  *::-webkit-scrollbar {
+    width: 8px;
+    height: 8px;
+  }
+  *::-webkit-scrollbar-thumb {
+    background: rgb(var(--c-border-default));
+    border-radius: 9999px;
+    border: 2px solid transparent;
+    background-clip: padding-box;
+  }
+  *::-webkit-scrollbar-thumb:hover {
+    background-color: rgb(var(--c-border-strong));
+  }
+  *::-webkit-scrollbar-track {
+    background: transparent;
+  }
+}
+
+@layer components {
+  .num {
+    font-variant-numeric: tabular-nums lining-nums;
+  }
+  .mono {
+    font-family: var(--font-mono);
+    font-variant-numeric: tabular-nums slashed-zero;
+  }
+  .overline {
+    font-size: 0.6875rem;
+    line-height: 1rem;
+    font-weight: 600;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+  }
+  .font-numeral {
+    font-family: var(--font-display);
+    font-variant-numeric: tabular-nums lining-nums;
+  }
+  /* "72 %": the % sign at 0.6 em in text/secondary. */
+  .pct-sign {
+    font-size: 0.6em;
+    color: rgb(var(--c-text-secondary));
+    font-weight: 500;
+    letter-spacing: 0;
+    margin-left: 0.08em;
+  }
+  /* 45° 1 px hatch for error cells (▨): text/disabled, 6 px pitch. Never red. */
+  .hatch {
+    background-image: repeating-linear-gradient(
+      45deg,
+      rgb(var(--c-text-disabled)) 0 1px,
+      transparent 1px 6px
+    );
+  }
+  .skeleton {
+    background: linear-gradient(
+      90deg,
+      rgb(var(--c-surface-1)) 0%,
+      rgb(var(--c-surface-2)) 50%,
+      rgb(var(--c-surface-1)) 100%
+    );
+    background-size: 200% 100%;
+    border-radius: var(--r-sm);
+  }
+  .hud-chip {
+    background: rgb(var(--c-surface-3) / 0.88);
+    box-shadow: var(--e-hud);
+    border: 1px solid rgb(var(--c-border-default));
+    border-radius: var(--r-sm);
+  }
+  .panel-scroll {
+    overflow-y: auto;
+    overscroll-behavior: contain;
+  }
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .skeleton {
+    animation: shimmer 1.8s linear infinite;
+  }
+}
+
+/* Reduced motion (OS setting or in-app Calm mode, which sets data-calm on <html>). */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 1ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 1ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+html[data-calm='true'] *,
+html[data-calm='true'] *::before,
+html[data-calm='true'] *::after {
+  animation-duration: 1ms !important;
+  animation-iteration-count: 1 !important;
+  transition-duration: 1ms !important;
+}
+
+/* Forced colours: chrome falls back to system colours; meters keep their segments. */
+@media (forced-colors: active) {
+  .hud-chip,
+  .skeleton {
+    border: 1px solid CanvasText;
+    background: Canvas;
+  }
+  :focus-visible {
+    outline: 2px solid Highlight;
+    outline-offset: 2px;
+  }
+}

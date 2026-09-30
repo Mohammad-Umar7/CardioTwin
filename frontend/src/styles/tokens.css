@@ -1,0 +1,134 @@
+/*
+ * LUMEN design tokens — docs/design/DESIGN_SYSTEM.md §2 (binding).
+ *
+ * Colours are stored as space-separated sRGB channels so Tailwind (tailwind.config.ts) and plain CSS can
+ * both apply alpha: `rgb(var(--c-surface-3) / .88)`. The matching hex values live in src/theme/tokens.ts
+ * for canvas / WebGL consumers. Risk colours are NOT tokens here: they come from src/theme/risk.ts only.
+ */
+:root {
+  /* 2.1 surfaces */
+  --c-bg-void: 7 9 12; /* #07090C */
+  --c-bg-app: 11 14 18; /* #0B0E12 */
+  --c-bg-panel: 16 20 26; /* #10141A */
+  --c-surface-1: 21 26 33; /* #151A21 */
+  --c-surface-2: 27 33 42; /* #1B212A */
+  --c-surface-3: 35 42 53; /* #232A35 */
+
+  /* borders */
+  --c-border-hairline: 28 34 43; /* #1C222B */
+  --c-border-default: 38 46 57; /* #262E39 */
+  --c-border-strong: 54 64 77; /* #36404D */
+
+  /* text */
+  --c-text-primary: 237 241 245; /* #EDF1F5 */
+  --c-text-secondary: 163 173 186; /* #A3ADBA */
+  --c-text-tertiary: 135 146 161; /* #8792A1 */
+  --c-text-disabled: 77 86 99; /* #4D5663 */
+
+  /* interaction (Signal Cyan) — interaction only */
+  --c-accent: 86 194 230; /* #56C2E6 */
+  --c-accent-hover: 127 211 238; /* #7FD3EE */
+  --c-accent-pressed: 62 159 194; /* #3E9FC2 */
+  --c-accent-ink: 7 9 12; /* #07090C */
+  --accent-subtle: rgba(86, 194, 230, 0.14);
+
+  /* status — never used for risk */
+  --c-success: 63 182 139; /* #3FB68B */
+  --c-warn: 227 195 90; /* #E3C35A */
+  --c-danger: 255 95 109; /* #FF5F6D */
+  --c-pending: 75 82 96; /* #4B5260 — pending / stale risk marks */
+  --scrim: rgba(7, 9, 12, 0.6);
+
+  /* 2.4 spacing, 4 px grid */
+  --sp-0-5: 2px;
+  --sp-1: 4px;
+  --sp-2: 8px;
+  --sp-3: 12px;
+  --sp-4: 16px;
+  --sp-5: 20px;
+  --sp-6: 24px;
+  --sp-8: 32px;
+  --sp-10: 40px;
+  --sp-12: 48px;
+  --sp-16: 64px;
+  --sp-20: 80px;
+
+  /* radius: instrument-like, not bubbly */
+  --r-xs: 2px;
+  --r-sm: 4px;
+  --r-md: 6px;
+  --r-lg: 8px;
+  --r-full: 9999px;
+
+  /* elevation: depth comes from surface steps; shadows only on floating layers */
+  --e-0: none;
+  --e-1: inset 0 1px 0 rgba(255, 255, 255, 0.03);
+  --e-2: 0 0 0 1px #262e39, 0 8px 24px rgba(0, 0, 0, 0.45);
+  --e-3: 0 0 0 1px #36404d, 0 16px 48px rgba(0, 0, 0, 0.6);
+  --e-hud: 0 2px 8px rgba(0, 0, 0, 0.5);
+  --focus-ring: 0 0 0 2px #0b0e12, 0 0 0 4px #56c2e6;
+
+  /* control heights */
+  --h-xs: 24px;
+  --h-sm: 28px;
+  --h-md: 32px;
+  --h-lg: 40px;
+
+  /* z-index */
+  --z-canvas: 0;
+  --z-hud: 10;
+  --z-labels: 20;
+  --z-panels: 30;
+  --z-flyout: 40;
+  --z-popover: 50;
+  --z-toast: 60;
+  --z-scrim: 70;
+  --z-coachmark: 80;
+  --z-status: 90;
+  --z-skip: 100;
+
+  /* 3 typography */
+  --font-ui: 'Inter Variable', system-ui, 'Segoe UI', Roboto, sans-serif;
+  --font-display: 'Inter Tight Variable', 'Inter Variable', system-ui, sans-serif;
+  --font-mono: 'JetBrains Mono Variable', ui-monospace, Consolas, monospace;
+
+  /* 6 motion */
+  --dur-instant: 90ms;
+  --dur-fast: 160ms;
+  --dur-base: 240ms;
+  --dur-flyout: 360ms;
+  --dur-data: 420ms;
+  --ease-instant: cubic-bezier(0.2, 0, 0, 1);
+  --ease-out: cubic-bezier(0.22, 1, 0.36, 1);
+  --ease-data: cubic-bezier(0.16, 1, 0.3, 1);
+  --ease-peel: cubic-bezier(0.65, 0, 0.35, 1);
+  --ease-exit: cubic-bezier(0.55, 0, 1, 0.45);
+
+  /* 4 layout (≥ 1440 defaults; overridden per breakpoint in globals.css) */
+  --topbar-h: 48px;
+  --status-h: 28px;
+  --left-w: 320px;
+  --right-w: 384px;
+  --rail-w: 56px;
+  --flyout-w: 296px;
+}
+
+@media (max-width: 1439.98px) {
+  :root {
+    --topbar-h: 40px;
+    --status-h: 24px;
+    --right-w: 336px;
+  }
+}
+
+@media (max-width: 1279.98px) {
+  :root {
+    --right-w: 320px;
+  }
+}
+
+@media (max-height: 720px) {
+  :root {
+    --status-h: 24px;
+  }
+}
