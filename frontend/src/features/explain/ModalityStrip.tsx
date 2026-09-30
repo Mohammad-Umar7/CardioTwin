@@ -45,15 +45,15 @@ export function ModalityStrip({ rows, target, unit, scale, labelOf, onPick, acti
     <section aria-labelledby="modality-title" className="flex flex-col gap-2">
       <div className="flex h-6 items-center justify-between gap-2">
         <h3 id="modality-title" className="eyebrow text-secondary">
-          Evidence by data modality
+          By data modality
         </h3>
         {lead && lead.abs > 0 && (
-          <span className="text-label font-normal text-tertiary">
-            Largest share: {lead.label} {Math.round(lead.share * 100)}&thinsp;%
+          <span className="truncate text-label font-normal text-tertiary">
+            {Math.round(lead.share * 100)}&thinsp;% of the evidence from {lead.label.toLowerCase().replace(/^resting ecg$/, 'the ECG')}
           </span>
         )}
       </div>
-      <ul className="grid grid-cols-7 gap-1" aria-label={`Contribution of each data modality to ${target}`}>
+      <ul className="-mx-1 flex justify-between" aria-label={`Contribution of each data modality to ${target}`}>
         {rows.map((r) => {
           const up = r.sum >= 0;
           const h = r.abs === 0 ? 0 : Math.max(2, (Math.abs(r.sum) / max) * HALF);
@@ -83,7 +83,7 @@ export function ModalityStrip({ rows, target, unit, scale, labelOf, onPick, acti
                   aria-pressed={active === r.group}
                   aria-label={`${r.label}: ${r.abs === 0 ? 'no effect' : `${up ? 'raises' : 'lowers'} ${target}, ${f.spoken}`}. Show its inputs.`}
                   className={cn(
-                    'flex w-full flex-col items-center gap-1 rounded-sm px-0.5 py-1 outline-none transition-colors duration-instant',
+                    'flex min-w-10 flex-col items-center gap-1 rounded-sm px-1 py-1 outline-none transition-colors duration-instant',
                     'hover:bg-surface-1 focus-visible:shadow-focus',
                     active === r.group && 'bg-surface-2',
                   )}

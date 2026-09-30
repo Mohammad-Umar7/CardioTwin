@@ -1,8 +1,11 @@
 import { useEffect, useRef, useState } from 'react';
 import type { Contribution, FeatureVector } from '@/types/contracts';
 
-/** Grid shared by contribution rows and their headers: tip · label · value · bar · number. */
-export const ROW_GRID = 'grid-cols-[10px_minmax(0,1fr)_auto_104px_40px]';
+/**
+ * Grid shared by contribution rows and their headers: tip · label · value · bar · number. The bar column
+ * narrows in the 400 px drawer (< 1440) so labels keep their words.
+ */
+export const ROW_GRID = 'grid-cols-[10px_minmax(0,1fr)_auto_80px_40px] min-[1440px]:grid-cols-[10px_minmax(0,1fr)_auto_104px_40px]';
 
 /** Features whose value changed since the last estimate (for the 1.2 s accent rule, V2 §8.3 step 5). */
 export function useChangedFeatures(contributions: readonly Contribution[] | undefined): ReadonlySet<string> {

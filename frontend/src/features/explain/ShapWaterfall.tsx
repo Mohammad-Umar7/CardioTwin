@@ -13,8 +13,8 @@ import type { ContributionUnit } from './explainPrefs';
 import { ROW_GRID, useChangedFeatures } from './explainUi';
 import { formatContribution, useExplainData } from './useExplainData';
 
-/** Half-width of the diverging bar (the whole bar column is twice this). */
-const HALF = 52;
+/** Half-width of the diverging bar, as a share of the bar column (the column is 80 or 104 px wide). */
+const HALF_PCT = 50;
 
 
 export interface ContributionRowProps {
@@ -43,7 +43,7 @@ export function ContributionRow({ c, spec, target, max, unit, scale, changed, in
   const reduced = useIsReducedMotion();
   const negligible = Math.abs(c.shap) < NEGLIGIBLE_SHAP;
   const up = c.shap > 0;
-  const width = Math.max(1, Math.min(HALF, (Math.abs(c.shap) / max) * HALF));
+  const share = Math.max(0.02, Math.min(1, Math.abs(c.shap) / max));
   const value = spec ? formatFeatureValue(spec, c.value as never) : String(c.value ?? '–');
   const label = spec?.label ?? c.feature;
   const f = formatContribution(c.shap, unit, scale);
@@ -103,8 +103,8 @@ export function ContributionRow({ c, spec, target, max, unit, scale, changed, in
             <span
               className="absolute top-1/2 h-2 -translate-y-1/2 rounded-xs transition-[width,left] duration-base ease-out"
               style={{
-                width,
-                left: up ? '50%' : `calc(50% - ${width}px)`,
+                width: `${share * HALF_PCT}%`,
+                left: up ? '50%' : `${50 - share * HALF_PCT}%`,
                 backgroundColor: up ? SHAP_RAISES : SHAP_LOWERS,
               }}
             />
