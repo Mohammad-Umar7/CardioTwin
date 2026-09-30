@@ -23,6 +23,7 @@ python -m venv .venv
 ./.venv/Scripts/python -m pip install -e ml                        # editable install of cardiotwin_ml
 
 ./.venv/Scripts/python -m cardiotwin_ml.train                      # full deterministic run -> artifacts, figures, report
+                                                                   # (~7 min with 8 CPU workers, ~4 min with 28)
 ./.venv/Scripts/python -m pytest ml/tests -q                       # test-suite (uses the built artifacts)
 ```
 
@@ -90,7 +91,7 @@ SHAP values are exact and live in the ensemble's **log-odds space**:
 * XGBoost component — path-dependent TreeSHAP (Lundberg et al. 2018, Algorithm 2) with node covers, re-implemented
   in **float64** (`xgb_trees.py`) because XGBoost's own `pred_contribs` accumulates in float32 and misses the 1e-6
   additivity contract by up to ~1e-5. Agreement with `pred_contribs` and with the `shap` library is checked on every
-  run (`metrics.json → explainability_checks`, typically ≤ 2e-6 = float32 precision);
+  run (`metrics.json → explainability_checks`: ≤ 5e-7 on the deployed models, i.e. float32 precision);
 * ensemble — `φ = w·φ_LR + (1−w)·φ_XGB`, `base = w·base_LR + (1−w)·base_XGB`, so `base + Σφ = margin` (asserted
   to 1e-6, observed ≈ 1e-15). One-hot columns (`BBB`) are summed back into their raw feature.
 
@@ -194,4 +195,5 @@ name). Numeric `value`s are emitted as integers when integral. `summary.expected
 | `fixtures.json` | parity tests | request → expected response pairs, with encoded vectors |
 | `cardiotwin_models.joblib` | backend | native scikit-learn / XGBoost models (weights deliverable) |
 
-All JSON artifacts are deterministic; a rerun changes only `metrics.json → generated_at`.
+All JSON artifacts are deterministic: reruns (also with a different `--jobs`) reproduce every file byte for byte,
+except `metrics.json → generated_at`.

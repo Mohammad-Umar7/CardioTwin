@@ -1,6 +1,6 @@
 """One-command, deterministic CardioTwin pipeline.
 
-    ./.venv/Scripts/python -m cardiotwin_ml.train            # full run (~2-10 min on a laptop CPU)
+    ./.venv/Scripts/python -m cardiotwin_ml.train            # full run (~7 min with 8 CPU workers)
     ./.venv/Scripts/python -m cardiotwin_ml.train --fast     # smoke run (reduced CV / search / bootstrap)
 
 Stages: data -> locked hold-out split -> ablations (dev) -> nested-CV leaderboard (dev) -> ensemble
@@ -210,6 +210,7 @@ def run(
     X_test = encoder.transform(test_values)
 
     log.info("stage done: ablations (%.1f s elapsed)", time.perf_counter() - t_start)
+
     # ---------------------------------------------------------------- nested-CV leaderboard (dev only)
     bl_name = cfg["baseline"]["model"]
     bl_spec = specs[bl_name]
@@ -219,6 +220,7 @@ def run(
     cv = run_cv_jobs(jobs, seed, cfg["tuning"], n_jobs)
 
     log.info("stage done: nested-CV leaderboard (%.1f s elapsed)", time.perf_counter() - t_start)
+
     # ---------------------------------------------------------------- ensemble on OOF margins (dev only)
     ens_cfg = cfg["ensemble"]
     tree_name = ens_cfg["tree_component"]
@@ -314,6 +316,7 @@ def run(
         )
 
     log.info("stage done: final refit (%.1f s elapsed)", time.perf_counter() - t_start)
+
     # ---------------------------------------------------------------- the ONE evaluation on the test set
     boot = cfg["bootstrap"]
     curves_cfg = cfg["curves"]
@@ -373,6 +376,7 @@ def run(
         }
 
     log.info("stage done: test evaluation (%.1f s elapsed)", time.perf_counter() - t_start)
+
     # ---------------------------------------------------------------- explanations
     dev_records = dev_values.to_dict(orient="records")
     num_view, _ = explain.numeric_view(encoder, dev_records)
@@ -390,6 +394,7 @@ def run(
         checks[t] = {k: (round_float(v, 3) if isinstance(v, float) else v) for k, v in cross.items()}
 
     log.info("stage done: explanations (%.1f s elapsed)", time.perf_counter() - t_start)
+
     # ---------------------------------------------------------------- artifacts
     artifacts_dir.mkdir(parents=True, exist_ok=True)
     defaults = export.compute_defaults(encoder, dev_values)
