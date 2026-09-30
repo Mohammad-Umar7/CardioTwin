@@ -92,24 +92,32 @@ def test_monte_carlo_splits_are_stratified_deterministic_and_new(ctx: AnalysisCo
     assert len(tests) == 6
 
 
+# Refitting the recipe is bit-exact on the reference workstation, but other x86 CPUs (e.g. CI runners) can pick
+# different SIMD code paths in BLAS/XGBoost and differ in the last ulp. 1e-12 still catches any real divergence.
+REPRO_ATOL = 1e-12
+
+
 def test_recipe_harness_reproduces_the_deployed_model_exactly(ctx: AnalysisContext) -> None:
     """Frozen recipe on the locked split == the published model (weight, Platt, threshold, probabilities)."""
     X_test = ctx.X[ctx.test_pos]
     for t in ctx.targets:
         fit = fit_recipe(ctx, t, ctx.dev_pos, "frozen")
         deployed = ctx.deployed[t]
-        assert (fit.model.weight, fit.model.platt_a, fit.model.platt_b) == (deployed.weight, deployed.platt_a, deployed.platt_b)
-        assert fit.model.threshold == deployed.threshold and fit.model.threshold_f1 == deployed.threshold_f1
-        assert np.array_equal(fit.model.predict_proba(X_test), deployed.predict_proba(X_test)), t
+        got = (fit.model.weight, fit.model.platt_a, fit.model.platt_b)
+        want = (deployed.weight, deployed.platt_a, deployed.platt_b)
+        assert got == pytest.approx(want, rel=0, abs=REPRO_ATOL), t
+        assert fit.model.threshold == pytest.approx(deployed.threshold, rel=0, abs=REPRO_ATOL), t
+        assert fit.model.threshold_f1 == pytest.approx(deployed.threshold_f1, rel=0, abs=REPRO_ATOL), t
+        np.testing.assert_allclose(fit.model.predict_proba(X_test), deployed.predict_proba(X_test), rtol=0, atol=REPRO_ATOL, err_msg=t)
 
 
 def test_robustness_is_independent_of_worker_count(ctx: AnalysisContext) -> None:
     small = _only(ctx, "LCX")
     a = run_robustness(small, 2, 0.2, 1000, "frozen", n_jobs=1)
     b = run_robustness(small, 2, 0.2, 1000, "frozen", n_jobs=2)
-    assert a.reproduction_max_abs_diff == 0.0 and b.reproduction_max_abs_diff == 0.0
+    assert a.reproduction_max_abs_diff <= REPRO_ATOL and b.reproduction_max_abs_diff <= REPRO_ATOL
     for k, v in a.values["LCX"].items():
-        assert np.array_equal(v, b.values["LCX"][k]), k
+        np.testing.assert_allclose(v, b.values["LCX"][k], rtol=0, atol=REPRO_ATOL, err_msg=k)
     assert a.locked == b.locked
     assert a.locked["LCX"]["roc_auc"] == pytest.approx(ctx.metrics["targets"]["LCX"]["test"]["roc_auc"]["value"], abs=1e-6)
 
