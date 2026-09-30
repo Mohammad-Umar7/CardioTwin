@@ -6,6 +6,7 @@ import type { RenderTier } from '@/state/viewerStore';
 import { BEAT_MODE } from '../anatomy/beatDeform';
 import { VESSEL_INFLATE } from '../anatomy/materials';
 import { getRiskLUT } from '../riskLut';
+import { sceneRuntime } from '../stage/sceneRuntime';
 import { MAX_TARGET_SLOTS, fxFrame, slotOf, targetSlots } from './fxState';
 import { DASH_PERIOD, createOverlayMaterial, createOverlayShared, type OverlayMaterial } from './overlayMaterial';
 import { isAttached, isEffectivelyVisible } from './sceneNodes';
@@ -18,6 +19,8 @@ interface Entry {
   overlay: Mesh;
   material: OverlayMaterial;
   slot: number;
+  /** Coronary node the mesh belongs to (for the anatomy's per-node solid factor). */
+  node: string;
   /** Arc-length range of the mesh, for skipping draws the pulse / sweep cannot reach this frame. */
   arcMin: number;
   arcMax: number;
@@ -133,7 +136,7 @@ export function VesselOverlay({ tier, treeLengthOf, restOffsetOf }: VesselOverla
       };
       root.add(overlay);
       const [arcMin, arcMax] = arcRange(object.geometry as BufferGeometry, attribute);
-      entries.current.set(object, { source: object, overlay, material, slot: slotOf(slots, target), arcMin, arcMax });
+      entries.current.set(object, { source: object, overlay, material, slot: slotOf(slots, target), node: nodeName || object.name, arcMin, arcMax });
     });
   };
 
@@ -156,11 +159,17 @@ export function VesselOverlay({ tier, treeLengthOf, restOffsetOf }: VesselOverla
         dashes > 0 ||
         (pulsing && overlaps(entry.arcMin, entry.arcMax, f.pulseFront, PULSE_REACH)) ||
         (igniting && overlaps(entry.arcMin, entry.arcMax, f.ignite, IGNITE_REACH));
-      const visible = lit && isEffectivelyVisible(entry.source);
+      const solid = sceneRuntime.nodes[entry.node]?.solid ?? 1;
+      const visible = lit && solid > 0.01 && isEffectivelyVisible(entry.source);
       entry.overlay.visible = visible;
       if (!visible) continue;
       const s = Math.min(entry.slot, MAX_TARGET_SLOTS - 1);
       const u = entry.material.uniforms;
+      u.uSolid.value = solid;
+      if (entry.material.clippingPlanes !== sceneRuntime.sectionPlanes && sceneRuntime.sectionPlanes.length > 0) {
+        entry.material.clippingPlanes = sceneRuntime.sectionPlanes;
+        entry.material.needsUpdate = true;
+      }
       u.uP.value = f.p[s]!;
       u.uAvail.value = f.available[s]!;
       u.uDim.value = f.dim[s]!;

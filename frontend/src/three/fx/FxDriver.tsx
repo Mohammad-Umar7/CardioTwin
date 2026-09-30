@@ -21,6 +21,7 @@ import {
   takeIgnitionRequest,
   targetSlots,
 } from './fxState';
+import { sceneRuntime } from '../stage/sceneRuntime';
 import { isAttached } from './sceneNodes';
 
 /** Damping rates λ, matching useRiskAnimation (§6): p 6, availability / selection 8. */
@@ -137,7 +138,11 @@ export function FxDriver() {
     }
 
     // --- ignition: when a prediction lands for a new case (or no estimate arrives in time)
-    const anatomyReady = viewer.anatomySource === 'glb' || viewer.anatomySource === 'procedural' || viewer.anatomySource === 'error';
+    // The anatomy's cold-load assembly flies the parts in first; it tells us when the tree may ignite.
+    const { assembly } = sceneRuntime;
+    const assembled = assembly.done || assembly.t >= assembly.igniteAt;
+    const anatomyReady =
+      (viewer.anatomySource === 'glb' && assembled) || viewer.anatomySource === 'procedural' || viewer.anatomySource === 'error';
     const caseKey = patient.mode === 'custom' ? 'custom' : patient.selectedPatientId ? `cohort:${patient.selectedPatientId}` : null;
     const landed = trigger.update(now, anatomyReady, caseKey, !!prediction && patient.status === 'ready');
     const requested = takeIgnitionRequest();

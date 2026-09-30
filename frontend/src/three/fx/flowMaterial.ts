@@ -73,6 +73,7 @@ const vertexShader = /* glsl */ `
 
   // The anatomy's non-affine beat terms (atrial kick) — same chunk and shared uniforms as the vessels.
   ${BEAT_VERTEX_PARS}
+  #include <clipping_planes_pars_vertex>
 
   vec4 centreTexel(int i) {
     return texelFetch(uCentre, ivec2(i % uTexWidth, i / uTexWidth), 0);
@@ -92,6 +93,9 @@ const vertexShader = /* glsl */ `
     gl_Position = vec4(2.0, 2.0, 2.0, 1.0); // outside the clip volume: no fragments
     vAlpha = 0.0;
     vHalo = 0.0;
+    #if NUM_CLIPPING_PLANES > 0
+      vClipPosition = vec3(0.0);
+    #endif
     vColor = vec3(0.0);
     vQuad = vec2(0.0);
   }
@@ -149,6 +153,9 @@ const vertexShader = /* glsl */ `
     hv.xyz += offset;
     tv.xyz += offset;
 
+    #if NUM_CLIPPING_PLANES > 0
+      vClipPosition = -hv.xyz; // section-plane clipping (three's clipping_planes_fragment)
+    #endif
     vec4 hc = projectionMatrix * hv;
     vec4 tc = projectionMatrix * tv;
     if (hc.w <= 0.0 || tc.w <= 0.0) { collapse(); return; }
@@ -193,7 +200,9 @@ const fragmentShader = /* glsl */ `
   varying vec3 vColor;
   varying float vAlpha;
   varying float vHalo;
+  #include <clipping_planes_pars_fragment>
   void main() {
+    #include <clipping_planes_fragment>
     if (vAlpha <= 0.0) discard;
     float across = exp(-2.4 * vQuad.y * vQuad.y);
     // comet: dim tail, bright head, soft round cap
@@ -294,6 +303,7 @@ export function createFlowMaterial(riskLut: Texture, inflate: number): FlowMater
     blendDst: OneMinusSrcAlphaFactor,
     blendSrcAlpha: ZeroFactor,
     blendDstAlpha: OneFactor,
+    clipping: true,
   }) as FlowMaterial;
   return material;
 }

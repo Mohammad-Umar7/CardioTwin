@@ -15,6 +15,7 @@ import {
 import { useSchemaIndex } from '@/hooks/useData';
 import { VESSEL_INFLATE } from '../anatomy/materials';
 import { getRiskLUT } from '../riskLut';
+import { sceneRuntime } from '../stage/sceneRuntime';
 import {
   DEFAULT_STEP,
   buildFlowPaths,
@@ -108,7 +109,7 @@ export function FlowParticles({ pristine, centrelines, count }: FlowParticlesPro
     mesh.raycast = () => {}; // never intercepts picking
     mesh.userData.ctFx = true;
 
-    const tracker = new NodeTracker(nodeNames, restInverses(pristine, nodeNames));
+    const tracker = new NodeTracker(nodeNames, restInverses(pristine, nodeNames), 30, (name) => sceneRuntime.nodes[name]?.solid ?? 1);
     return { mesh, geometry, material, texture, tracker, max: particles.count };
   }, [centrelines, pristine, targets]);
 
@@ -160,9 +161,15 @@ export function FlowParticles({ pristine, centrelines, count }: FlowParticlesPro
     };
   }, [built, scene]);
 
-  // Skip the draw entirely while the flow is faded out (Flow off, reduced motion, tier C).
+  // Skip the draw entirely while the flow is faded out (Flow off, reduced motion, tier C). Clip with the
+  // anatomy's heart section plane(s), so a cut heart never shows flow floating in the removed half.
   useFrame(() => {
     built.mesh.visible = count > 0 && fxFrame.flowOpacity > 0;
+    const planes = sceneRuntime.sectionPlanes;
+    if (built.material.clippingPlanes !== planes && planes.length > 0) {
+      built.material.clippingPlanes = planes;
+      built.material.needsUpdate = true;
+    }
   });
 
   return <primitive object={built.mesh} />;

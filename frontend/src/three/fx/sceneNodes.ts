@@ -42,7 +42,7 @@ export function restInverses(pristine: Object3D, names: readonly string[]): Matr
  */
 export class NodeTracker {
   readonly matrices: Matrix4[];
-  /** 1 while the node renders, else 0 (its particles fade out with it). */
+  /** 0..1: visible × the anatomy's solid factor for the node (its particles fade out with it). */
   readonly visibility: Float32Array;
   private readonly live: (Object3D | null)[];
   private missingFor = 0;
@@ -51,6 +51,8 @@ export class NodeTracker {
     readonly names: readonly string[],
     private readonly rest: readonly Matrix4[],
     private readonly retryFrames = 30,
+    /** Extra 0..1 opacity per node (the anatomy's isolate / ghost / assembly dissolve), default 1. */
+    private readonly solidOf: (name: string) => number = () => 1,
   ) {
     this.matrices = names.map(() => new Matrix4());
     this.visibility = new Float32Array(names.length);
@@ -72,7 +74,7 @@ export class NodeTracker {
         continue;
       }
       this.matrices[i]!.multiplyMatrices(node.matrixWorld, this.rest[i]!);
-      this.visibility[i] = isEffectivelyVisible(node) ? 1 : 0;
+      this.visibility[i] = isEffectivelyVisible(node) ? Math.min(1, Math.max(0, this.solidOf(this.names[i]!))) : 0;
     }
     this.missingFor = missing ? this.missingFor + 1 : 0;
     return !missing;

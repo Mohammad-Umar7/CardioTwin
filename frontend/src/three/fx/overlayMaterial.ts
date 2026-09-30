@@ -46,6 +46,8 @@ export interface OverlayOwn {
   uDashPhase: { value: number };
   uRestOffset: { value: Vector3 };
   uBeatMode: { value: number };
+  /** The anatomy's solid factor for this node (isolate / ghost / assembly), 0..1. */
+  uSolid: { value: number };
 }
 
 export type OverlayMaterial = ShaderMaterial & { uniforms: OverlayShared & OverlayOwn };
@@ -79,6 +81,7 @@ export function createOverlayMaterial(shared: OverlayShared, arclenAttribute: st
     uDashPhase: { value: 0 },
     uRestOffset: { value: new Vector3() },
     uBeatMode: { value: beatMode },
+    uSolid: { value: 1 },
   };
   const material = new ShaderMaterial({
     uniforms: { ...shared, ...own, ...BEAT_UNIFORMS },
@@ -89,11 +92,14 @@ export function createOverlayMaterial(shared: OverlayShared, arclenAttribute: st
       varying vec3 vNormalV;
       varying vec3 vViewV;
       ${BEAT_VERTEX_PARS}
+      #include <clipping_planes_pars_vertex>
       void main() {
         vec3 transformed = position;
         ${BEAT_VERTEX}
         transformed += normalize(normal) * uInflate;
         vec4 mv = modelViewMatrix * vec4(transformed, 1.0);
+        vec4 mvPosition = mv;
+        #include <clipping_planes_vertex>
         vArc = ${arclenAttribute};
         vNormalV = normalize(normalMatrix * normal);
         vViewV = -mv.xyz;
@@ -116,10 +122,13 @@ export function createOverlayMaterial(shared: OverlayShared, arclenAttribute: st
       uniform float uDensity;
       uniform float uTreeLength;
       uniform float uDashPhase;
+      uniform float uSolid;
       varying float vArc;
       varying vec3 vNormalV;
       varying vec3 vViewV;
+      #include <clipping_planes_pars_fragment>
       void main() {
+        #include <clipping_planes_fragment>
         float facing = clamp(dot(normalize(vNormalV), normalize(vViewV)), 0.0, 1.0);
         float core = 0.3 + 0.7 * facing; // light "inside" the tube: brightest along its axis
         vec3 ramp = texture2D(uRiskLUT, vec2(clamp(uP, 0.0, 1.0), 0.5)).rgb;
@@ -153,7 +162,7 @@ export function createOverlayMaterial(shared: OverlayShared, arclenAttribute: st
           col += mix(uFlowWhite, ramp, uTintMix) * (0.7 * uDashAmp * uDensity * bead * facing * facing);
         }
 
-        col *= core * (1.0 - 0.7 * uDim);
+        col *= core * (1.0 - 0.7 * uDim) * uSolid;
         if (dot(col, vec3(1.0)) < 1e-4) discard;
         gl_FragColor = vec4(col, 1.0);
         #include <tonemapping_fragment>
@@ -164,6 +173,7 @@ export function createOverlayMaterial(shared: OverlayShared, arclenAttribute: st
     depthWrite: false,
     depthTest: true,
     blending: AdditiveBlending,
+    clipping: true,
   }) as OverlayMaterial;
   return material;
 }
