@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useLayoutEffect, useRef, useState, type CSSProperties, type ReactNode } from 'react';
 import { cn } from '@/lib/cn';
 import { useUiStore, type Chrome } from '@/state/uiStore';
-import { CHROME_SLOTS, computeStageInsets, slotTransition, toolbarOffset } from './stageInsets';
+import { CHROME_SLOTS, columnOverflows, computeStageInsets, slotTransition, toolbarOffset } from './stageInsets';
 
 export interface StageLayoutProps {
   /** Full-bleed canvas layer (the workstation <CanvasSlot/>). It never changes size. */
@@ -194,7 +194,7 @@ export function StageLayout({
     });
     useUiStore.getState().setStageInsets(next);
     const col = rightRef.current;
-    if (col) setRightScrolls(col.scrollHeight > col.clientHeight + 1);
+    if (col) setRightScrolls(columnOverflows(col));
     // The toolbar shares the bottom band with the legend chip (and a docked drawer): keep clear of both.
     const g = cssPx(stage, '--stage-inset', INSET_FALLBACK);
     const legendShown = CHROME_SLOTS[chrome].bottomLeft && drawer !== 'inputs';
@@ -233,9 +233,22 @@ export function StageLayout({
       measure();
     });
     [leftRef.current, rightRef.current, bottomRef.current, legendRef.current].forEach((el) => el && mo.observe(el, { childList: true }));
+    // Entry slides and chrome glides change no box size, so the observers stay silent when they end:
+    // re-measure once they settle (coalesced to one frame).
+    let frame = 0;
+    const settle = () => {
+      cancelAnimationFrame(frame);
+      frame = requestAnimationFrame(() => measure());
+    };
+    const stage = stageRef.current;
+    stage?.addEventListener('transitionend', settle);
+    stage?.addEventListener('animationend', settle);
     return () => {
       ro.disconnect();
       mo.disconnect();
+      cancelAnimationFrame(frame);
+      stage?.removeEventListener('transitionend', settle);
+      stage?.removeEventListener('animationend', settle);
     };
   }, [measure]);
 

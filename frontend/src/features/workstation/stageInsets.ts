@@ -92,3 +92,18 @@ export function toolbarOffset(p: ToolbarPlacement): number {
   const x = Math.max(min, Math.min(max, centre));
   return x - p.stageWidth / 2;
 }
+
+/**
+ * Whether the right column must scroll: its content's layout height (offsetTop + offsetHeight, which
+ * ignore transforms) exceeds the column's box. `scrollHeight` would also count a card's 8 px entry
+ * slide, which is a transform, and leave a scrollbar behind that narrows the cards by its width.
+ */
+export function columnOverflows(col: HTMLElement): boolean {
+  let bottom = 0;
+  for (const child of col.children) {
+    if (!(child instanceof HTMLElement)) continue;
+    bottom = Math.max(bottom, child.offsetTop + child.offsetHeight);
+  }
+  const padBottom = Number.parseFloat(getComputedStyle(col).paddingBottom) || 0;
+  return bottom + padBottom > col.clientHeight + 1.5;
+}

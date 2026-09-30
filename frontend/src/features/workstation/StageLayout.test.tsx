@@ -3,7 +3,7 @@ import { act, render, screen } from '@testing-library/react';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import { ZERO_INSETS, useUiStore } from '@/state/uiStore';
 import { ChromeGate, StageLayout } from './StageLayout';
-import { computeStageInsets, type InsetInput } from './stageInsets';
+import { columnOverflows, computeStageInsets, type InsetInput } from './stageInsets';
 
 const BOXES: Record<string, { width: number; height: number }> = {
   'slot-left': { width: 280, height: 336 },
@@ -225,5 +225,30 @@ describe('toolbar placement', () => {
     expect(left + 600).toBeLessThanOrEqual(1000 - 12 + 0.001);
     // No legend (tour, focus): pure free-area centre.
     expect(toolbarOffset({ ...explain, legendRight: 0 }) + 720).toBe((64 + 1440 - 452) / 2);
+  });
+});
+
+describe('right column overflow', () => {
+  /** A column of cards with layout boxes (jsdom has no layout): offsetTop/offsetHeight per card. */
+  function column(clientHeight: number, cards: { top: number; height: number; translateY?: number }[]) {
+    const col = document.createElement('div');
+    Object.defineProperty(col, 'clientHeight', { value: clientHeight });
+    for (const c of cards) {
+      const card = document.createElement('div');
+      Object.defineProperty(card, 'offsetTop', { value: c.top });
+      Object.defineProperty(card, 'offsetHeight', { value: c.height });
+      if (c.translateY) card.style.transform = `translateY(${c.translateY}px)`;
+      col.appendChild(card);
+    }
+    return col;
+  }
+
+  it('does not scroll while a card that fits is still sliding in (transforms are not layout)', () => {
+    // Risk card 452 + gap 8 + inspector 244 = 704 in a 704 px column; the inspector is mid-entry (+8 px).
+    expect(columnOverflows(column(704, [{ top: 0, height: 452 }, { top: 460, height: 244, translateY: 8 }]))).toBe(false);
+  });
+
+  it('scrolls when the stacked cards are taller than the column', () => {
+    expect(columnOverflows(column(632, [{ top: 0, height: 444 }, { top: 452, height: 314 }]))).toBe(true);
   });
 });
