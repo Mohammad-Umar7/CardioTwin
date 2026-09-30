@@ -1,7 +1,10 @@
 import { useEffect, useRef } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
 import { AlertTriangle, CheckCircle2, Info, X, XCircle } from 'lucide-react';
+import { useLocation } from 'react-router-dom';
+import { useMediaQuery } from '@/hooks/useMediaQuery';
 import { cn } from '@/lib/cn';
+import { ROUTES } from '@/routes';
 import { EASE, MOTION } from '@/theme/tokens';
 import { useUiStore, type Toast } from '@/state/uiStore';
 import { toastDuration } from './toastDuration';
@@ -61,13 +64,21 @@ function ToastItem({ toast }: { toast: Toast }) {
   );
 }
 
-/** Toasts: bottom-right above the status line; they auto-hide (see `toastDuration`), paused on hover or focus. */
+/**
+ * Toasts: bottom-right above the status line; they auto-hide (see `toastDuration`), paused on hover or focus.
+ * While the Explain drawer is docked on the right they sit left of it, never over its rows.
+ */
 export function Toaster() {
   const toasts = useUiStore((s) => s.toasts);
+  const rightDrawer = useUiStore((s) => s.drawer === 'explain');
+  const { pathname } = useLocation();
+  const docked = useMediaQuery('(min-width: 1100px)');
+  const besideDrawer = docked && rightDrawer && pathname.startsWith(ROUTES.workstation);
   return (
     <div
       aria-live="polite"
-      className="pointer-events-none fixed bottom-[calc(var(--status-h)+12px)] right-3 z-toast flex flex-col items-end gap-2"
+      style={besideDrawer ? { right: 'calc(var(--drawer-explain-w) + 12px)' } : undefined}
+      className="pointer-events-none fixed bottom-[calc(var(--status-h)+12px)] right-3 z-toast flex flex-col items-end gap-2 transition-[right] duration-base ease-out"
     >
       <AnimatePresence initial={false}>
         {toasts.map((t) => (
