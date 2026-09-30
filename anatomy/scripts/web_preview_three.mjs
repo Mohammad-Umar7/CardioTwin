@@ -8,8 +8,10 @@
  * anatomy/scripts/web_preview_three.html in headless Chrome / Edge (Chrome DevTools Protocol over Node's built-in
  * WebSocket, no extra dependency) and saves a 1920x1080 JPEG once the page reports that it has rendered. The page uses
  * the viewer's own three.js (frontend/node_modules/three) with GLTFLoader + MeshoptDecoder, so the image shows what a
- * glTF 2.0 viewer shows from the GLB's baked maps — the fidelity reference for the web look (web_preview.jpg is the
- * Blender EEVEE equivalent).
+ * glTF 2.0 viewer shows from the GLB's baked maps, with the viewer's Realistic rig, studio environment and
+ * NeutralToneMapping, from the exact hero camera. The saved image is a side-by-side (Cycles hero_heart.jpg | three.js)
+ * and the parity of the two (mean absolute difference and the share of object pixels differing by more than 30 levels)
+ * is written to anatomy/build/web_parity.json.
  */
 import { spawn } from 'node:child_process';
 import { createReadStream, existsSync, mkdtempSync, rmSync, statSync, writeFileSync } from 'node:fs';
@@ -17,6 +19,8 @@ import { createServer } from 'node:http';
 import { tmpdir } from 'node:os';
 import { dirname, extname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
+
+import sharp from 'sharp';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const REPO = resolve(HERE, '..', '..');
@@ -79,9 +83,38 @@ if (!ready) {
   const r = await send('Runtime.evaluate', { expression: 'document.title' });
   throw new Error(`page did not render (title: ${r.result?.result?.value})`);
 }
-const shot = await send('Page.captureScreenshot', { format: 'jpeg', quality: 90, clip: { x: 0, y: 0, width: 1920, height: 1080, scale: 1 } });
-writeFileSync(OUT, Buffer.from(shot.result.data, 'base64'));
-console.log(`[web-preview] ${OUT} (${(statSync(OUT).size / 1024).toFixed(0)} kB) via ${exe.split(/[\\/]/).pop()}`);
+const shot = await send('Page.captureScreenshot', { format: 'png', clip: { x: 0, y: 0, width: 1920, height: 1080, scale: 1 } });
+const capture = Buffer.from(shot.result.data, 'base64');
+// parity with the Cycles hero (same camera): mean absolute difference over the object pixels
+const HERO = join(REPO, 'docs', 'media', 'renders', 'hero_heart.jpg');
+if (existsSync(HERO)) {
+  const a = await sharp(HERO).removeAlpha().resize(1920, 1080).raw().toBuffer();
+  const b = await sharp(capture).removeAlpha().resize(1920, 1080).raw().toBuffer();
+  let sum = 0, n = 0, big = 0;
+  const bgA = [a[0], a[1], a[2]], bgB = [b[0], b[1], b[2]];
+  for (let i = 0; i < a.length; i += 3) {
+    const objA = Math.abs(a[i] - bgA[0]) + Math.abs(a[i + 1] - bgA[1]) + Math.abs(a[i + 2] - bgA[2]) > 24;
+    const objB = Math.abs(b[i] - bgB[0]) + Math.abs(b[i + 1] - bgB[1]) + Math.abs(b[i + 2] - bgB[2]) > 24;
+    if (!objA && !objB) continue;
+    const d = (Math.abs(a[i] - b[i]) + Math.abs(a[i + 1] - b[i + 1]) + Math.abs(a[i + 2] - b[i + 2])) / 3;
+    sum += d; n++; if (d > 30) big++;
+  }
+  const parity = { object_pixels: n, mean_abs_diff: Number((sum / Math.max(n, 1)).toFixed(2)), share_over_30: Number((big / Math.max(n, 1)).toFixed(4)) };
+  writeFileSync(join(REPO, 'anatomy', 'build', 'web_parity.json'), JSON.stringify(parity, null, 1));
+  console.log(`[web-preview] parity with hero_heart.jpg: ${JSON.stringify(parity)}`);
+  const half = async (src) => sharp(src).resize(960, 540).toBuffer();
+  const label = (text) => Buffer.from(`<svg width="960" height="60"><text x="24" y="40" font-family="Segoe UI, Arial" font-size="26" fill="#c8ccd4">${text}</text></svg>`);
+  const out = await sharp({ create: { width: 1920, height: 1080, channels: 3, background: '#16181c' } })
+    .composite([
+      { input: await half(HERO), left: 0, top: 270 }, { input: await half(capture), left: 960, top: 270 },
+      { input: label('Cycles render (hero_heart.jpg)'), left: 0, top: 200 },
+      { input: label(`three.js, baked maps only (MAD ${parity.mean_abs_diff} / 255)`), left: 960, top: 200 },
+    ]).jpeg({ quality: 88 }).toBuffer();
+  writeFileSync(OUT, out);
+} else {
+  writeFileSync(OUT, await sharp(capture).jpeg({ quality: 88 }).toBuffer());
+}
+console.log(`[web-preview] ${OUT} (${(statSync(OUT).size / 1024).toFixed(0)} kB) via ${exe}`);
 ws.close();
 browser.kill();
 server.close();
