@@ -175,13 +175,15 @@ const REALISTIC: Partial<Record<TissueKind, Look>> = {
     interior: '#B89E84',
   },
   coronary: {
+    // Glossy but not mirror-like: at low risk the thin tube must still read as its ramp blue, not as a
+    // white highlight.
     color: ANATOMY.vesselPending,
-    roughness: 0.3,
-    env: 0.8,
-    clearcoat: 1,
-    clearcoatRoughness: 0.1,
+    roughness: 0.34,
+    env: 0.5,
+    clearcoat: 0.55,
+    clearcoatRoughness: 0.2,
     detail: { freq: 45, bump: 0.0015, colorVar: 0.05, roughVar: 0.06, deep: '#000000' },
-    rim: { color: REAL.coronaryRim, strength: 0.16 },
+    rim: { color: REAL.coronaryRim, strength: 0.1 },
     interior: '#1A0C0C',
   },
   leftMain: {
