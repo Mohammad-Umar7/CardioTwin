@@ -117,10 +117,12 @@ export const SURFACE_MIN_COVERAGE = 0.6;
  * projections): the LAD's anterior interventricular groove face-on from a shallow LAO-cranial, the LCX's left
  * AV groove from the left lateral, a little caudal, the RCA's right AV groove from a shallow RAO-caudal.
  */
-export const SURFACE_PREFERRED: Readonly<Record<string, { azimuth: number; elevation: number }>> = {
+export const SURFACE_PREFERRED: Readonly<Record<string, { azimuth: number; elevation: number; range?: readonly [number, number] }>> = {
   LAD: { azimuth: 30, elevation: 15 },
   LCX: { azimuth: 90, elevation: -10 },
-  RCA: { azimuth: -15, elevation: -10 },
+  // The right AV groove is seen from the patient's right: a shallow-to-mid RAO, never an AP that shows the
+  // groove edge-on (the search stays inside `range`, C-arm azimuth in degrees).
+  RCA: { azimuth: -30, elevation: -10, range: [-60, -15] },
 };
 
 /** How much of the proximal trunk a view shows, and how spread out on the screen. */
@@ -157,14 +159,16 @@ export function surfaceViewScore(
 export function surfaceBestView(
   conventional: BestView,
   candidates: readonly AnchorCandidate[],
-  options: SearchOptions & { preferred?: { azimuth: number; elevation: number } | null } = {},
+  options: SearchOptions & { preferred?: { azimuth: number; elevation: number; range?: readonly [number, number] } | null } = {},
 ): SurfaceViewScore {
   const { target = new Vector3(), visible = clear, step = 15, preferred = null } = options;
-  const anchor = preferred ? { ...preferred, distance: conventional.distance } : conventional;
+  const anchor = preferred ? { azimuth: preferred.azimuth, elevation: preferred.elevation, distance: conventional.distance } : conventional;
+  const [azMin, azMax] = preferred?.range ?? [-180, 180];
   const conv = surfaceViewScore(candidates, conventional, target, visible);
   let best: SurfaceViewScore = { view: conventional, ...conv, score: -Infinity };
   if (candidates.length === 0) return { ...best, score: 0 };
   for (let az = -180 + step; az <= 180; az += step) {
+    if (az < azMin || az > azMax) continue;
     for (const el of SURFACE_ELEVATIONS) {
       const view = { azimuth: az, elevation: el, distance: conventional.distance };
       const s = surfaceViewScore(candidates, view, target, visible);

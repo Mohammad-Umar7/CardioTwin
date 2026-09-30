@@ -121,10 +121,23 @@ function fadedTest(entry: RigEntry): ((hit: Intersection) => boolean) | null {
   }
   const clip = kind === 'pulmonaryArtery' || kind === 'pulmonaryVeins' ? PULMONARY_CLIP : kind === 'aorta' || kind === 'systemicVein' ? GREAT_VESSEL_CLIP : null;
   if (!clip) return null;
-  const centre = new Vector3(...clip.centre);
-  const limit = clip.radius - 0.3 * clip.feather;
+  const fixedCentre = new Vector3(...clip.centre);
   const rest = new Vector3();
-  return (hit) => entry.mesh.worldToLocal(rest.copy(hit.point)).add(entry.restOffset).distanceTo(centre) > limit;
+  // The sphere's live uniforms when the material has them (the systemic sphere tightens while a vessel is
+  // selected), else the published constants.
+  const live = () => {
+    const u = (entry.mesh.material as { userData?: { ct?: { uniforms?: Record<string, { value: unknown }> } } }).userData?.ct?.uniforms;
+    const centre = u?.uClipCentre?.value as Vector3 | undefined;
+    const radius = u?.uClipRadius?.value as number | undefined;
+    const feather = u?.uClipFeather?.value as number | undefined;
+    return centre && radius !== undefined && feather !== undefined
+      ? { centre, limit: radius - 0.3 * feather }
+      : { centre: fixedCentre, limit: clip.radius - 0.3 * clip.feather };
+  };
+  return (hit) => {
+    const { centre, limit } = live();
+    return entry.mesh.worldToLocal(rest.copy(hit.point)).add(entry.restOffset).distanceTo(centre) > limit;
+  };
 }
 const tmpLocal = new Vector3();
 const tmpRest = new Vector3();

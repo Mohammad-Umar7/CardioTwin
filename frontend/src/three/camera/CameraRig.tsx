@@ -75,10 +75,11 @@ const FOCUS_ZOOM = 1;
  */
 const SELECTION_CHIP_ROOM = 68;
 /**
- * A selection view centres a blend of the selected vessel (60 %) and the heart walls (40 %): the vessel is the
- * subject, but the heart stays balanced in the free area instead of riding high with an empty lower third.
+ * A selection view centres a blend of the selected vessel (42 %) and the heart walls (58 %): the vessel is the
+ * subject and stays well inside the free area, but the heart stays balanced (within ~32 px of the centre)
+ * instead of riding high with an empty lower third.
  */
-const VESSEL_WEIGHT = 0.6;
+const VESSEL_WEIGHT = 0.42;
 
 /**
  * Orbit limits (V2 §5.15): in the default mode the polar angle is clamped to 35°–145° and the distance

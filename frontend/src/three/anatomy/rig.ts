@@ -154,6 +154,12 @@ export const PULMONARY_CLIP = { centre: [0, 0.22, -0.15] as const, radius: 0.56,
  */
 export const GREAT_VESSEL_CLIP = { centre: [0, 0.05, -0.05] as const, radius: 0.8, feather: 0.24 } as const;
 /**
+ * While a vessel is selected the systemic sphere moves anterior and shrinks: the ascending aorta, its root and
+ * the SVC stay, the arch and the descending aorta fade — from a lateral or posterior best view (the LCX's) the
+ * descending aorta would otherwise run as a full-height column in front of the lateral wall and the marginals.
+ */
+export const GREAT_VESSEL_CLIP_SELECTED = { centre: [0, 0.15, 0.22] as const, radius: 0.62, feather: 0.2 } as const;
+/**
  * Outer ghosts in the workstation stay faint (V2 §5.15: α ≤ 0.12, "clean silhouette"): bone and cartilage
  * sit right behind and around the heart, so they are the faintest (≤ 2 % over the stage); skin, muscle and
  * the diaphragm keep a trace of the thorax at the frame's edges.
@@ -778,6 +784,17 @@ export class AnatomyRig {
 
     const sel = inp.selected;
     const chestAway = inp.stage === 'workstation' && this.e >= PEEL_CHEST_AWAY;
+
+    // Great-vessel clip sphere: tighter while a vessel is selected (GREAT_VESSEL_CLIP_SELECTED), gliding.
+    const clipGoal = sel && inp.stage === 'workstation' ? GREAT_VESSEL_CLIP_SELECTED : GREAT_VESSEL_CLIP;
+    const clip = this.shared.clipGreat;
+    const kClip = inp.reduced ? 1 : 1 - Math.exp(-LAMBDA_SECTION * dt);
+    clip.uClipCentre.value.x += (clipGoal.centre[0] - clip.uClipCentre.value.x) * kClip;
+    clip.uClipCentre.value.y += (clipGoal.centre[1] - clip.uClipCentre.value.y) * kClip;
+    clip.uClipCentre.value.z += (clipGoal.centre[2] - clip.uClipCentre.value.z) * kClip;
+    clip.uClipRadius.value += (clipGoal.radius - clip.uClipRadius.value) * kClip;
+    clip.uClipFeather.value += (clipGoal.feather - clip.uClipFeather.value) * kClip;
+    if (Math.abs(clip.uClipRadius.value - clipGoal.radius) > 1e-3) moving = true;
     const k = (dtLambda: number) => (inp.reduced ? 1 : 1 - Math.exp(-dtLambda * dt));
     const fadeK = k(LAMBDA_FADE);
 
