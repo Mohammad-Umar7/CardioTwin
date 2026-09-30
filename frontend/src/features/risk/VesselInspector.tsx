@@ -214,8 +214,16 @@ export function VesselInspector({ className }: VesselInspectorProps) {
                       threshold ›
                     </button>
                   </>
-                ) : (
+                ) : view.unavailable ? (
+                  // Only a real failure says "unavailable" (the Risk card shows the same error state).
                   <span className="text-tertiary">Estimate unavailable</span>
+                ) : (
+                  // Loading (a route or patient switch): the same skeleton moment as the Risk card.
+                  <span aria-busy="true" aria-label="Computing the estimate" className="flex flex-col gap-1.5 pt-0.5">
+                    {/* Spans, not <Skeleton> divs: this sits inside a <p>. */}
+                    <span aria-hidden className="skeleton block h-3.5 w-full" />
+                    <span aria-hidden className="skeleton block h-3.5 w-2/3" />
+                  </span>
                 )}
               </p>
 
