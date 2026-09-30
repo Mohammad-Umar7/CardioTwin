@@ -1,4 +1,3 @@
-import { useGLTF } from '@react-three/drei';
 import { useFrame, useThree } from '@react-three/fiber';
 import { useEffect, useMemo } from 'react';
 import {
@@ -11,6 +10,7 @@ import {
   NearestFilter,
   RGBAFormat,
   Vector2,
+  type Object3D,
 } from 'three';
 import { useSchemaIndex } from '@/hooks/useData';
 import { VESSEL_INFLATE } from '../anatomy/materials';
@@ -46,8 +46,8 @@ function shuffleInstances(path: Float32Array, seed: Float32Array, count: number)
 }
 
 interface FlowParticlesProps {
-  /** GLB URL (the pristine glTF gives the rest-pose node transforms). */
-  url: string;
+  /** The pristine glTF scene (rest-pose node transforms; never rendered, never mutated). */
+  pristine: Object3D;
   centrelines: CentrelineFile;
   /** Instances to draw this tier (≤ PARTICLES_BY_TIER.A). */
   count: number;
@@ -60,8 +60,7 @@ interface FlowParticlesProps {
  * (explode, rides, heartbeat) via NodeTracker, surge in diastole via the cardiac clock and echo each
  * vessel's predicted risk (sparser, slower, warmer). Illustrative only.
  */
-export function FlowParticles({ url, centrelines, count }: FlowParticlesProps) {
-  const gltf = useGLTF(url, false, true);
+export function FlowParticles({ pristine, centrelines, count }: FlowParticlesProps) {
   const scene = useThree((s) => s.scene);
   const schema = useSchemaIndex();
   const targets = targetSlots(schema?.vessels.map((t) => t.id)).join('|');
@@ -108,9 +107,9 @@ export function FlowParticles({ url, centrelines, count }: FlowParticlesProps) {
     mesh.raycast = () => {}; // never intercepts picking
     mesh.userData.ctFx = true;
 
-    const tracker = new NodeTracker(nodeNames, restInverses(gltf.scene, nodeNames));
+    const tracker = new NodeTracker(nodeNames, restInverses(pristine, nodeNames));
     return { mesh, geometry, material, texture, tracker, max: particles.count };
-  }, [centrelines, gltf.scene, targets]);
+  }, [centrelines, pristine, targets]);
 
   useEffect(
     () => () => {

@@ -14,7 +14,8 @@
  *   quad   = screen-space capsule from tail to head, `uWidthPx` wide
  * Fragment stage: a comet profile (bright head, fading tail), soft across — additive, no depth write.
  */
-import { AdditiveBlending, Color, Matrix4, ShaderMaterial, Vector2, type Texture } from 'three';
+import { AdditiveBlending, Color, Matrix4, ShaderMaterial, Vector2, Vector3, type Texture } from 'three';
+import { BEAT_MODE, BEAT_UNIFORMS, BEAT_VERTEX_PARS } from '../anatomy/beatDeform';
 import { RADIUS_SCALE } from './centreline';
 import { FLOW_WHITE, MAX_NODES, MAX_TARGET_SLOTS } from './fxState';
 
@@ -56,6 +57,9 @@ const vertexShader = /* glsl */ `
   varying vec3 vColor;
   varying float vAlpha;
 
+  // The anatomy's non-affine beat terms (atrial kick) — same chunk and shared uniforms as the vessels.
+  ${BEAT_VERTEX_PARS}
+
   vec4 centreTexel(int i) {
     return texelFetch(uCentre, ivec2(i % uTexWidth, i / uTexWidth), 0);
   }
@@ -63,7 +67,7 @@ const vertexShader = /* glsl */ `
   vec3 toWorld(vec4 t, out float alpha) {
     int n = int(t.w);
     alpha = uNodeAlpha[n];
-    return (uNode[n] * vec4(t.xyz, 1.0)).xyz;
+    return (uNode[n] * vec4(ctBeat(t.xyz), 1.0)).xyz;
   }
 
   void collapse() {
@@ -108,7 +112,7 @@ const vertexShader = /* glsl */ `
     float seam = step(3.5 * uSpacing, distance(p0, p1));
 
     float speed = uFlowSpeed[slot] * aSeed.y;
-    float len = clamp(speed * uExposure, 0.0012, 0.045);
+    float len = clamp(speed * uExposure, 0.002, 0.03);
 
     vec4 hv = viewMatrix * vec4(head, 1.0);
     vec4 tv = viewMatrix * vec4(head - dir * len, 1.0);
@@ -149,7 +153,9 @@ const vertexShader = /* glsl */ `
     vec3 ramp = texture2D(uRiskLUT, vec2(clamp(uP[slot], 0.0, 1.0), 0.5)).rgb;
     vec3 tint = mix(uFlowWhite, ramp, uTintMix[slot]);
     float surge = clamp(speed / max(uMeanSpeed, 1e-4), 0.0, 2.6);
-    vColor = tint * (0.55 + 0.3 * surge + 1.1 * pulse + 0.25 * uHover[slot]);
+    // HDR on purpose: the particles must read as light running OVER an already glowing vessel, so their
+    // core sits well above the bloom threshold (they glint) while the tint keeps the vessel's hue family.
+    vColor = tint * (1.05 + 0.55 * surge + 1.2 * pulse + 0.3 * uHover[slot]);
     vAlpha = alpha;
     vQuad = vec2(position.x, position.y);
   }
@@ -162,7 +168,7 @@ const fragmentShader = /* glsl */ `
   varying float vAlpha;
   void main() {
     if (vAlpha <= 0.0) discard;
-    float across = exp(-3.2 * vQuad.y * vQuad.y);
+    float across = exp(-2.4 * vQuad.y * vQuad.y);
     // comet: dim tail, bright head, soft round cap
     float along = mix(0.12, 1.0, smoothstep(-1.0, 0.7, vQuad.x)) * (1.0 - smoothstep(0.78, 1.0, vQuad.x));
     float a = vAlpha * across * along;
@@ -175,6 +181,8 @@ const fragmentShader = /* glsl */ `
 
 export interface FlowUniforms {
   [name: string]: { value: unknown };
+  uRestOffset: { value: Vector3 };
+  uBeatMode: { value: number };
   uCentre: { value: Texture | null };
   uTexWidth: { value: number };
   uSpacing: { value: number };
@@ -204,12 +212,17 @@ export interface FlowUniforms {
 export type FlowMaterial = ShaderMaterial & { uniforms: FlowUniforms };
 
 /** Streak "shutter": a particle's streak covers the distance it travels in this many seconds. */
-export const STREAK_EXPOSURE_S = 0.07;
+export const STREAK_EXPOSURE_S = 0.045;
 /** Streak width in CSS pixels (× device pixel ratio at runtime), §7.4: 2–3.5 px. */
-export const STREAK_WIDTH_PX = 2.6;
+export const STREAK_WIDTH_PX = 4;
 
 export function createFlowMaterial(riskLut: Texture, inflate: number): FlowMaterial {
   const uniforms: FlowUniforms = {
+    // Shared beat uniforms (same objects as the anatomy's, so they update together). Centreline points
+    // are already in the rest frame, hence a zero rest offset; coronaries use the atrial-only mode.
+    ...BEAT_UNIFORMS,
+    uRestOffset: { value: new Vector3() },
+    uBeatMode: { value: BEAT_MODE.atrial },
     uCentre: { value: null },
     uTexWidth: { value: 1 },
     uSpacing: { value: 0.008 },

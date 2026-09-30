@@ -12,7 +12,7 @@
 import type { FlowPath } from './centreline';
 
 /** Share weight = ownLength + SHARED_WEIGHT · length. */
-export const SHARED_WEIGHT = 0.1;
+export const SHARED_WEIGHT = 0.04;
 
 /** Per-instance attributes, 4 floats each (matching the shader's aPath / aSeed). */
 export interface ParticleAttributes {

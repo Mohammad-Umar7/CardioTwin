@@ -92,7 +92,9 @@ export function FxDriver() {
     // --- clock (+ phase lock to the anatomy's own beat while it keeps a private phase)
     cardiacClock.setRate(patient.features.PR);
     const beats0 = cardiacClock.beats;
-    cardiacClock.tick(delta);
+    // Keyed by the R3F frame clock: the anatomy's heartbeat hook ticks the same clock in the same frame
+    // and the second call is a no-op (the key only has to be equal within one frame).
+    cardiacClock.tick(delta, state.clock.elapsedTime);
     const beats1 = cardiacClock.beats;
     if (!heart.current || !isAttached(heart.current, scene)) {
       heart.current = null;
