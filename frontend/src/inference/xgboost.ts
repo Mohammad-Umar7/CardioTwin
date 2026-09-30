@@ -150,10 +150,16 @@ export function toFloat32Row(x: Float64Array): Float64Array {
 
 export function xgboostMargin(c: CompiledXGBoost, x32: Float64Array): number {
   let m = c.baseMargin;
-  const { roots, feature, yes, no, leaf } = c;
+  const { roots, feature, threshold, yes, no, missingYes, leaf } = c;
   for (let t = 0; t < roots.length; t++) {
     let s = roots[t];
-    while (feature[s] !== -1) s = goesYes(c, s, x32) ? yes[s] : no[s];
+    let f = feature[s];
+    while (f !== -1) {
+      // Inlined goesYes(): hot loop of every prediction and ICE sample.
+      const v = x32[f];
+      s = (v !== v ? missingYes[s] === 1 : v < threshold[s]) ? yes[s] : no[s];
+      f = feature[s];
+    }
     m += leaf[s];
   }
   return m;

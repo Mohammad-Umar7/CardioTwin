@@ -100,6 +100,7 @@ export class EdgeModel {
   private readonly compiled: readonly CompiledTarget[];
   private readonly workspace: TreeShapWorkspace;
   private readonly nColumns: number;
+  private readonly featureKeys: ReadonlySet<string>;
 
   constructor(spec: PortableModelSpec) {
     assertPortableModelSpec(spec);
@@ -107,6 +108,7 @@ export class EdgeModel {
     this.modelVersion = spec.model_version;
     this.targets = [...spec.targets];
     this.nColumns = spec.columns.length;
+    this.featureKeys = new Set(spec.features.map((f) => f.key));
     this.compiled = spec.targets.map((t) => compileTarget(t, spec.models[t]!, this.nColumns));
     let maxDepth = 0;
     for (const target of this.compiled) {
@@ -117,7 +119,7 @@ export class EdgeModel {
 
   /** Normalise, impute and encode one request (throws `FeatureInputError` on bad input). */
   encode(input: EdgeFeatureInput): EncodedRequest {
-    const normalised = normaliseFeatures(this.spec.features, input);
+    const normalised = normaliseFeatures(this.spec.features, input, this.featureKeys);
     const { x, derived } = encode(this.spec, normalised.values);
     return { ...normalised, x, derived };
   }

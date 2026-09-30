@@ -81,11 +81,20 @@ export interface NormalisedFeatures {
   imputed: string[];
 }
 
-/** Validate keys, normalise values and fill missing features with their defaults. */
-export function normaliseFeatures(features: readonly PortableFeature[], input: EdgeFeatureInput): NormalisedFeatures {
-  const known = new Set(features.map((f) => f.key));
-  const unknown = Object.keys(input).filter((k) => !known.has(k));
-  if (unknown.length > 0) throw new FeatureInputError(`unknown feature(s): ${show(unknown)}`, unknown);
+/**
+ * Validate keys, normalise values and fill missing features with their defaults. `known` (the set of
+ * feature keys) may be passed in by callers that normalise many requests against one model.
+ */
+export function normaliseFeatures(
+  features: readonly PortableFeature[],
+  input: EdgeFeatureInput,
+  known: ReadonlySet<string> = new Set(features.map((f) => f.key)),
+): NormalisedFeatures {
+  let unknown: string[] | null = null;
+  for (const key in input) {
+    if (Object.prototype.hasOwnProperty.call(input, key) && !known.has(key)) (unknown ??= []).push(key);
+  }
+  if (unknown) throw new FeatureInputError(`unknown feature(s): ${show(unknown)}`, unknown);
   const values: Record<string, NormalisedValue> = {};
   const imputed: string[] = [];
   for (const f of features) {
