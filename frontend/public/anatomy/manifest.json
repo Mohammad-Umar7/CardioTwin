@@ -1,11 +1,11 @@
 {
   "version": "1.1.0",
   "glb": "cardiotwin_anatomy.glb",
-  "glb_bytes": 9975888,
-  "glb_sha256": "3458b353a16823ecab02d0b92c41adab63e5d0f656c027b15dbeb57d91b28960",
+  "glb_bytes": 9379616,
+  "glb_sha256": "1725082d471d81448c43ff89729ce97cbd9ed3b127501c73f5f86d168cefe5d7",
   "textures": {
     "gpu_mib": 123.2,
-    "webp_mb": 5.03,
+    "webp_mb": 4.44,
     "priority": [
       "Heart_Wall_Anterior",
       "Heart_Wall_Posterior",
@@ -792,7 +792,7 @@
       "definition": "Right lung: superior, middle and inferior lobes; its mediastinal surface is grooved by the right atrium, superior vena cava and azygos vein.",
       "clinical_relevance": "The middle lobe abuts the right heart border; right pulmonary veins drain into the left atrium behind the right atrium and SVC.",
       "center": [
-        -0.8613,
+        -0.8603,
         0.0821,
         -0.1491
       ],
@@ -803,13 +803,13 @@
           -1.0549
         ],
         "max": [
-          -0.2276,
+          -0.2257,
           1.3542,
           0.7567
         ]
       },
       "triangles": 13000,
-      "realistic_color": "#ca9b9c"
+      "realistic_color": "#ca9a9c"
     },
     {
       "id": "trachea_bronchi",
@@ -894,7 +894,7 @@
         ]
       },
       "triangles": 2492,
-      "realistic_color": "#bd887a"
+      "realistic_color": "#bc887a"
     },
     {
       "id": "diaphragm",
@@ -1643,24 +1643,24 @@
       "definition": "Epicardial adipose tissue of the anterior half: the fat bed of the right atrioventricular groove and the anterior interventricular groove, 3-8 mm thick, in which the RCA, LAD, anterior interventricular vein and their proximal branches lie about two-thirds embedded; it thins towards the apex and feathers out onto the myocardium. Synthesised from the vessel courses (BodyParts3D has no epicardial fat).",
       "clinical_relevance": "Epicardial and pericoronary fat is metabolically active; CT pericoronary fat attenuation around the proximal RCA, LAD and LCX is a marker of coronary inflammation and risk.",
       "center": [
-        -0.0069,
-        -0.0954,
-        0.2064
+        -0.0044,
+        -0.1395,
+        0.1764
       ],
       "bbox": {
         "min": [
-          -0.5539,
-          -0.5315,
-          -0.1426
+          -0.5496,
+          -0.5268,
+          -0.1375
         ],
         "max": [
-          0.5402,
-          0.3407,
-          0.5553
+          0.5407,
+          0.2477,
+          0.4904
         ]
       },
-      "triangles": 8526,
-      "realistic_color": "#e4cc8f",
+      "triangles": 7816,
+      "realistic_color": "#d1a64d",
       "rides": "Heart_Wall_Anterior"
     },
     {
@@ -1684,24 +1684,24 @@
       "definition": "Epicardial adipose tissue of the posterior half: the fat bed of the posterior atrioventricular groove (coronary sinus, circumflex, distal RCA) and the posterior interventricular groove (PDA and middle cardiac vein), 3-8 mm thick, with the vessels about two-thirds embedded; feathers out onto the myocardium. Synthesised from the vessel courses.",
       "clinical_relevance": "Surrounds the coronary sinus and circumflex artery; excess epicardial fat is associated with atrial fibrillation and coronary artery disease.",
       "center": [
-        0.0568,
-        -0.0769,
-        -0.1017
+        0.0594,
+        -0.0761,
+        -0.0994
       ],
       "bbox": {
         "min": [
-          -0.4759,
-          -0.5464,
-          -0.5763
+          -0.4616,
+          -0.5401,
+          -0.5715
         ],
         "max": [
-          0.5895,
-          0.3926,
-          0.3729
+          0.5803,
+          0.388,
+          0.3726
         ]
       },
-      "triangles": 10354,
-      "realistic_color": "#e4cc8f",
+      "triangles": 11200,
+      "realistic_color": "#d1a54d",
       "rides": "Heart_Wall_Posterior"
     },
     {
@@ -2681,7 +2681,7 @@
         "position": [
           6.5302,
           1.9235,
-          0.8536
+          0.8535
         ],
         "target": [
           0.4385,
@@ -2692,12 +2692,12 @@
       },
       "lung_r": {
         "position": [
-          -6.9523,
-          1.9341,
-          0.8568
+          -6.9524,
+          1.9345,
+          0.8585
         ],
         "target": [
-          -0.8613,
+          -0.8603,
           0.0821,
           -0.1491
         ],
@@ -2939,27 +2939,27 @@
       },
       "epicardial_fat_anterior": {
         "position": [
-          0.9392,
-          0.7637,
-          2.9094
+          0.8895,
+          0.6723,
+          2.7305
         ],
         "target": [
-          -0.0069,
-          -0.0954,
-          0.2064
+          -0.0044,
+          -0.1395,
+          0.1764
         ],
         "fov": 35.0
       },
       "epicardial_fat_posterior": {
         "position": [
-          1.0903,
-          0.8616,
-          2.8512
+          1.0787,
+          0.8496,
+          2.8129
         ],
         "target": [
-          0.0568,
-          -0.0769,
-          -0.1017
+          0.0594,
+          -0.0761,
+          -0.0994
         ],
         "fov": 35.0
       },
