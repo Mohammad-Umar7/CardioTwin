@@ -84,6 +84,14 @@ export function FXComposer({ tier }: { tier: RenderTier }) {
     [gl],
   );
 
+  // @react-three/postprocessing resizes the chain on CSS size changes only; a pixel-ratio change (a tier
+  // switch) must resize its buffers too, or the scene keeps rendering at the old resolution.
+  const dpr = useThree((s) => s.viewport.dpr);
+  const size = useThree((s) => s.size);
+  useEffect(() => {
+    composer.current?.setSize(size.width, size.height);
+  }, [dpr, size]);
+
   useFrame(() => {
     // Keep the bloom selection in sync with the (re)loaded anatomy: GLB, procedural placeholder, remounts.
     if (countdown.current-- <= 0) {

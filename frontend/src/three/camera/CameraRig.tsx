@@ -601,7 +601,6 @@ export function CameraRig() {
     <CameraControls
       ref={ref}
       makeDefault
-      regress
       minDistance={limits.minDistance}
       maxDistance={thoraxView ? Math.max(limits.maxDistance, THORAX_MAX_DISTANCE) : limits.maxDistance}
       minPolarAngle={limits.minPolar}

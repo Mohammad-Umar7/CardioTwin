@@ -25,16 +25,16 @@ ensureRealisticDefault();
 
 
 /**
- * The tier's pixel ratio, lowered while the camera is being dragged (camera-controls `regress` drops R3F's
- * performance factor) and restored when it settles. Replaces drei's AdaptiveDpr, which multiplied the
- * factor into the pixel ratio the canvas MOUNTED with and so overrode later tier changes (tier C ran at 1.25).
+ * The tier's own pixel ratio, applied whenever the tier changes. Replaces drei's AdaptiveDpr, which scaled
+ * the pixel ratio the canvas MOUNTED with and so overrode later tier changes (tier C ran at 1.25), and
+ * which, with the camera's drag-time regress, resized the canvas and the post chain at every drag start and
+ * end (a flicker frame each time). The adaptive tier is the one performance lever.
  */
 function TierDpr({ tier, integrated }: { tier: RenderTier; integrated: boolean }) {
   const setDpr = useThree((s) => s.setDpr);
-  const factor = useThree((s) => s.performance.current);
   useEffect(() => {
-    setDpr(Math.max(0.75, resolvedDpr(dprFor(tier, integrated)) * factor));
-  }, [tier, integrated, factor, setDpr]);
+    setDpr(resolvedDpr(dprFor(tier, integrated)));
+  }, [tier, integrated, setDpr]);
   return null;
 }
 
