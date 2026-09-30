@@ -110,6 +110,7 @@ export function RiskSummaryCard({ className }: RiskSummaryCardProps) {
             className="flex-1 justify-between"
             onClick={() => openDrawer('explain', { tab: 'why' })}
             aria-keyshortcuts={SHORTCUT.explain}
+            data-drawer-opener="explain"
           >
             <span>Explain</span>
             <Kbd className="font-semibold">{SHORTCUT.explain}</Kbd>

@@ -129,6 +129,7 @@ function Rail() {
           icon={<PencilLine />}
           size="md"
           onClick={() => useUiStore.getState().openDrawer('inputs')}
+          data-drawer-opener="inputs"
         />
         {edits > 0 && <span aria-hidden className="pointer-events-none absolute right-1.5 top-1.5 size-1.5 rounded-full bg-accent" />}
       </span>
@@ -234,6 +235,7 @@ function CardBody() {
         iconLeft={<PencilLine className="stroke-[1.5]" />}
         onClick={() => openDrawer('inputs')}
         aria-keyshortcuts="I"
+        data-drawer-opener="inputs"
       >
         <span className="flex-1 text-left">Edit inputs</span>
         <Kbd>I</Kbd>

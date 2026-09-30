@@ -107,7 +107,16 @@ export function ExplainDrawer({ className }: ExplainDrawerProps) {
   const targets = d.index?.targets.map((t) => t.id) ?? ['CAD', 'LAD', 'LCX', 'RCA'];
 
   return (
-    <Drawer open={open} side="right" onClose={() => ui().closeDrawer()} labelledBy={titleId} region="explain-drawer" className={className}>
+    <Drawer
+      open={open}
+      side="right"
+      onClose={() => ui().closeDrawer()}
+      labelledBy={titleId}
+      region="explain-drawer"
+      openerKey="drawer:explain"
+      returnFocus='[data-drawer-opener="explain"]'
+      className={className}
+    >
       <header className="shrink-0 border-b border-hairline px-4 pt-3" data-tour="why">
         <div className="flex h-7 items-center gap-2">
           <SegmentedControl<TargetId>

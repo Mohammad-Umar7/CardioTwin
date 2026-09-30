@@ -11,6 +11,7 @@
  */
 import { create } from 'zustand';
 import { createJSONStorage, persist } from 'zustand/middleware';
+import { noteOpener } from '@/lib/focusReturn';
 import { safeLocalStorage } from './safeStorage';
 
 /** Compact-layout (< 1100 px) tabs: Summary · Record · Why (V2 §4.7). */
@@ -186,14 +187,17 @@ export const useUiStore = create<UiState>()(
               ? { chrome: 'focus', ...CLOSED_DRAWER }
               : {},
         ),
-      openDrawer: (drawer, opts = {}) =>
+      openDrawer: (drawer, opts = {}) => {
+        // Before any card turns inert: the element that asked is where focus returns on close.
+        if (get().drawer !== drawer) noteOpener(`drawer:${drawer}`);
         set((s) => ({
           drawer,
           explainTab: opts.tab ?? s.explainTab,
           focusField: drawer === 'inputs' ? (opts.field ?? null) : null,
           inputsSection: drawer === 'inputs' ? (opts.section ?? null) : null,
           ...(s.chrome === 'focus' ? { chrome: 'workstation' as const } : null),
-        })),
+        }));
+      },
       closeDrawer: () => set(CLOSED_DRAWER),
       toggleDrawer: (drawer, opts) => {
         if (get().drawer === drawer) get().closeDrawer();

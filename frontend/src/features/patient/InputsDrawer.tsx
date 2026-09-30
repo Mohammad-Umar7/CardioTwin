@@ -47,7 +47,16 @@ export function InputsDrawer({ className }: InputsDrawerProps) {
   const titleId = useId();
 
   return (
-    <Drawer open={open} side="left" onClose={close} labelledBy={titleId} region="inputs-drawer" className={className}>
+    <Drawer
+      open={open}
+      side="left"
+      onClose={close}
+      labelledBy={titleId}
+      region="inputs-drawer"
+      openerKey="drawer:inputs"
+      returnFocus='[data-drawer-opener="inputs"]'
+      className={className}
+    >
       <DrawerContent titleId={titleId} onClose={close} />
     </Drawer>
   );

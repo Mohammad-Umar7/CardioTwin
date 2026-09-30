@@ -2,6 +2,7 @@ import { AnimatePresence, motion } from 'framer-motion';
 import { createContext, useContext, useEffect, useRef, type ReactNode } from 'react';
 import { useIsReducedMotion } from '@/hooks/useMediaQuery';
 import { cn } from '@/lib/cn';
+import { canTakeFocus, focusableMatch, takeOpener } from '@/lib/focusReturn';
 import { EASE, MOTION } from '@/theme/tokens';
 import { ESCAPE_PRIORITY, useEscapeLayer } from './escapeStack';
 import { ExitInert } from './ExitInert';
@@ -23,6 +24,13 @@ export interface DrawerProps {
    * first input, then the drawer itself (never the close button: focusing it would pop its tooltip).
    */
   initialFocus?: string;
+  /**
+   * Where focus returns on close when the opener is gone or cannot take focus (opened by a shortcut or the
+   * palette): a selector for the drawer's usual opener, e.g. `[data-drawer-opener="explain"]`.
+   */
+  returnFocus?: string;
+  /** Opener key noted by `noteOpener` when the drawer was asked to open (e.g. `drawer:explain`). */
+  openerKey?: string;
   /** Esc closes the drawer (default true); it sits below palette, modals and menus in the Esc chain. */
   closeOnEscape?: boolean;
   children: ReactNode;
@@ -65,6 +73,8 @@ export function Drawer({
   width,
   region,
   initialFocus,
+  returnFocus,
+  openerKey,
   closeOnEscape = true,
   children,
   className,
@@ -80,12 +90,16 @@ export function Drawer({
 
   useEscapeLayer(open && closeOnEscape && !inline, onClose, ESCAPE_PRIORITY.drawer);
 
-  // Remember the opener, move focus in, and give focus back on close (if nothing else took it). A passive
-  // effect, so the restore runs after React's post-commit selection restore instead of being undone by it.
+  // Remember the opener, move focus in, and give focus back on close (if nothing else took it). The opener
+  // is the element noted when the drawer was asked to open (`noteOpener`): by the time this effect runs, the
+  // card that held it may already be inert and focus on <body>. The restore waits one task, so the card's
+  // `inert` is lifted first (it is removed in the same commit's effects).
   useEffect(() => {
     if (!open || inline) return;
+    const noted = openerKey ? takeOpener(openerKey) : null;
     const active = document.activeElement;
-    opener.current = active instanceof HTMLElement && active !== document.body ? active : null;
+    opener.current = noted ?? (active instanceof HTMLElement && active !== document.body ? active : null);
+    const shown = panel.current;
     const t = window.setTimeout(() => {
       const root = panel.current;
       if (!root || root.contains(document.activeElement)) return;
@@ -98,12 +112,18 @@ export function Drawer({
     }, 0);
     return () => {
       window.clearTimeout(t);
-      const back = opener.current;
-      const focusLost = document.activeElement === document.body || document.activeElement === null;
-      if (back?.isConnected && (focusWithin.current || focusLost)) back.focus({ preventScroll: true });
+      const closing = shown;
       focusWithin.current = false;
+      window.setTimeout(() => {
+        // Only when focus has nowhere better to be: never steal it from a control the user moved to.
+        const active = document.activeElement;
+        const lost = active === document.body || active === null || (closing?.contains(active) ?? false);
+        if (!lost) return;
+        const back = canTakeFocus(opener.current) ? opener.current : focusableMatch(returnFocus);
+        back?.focus({ preventScroll: true });
+      }, 0);
     };
-  }, [open, initialFocus, inline]);
+  }, [open, initialFocus, inline, openerKey, returnFocus]);
 
   if (inline) {
     return (
