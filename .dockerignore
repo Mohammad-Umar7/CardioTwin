@@ -1,10 +1,13 @@
-# Keep the Docker build context small: only backend/, ml/ (package + artifacts), docs/ and the
-# frontend sources are needed; everything else is excluded.
+# Keep the Docker build context small. backend/Dockerfile copies only: frontend/ (sources + public assets),
+# ml/ (package, configs, artifacts), backend/, scripts/constraints.txt, scripts/runtime_requirements.py and
+# docs/MODEL_CARD.md; everything else below is excluded.
 
-# VCS, editors, local tooling
+# VCS, CI, editors, local tooling
 .git
 .gitignore
 .gitattributes
+.github
+Makefile
 .claude
 .vscode
 .idea
@@ -38,6 +41,11 @@ anatomy
 ml/tests
 ml/reports
 backend/tests
+scripts/tests
+docs/media
+docs/figures
+docs/design
+docs/anatomy
 **/*.blend
 **/*.blend1
 **/*.mp4
