@@ -21,7 +21,7 @@ import { MeshoptDecoder } from 'meshoptimizer';
 const HERE = dirname(fileURLToPath(import.meta.url));
 const REPO = resolve(HERE, '..', '..');
 const [a, b] = process.argv.slice(2);
-const input = resolve(b ? a : resolve(REPO, 'frontend/public/anatomy/cardiotwin_anatomy.glb'));
+const input = resolve(b ? a : resolve(process.env.CARDIOTWIN_PUBLIC_DIR ?? resolve(REPO, 'frontend/public/anatomy'), 'cardiotwin_anatomy.glb'));
 const outDir = resolve(b ?? a ?? 'anatomy/build/decoded');
 
 await MeshoptDecoder.ready;

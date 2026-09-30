@@ -6,6 +6,7 @@ Blender scripts (Blender's bundled Python), so it must only use the standard lib
 from __future__ import annotations
 
 import json
+import os
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
@@ -15,7 +16,9 @@ REPO_ROOT = ANATOMY_DIR.parent
 CONFIG_PATH = ANATOMY_DIR / "config" / "anatomy.json"
 RAW_DIR = ANATOMY_DIR / "raw"
 BUILD_DIR = ANATOMY_DIR / "build"
-PUBLIC_DIR = REPO_ROOT / "frontend" / "public" / "anatomy"
+#: Published web assets. CARDIOTWIN_PUBLIC_DIR redirects every stage (and the checks) to a staging folder, so a
+#: rebuild can be verified before it replaces the files the running viewer serves.
+PUBLIC_DIR = Path(os.environ.get("CARDIOTWIN_PUBLIC_DIR") or (REPO_ROOT / "frontend" / "public" / "anatomy"))
 MEDIA_DIR = REPO_ROOT / "docs" / "media"
 RENDER_DIR = MEDIA_DIR / "renders"
 

@@ -19,7 +19,7 @@ const base = process.argv[2] ?? new URL('../../frontend', import.meta.url).pathn
 const THREE = await import(pathToFileURL(base + '/node_modules/three/build/three.module.js').href);
 const { GLTFLoader } = await import(pathToFileURL(base + '/node_modules/three/examples/jsm/loaders/GLTFLoader.js').href);
 const { MeshoptDecoder } = await import(pathToFileURL(base + '/node_modules/three/examples/jsm/libs/meshopt_decoder.module.js').href);
-const buf = readFileSync(base + '/public/anatomy/cardiotwin_anatomy.glb');
+const buf = readFileSync((process.env.CARDIOTWIN_PUBLIC_DIR ?? base + '/public/anatomy') + '/cardiotwin_anatomy.glb');
 const loader = new GLTFLoader();
 loader.setMeshoptDecoder(MeshoptDecoder);
 // Node has no image decoder: textures resolve to empty Texture objects (geometry is what we check here)

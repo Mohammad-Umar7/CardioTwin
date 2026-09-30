@@ -21,7 +21,7 @@ import sharp from 'sharp';
 const HERE = dirname(fileURLToPath(import.meta.url));
 const REPO = resolve(HERE, '..', '..');
 const [a, b] = process.argv.slice(2);
-const input = resolve(b ? a : resolve(REPO, 'frontend/public/anatomy/cardiotwin_anatomy.glb'));
+const input = resolve(b ? a : resolve(process.env.CARDIOTWIN_PUBLIC_DIR ?? resolve(REPO, 'frontend/public/anatomy'), 'cardiotwin_anatomy.glb'));
 const output = resolve(b ?? a);
 
 await MeshoptDecoder.ready;
