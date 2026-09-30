@@ -15,7 +15,14 @@ export function useActiveSection(ids: readonly string[], rootMargin = '-140px 0p
       (entries) => {
         for (const e of entries) seen.set(e.target.id, e.isIntersecting);
         const first = list.find((id) => seen.get(id));
-        if (first) setActive(first);
+        if (first) {
+          setActive(first);
+          return;
+        }
+        // Nothing in the reading band: above the first section (the page top, the intro), the first entry
+        // is the one being read, never whatever section was last highlighted further down.
+        const top = document.getElementById(list[0] ?? '')?.getBoundingClientRect().top;
+        if (top !== undefined && top > window.innerHeight * 0.4) setActive(list[0] ?? null);
       },
       { rootMargin },
     );
