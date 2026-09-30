@@ -15,8 +15,12 @@ leaves the LCX and RCA moderate but unflagged. The angiogram agrees on all four.
 | RCA | ≈ 31 % (moderate) | 0.318 | not flagged | normal |
 
 What-if used in the video: turning *typical chest pain* off gives CAD ≈ 72 % (just below its threshold),
-LAD ≈ 58 %, LCX ≈ 15 % and RCA ≈ 14 %. The top LAD drivers are the regional wall-motion abnormality on echo and
-typical angina (both raise the risk), a reduced ejection fraction of 40 % (raises it) and a normal ESR (lowers it).
+LAD ≈ 58 %, LCX ≈ 15 % and RCA ≈ 14 %. The top LAD drivers, largest first, are the regional wall-motion
+abnormality on echo and typical angina (both raise the risk), a normal ESR (lowers it) and a reduced ejection
+fraction of 40 % (raises it).
+
+LCX is a hair below its threshold (32.64 % vs 32.65 %), so the inspector may show "33 %" next to a "33 %"
+threshold. Keep the LCX unselected on camera, or say "just below its threshold" if it comes up.
 
 ## Before you record
 
@@ -55,7 +59,7 @@ bottom. No mouse movement.
 **Narration.**
 Before an invasive coronary angiogram, doctors already have the patient's history, ECG, blood tests and echo. What
 they don't get is a clear answer to two questions: which artery, and why? In the public cohort behind this project,
-303 patients were sent for angiography, and 29 percent of them had no significant narrowing.
+303 patients were sent for angiography, and 29 percent of them turned out not to have coronary disease.
 
 **Subtitles.**
 ```
@@ -66,7 +70,7 @@ What they don't get is a clear answer:
 which artery, and why?
 In the public cohort behind this project,
 303 patients were sent for angiography,
-and 29 percent had no significant narrowing.
+and 29 percent turned out not to have coronary disease.
 ```
 
 ## 2 · What CardioTwin is (0:20–0:40)
@@ -211,16 +215,16 @@ One click restores the record.
 **On screen.**
 
 1. With the LAD selected, press `E` to open the **Explain** drawer on **Why**.
-2. Point at the top bars: *Regional wall-motion abnormality* (raises), *Typical angina* (raises), *Ejection fraction
-   40 %* (raises) and *ESR* (lowers).
+2. Point at the top bars: *Regional wall-motion abnormality* (raises), *Typical angina* (raises), *ESR* (lowers)
+   and *Ejection fraction 40 %* (raises).
 3. Switch the grouping to **modality** and hold on the modality strip.
 4. Open **Physiology**. Scroll slowly past the values, reference ranges and contributions.
 5. Briefly open **Model**, then close the drawer with `Esc`.
 
 **Narration.**
 Why does the model think so? The Explain drawer answers with numbers. For the LAD, the regional wall-motion
-abnormality on echo and the typical angina push the risk up, a reduced ejection fraction adds to it, and a normal
-ESR pulls it down. These are exact SHAP values, shown in percentage points that add up exactly from a typical
+abnormality on echo and the typical angina push the risk up, a normal ESR pulls it down, and a reduced ejection
+fraction adds to it. These are exact SHAP values, shown in percentage points that add up exactly from a typical
 patient's risk to this patient's. Grouped by modality, you see how much comes from symptoms, from echo and from labs.
 The physiology tab puts every measurement next to its reference range and its contribution. These are associations
 the model learned, not causes.
@@ -231,8 +235,8 @@ Why does the model think so?
 For the LAD, the wall-motion abnormality
 on echo and the typical angina
 push the risk up;
-a reduced ejection fraction adds to it,
-and a normal ESR pulls it down.
+a normal ESR pulls it down,
+and a reduced ejection fraction adds to it.
 These are exact SHAP values,
 in percentage points that add up exactly.
 Grouped by modality: symptoms, echo, labs.
