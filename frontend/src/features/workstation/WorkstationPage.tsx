@@ -1,52 +1,33 @@
 import { useEffect } from 'react';
-import { useParams } from 'react-router-dom';
+import { useParams, useSearchParams } from 'react-router-dom';
 import { Tabs } from '@/design';
 import { tabPanelId } from '@/design/tabIds';
-import { useCohort, useSchemaIndex } from '@/hooks/useData';
-import { useHotkeys } from '@/hooks/useHotkeys';
+import { useCohort } from '@/hooks/useData';
 import { useLayoutMode } from '@/hooks/useMediaQuery';
+import { ExplainDrawer } from '@/features/explain/ExplainDrawer';
 import { ExplainPanel } from '@/features/explain/ExplainPanel';
 import { ClinicalForm } from '@/features/patient/ClinicalForm';
+import { InputsDrawer } from '@/features/patient/InputsDrawer';
+import { PatientCard } from '@/features/patient/PatientCard';
+import { WhatIfPill } from '@/features/patient/WhatIfPill';
+import { AnswerPill } from '@/features/risk/AnswerPill';
 import { CADHeroCard } from '@/features/risk/CADHeroCard';
 import { GroundTruthReveal } from '@/features/risk/GroundTruthReveal';
+import { RiskSummaryCard } from '@/features/risk/RiskSummaryCard';
+import { VesselInspector } from '@/features/risk/VesselInspector';
 import { VesselList } from '@/features/risk/VesselList';
-import { usePatientStore } from '@/state/patientStore';
+import { selectEditCount, usePatientStore } from '@/state/patientStore';
 import { useUiStore, type MobileTab } from '@/state/uiStore';
-import { useViewerStore } from '@/state/viewerStore';
 import { CanvasSlot } from '@/three/CanvasSlot';
-import { PROJECTIONS, cycleProjection } from '@/three/camera/presets';
 import { CanvasHud } from './CanvasHud';
 import { GroupRail } from './GroupRail';
+import { CanvasToolbar } from './hud/CanvasToolbar';
+import { FirstRunHint } from './hud/FirstRunHint';
+import { LegendChip } from './hud/LegendChip';
+import { SelectionChip } from './hud/SelectionChip';
 import { LeftPanel, PatientHeader, RightPanel, TabbedRightPanel } from './panels';
-
-/** Workstation shortcuts (DESIGN_SYSTEM §10.3). Arrow keys / zoom live on the focused canvas itself. */
-function useWorkstationHotkeys() {
-  const index = useSchemaIndex();
-  useHotkeys({
-    '1': () => index?.vessels[0] && useViewerStore.getState().select(index.vessels[0].id),
-    '2': () => index?.vessels[1] && useViewerStore.getState().select(index.vessels[1].id),
-    '3': () => index?.vessels[2] && useViewerStore.getState().select(index.vessels[2].id),
-    '0': () => useViewerStore.getState().flyHome(),
-    h: () => useViewerStore.getState().flyHome(),
-    Escape: () => useViewerStore.getState().select(null),
-    b: () => useViewerStore.getState().toggle('heartbeat'),
-    t: () => useViewerStore.getState().toggle('territories'),
-    f: () => useViewerStore.getState().toggle('bloodFlow'),
-    '[': () => {
-      const v = useViewerStore.getState();
-      v.flyToPreset(cycleProjection(lastPreset(), -1).id);
-    },
-    ']': () => {
-      const v = useViewerStore.getState();
-      v.flyToPreset(cycleProjection(lastPreset(), 1).id);
-    },
-  });
-}
-
-const lastPreset = () => {
-  const cmd = useViewerStore.getState().cameraCommand;
-  return cmd?.kind === 'preset' && cmd.preset && PROJECTIONS.some((p) => p.id === cmd.preset) ? cmd.preset : null;
-};
+import { StageLayout } from './StageLayout';
+import { useWorkstationCommands } from './useWorkstationCommands';
 
 /** Deep link: #/workstation/P-017 opens that cohort patient. */
 function usePatientFromRoute() {
@@ -59,7 +40,70 @@ function usePatientFromRoute() {
   }, [patientId, cohort.data]);
 }
 
-function CanvasStage({ className }: { className?: string }) {
+/** The workstation always opens with workstation chrome (the landing page sets `landing`). */
+function useWorkstationChrome() {
+  useEffect(() => {
+    const ui = useUiStore.getState();
+    if (ui.chrome === 'landing') ui.setChrome('workstation');
+  }, []);
+}
+
+function PageTitle() {
+  const id = usePatientStore((s) => s.selectedPatientId);
+  const mode = usePatientStore((s) => s.mode);
+  const who = mode === 'custom' ? 'custom patient' : mode === 'blank' ? 'blank patient' : (id ?? 'no patient selected');
+  return <h1 className="sr-only">Workstation · {who}</h1>;
+}
+
+/**
+ * V2 workstation (WORKSTATION_V2 §4): the full-bleed stage with floating cards. The slot contents are the
+ * owners' components (B patient, C risk/explain, D hud); StageLayout places them and publishes the insets.
+ */
+function StageWorkstation() {
+  const edits = usePatientStore(selectEditCount);
+  return (
+    <div className="relative min-h-0" style={{ height: 'calc(100vh - var(--topbar-h) - var(--status-h))' }}>
+      <PageTitle />
+      <StageLayout
+        canvas={<CanvasSlot stage="workstation" className="h-full w-full" />}
+        left={<PatientCard />}
+        right={
+          <>
+            <RiskSummaryCard />
+            <VesselInspector />
+          </>
+        }
+        top={
+          <>
+            <SelectionChip />
+            <WhatIfPill />
+          </>
+        }
+        bottom={<CanvasToolbar />}
+        bottomLeft={<LegendChip />}
+        overlay={
+          <>
+            <AnswerPill />
+            <FirstRunHint />
+          </>
+        }
+        drawers={
+          <>
+            <InputsDrawer />
+            <ExplainDrawer />
+          </>
+        }
+        frame={edits > 0}
+      />
+    </div>
+  );
+}
+
+// ------------------------------------------------------------------------------------------ legacy
+// The phase-1 layouts stay reachable at #/workstation?layout=legacy (and below 1100 px) until B–D replace
+// the panels; then GroupRail, panels.tsx and CanvasHud are deleted (V2 §9.3).
+
+function LegacyCanvasStage({ className }: { className?: string }) {
   return (
     <CanvasSlot stage="workstation" className={className}>
       <CanvasHud />
@@ -109,46 +153,45 @@ function CompactTabs() {
   );
 }
 
-/**
- * Workstation (DESIGN_SYSTEM §4.2–4.3). Layout by viewport:
- *   ≥ 1440      320 inputs panel · fluid canvas · 384 results panel (CAD card pinned)
- *   1100–1439   56 rail + 296 flyout OVER the canvas · fluid canvas · tabbed results panel
- *   < 1100      canvas 55vh on top, tabs Inputs / Risk / Why below
- * Panels read the stores; the canvas is the persistent shell canvas moved into this page's slot.
- */
-function PageTitle() {
-  const id = usePatientStore((s) => s.selectedPatientId);
-  const mode = usePatientStore((s) => s.mode);
-  return <h1 className="sr-only">Workstation · {mode === 'custom' ? 'custom patient' : (id ?? 'no patient selected')}</h1>;
-}
-
-export default function WorkstationPage() {
-  const mode = useLayoutMode();
-  useWorkstationHotkeys();
-  usePatientFromRoute();
-
-  if (mode === 'compact') {
-    return (
-      <div className="flex flex-col">
-        <PageTitle />
-        <CanvasStage className="h-[55vh] min-h-[320px]" />
-        <CompactTabs />
-      </div>
-    );
-  }
-
+function LegacyWorkstation({ wide }: { wide: boolean }) {
   return (
     <div
       className="relative grid min-h-0 overflow-clip"
       style={{
         height: 'calc(100vh - var(--topbar-h) - var(--status-h))',
-        gridTemplateColumns: mode === 'wide' ? 'var(--left-w) minmax(0, 1fr) var(--right-w)' : 'var(--group-rail-w) minmax(0, 1fr) var(--right-w)',
+        gridTemplateColumns: wide
+          ? 'var(--left-w) minmax(0, 1fr) var(--right-w)'
+          : 'var(--group-rail-w) minmax(0, 1fr) var(--right-w)',
       }}
     >
       <PageTitle />
-      {mode === 'wide' ? <LeftPanel /> : <GroupRail />}
-      <CanvasStage className="min-h-0" />
-      {mode === 'wide' ? <RightPanel /> : <TabbedRightPanel />}
+      {wide ? <LeftPanel /> : <GroupRail />}
+      <LegacyCanvasStage className="min-h-0" />
+      {wide ? <RightPanel /> : <TabbedRightPanel />}
     </div>
   );
+}
+
+/**
+ * Workstation route. Desktop (≥ 1100): the V2 stage. Below 1100: the stacked compact layout (canvas on
+ * top, tabs below) until the V2 compact layout lands. `?layout=legacy` shows the phase-1 3-column grid.
+ */
+export default function WorkstationPage() {
+  const mode = useLayoutMode();
+  const [params] = useSearchParams();
+  useWorkstationCommands();
+  usePatientFromRoute();
+  useWorkstationChrome();
+
+  if (mode === 'compact') {
+    return (
+      <div className="flex flex-col">
+        <PageTitle />
+        <LegacyCanvasStage className="h-[55vh] min-h-[320px]" />
+        <CompactTabs />
+      </div>
+    );
+  }
+  if (params.get('layout') === 'legacy') return <LegacyWorkstation wide={mode === 'wide'} />;
+  return <StageWorkstation />;
 }
