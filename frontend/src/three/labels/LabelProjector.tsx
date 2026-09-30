@@ -12,13 +12,15 @@ import { freeArea, heartBox } from '../camera/framing';
 import { sceneRuntime } from '../stage/sceneRuntime';
 import { buildTracks, restToDisplayed, type AnchorTrack } from './anchorTracks';
 import { facing } from './dynamicAnchor';
-import { labelEls, labelSizes, laneFor, layoutLanes, lineEls, type LaneItem } from './labelRegistry';
+import { dotEls, labelEls, labelSizes, laneFor, layoutLanes, lineEls, type LaneItem } from './labelRegistry';
 
 const DEFAULT_TARGETS = ['LAD', 'LCX', 'RCA'];
 /** Labels fade in LAD → LCX → RCA, 60 ms apart, once the coronaries ignite (V2 §5.14). */
 const REVEAL_STAGGER_MS = 60;
 /** Room kept free for the context slot (selection chip / what-if pill) above the lanes. */
 const CONTEXT_SLOT_ROOM = 44;
+/** Share of the heart box's projected width that the organ's silhouette actually covers. */
+const SILHOUETTE = 0.85;
 /** Anchor glide when the chosen candidate changes (per-second rate of an exponential approach). */
 const ANCHOR_GLIDE = 14;
 
@@ -178,7 +180,10 @@ export function LabelProjector() {
       minX = Math.min(minX, x);
       maxX = Math.max(maxX, x);
     }
-    const heart = Number.isFinite(minX) && maxX > minX ? { minX, maxX } : null;
+    // The box corners sit outside the organ's silhouette; 85 % of the projected box hugs it.
+    const cx = (minX + maxX) / 2;
+    const half = ((maxX - minX) / 2) * SILHOUETTE;
+    const heart = Number.isFinite(minX) && maxX > minX ? { minX: cx - half, maxX: cx + half } : null;
     const compact = width < 640;
 
     // 3. Lanes.
@@ -224,6 +229,13 @@ export function LabelProjector() {
       setAttr(line, 'stroke-dasharray', dimmed || behind ? '3 3' : '');
       setAttr(line, 'data-selected', String(isSelected));
       setStyle(line, 'opacity', !revealed ? '0' : isSelected ? '0.9' : dimmed || behind ? '0.35' : '0.6');
+      const dot = dotEls.get(r.id);
+      if (dot) {
+        setAttr(dot, 'cx', p.x.toFixed(1));
+        setAttr(dot, 'cy', p.y.toFixed(1));
+        setAttr(dot, 'data-selected', String(isSelected));
+        setStyle(dot, 'opacity', !revealed || behind ? '0' : dimmed ? '0.5' : '1');
+      }
     });
 
     // Hide labels whose vessel has no anchor (anatomy switched, target missing).
@@ -232,6 +244,8 @@ export function LabelProjector() {
       setStyle(label, 'opacity', '0');
       const line = lineEls.get(id);
       if (line) setStyle(line, 'opacity', '0');
+      const dot = dotEls.get(id);
+      if (dot) setStyle(dot, 'opacity', '0');
     }
   });
 

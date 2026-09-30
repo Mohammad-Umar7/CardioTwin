@@ -6,6 +6,8 @@
  */
 export const labelEls = new Map<string, HTMLElement>();
 export const lineEls = new Map<string, SVGLineElement>();
+/** Anchor dots at the vessel end of each leader. */
+export const dotEls = new Map<string, SVGCircleElement>();
 /** Label box sizes, kept current by the overlay's ResizeObserver so the projector never forces layout. */
 export const labelSizes = new Map<string, { width: number; height: number }>();
 

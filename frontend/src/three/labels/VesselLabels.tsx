@@ -1,14 +1,14 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { RiskPip } from '@/design';
 import { useSchemaIndex } from '@/hooks/useData';
-import { useDelayedFlag, useReducedMotion } from '@/hooks/useMediaQuery';
+import { useDelayedFlag, useIsReducedMotion } from '@/hooks/useMediaQuery';
 import { cn } from '@/lib/cn';
 import { formatProbability } from '@/lib/format';
 import { selectDisplayedPrediction, usePatientStore } from '@/state/patientStore';
 import { useUiStore } from '@/state/uiStore';
 import { useViewerStore } from '@/state/viewerStore';
 import { RISK_PENDING } from '@/theme/risk';
-import { labelEls, labelShowsProbability, labelSizes, lineEls } from './labelRegistry';
+import { dotEls, labelEls, labelShowsProbability, labelSizes, lineEls } from './labelRegistry';
 
 const DEFAULT_VESSELS = ['LAD', 'LCX', 'RCA'];
 /** The band-change ring plays at most once per 1.2 s per label (V2 §8.3). */
@@ -18,7 +18,7 @@ const RING_MS = 260;
 const STALE_AFTER_MS = 150;
 
 function useBandRing(target: string, band: string | null): boolean {
-  const reduced = useReducedMotion();
+  const reduced = useIsReducedMotion();
   const last = useRef<{ band: string | null; at: number }>({ band, at: 0 });
   const [ringing, setRinging] = useState(false);
   useEffect(() => {
@@ -112,24 +112,43 @@ function Label({ target }: { target: string }) {
 }
 
 function Leader({ target }: { target: string }) {
-  const register = useCallback(
+  const registerLine = useCallback(
     (el: SVGLineElement | null) => {
       if (el) lineEls.set(target, el);
       else lineEls.delete(target);
     },
     [target],
   );
+  const registerDot = useCallback(
+    (el: SVGCircleElement | null) => {
+      if (el) dotEls.set(target, el);
+      else dotEls.delete(target);
+    },
+    [target],
+  );
   return (
-    <line
-      ref={register}
-      className="stroke-primary transition-opacity duration-fast data-[selected=true]:stroke-accent"
-      strokeWidth={1}
-      style={{ opacity: 0 }}
-      x1={0}
-      y1={0}
-      x2={0}
-      y2={0}
-    />
+    <g>
+      <line
+        ref={registerLine}
+        className="stroke-primary transition-opacity duration-fast data-[selected=true]:stroke-accent"
+        strokeWidth={1}
+        style={{ opacity: 0 }}
+        x1={0}
+        y1={0}
+        x2={0}
+        y2={0}
+      />
+      {/* The anchor: a 2.5 px dot with a dark halo so it reads on tissue of any colour. */}
+      <circle
+        ref={registerDot}
+        r={2.5}
+        className="fill-primary stroke-void transition-opacity duration-fast data-[selected=true]:fill-accent"
+        strokeWidth={1.5}
+        style={{ opacity: 0 }}
+        cx={0}
+        cy={0}
+      />
+    </g>
   );
 }
 
