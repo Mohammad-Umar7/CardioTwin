@@ -13,7 +13,7 @@ import { sceneRuntime } from '../stage/sceneRuntime';
 import { clearAnchors, setAnchors, toVector, type LabelAnchor } from './anchors';
 import { ASSEMBLY_IGNITE_AT } from './assembly';
 import { Picker, type CentrelineLike } from './picking';
-import { AnatomyRig } from './rig';
+import { AnatomyRig, type RigInputs } from './rig';
 import type { QualityTier } from './tissue';
 import { useBeat } from './useHeartbeat';
 import { useRiskAnimation } from './useRiskAnimation';
@@ -40,6 +40,24 @@ function frontMostPoint(node: Object3D, side: 1 | -1): Vector3 | null {
 }
 
 const DEFAULT_VESSEL_TARGETS = ['LAD', 'LCX', 'RCA'];
+
+const EMPTY_INPUTS: RigInputs = {
+  dt: 0,
+  explodeTarget: 0.6,
+  look: 'realistic',
+  stage: 'hidden',
+  layerVisibility: {},
+  ghostLayers: true,
+  selected: null,
+  isolate: false,
+  ghostOthers: false,
+  showVeins: false,
+  section: false,
+  sectionDepth: 0,
+  reduced: false,
+  beatV: 0,
+  beatA: 0,
+};
 
 /**
  * Node name → VESSEL target, from schema.targets[].anatomy (authoritative) and
@@ -257,6 +275,8 @@ export function GlbAnatomy({ url }: { url: string }) {
   const beatGate = useCallback(() => !!rig && (rig.assembly.done || rig.assembly.t >= ASSEMBLY_IGNITE_AT), [rig]);
   const beat = useBeat(beatGate);
 
+  // One mutable inputs object, refilled every frame (no per-frame allocation).
+  const inputs = useRef<RigInputs | null>(null);
   useFrame((state, delta) => {
     if (!rig) return;
     const viewer = useViewerStore.getState();
@@ -264,23 +284,23 @@ export function GlbAnatomy({ url }: { url: string }) {
     const read = readScene();
     rig.setLook(read.look);
     if (viewer.tier !== 'D') rig.setTier(viewer.tier);
-    const moving = rig.update({
-      dt: delta,
-      explodeTarget: viewer.explode,
-      look: read.look,
-      stage: viewer.stage,
-      layerVisibility: viewer.layerVisibility,
-      ghostLayers: viewer.ghostLayers,
-      selected: viewer.selectedStructure,
-      isolate: read.isolate,
-      ghostOthers: read.ghostOthers,
-      showVeins: controls.showVeins,
-      section: controls.section,
-      sectionDepth: controls.sectionDepth,
-      reduced: reduced || viewer.calm,
-      beatV: beat.current.v,
-      beatA: beat.current.a,
-    });
+    const inp = (inputs.current ??= { ...EMPTY_INPUTS });
+    inp.dt = delta;
+    inp.explodeTarget = viewer.explode;
+    inp.look = read.look;
+    inp.stage = viewer.stage;
+    inp.layerVisibility = viewer.layerVisibility;
+    inp.ghostLayers = viewer.ghostLayers;
+    inp.selected = viewer.selectedStructure;
+    inp.isolate = read.isolate;
+    inp.ghostOthers = read.ghostOthers;
+    inp.showVeins = controls.showVeins;
+    inp.section = controls.section;
+    inp.sectionDepth = controls.sectionDepth;
+    inp.reduced = reduced || viewer.calm;
+    inp.beatV = beat.current.v;
+    inp.beatA = beat.current.a;
+    const moving = rig.update(inp);
     // Labels follow the wall they sit on through the peel and the assembly (never the beat).
     for (const a of anchorRest.current) {
       const entry = rig.byNode.get(a.node);

@@ -21,16 +21,17 @@ export const LONGITUDINAL_PIVOT = 0.18;
 
 const tmpA = new Matrix4();
 const tmpB = new Matrix4();
+const tmpPivot = new Vector3();
 
 /**
  * Affine beat matrix (rest frame) at ventricular activation v (see heartbeat.ts). v = 0 → identity; v < 0
- * (atrial filling) gives a slight expansion.
+ * (atrial filling) gives a slight expansion. Allocation-free (called every frame).
  */
 export function beatMatrix(frame: Pick<HeartFrame, 'apex' | 'axis' | 'length'>, v: number, out = new Matrix4()): Matrix4 {
   if (v === 0) return out.identity();
   const sr = 1 - BEAT_AMPLITUDE.radial * v;
   const sl = 1 - BEAT_AMPLITUDE.longitudinal * v;
-  const pivot = frame.apex.clone().addScaledVector(frame.axis, frame.length * LONGITUDINAL_PIVOT);
+  const pivot = tmpPivot.copy(frame.apex).addScaledVector(frame.axis, frame.length * LONGITUDINAL_PIVOT);
   const a = frame.axis;
   // S = sr·I + (sl − sr)·a·aᵀ : radial scale everywhere, longitudinal scale along a.
   const k = sl - sr;
