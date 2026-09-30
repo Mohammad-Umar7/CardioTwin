@@ -66,6 +66,16 @@ describe('facts and wording', () => {
       'Separates stenotic from non-stenotic LAD very well in cross-validation on the development set.',
     );
   });
+
+  it('never lets an easy locked split outrun the robust estimate (LCX: test 0.81, re-split median 0.76)', () => {
+    const lcx = { ...cadMetrics, test: { ...cadMetrics.test, roc_auc: { ...cadMetrics.test.roc_auc!, value: 0.81 } }, cv: { ...cadMetrics.cv, roc_auc: { ...cadMetrics.cv.roc_auc!, mean: 0.74 } } };
+    const robustness = { rocAuc: { p50: 0.76 } } as unknown as Parameters<typeof pageTakeaway>[3];
+    expect(pageTakeaway('LCX', lcx, 'test', robustness)).toBe('Separates stenotic from non-stenotic LCX moderately well on patients it never saw.');
+    // Without re-splits, the cross-validation mean bounds it.
+    expect(pageTakeaway('LCX', lcx, 'test')).toMatch(/moderately well/);
+    // A harder locked split keeps its own, lower word.
+    expect(pageTakeaway('CAD', cadMetrics, 'test', { rocAuc: { p50: 0.93 } } as unknown as Parameters<typeof pageTakeaway>[3])).toBe('Separates CAD from no CAD well on patients it never saw.');
+  });
 });
 
 describe('test vs CV reconciliation (§6.4 rule 2)', () => {

@@ -268,7 +268,7 @@ export default function PerformancePage() {
                   id="summary-title"
                   className="max-w-[30ch] font-display text-display-2 text-primary text-balance"
                 >
-                  {pageTakeaway(target, m, split)}
+                  {pageTakeaway(target, m, split, extras.robustness)}
                 </h1>
                 <p className="max-w-[92ch] text-body text-secondary text-pretty">
                   {reconcileSentence(m, split, facts, extras.robustness)}

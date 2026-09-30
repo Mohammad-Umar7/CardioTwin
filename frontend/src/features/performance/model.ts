@@ -99,13 +99,21 @@ export function headlineAuc(m: TargetMetrics, split: Split): number | null {
   return split === 'test' ? (m.test.roc_auc?.value ?? null) : (m.cv.roc_auc?.mean ?? null);
 }
 
-/** Page title = takeaway: "Separates CAD from no CAD well on patients it never saw." */
-export function pageTakeaway(target: string, m: TargetMetrics, split: Split): string {
+/**
+ * Page title = takeaway: "Separates CAD from no CAD well on patients it never saw." On the test split the
+ * verdict word never outruns the robust estimate: it is read from the LOWER of the locked test ROC-AUC and
+ * the re-split median (or, without re-splits, the cross-validation mean). A locked split that was an easy
+ * draw (LCX: 0.81 at the 84th percentile, re-split median 0.76) then reads "moderately well", and the 0.81
+ * stays on the tiles and in the sentence below as the evidence.
+ */
+export function pageTakeaway(target: string, m: TargetMetrics, split: Split, robustness?: RobustnessResult | null): string {
   const auc = headlineAuc(m, split);
   const pairText = target === 'CAD' ? 'CAD from no CAD' : `stenotic from non-stenotic ${target}`;
   const where = split === 'test' ? 'on patients it never saw' : 'in cross-validation on the development set';
   if (auc === null) return `How well does it separate ${pairText}?`;
-  return `Separates ${pairText} ${discriminationWord(auc)} ${where}.`;
+  const robust = split === 'test' ? (robustness?.rocAuc.p50 ?? m.cv.roc_auc?.mean ?? null) : null;
+  const verdictAuc = robust !== null && Number.isFinite(robust) ? Math.min(auc, robust) : auc;
+  return `Separates ${pairText} ${discriminationWord(verdictAuc)} ${where}.`;
 }
 
 /**

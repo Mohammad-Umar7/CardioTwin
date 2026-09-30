@@ -67,6 +67,10 @@ describe('model names', () => {
       'an ensemble of elastic-net logistic regression and gradient-boosted trees',
     );
     expect(deployedModelPhrase(null)).toBe('an ensemble of logistic regression and gradient-boosted trees');
+    // The bedside baseline as the linear part is spelled out, never "bedside logistic regression".
+    expect(deployedModelPhrase('lr_core')).toBe(
+      'logistic regression on 5 bedside inputs (age, sex, typical angina, diabetes, hypertension) blended with gradient-boosted trees on all 53 inputs',
+    );
     expect(DEPLOYED_SHORT_NAME).not.toMatch(/_/);
     expect(deployedModelShort('lr_elasticnet')).toBe('Elastic-net logistic + boosted trees');
     expect(deployedModelShort('lr_core')).toBe('Bedside logistic + boosted trees');

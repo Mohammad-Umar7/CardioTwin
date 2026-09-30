@@ -113,7 +113,7 @@ const LINEAR_PART: Record<string, string> = {
   lr_l2: 'ridge logistic regression',
   lr_l1: 'lasso logistic regression',
   lr_elasticnet: 'elastic-net logistic regression',
-  lr_core: 'bedside logistic regression',
+  lr_core: 'logistic regression on 5 bedside inputs',
 };
 
 function titleFromId(id: string): string {
@@ -147,6 +147,10 @@ export function deployedModelName(logisticId?: string | null): string {
  * logistic regression and gradient-boosted trees, …"), so sentences never read "Deployed: Ensemble: …".
  */
 export function deployedModelPhrase(logisticId?: string | null): string {
+  // The bedside baseline as the linear part: say what it is (5 named inputs), not an opaque "bedside logistic".
+  if (logisticId === 'lr_core') {
+    return `logistic regression on ${CLINICAL_CORE_INPUTS.length} bedside inputs (${CLINICAL_CORE_INPUTS.join(', ').toLowerCase()}) blended with gradient-boosted trees on all 53 inputs`;
+  }
   const linear = (logisticId ? LINEAR_PART[logisticId] : undefined) ?? 'logistic regression';
   return `an ensemble of ${linear} and gradient-boosted trees`;
 }
