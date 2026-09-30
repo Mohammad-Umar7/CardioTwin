@@ -56,6 +56,7 @@ every input STL by SHA-256 and lists the derived / synthesised parts.
 | 7 | Renders | `blender --background --factory-startup --python anatomy/blender/render_heroes.py -- [--shots …] [--save-scene]` | `docs/media/renders/` |
 | 7b | Web preview | `blender --background --factory-startup --python anatomy/blender/render_web_preview.py` | `docs/media/renders/web_preview.jpg` |
 | QA | Decode for QA | `node anatomy/scripts/decode_glb.mjs [glb] OUT_DIR` | plain per-node arrays (used by `tests/test_mesh_quality.py`) |
+| QA | three.js view | `node anatomy/scripts/check_three.mjs` | attributes as three.js names them (`_segment`, `_vein`, `_dist_hilum` …) and the baked maps on the heart-wall material |
 | QA | Previews | `blender --background --factory-startup --python anatomy/blender/preview.py -- --views torso,heart,open,territory,qa` | `anatomy/build/preview/*.png` |
 
 `build.py --only manifest,verify` runs a subset; `--skip fetch` skips stages.
