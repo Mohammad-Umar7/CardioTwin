@@ -89,8 +89,11 @@ origin — the viewer can offset or scale any node safely.
 * **Thorax limits** — aorta, IVC and trachea are cut (and capped) to z ∈ [986, 1390] mm so nothing leaves the torso.
 * **Seamless aorta** — BodyParts3D splits the aorta into ascending / arch / descending pieces whose end caps show
   as seam rings; they are fused by a 0.6 mm voxel remesh and relaxed with a corrective smooth.
-* **Decimation** — quadric collapse to the per-node budget, then smooth shading with face-area-weighted normals.
-  Coronary arteries are never decimated (they keep 100 % of the source detail).
+* **Decimation** — quadric collapse to the per-node budget, then smooth shading with corner-angle-weighted normals;
+  edges folding more than 75° (thin-wall rims at vessel and valve openings, cap edges) are split sharp so two
+  opposite surfaces are never averaged into a dark seam. (Face-area weighting was dropped: on the decimated wall it
+  inverted ~4 % of vertex normals against their faces.) Coronary arteries are never decimated (they keep 100 % of
+  the source detail).
 * **Costal cartilages** — the individual cartilages of ribs 1–7 (FMA) plus the fused ribs 8–10 costal-margin sets
   (`BP24`/`BP28`); the two sets do not overlap (only the rib-7 joint touches).
 

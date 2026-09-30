@@ -400,18 +400,29 @@ def reorient_after_decimation(ob: bpy.types.Object) -> None:
         log(f"  {ob.name}: {flipped} faces reversed after decimation")
 
 
-def smooth_normals(ob: bpy.types.Object, flat_faces: set[int] | None = None) -> None:
-    """Smooth shading with face-area-weighted normals; ``flat_faces`` stay flat (cut caps)."""
+def smooth_normals(ob: bpy.types.Object, flat_faces: set[int] | None = None, *, sharp_deg: float = 75.0) -> None:
+    """Smooth shading with Blender's corner-angle-weighted vertex normals.
+
+    Edges folding more than ``sharp_deg`` (the rims of thin walls at vessel and valve openings, the
+    edges of cut caps) are marked sharp so the normals split there instead of averaging two opposite
+    surfaces into a dark seam; ``flat_faces`` (cut caps) stay flat. Face-area weighting is avoided:
+    after decimation it lets a few large triangles dominate and inverted ~4 % of the heart-wall
+    vertex normals against their faces.
+    """
     me = ob.data
+    bm = bmesh.new()
+    bm.from_mesh(me)
+    limit = math.radians(sharp_deg)
+    for e in bm.edges:
+        if len(e.link_faces) == 2 and e.calc_face_angle(0.0) > limit:
+            e.smooth = False
+    bm.to_mesh(me)
+    bm.free()
     smooth = np.ones(len(me.polygons), dtype=bool)
     if flat_faces:
         smooth[list(flat_faces)] = False
     me.polygons.foreach_set("use_smooth", smooth)
-    mod = ob.modifiers.new("WeightedNormal", "WEIGHTED_NORMAL")
-    mod.mode = "FACE_AREA"
-    mod.weight = 50
-    mod.keep_sharp = True
-    apply_modifiers(ob)
+    me.update()
 
 
 def orient_open_shell_outward(ob: bpy.types.Object) -> None:
