@@ -44,6 +44,7 @@ model runs on a FastAPI server and, bit for bit, inside the browser, so the demo
 Cycles renders of the published asset. A 7-second turntable is at
 [`docs/media/renders/heart_turntable.mp4`](docs/media/renders/heart_turntable.mp4).
 
+<!-- RENDERS: anatomy/blender/render_heroes.py also writes open_heart.jpg, coronary_detail.jpg and heart_posterior.jpg; add them to the gallery above once they are committed -->
 <!-- SCREENSHOT: landing → docs/media/screenshots/landing.png (1440×900, landing hero with the KPI strip) -->
 <!-- SCREENSHOT: workstation → docs/media/screenshots/workstation.png (1440×900, test patient, risk summary card, vessels coloured) -->
 <!-- SCREENSHOT: workstation-lad → docs/media/screenshots/workstation-lad.png (LAD selected: camera at its best view, vessel inspector open) -->
@@ -239,7 +240,7 @@ the API without trained artifacts, for UI work. All API settings are listed in
 ```
 
 `--fast` gives a reduced smoke run, and `--dev-only` never touches the test set. Reruns reproduce every JSON
-artifact byte for byte, and CI trains twice from the raw data and compares the results. Protocol details:
+artifact byte for byte (apart from the `generated_at` timestamp), and CI trains twice from the raw data and compares the results. Protocol details:
 [`ml/README.md`](ml/README.md).
 
 ## Rebuild the anatomy
