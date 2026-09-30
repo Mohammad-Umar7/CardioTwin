@@ -11,7 +11,7 @@ import { useChangeTick, useCurrentTarget } from './hooks';
 import { IceStrip } from './IceStrip';
 import { useIceStrip } from './useIceStrip';
 import { useInputInteraction } from './lib/interaction';
-import { displayParts, displayValue, inRange, isPresent, numericValue, optionShort, rangeGlyph, snapNumeric } from './lib/values';
+import { cardLabel, displayParts, displayValue, inRange, isPresent, numericValue, optionShort, rangeGlyph, snapNumeric } from './lib/values';
 import { useField } from './useField';
 
 /**
@@ -78,9 +78,12 @@ export function RowLabel({
   suffix?: ReactNode;
 }) {
   const ref = rangeCopy(spec);
+  const label = cardLabel(spec);
+  const abbreviated = label !== spec.label;
   const tip =
-    spec.description || ref ? (
+    spec.description || ref || abbreviated ? (
       <span className="flex flex-col gap-1">
+        {abbreviated && <span className="font-semibold">{spec.label}</span>}
         {spec.description && <span>{spec.description}</span>}
         {ref && <span className="text-tertiary">Reference {ref.replace(/^ref /, '')}</span>}
       </span>
@@ -99,7 +102,14 @@ export function RowLabel({
             imputed && 'underline decoration-dashed decoration-tertiary underline-offset-[3px]',
           )}
         >
-          {spec.label}
+          {abbreviated ? (
+            <>
+              <span aria-hidden>{label}</span>
+              <span className="sr-only">{spec.label}</span>
+            </>
+          ) : (
+            label
+          )}
         </Tag>
       </Tooltip>
       {imputed && (
@@ -124,7 +134,18 @@ function ResetButton({ spec, recorded, onReset }: { spec: FeatureSpec; recorded:
       tooltip={`Reset to ${displayValue(spec, recorded)}`}
       icon={<RotateCcw />}
       size="xs"
-      onClick={onReset}
+      onClick={(e) => {
+        const row = e.currentTarget.closest<HTMLElement>('[data-row-id]');
+        onReset();
+        // The ↺ disappears with the edit: keep keyboard focus in the row instead of dropping it on <body>.
+        requestAnimationFrame(() => {
+          const target =
+            row?.querySelector<HTMLElement>('input:not([type="range"])') ??
+            row?.querySelector<HTMLElement>('[role="radio"][aria-checked="true"]') ??
+            row;
+          if (target?.isConnected) target.focus({ preventScroll: true });
+        });
+      }}
     />
   );
 }
@@ -293,7 +314,7 @@ export function NumericRow({ spec, rowId, expanded, suffix, className }: RowProp
       )}
     >
       <EditFlash value={field.value} />
-      <div className={cn('grid grid-cols-[minmax(0,1fr)_60px_48px_64px] items-center gap-1.5 pl-1 pr-2', ROW)}>
+      <div className={cn('grid grid-cols-[minmax(0,1fr)_56px_44px_56px] items-center gap-1.5 pl-1 pr-2', ROW)}>
         <RowLabel spec={spec} htmlFor={inputId} labelId={labelId} edited={field.edited} imputed={field.imputed} suffix={suffix} />
         <input
           id={inputId}
@@ -380,7 +401,7 @@ export function CategoricalRow({ spec, rowId, suffix, className }: RowProps) {
       onPointerEnter={() => useUiStore.getState().highlightFeature(spec.key)}
       onPointerLeave={() => useUiStore.getState().highlightFeature(null)}
       className={cn(
-        'relative grid grid-cols-[minmax(0,1fr)_auto_24px] items-center gap-1.5 rounded-sm pl-1 pr-1 outline-none transition-colors duration-fast',
+        'relative grid grid-cols-[minmax(0,1fr)_auto_auto] items-center gap-1.5 rounded-sm pl-1 pr-1 outline-none transition-colors duration-fast',
         ROW,
         highlighted ? 'bg-surface-1' : 'hover:bg-surface-1/60',
         className,
@@ -414,7 +435,8 @@ export function CategoricalRow({ spec, rowId, suffix, className }: RowProps) {
           ))}
         </select>
       )}
-      <span className="flex justify-center">{field.edited && <ResetButton spec={spec} recorded={field.recorded} onReset={field.reset} />}</span>
+      {/* ↺ only while edited: a reserved column would truncate "Valvular heart disease" at 1280. */}
+      {field.edited ? <ResetButton spec={spec} recorded={field.recorded} onReset={field.reset} /> : <span />}
     </div>
   );
 }
