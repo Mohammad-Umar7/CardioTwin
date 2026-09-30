@@ -196,6 +196,7 @@ def run(
         specs[cfg["ensemble"]["tree_component"]],
         abl_cfg,
         seed,
+        n_jobs=n_jobs,
     )
     adopted = {k: v["adopted"] for k, v in ablations["variants"].items()}
     if adopted.get("selection") or adopted.get("chain"):

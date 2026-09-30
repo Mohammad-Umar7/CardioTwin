@@ -60,8 +60,12 @@ def run_ablations(
     cfg: dict[str, Any],
     seed: int,
     chain_source: str = "CAD",
+    n_jobs: int = -1,
 ) -> dict[str, Any]:
-    """Run every variant and return a JSON-ready report with adoption decisions."""
+    """Run every variant and return a JSON-ready report with adoption decisions.
+
+    ``n_jobs`` is forwarded to every cross-validation run (``--jobs`` on the command line).
+    """
     fixed_lr = dict(cfg["fixed_params"]["logistic"])
     fixed_xgb = dict(cfg["fixed_params"]["xgboost"])
     k = int(cfg["selection_k"])
@@ -72,7 +76,7 @@ def run_ablations(
         for variant, X, sel in (("baseline", X_base, None), ("derived", X_derived, None), ("selection", X_base, k)):
             jobs.append(CVJob(f"{variant}|{t}|lr", lr_spec, t, X, y, folds[t], nested=False, overrides=fixed_lr, select_k=sel))
             jobs.append(CVJob(f"{variant}|{t}|xgb", xgb_spec, t, X, y, folds[t], nested=False, overrides=fixed_xgb, select_k=sel))
-    results = run_cv_jobs(jobs, seed, tuning={}, n_jobs=-1)
+    results = run_cv_jobs(jobs, seed, tuning={}, n_jobs=n_jobs)
 
     scores: dict[str, dict[str, VariantScore]] = {}
     for t in targets:
@@ -88,8 +92,8 @@ def run_ablations(
         if t == chain_source:
             continue
         y = labels[t]
-        lr = run_chain_cv(lr_spec, lr_spec, t, X_base, y_src, y, folds[t], seed, fixed_lr, fixed_lr)
-        xgb = run_chain_cv(lr_spec, xgb_spec, t, X_base, y_src, y, folds[t], seed, fixed_lr, fixed_xgb)
+        lr = run_chain_cv(lr_spec, lr_spec, t, X_base, y_src, y, folds[t], seed, fixed_lr, fixed_lr, n_jobs)
+        xgb = run_chain_cv(lr_spec, xgb_spec, t, X_base, y_src, y, folds[t], seed, fixed_lr, fixed_xgb, n_jobs)
         scores.setdefault("chain", {})[t] = VariantScore(
             "chain", t, _ensemble_fold_auc(lr, xgb, y, folds[t]), _mean_fold_auc(lr), _mean_fold_auc(xgb)
         )
