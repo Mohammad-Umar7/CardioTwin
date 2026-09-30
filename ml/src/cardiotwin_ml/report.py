@@ -329,6 +329,176 @@ def fig_ablations(metrics: dict[str, Any], path: Path) -> None:
     _save(fig, path, "Evidence-driven extras (paired dev-CV ablations)")
 
 
+# --------------------------------------------------------------------------- validation-analysis figures
+# Drawn only when python -m cardiotwin_ml.analysis has added the corresponding keys to metrics.json.
+
+GROUP_SHORT = {
+    "demographics": "Demogr.",
+    "risk_factors": "+Risk f.",
+    "symptoms": "+Sympt.",
+    "exam": "+Exam",
+    "ecg": "+ECG",
+    "labs": "+Labs",
+    "echo": "+Echo",
+}
+
+
+def fig_robustness(metrics: dict[str, Any], path: Path) -> None:
+    rob = metrics["robustness"]
+    ts = [t for t in _targets(metrics) if t in rob]
+    panels = (("roc_auc", "ROC-AUC  (higher is better)"), ("f1", "F1 at the deployed threshold"), ("brier", "Brier score  (lower is better)"))
+    fig, axes = plt.subplots(1, 3, figsize=(13.2, 4.3), sharey=True)
+    rng = np.random.default_rng(0)
+    for ax, (key, xlabel) in zip(axes, panels, strict=True):
+        for i, t in enumerate(ts):
+            y = len(ts) - 1 - i
+            d = rob[t][key]
+            s = np.asarray(rob[t]["samples"][key])
+            ax.scatter(s, y + rng.uniform(-0.22, 0.22, size=len(s)), s=6, color=MODEL, alpha=0.22, linewidths=0, zorder=1)
+            ax.plot([d["p05"], d["p95"]], [y, y], color=INK_2, lw=1.2, zorder=2, solid_capstyle="round")
+            ax.plot([d["p25"], d["p75"]], [y, y], color=MODEL, lw=7, zorder=3, solid_capstyle="butt")
+            ax.scatter([d["p50"]], [y], marker="|", s=160, color="white", linewidths=2.2, zorder=4)
+            ax.scatter([d["fixed_split"]], [y + 0.34], marker="D", s=46, color=BASELINE, edgecolors="white", linewidths=1.2, zorder=5)
+            ax.annotate(f"P{d['fixed_split_percentile']:.0f}", (d["fixed_split"], y + 0.34), xytext=(7, -3),
+                        textcoords="offset points", fontsize=7.5, color=INK_2)
+            if key == "roc_auc":
+                cv = rob[t]["cv_estimate"]["roc_auc"]
+                ax.scatter([cv], [y - 0.34], marker="^", s=34, color=INK, zorder=5)
+        ax.set(xlabel=xlabel)
+        ax.set_ylim(-0.7, len(ts) - 0.3)
+        ax.grid(axis="y", visible=False)
+    axes[0].set_yticks(range(len(ts)), [TARGET_TITLES.get(t, t) for t in ts[::-1]])
+    handles = [
+        plt.Line2D([], [], color=MODEL, marker="o", ls="", alpha=0.5, markersize=4, label=f"one of {rob[ts[0]]['n_splits']} random 80/20 splits"),
+        plt.Line2D([], [], color=MODEL, lw=7, label="interquartile range (white tick = median)"),
+        plt.Line2D([], [], color=INK_2, lw=1.2, label="5th–95th percentile"),
+        plt.Line2D([], [], color=BASELINE, marker="D", ls="", markersize=6, label="locked test split (P = its percentile)"),
+        plt.Line2D([], [], color=INK, marker="^", ls="", markersize=6, label="cross-fitted dev-CV mean"),
+    ]
+    fig.legend(handles=handles, loc="lower center", ncol=5, bbox_to_anchor=(0.5, -0.07), fontsize=7.8)
+    mode = metrics.get("analysis", {}).get("robustness", {}).get("hyperparameters", "search")
+    _save(fig, path, f"Monte-Carlo repeated hold-out of the frozen recipe ({'hyper-parameters re-searched' if mode == 'search' else 'deployed hyper-parameters'} in every split)")
+
+
+def fig_modality(metrics: dict[str, Any], path: Path) -> None:
+    mod = metrics["modality_ablation"]
+    ts = [t for t in _targets(metrics) if t in mod]
+    fig, axes = plt.subplots(2, len(ts), figsize=(3.6 * len(ts), 7.4), sharey="row", sharex="row",
+                             gridspec_kw={"height_ratios": [1.15, 1]})
+    axes = np.atleast_2d(axes)
+    for c, t in enumerate(ts):
+        m = mod[t]
+        ax = axes[0, c]
+        cum = m["cumulative"]
+        xs = np.arange(len(cum))
+        means = np.array([r["roc_auc"]["mean"] for r in cum])
+        lo = means - np.array([r["roc_auc"]["ci"][0] for r in cum])
+        hi = np.array([r["roc_auc"]["ci"][1] for r in cum]) - means
+        first_test = next((k for k, r in enumerate(cum) if r["group"] not in ("demographics", "risk_factors", "symptoms", "exam")), None)
+        if first_test is not None:
+            ax.axvspan(first_test - 0.5, len(cum) - 0.5, color="#f4f8fd", zorder=0, lw=0)
+            ax.text(first_test - 0.4, 0.515, "instrumental tests", fontsize=7.2, color=INK_2)
+        ax.errorbar(xs, means, yerr=[lo, hi], fmt="none", ecolor=GRID, elinewidth=2.4, capsize=0, zorder=1)
+        ax.plot(xs, means, color=INK_2, lw=1.2, zorder=2)
+        ax.scatter(xs, means, s=46, zorder=3, edgecolors="white", linewidths=1.3,
+                   c=[GROUP_COLORS.get(r["group"], NEUTRAL) for r in cum])
+        ax.set_xticks(xs, [GROUP_SHORT.get(r["group"], r["group"]) for r in cum], rotation=40, ha="right", fontsize=7.8)
+        ax.set(ylim=(0.5, 1.0), title=TARGET_TITLES.get(t, t))
+        ax.grid(axis="x", visible=False)
+        if "instrumental" in m:
+            d = m["instrumental"]["delta"]
+            ax.text(0.03, 0.96, f"ECG+labs+echo vs bedside\nΔ {d['mean']:+.3f} [{d['ci'][0]:+.3f}, {d['ci'][1]:+.3f}]",
+                    transform=ax.transAxes, va="top", fontsize=7.6, color=INK)
+        if c == 0:
+            ax.set_ylabel("Dev-CV ROC-AUC (95% corrected-t CI)")
+
+        ax2 = axes[1, c]
+        loo = m["leave_one_out"]
+        ys = np.arange(len(loo))[::-1]
+        dm = np.array([r["delta_vs_full"]["mean"] for r in loo])
+        dlo = dm - np.array([r["delta_vs_full"]["ci"][0] for r in loo])
+        dhi = np.array([r["delta_vs_full"]["ci"][1] for r in loo]) - dm
+        ax2.barh(ys, dm, height=0.62, color=[GROUP_COLORS.get(r["group"], NEUTRAL) for r in loo], edgecolor="white", linewidth=1)
+        ax2.errorbar(dm, ys, xerr=[dlo, dhi], fmt="none", ecolor=INK_2, elinewidth=1.1, capsize=2)
+        ax2.axvline(0, color=INK_2, lw=0.8)
+        ax2.set_yticks(ys, [r["label"] for r in loo], fontsize=8)
+        ax2.grid(axis="y", visible=False)
+        ax2.set_xlabel("Δ ROC-AUC if removed (vs full panel)")
+    p = metrics.get("analysis", {}).get("modality_ablation", {})
+    _save(fig, path, f"What each modality adds — development CV ({p.get('n_folds', 50)} paired folds); "
+                     "top: cumulative, bottom: leave-one-modality-out")
+
+
+def fig_subgroups(metrics: dict[str, Any], path: Path) -> None:
+    sub = metrics["subgroups"]
+    ts = [t for t in _targets(metrics) if t in sub]
+    first = sub[ts[0]]
+    rows: list[tuple[str, str | None, str | None]] = [("Overall", None, None)]
+    for fid, fac in first["factors"].items():
+        for lv in fac["levels"]:
+            rows.append((lv["label"], fid, lv["id"]))
+    ypos, y, prev = [], 0.0, None
+    for _, fid, _ in rows:
+        if prev is not None and fid != prev:
+            y += 0.6
+        ypos.append(y)
+        y += 1.0
+        prev = fid
+    ypos = [max(ypos) - v for v in ypos]
+    fig, axes = plt.subplots(1, len(ts), figsize=(3.4 * len(ts) + 1.2, 4.9), sharey=True)
+    for ax, t in zip(np.atleast_1d(axes), ts, strict=False):
+        for (_label, fid, lid), yv in zip(rows, ypos, strict=True):
+            if fid is None:
+                blocks = sub[t]["overall"]
+            else:
+                blocks = next(lv for lv in sub[t]["factors"][fid]["levels"] if lv["id"] == lid)
+            for off, name, color, marker in ((0.16, "oof", MODEL, "o"), (-0.16, "test", BASELINE, "D")):
+                b = blocks[name]
+                if b["roc_auc"] is None:
+                    continue
+                v, (lo, hi) = b["roc_auc"]["value"], b["roc_auc"]["ci"]
+                ax.plot([lo, hi], [yv + off] * 2, color=color, lw=1.8, alpha=0.55 if b["small_n"] else 1.0, solid_capstyle="round")
+                ax.scatter([v], [yv + off], marker=marker, s=34, zorder=3, linewidths=1.3,
+                           facecolors="white" if b["small_n"] else color, edgecolors=color)
+        ax.axvline(0.5, color=NEUTRAL, lw=0.9, ls=":")
+        ax.set(xlim=(0.25, 1.02), xlabel="ROC-AUC (95% bootstrap CI)", title=TARGET_TITLES.get(t, t))
+        ax.grid(axis="y", visible=False)
+    labels = []
+    for label, fid, lid in rows:
+        if fid is None:
+            b = first["overall"]
+        else:
+            b = next(lv for lv in first["factors"][fid]["levels"] if lv["id"] == lid)
+        labels.append(f"{label}  ({b['oof']['n']} / {b['test']['n']})")
+    np.atleast_1d(axes)[0].set_yticks(ypos, labels, fontsize=8)
+    handles = [
+        plt.Line2D([], [], color=MODEL, marker="o", lw=1.8, label="development, cross-fitted out-of-fold"),
+        plt.Line2D([], [], color=BASELINE, marker="D", lw=1.8, label="locked test set (deployed model)"),
+        plt.Line2D([], [], color=INK_2, marker="o", ls="", markerfacecolor="white", label="hollow = small n (unstable)"),
+    ]
+    fig.legend(handles=handles, loc="lower center", ncol=3, bbox_to_anchor=(0.5, -0.06), fontsize=8)
+    _save(fig, path, "Subgroup discrimination — labels show patients (development / test)")
+
+
+ANALYSIS_FIGURES = {
+    "robustness.png": ("robustness", fig_robustness),
+    "modality_ablation.png": ("modality_ablation", fig_modality),
+    "subgroups.png": ("subgroups", fig_subgroups),
+}
+
+
+def make_analysis_figures(metrics: dict[str, Any], out_dir: Path = FIGURES_DIR) -> list[Path]:
+    """Figures of the validation analyses present in ``metrics`` (``python -m cardiotwin_ml.analysis``)."""
+    _style()
+    out = []
+    for name, (key, fn) in ANALYSIS_FIGURES.items():
+        if metrics.get(key):
+            path = out_dir / name
+            fn(metrics, path)
+            out.append(path)
+    return out
+
+
 FIGURES = {
     "roc_curves.png": fig_roc,
     "pr_curves.png": fig_pr,
@@ -351,7 +521,7 @@ def make_figures(metrics: dict[str, Any], out_dir: Path = FIGURES_DIR) -> list[P
         path = out_dir / name
         fn(metrics, path)
         out.append(path)
-    return out
+    return out + make_analysis_figures(metrics, out_dir)
 
 
 # --------------------------------------------------------------------------- results.md
@@ -460,8 +630,135 @@ def results_markdown(metrics: dict[str, Any]) -> str:
     lines += ["", "## Ablations (development CV, paired folds)", "", "| Variant | Mean Δ ROC-AUC | Adopted |", "| --- | --- | --- |"]
     for v, r in abl.items():
         lines.append(f"| {v} | {r['mean_delta_auc']:+.4f} | {'yes' if r['adopted'] else 'no'} |")
+    lines += analysis_markdown(metrics)
     lines += ["", f"_Generated from `ml/artifacts/metrics.json` ({metrics['generated_at']})._", ""]
     return "\n".join(lines)
+
+
+def _dist(d: dict[str, Any], digits: int = 3) -> str:
+    return f"{d['p50']:.{digits}f} ({d['p05']:.{digits}f}–{d['p95']:.{digits}f})"
+
+
+def _dci(d: dict[str, Any], digits: int = 3) -> str:
+    return f"{d['mean']:+.{digits}f} ({d['ci'][0]:+.{digits}f} to {d['ci'][1]:+.{digits}f})"
+
+
+def analysis_markdown(metrics: dict[str, Any]) -> list[str]:
+    """Sections for the validation analyses (only those present in ``metrics``)."""
+    ts = _targets(metrics)
+    meta = metrics.get("analysis", {})
+    lines: list[str] = []
+    rob = metrics.get("robustness")
+    if rob:
+        p = meta.get("robustness", {})
+        lines += [
+            "",
+            "## Robustness: Monte-Carlo repeated hold-out",
+            "",
+            f"{p.get('method', '')} Median (5th–95th percentile) over the {rob[ts[0]]['n_splits']} splits; *percentile* = "
+            "where the locked test split falls in that distribution. The harness reproduces the deployed model on the "
+            f"locked split exactly (max |Δp| = {p.get('reproduction', {}).get('max_abs_probability_difference', float('nan')):.1g}).",
+            "",
+            "| Target | Locked test ROC-AUC | MC ROC-AUC | Percentile | MC F1 | MC Brier | MC calibration slope | Beats baseline | Dev-CV ROC-AUC (percentile) |",
+            "| --- | --- | --- | --- | --- | --- | --- | --- | --- |",
+        ]
+        for t in ts:
+            r = rob[t]
+            lines.append(
+                f"| {t} | {r['roc_auc']['fixed_split']:.3f} | {_dist(r['roc_auc'])} | {r['fixed_split_percentile']:.0f} | "
+                f"{_dist(r['f1'])} | {_dist(r['brier'])} | {_dist(r['calibration_slope'], 2)} | "
+                f"{r['delta_roc_auc_vs_baseline']['share_positive']:.0%} of splits | "
+                f"{r['cv_estimate']['roc_auc']:.3f} ({r['cv_estimate']['percentile']:.0f}) |"
+            )
+        if all("hyperparameter_sensitivity" in rob[t] for t in ts):
+            parts = [
+                f"{t} {rob[t]['hyperparameter_sensitivity']['roc_auc_mean_alternative']:.3f} vs "
+                f"{rob[t]['hyperparameter_sensitivity']['roc_auc_mean_primary']:.3f}"
+                for t in ts
+            ]
+            lines += [
+                "",
+                f"Tuning-optimism check (same splits, {rob[ts[0]]['hyperparameter_sensitivity']['compared']}): mean ROC-AUC "
+                "with the deployed hyper-parameters reused vs re-searched per split — " + "; ".join(parts) + ".",
+            ]
+    mod = metrics.get("modality_ablation")
+    if mod:
+        p = meta.get("modality_ablation", {})
+        cum_groups = [r["group"] for r in mod[ts[0]]["cumulative"]]
+        labels = {r["group"]: r["label"] for r in mod[ts[0]]["cumulative"]}
+        lines += [
+            "",
+            "## Modality ablation (development CV)",
+            "",
+            f"{p.get('method', '')} Model: {p.get('model', '')}. CIs: {p.get('ci', '')}.",
+            "",
+            "Cumulative ROC-AUC (mean over folds):",
+            "",
+            "| Target | " + " | ".join(("" if k == 0 else "+") + labels[g] for k, g in enumerate(cum_groups)) + " |",
+            "| --- | " + " | ".join("---" for _ in cum_groups) + " |",
+        ]
+        for t in ts:
+            lines.append(f"| {t} | " + " | ".join(f"{r['roc_auc']['mean']:.3f}" for r in mod[t]["cumulative"]) + " |")
+        if all("instrumental" in mod[t] for t in ts):
+            lines += [
+                "",
+                "What the instrumental modalities add to bedside information (demographics, history, symptoms, examination):",
+                "",
+                "| Target | Bedside ROC-AUC | + ECG, labs, echo | Δ (95% CI) | p | Folds improved |",
+                "| --- | --- | --- | --- | --- | --- |",
+            ]
+            for t in ts:
+                i = mod[t]["instrumental"]
+                lines.append(
+                    f"| {t} | {i['bedside_roc_auc']['mean']:.3f} | {i['full_roc_auc']['mean']:.3f} | {_dci(i['delta'])} | "
+                    f"{i['delta']['p_value']:.3f} | {i['delta']['share_folds_improved']:.0%} |"
+                )
+        lines += [
+            "",
+            "Leave-one-modality-out: Δ ROC-AUC when the modality is removed from the full panel (negative = unique information; "
+            "Holm-adjusted p in brackets):",
+            "",
+            "| Modality | " + " | ".join(ts) + " |",
+            "| --- | " + " | ".join("---" for _ in ts) + " |",
+        ]
+        for k, r0 in enumerate(mod[ts[0]]["leave_one_out"]):
+            cells = []
+            for t in ts:
+                d = mod[t]["leave_one_out"][k]["delta_vs_full"]
+                cells.append(f"{_dci(d)} [{d['p_holm']:.2f}]")
+            lines.append(f"| {r0['label']} | " + " | ".join(cells) + " |")
+    sub = metrics.get("subgroups")
+    if sub:
+        p = meta.get("subgroups", {})
+        lines += [
+            "",
+            "## Subgroups (exploratory)",
+            "",
+            f"{p.get('method', '')} {p.get('ci', '')}. † = small n ({p.get('small_n', '')}); — = not estimable.",
+            "",
+            "| Subgroup | n (dev / test) | " + " | ".join(f"{t} OOF ROC-AUC | {t} test" for t in ts) + " |",
+            "| --- | --- | " + " | ".join("--- | ---" for _ in ts) + " |",
+        ]
+
+        def cell(b: dict[str, Any], with_ci: bool) -> str:
+            if b["roc_auc"] is None:
+                return "—"
+            v = b["roc_auc"]
+            txt = f"{v['value']:.2f} ({v['ci'][0]:.2f}–{v['ci'][1]:.2f})" if with_ci else f"{v['value']:.2f}"
+            return txt + (" †" if b["small_n"] else "")
+
+        rows = [("All patients", None, None)] + [
+            (f"{fac['label']}: {lv['label']}", fid, lv["id"]) for fid, fac in sub[ts[0]]["factors"].items() for lv in fac["levels"]
+        ]
+        for label, fid, lid in rows:
+            cells, n = [], ""
+            for t in ts:
+                blk = sub[t]["overall"] if fid is None else next(lv for lv in sub[t]["factors"][fid]["levels"] if lv["id"] == lid)
+                n = f"{blk['oof']['n']} / {blk['test']['n']}"
+                cells += [cell(blk["oof"], True), cell(blk["test"], False)]
+            lines.append(f"| {label} | {n} | " + " | ".join(cells) + " |")
+        lines += ["", f"_{p.get('caveat', '')}_"]
+    return lines
 
 
 def write_results_md(metrics: dict[str, Any], path: Path = REPORTS_DIR / "results.md") -> None:
