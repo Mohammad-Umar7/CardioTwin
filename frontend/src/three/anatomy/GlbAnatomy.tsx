@@ -335,8 +335,9 @@ export function GlbAnatomy({ url }: { url: string }) {
     const mask = GHOST_MASK.uGhostMask.value;
     const width = state.size.width;
     if (hero && width > 0) {
+      // Zero at the copy column's edge, full strength 8 % of the width beyond it: no ghost behind the headline.
       const left = useUiStore.getState().stageInsets.left / width;
-      mask.set(left, Math.max(0.01, left * 0.35));
+      mask.set(left + 0.08, 0.08);
     } else mask.set(-1, 1);
     // Labels follow the wall they sit on through the peel and the assembly (never the beat).
     for (const a of anchorRest.current) {

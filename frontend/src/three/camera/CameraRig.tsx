@@ -67,6 +67,7 @@ const THORAX_FULL_UNTIL = 0.2;
 const VIEW_WINDOW: readonly [number, number] = [0.05, 0.8];
 /** Margin (px) between the free-area edge and the visible great vessels (≥ 24 px from the canvas top). */
 const KEEP_MARGIN = 12;
+const HERO_KEEP_MARGIN = 24;
 /** A vessel's best view keeps the home distance for its angle: the target leaning onto the vessel is the "going to it". */
 const FOCUS_ZOOM = 1;
 /**
@@ -265,8 +266,9 @@ export function CameraRig() {
       // The real walls' silhouette (not their box) fills the share; the visible great vessels stay inside.
       points: heart,
       keep,
-      // The hero is full-bleed under the top bar: its fading vessels may reach the free area's edge.
-      keepMargin: forStage === 'hero' ? 0 : KEEP_MARGIN,
+      // The hero's trimmed great vessels end at least 24 px below the top of its free area (never cut by the
+      // top bar); the workstation keeps KEEP_MARGIN.
+      keepMargin: forStage === 'hero' ? HERO_KEEP_MARGIN : KEEP_MARGIN,
       target: geo.target,
       direction,
       fov: CAMERA_FOV,
