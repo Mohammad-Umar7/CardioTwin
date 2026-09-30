@@ -12,6 +12,11 @@ const host: HTMLDivElement | null = typeof document !== 'undefined' ? document.c
 if (host) {
   host.className = 'absolute inset-0';
   host.dataset.sceneHost = '';
+  // The canvas always fills its slot, even for the frame between a move (parked 600×400 → a page slot) and
+  // R3F's resize: a briefly stretched frame instead of a small one painted over the page's copy.
+  const style = document.createElement('style');
+  style.textContent = '[data-scene-host] canvas{width:100%!important;height:100%!important}';
+  document.head.appendChild(style);
 }
 
 /**
