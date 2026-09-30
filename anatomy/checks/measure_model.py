@@ -1862,6 +1862,8 @@ def run_checks(M: Model, yaml_checks: dict) -> list[Check]:
             tot += 1
             beh += int(sel[:, 2].min() > p[2])
     c.cond("behind PT", tot == 0 or beh == tot, "Z_LM < Z_PT where the PT overlies it", f"{beh}/{tot} overlapped LM samples lie wholly behind the pulmonary trunk")
+    c.cond("PT overlies the LM", tot > 0, "the pulmonary trunk overlies part of the LM (the test above is not vacuous)",
+           f"{tot} of {len(lm.P)} LM samples lie under the pulmonary trunk in the frontal projection (+-2 mm)", severity="soft")
     kids = [(k, v["segments"][0]) for k, v in M.v.items() if v["parent"] == "LM"]
     bad = [k for k, sg in kids if np.linalg.norm(sg.P[0] - lm.P[-1]) > 0.01]
     c.cond("no LM side branches", not bad, "attach at LM end", f"children {[k for k, _ in kids]} attach at the LM end" if not bad else f"{bad} attach before the LM end")
@@ -2481,6 +2483,109 @@ def run_checks(M: Model, yaml_checks: dict) -> list[Check]:
     else:
         c.absent = True
 
+    # ------------------------------------------------------------------ round-3 hardening (courses the old checks missed)
+    vjr = json.loads((PUBLIC / "vessels.json").read_text(encoding="utf-8")) if (PUBLIC / "vessels.json").exists() else {}
+    vsegs = vjr.get("veins", {}).get("segments", [])
+
+    def vmain(label):
+        return next((np.asarray(sg["points"], float) for sg in vsegs if sg["label"] == label and not sg.get("side")), None)
+
+    pvW = weld(m["GreatVessel_PulmonaryVeins"].V, m["GreatVessel_PulmonaryVeins"].F)[0]
+    pvtree = cKDTree(pvW)
+
+    c = new("VEN-13")
+    gP, aP = vmain("GCV"), vmain("AIV")
+    if gP is not None and aP is not None:
+        c.band("max MA ring distance of the GCV", float(MA.dist(gP).max()), None, 0.15)
+        c.band("max GCV height above the MA plane", float(((gP - MA.c) @ MA.n).max()), None, 0.12)
+        c.band("AIV start to the LM bifurcation", float(np.linalg.norm(aP[0] - lm.P[-1])), None, 0.10)
+        c.note(f"GCV {arclen(gP)[-1] / MM:.0f} mm, MA ring distance median {np.median(MA.dist(gP)) / MM:.1f} mm; AIV {arclen(aP)[-1] / MM:.0f} mm")
+    else:
+        c.absent = True
+
+    c = new("VEN-14")
+    dW = cKDTree(H).query(pvW)[0]
+    contact = pvW[dW <= 0.015]
+    left = contact[contact[:, 0] > bc[0]]
+    if len(left):
+        c.band("mitral isthmus (min MA ring distance of the left PV contact)", float(MA.dist(left).min()), 0.20, None)
+    c.band("min dist(LCX trunk, pulmonary veins)", float(pvtree.query(lcx.P)[0].min()), 0.05, None)
+    if gP is not None:
+        c.band("min dist(GCV, pulmonary veins)", float(pvtree.query(gP)[0].min()), 0.05, None)
+    c.note(f"left PV contact ring: {len(left)} vertices, median MA ring distance {np.median(MA.dist(left)) / MM:.1f} mm" if len(left) else "no left PV contact")
+
+    c = new("VEN-15")
+    sP = vmain("SCV")
+    if sP is not None:
+        rca_all = np.vstack([sg.P for sg in M.v["RCA"]["segments"][:1]])
+        dpair = cKDTree(rca_all).query(sP)[0]
+        c.band("max TA ring distance of the SCV", float(TA.dist(sP).max()), None, 0.12)
+        c.band("median SCV-RCA distance", float(np.median(dpair)), None, 0.08)
+        c.band("SCV length", float(arclen(sP)[-1]), 0.30, 0.80)
+        rm = vmain("RMV")
+        c.cond("right marginal vein", rm is not None, "a right marginal vein drains into the SCV", "present" if rm is not None else "absent", severity="soft")
+    else:
+        c.absent = True
+
+    c = new("COR-27")
+    cb = next((sg for sg in M.v["RCA"]["raw"]["segments"] if sg.get("code") == "CB"), None)
+    if cb is not None:
+        P_cb = np.asarray(cb["points"], float)
+        tail = P_cb[int(0.3 * len(P_cb)):]
+        HE = M.H_epi
+        gaps = []
+        for p_ in tail:
+            sl = HE[(np.abs(HE[:, 0] - p_[0]) < 0.03) & (np.abs(HE[:, 1] - p_[1]) < 0.03)]
+            if len(sl):
+                gaps.append(float(sl[:, 2].max() - p_[2]))
+        gaps = np.array(gaps)
+        c.band("fraction of the distal conus branch within 5 mm of the anterior RVOT surface",
+               float((gaps <= 0.05).mean()) if len(gaps) else float("nan"), 0.8, None, "")
+        c.band("conus branch runs leftwards (end.x - start.x)", float(P_cb[-1, 0] - P_cb[0, 0]), 0.01, None)
+        c.note(f"conus branch {arclen(P_cb)[-1] / MM:.0f} mm; median depth behind the most anterior wall {np.median(gaps) / MM:.1f} mm" if len(gaps) else "")
+    else:
+        c.absent = True
+
+    c = new("VAS-01")
+    fat_V = [weld(m[n].V, m[n].F) for n in ("EpicardialFat_Anterior", "EpicardialFat_Posterior") if n in m]
+    fat_tm = [trimesh.Trimesh(*f, process=False) for f in fat_V]
+    # the coronary ostia sit on the aortic root and the left main passes the pulmonary trunk: those surfaces support a
+    # vessel as the epicardium does; a branch's first 3 mm lie on its parent vessel, not on the heart
+    root_tm = [trimesh.Trimesh(*weld(m[n].V, m[n].F), process=False) for n in ("GreatVessel_Aorta", "GreatVessel_PulmonaryArtery") if n in m]
+    samples, radii = [], []
+    for vid, v in M.v.items():
+        if "SEPTAL" in vid:
+            continue
+        for sg in v["segments"]:
+            keep = arclen(sg.P) >= 0.03
+            samples.append(sg.P[keep][::2])
+            radii.append(sg.r[keep][::2])
+    for sg in vsegs:
+        P_ = np.asarray(sg["points"], float)[3::2]  # skip the drainage end (inside the atrial wall / parent)
+        samples.append(P_)
+        radii.append(np.asarray(sg["radius"], float)[3::2])
+    S_ = np.vstack(samples)
+    R_ = np.concatenate(radii)
+    d_h = M.epi_tree.query(S_)[0]
+    gap = d_h - R_
+    for rt in root_tm:
+        cand = np.flatnonzero(gap > 0.006)
+        if len(cand):
+            gap[cand] = np.minimum(gap[cand], trimesh.proximity.closest_point(rt, S_[cand])[1] - R_[cand])
+    for ft in fat_tm:
+        cand = np.flatnonzero(gap > 0.006)
+        if not len(cand):
+            break
+        inside = ft.contains(S_[cand])
+        gap[cand[inside]] = 0.0
+        rest = cand[~inside]
+        if len(rest):
+            d_f = trimesh.proximity.closest_point(ft, S_[rest])[1]
+            gap[rest] = np.minimum(gap[rest], d_f - R_[rest])
+    floating = int((gap > 0.006).sum())
+    c.band("floating centreline samples (wall > 0.6 mm off the heart / fat)", floating, 0, 0, "", fmt="{:.0f}")
+    c.note(f"{len(S_)} coronary and vein centreline samples; max gap {gap.max() / MM:.1f} mm; 99th percentile {np.percentile(gap, 99) / MM:.2f} mm")
+
     # ------------------------------------------------------------------ COLOUR
     gj = glb_json(GLB) if GLB.exists() else {}
     mats = gj.get("materials", [])
@@ -2700,7 +2805,7 @@ def main(argv=None) -> int:
     if args.only:
         pref = tuple(p.strip() for p in args.only.split(","))
         checks = [c for c in checks if c.id.startswith(pref)]
-    checks.sort(key=lambda c: (["POS", "CHM", "VLV", "GV", "COR", "VEN", "COL"].index(c.id.split("-")[0]), int(c.id.split("-")[1])))
+    checks.sort(key=lambda c: (["POS", "CHM", "VLV", "GV", "COR", "VEN", "VAS", "COL"].index(c.id.split("-")[0]), int(c.id.split("-")[1])))
     for c in checks:
         print(f"{c.id:7s} {c.verdict:5s} {c.title}")
         for s in c.subs:

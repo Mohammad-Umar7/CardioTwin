@@ -1334,6 +1334,88 @@ checks:
     source:
       - "https://pubmed.ncbi.nlm.nih.gov/17557896/"
 
+  - id: VEN-13
+    title: The great cardiac vein stays in the left AV groove and becomes the AIV at the LM bifurcation
+    structures: [CardiacVeins]
+    kind: position
+    severity: hard
+    statement: >-
+      The GCV runs in the left atrioventricular groove, on the atrial side of the circumflex and below the left auricle,
+      within ~15 mm of the mitral hinge along its whole length (it never climbs the posterior left-atrial wall, the
+      course of the oblique vein of Marshall), and turns into the anterior interventricular vein at the left-main
+      bifurcation (triangle of Brocq and Mouchet).
+    metric: "max MA.dist(GCV centreline); max height of the GCV above the MA plane; |AIV start - LM end|"
+    expect:
+      max MA ring distance of the GCV: {max: 0.15}
+      max GCV height above the MA plane: {max: 0.12}
+      AIV start to the LM bifurcation: {max: 0.10}
+    source:
+      - "https://pubmed.ncbi.nlm.nih.gov/17557896/"
+      - "https://radiopaedia.org/articles/great-cardiac-vein"
+
+  - id: VEN-14
+    title: Mitral isthmus and clearance of the pulmonary veins
+    structures: [GreatVessel_PulmonaryVeins, CardiacVeins, Coronary_LCX]
+    kind: position
+    severity: hard
+    statement: >-
+      The left pulmonary veins enter the left atrium 20-40 mm from the mitral annulus (the lateral mitral isthmus, an
+      ablation target), so the circumflex and the great cardiac vein in the AV groove keep >= 5 mm from them.
+    metric: "min MA.dist(left PV vertices within 1.5 mm of the heart wall); min distance of the LCX trunk and the GCV to the PV mesh"
+    expect:
+      mitral isthmus (min MA ring distance of the left PV contact): {min: 0.20}
+      min dist(LCX trunk, pulmonary veins): {min: 0.05}
+      min dist(GCV, pulmonary veins): {min: 0.05}
+    source:
+      - "https://pubmed.ncbi.nlm.nih.gov/15851158/"
+
+  - id: VEN-15
+    title: The small cardiac vein runs in the posterior right AV groove with the RCA
+    structures: [CardiacVeins, Coronary_RCA]
+    kind: position
+    severity: soft
+    statement: >-
+      When present, the small cardiac vein runs in the posterior right atrioventricular groove beside the distal RCA
+      (within ~8 mm of it, ~12 mm of the tricuspid hinge), 30-80 mm long, and receives the right marginal vein from the
+      acute margin before it drains into the coronary sinus.
+    metric: "max TA.dist(SCV); median distance SCV -> RCA trunk; SCV length"
+    expect:
+      max TA ring distance of the SCV: {max: 0.12}
+      median SCV-RCA distance: {max: 0.08}
+      SCV length: {min: 0.30, max: 0.80}
+    source:
+      - "https://pubmed.ncbi.nlm.nih.gov/17557896/"
+
+  - id: COR-27
+    title: The conus branch crosses the anterior surface of the infundibulum
+    structures: [Coronary_RCA]
+    kind: position
+    severity: soft
+    statement: >-
+      The conus branch (the first branch of the RCA, or a separate ostium) runs anteriorly and leftwards over the
+      right-ventricular outflow tract below the pulmonary valve, towards the anterior interventricular groove (ring of
+      Vieussens with the LAD's conus branch).
+    metric: "fraction of the distal 70 % of the CB centreline within 5 mm of the most anterior heart wall at its (x, y); end.x - start.x"
+    expect:
+      fraction of the distal conus branch within 5 mm of the anterior RVOT surface: {min: 0.8}
+      conus branch runs leftwards (end.x - start.x): {min: 0.01}
+    source:
+      - "https://radiopaedia.org/articles/conus-artery"
+
+  - id: VAS-01
+    title: No coronary or vein floats off the heart
+    structures: [Coronary_LM, Coronary_LAD, Coronary_LCX, Coronary_RCA, Coronary_RCA_Marginal, Coronary_RCA_PDA, Coronary_RCA_PL, CardiacVeins, EpicardialFat_Anterior, EpicardialFat_Posterior]
+    kind: shape
+    severity: soft
+    statement: >-
+      Every epicardial vessel lies on the epicardium or in the epicardial fat: at every centreline sample the vessel
+      wall is at most 0.6 mm off the heart surface (the aortic root and pulmonary trunk count for the ostial left main
+      and RCA), or the sample is inside or on the fat (no branch ends in air or pierces the fat edge). A branch's
+      first 3 mm lie on its parent vessel and are not sampled.
+    metric: "count of centreline samples (from 3 mm along each segment) whose distance to H_epi, the aorta and the pulmonary trunk minus r exceeds 6 mm/10 and that are neither inside nor within r + 0.6 mm of the fat"
+    expect:
+      floating centreline samples (wall > 0.6 mm off the heart / fat): {min: 0, max: 0}
+
 # ---------------------------------------------------------------------------------------------
 # COLOUR CONVENTIONS (glTF baseColorFactor, or the mean of baseColorTexture, converted to HSV)
 # ---------------------------------------------------------------------------------------------
