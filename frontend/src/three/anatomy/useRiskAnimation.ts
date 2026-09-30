@@ -4,7 +4,7 @@ import { MathUtils, type Color, type IUniform, type Vector3 } from 'three';
 import { useReducedMotion } from '@/hooks/useMediaQuery';
 import { pendingColor } from '@/lib/riskColor';
 import { riskLinear } from '@/theme/risk';
-import { usePatientStore } from '@/state/patientStore';
+import { selectDisplayedPrediction, usePatientStore } from '@/state/patientStore';
 import { useViewerStore } from '@/state/viewerStore';
 import { readScene } from '../stage/sceneControls';
 
@@ -87,7 +87,8 @@ export function useRiskAnimation({ vessels, territories }: RiskAnimationTargets)
     const patient = usePatientStore.getState();
     const viewer = useViewerStore.getState();
     const scene = readScene();
-    const prediction = patient.prediction;
+    // Hold-to-compare shows the recorded estimate everywhere, the anatomy included.
+    const prediction = selectDisplayedPrediction(patient);
     const now = state.clock.elapsedTime;
 
     if (patient.status === 'loading') loadingSince.current ??= now;

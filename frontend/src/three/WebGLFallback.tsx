@@ -1,7 +1,7 @@
 import { useSchemaIndex } from '@/hooks/useData';
 import { formatProbability } from '@/lib/format';
 import { bandStyle } from '@/lib/riskColor';
-import { usePatientStore } from '@/state/patientStore';
+import { selectDisplayedPrediction, usePatientStore } from '@/state/patientStore';
 import { useViewerStore } from '@/state/viewerStore';
 import { RISK_PENDING, riskHex } from '@/theme/risk';
 import { ANATOMY } from '@/theme/tokens';
@@ -22,7 +22,7 @@ const PATHS: Record<string, { d: string; label: [number, number]; anchor: 'start
  */
 export function WebGLFallback() {
   const schema = useSchemaIndex();
-  const predictions = usePatientStore((s) => s.prediction?.predictions);
+  const predictions = usePatientStore((s) => selectDisplayedPrediction(s)?.predictions);
   const selected = useViewerStore((s) => s.selectedStructure);
   const hovered = useViewerStore((s) => s.hoveredStructure);
   // Same look as the 3D stage (§7.9): a shaded, glossy muscle in Realistic, LUMEN clay in Clinical.
