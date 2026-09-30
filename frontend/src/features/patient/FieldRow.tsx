@@ -101,7 +101,7 @@ export function RowLabel({
           id={labelId}
           htmlFor={htmlFor}
           className={cn(
-            'min-w-0 truncate text-body-s text-secondary',
+            'min-w-[3rem] truncate text-body-s text-secondary',
             imputed && 'underline decoration-dashed decoration-tertiary underline-offset-[3px]',
           )}
         >
@@ -125,7 +125,8 @@ export function RowLabel({
           </span>
         </Tooltip>
       )}
-      {suffix && <span className="shrink-0 truncate text-label font-normal text-tertiary">{suffix}</span>}
+      {/* The group suffix gives way first: the label is the thing being searched for. */}
+      {suffix && <span className="min-w-0 shrink-[100] truncate text-label font-normal text-tertiary">{suffix}</span>}
     </span>
   );
 }
