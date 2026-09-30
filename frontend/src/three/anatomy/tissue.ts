@@ -337,7 +337,8 @@ export function createTissueMaterial(o: TissueOptions): TissueMaterial {
     metalness: L.metalness ?? 0,
     envMapIntensity: L.env,
     side: L.interior || o.kind === 'myocardium' ? DoubleSide : FrontSide,
-    transparent: !!L.transparent,
+    // Clip-sphere vessels fade out with alpha at their trimmed ends (they keep writing depth).
+    transparent: !!L.transparent || !!clipOf(o.kind, o.shared),
     opacity: L.transparent?.opacity ?? 1,
     depthWrite: !L.transparent,
   };
@@ -412,7 +413,7 @@ export function createTissueMaterial(o: TissueOptions): TissueMaterial {
     Object.assign(uniforms, {
       uCavityAO: { value: realistic ? 0.55 : 0.4 },
       uGrooveAO: { value: realistic ? 0.5 : 0.3 },
-      uVesselFat: { value: realistic ? 0.5 : 0 },
+      uVesselFat: { value: realistic ? 0.32 : 0 },
     });
     if (!flags.fat) Object.assign(uniforms, { uFatColor: { value: new Color(REAL.fat) } });
   }

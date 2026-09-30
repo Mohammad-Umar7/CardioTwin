@@ -140,7 +140,7 @@ export const PULMONARY_CLIP = { centre: [0, 0.28, -0.15] as const, radius: 0.58,
 /** Systemic great vessels: the arch stays, the descending aorta and the IVC fade into the dark stage. */
 export const GREAT_VESSEL_CLIP = { radius: 1.35, feather: 0.45 } as const;
 /** Outer ghosts in the workstation stay faint (V2 §5.15: α ≤ 0.12). */
-const WORKSTATION_GHOST = 0.6;
+const WORKSTATION_GHOST = 0.4;
 
 const damp = (from: number, to: number, lambda: number, dt: number) => to + (from - to) * Math.exp(-lambda * dt);
 
@@ -540,6 +540,9 @@ export class AnatomyRig {
       entry.ghostMesh.visible = ghostVisible > 0.002;
       entry.ghost.userData.ct.uniforms.uFade.value = ghostVisible;
       entry.pickable = PICKABLE_KINDS.has(entry.kind) && solidVisible > 0.5 && entry.mesh.visible;
+      const pub = sceneRuntime.nodes[entry.node] ?? (sceneRuntime.nodes[entry.node] = { solid: 0, ghost: 0 });
+      pub.solid = solidVisible;
+      pub.ghost = ghostVisible;
     }
 
     return moving;

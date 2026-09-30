@@ -14,7 +14,7 @@ export const REAL = {
   myocardium: '#5A2622',
   myocardiumDeep: '#3F1A1B',
   interior: '#3A1716',
-  fat: '#A6906E',
+  fat: '#8E7A5C',
   wrapTint: '#E0503C',
   sss: '#B8322A',
   papillary: '#5A2926',

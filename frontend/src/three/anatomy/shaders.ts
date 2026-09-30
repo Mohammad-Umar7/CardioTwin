@@ -210,7 +210,7 @@ ${f.fat ? `{
   diffuseColor.rgb = mix(diffuseColor.rgb, uFatColor * (0.9 + 0.2 * ctDetail.x), ctFat);
 }` : ''}
 ${f.cavity ? `{
-  float ctVesselFat = vCtCavity.z * (1.0 - 0.8 * vCtCavity.y) * clamp(0.55 + 0.6 * ctDetail.x + 0.4 * ctBroad.x, 0.0, 1.0);
+  float ctVesselFat = vCtCavity.z * clamp(0.45 + 0.7 * ctDetail.x + 0.5 * ctBroad.x, 0.0, 1.0);
   ${f.fat ? 'diffuseColor.rgb = mix(diffuseColor.rgb, uFatColor * (0.9 + 0.2 * ctDetail.x), ctVesselFat * uVesselFat);' : ''}
 }` : ''}
 ${f.territory ? `{
@@ -291,8 +291,9 @@ roughnessFactor = clamp(roughnessFactor + uRoughVar * ctDetail.x, 0.04, 1.0);`,
   }
 
   if (f.clipSphere) {
-    // Fade the trimmed vessel into the dark stage (no dither sparkle at the cut).
-    fs = fs.replace('#include <opaque_fragment>', `outgoingLight *= ctClipKeep * ctClipKeep;\n#include <opaque_fragment>`);
+    // Fade the trimmed vessel out with real alpha (the material is transparent): no dither sparkle and no
+    // black stub where a trimmed branch crosses the heart.
+    fs = fs.replace('#include <opaque_fragment>', `diffuseColor.a *= ctClipKeep * ctClipKeep;\n#include <opaque_fragment>`);
   }
 
   shader.fragmentShader = fs;
