@@ -21,7 +21,8 @@ import {
 import { MeshBVH, acceleratedRaycast, type HitPointInfo } from 'three-mesh-bvh';
 import type { PickInfo } from '../stage/pickStore';
 import { PICKABLE_KINDS } from './classify';
-import type { RigEntry } from './rig';
+import { GREAT_VESSEL_CLIP, PULMONARY_CLIP, type RigEntry } from './rig';
+import { ALONG_FADE } from './tissue';
 import type { HeartFrame } from './explode';
 import { segmentAtFace, segmentTable, territoryAtFace, veinTable, type SegmentInfo, type VeinInfo } from './segments';
 import { axial, heartWall, meanAngle, type AxisFrame, type RvArc } from './territory';
@@ -98,6 +99,32 @@ export function buildProxyGeometry(segments: CentrelineLike['segments'], restOff
 }
 
 const proxyMaterial = new MeshBasicMaterial({ visible: false });
+
+/**
+ * For clip-trimmed great vessels, a test that says whether a hit lies where the vessel is faded out (≤ 10 %
+ * alpha): the pulmonary trunk along its wall (`_dist_heart`), the pulmonary veins and systemic vessels inside
+ * their clip spheres (rig.ts). Null for every other kind.
+ */
+function fadedTest(entry: RigEntry): ((hit: Intersection) => boolean) | null {
+  const kind = entry.kind;
+  const geometry = entry.mesh.geometry as BufferGeometry;
+  const along = kind === 'pulmonaryArtery' ? geometry.getAttribute('_dist_heart') : null;
+  const fade = ALONG_FADE[kind];
+  if (along && fade) {
+    const limit = fade[0] + 0.7 * (fade[1] - fade[0]);
+    return (hit) => {
+      const f = hit.face;
+      if (!f) return false;
+      return (along.getX(f.a) + along.getX(f.b) + along.getX(f.c)) / 3 > limit;
+    };
+  }
+  const clip = kind === 'pulmonaryArtery' || kind === 'pulmonaryVeins' ? PULMONARY_CLIP : kind === 'aorta' || kind === 'systemicVein' ? GREAT_VESSEL_CLIP : null;
+  if (!clip) return null;
+  const centre = new Vector3(...clip.centre);
+  const limit = clip.radius - 0.3 * clip.feather;
+  const rest = new Vector3();
+  return (hit) => entry.mesh.worldToLocal(rest.copy(hit.point)).add(entry.restOffset).distanceTo(centre) > limit;
+}
 const tmpLocal = new Vector3();
 const tmpRest = new Vector3();
 const tmpTri = new Triangle();
@@ -152,8 +179,14 @@ export class Picker {
       if (!PICKABLE_KINDS.has(entry.kind)) continue;
       const mesh = entry.mesh;
       mesh.userData.ctEntry = entry.node;
+      const faded = fadedTest(entry);
       mesh.raycast = function raycast(this: Mesh, raycaster: Raycaster, hits: Intersection[]) {
-        if (entry.pickable) acceleratedRaycast.call(this, raycaster, hits);
+        if (!entry.pickable) return;
+        const before = hits.length;
+        acceleratedRaycast.call(this, raycaster, hits);
+        // A great vessel's trimmed-away stretch (clip sphere / along-the-wall fade) is invisible: it must not
+        // answer the pointer in what looks like empty stage.
+        if (faded) for (let i = hits.length - 1; i >= before; i -= 1) if (faded(hits[i]!)) hits.splice(i, 1);
       };
     }
     // Proxy tubes: children of their vessel node, so they explode, hinge and beat with it.
