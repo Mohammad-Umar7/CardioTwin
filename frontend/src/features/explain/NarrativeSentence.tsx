@@ -1,52 +1,78 @@
 import { AnimatePresence, motion } from 'framer-motion';
+import { useMemo } from 'react';
 import { useSchemaIndex } from '@/hooks/useData';
-import { buildNarrative, narrativeText } from '@/lib/explain';
-import { usePatientStore } from '@/state/patientStore';
+import { useIsReducedMotion } from '@/hooks/useMediaQuery';
+import { cn } from '@/lib/cn';
+import { buildNarrative, narrativeText, type NarrativePart } from '@/lib/explain';
+import { selectDisplayedPrediction, usePatientStore } from '@/state/patientStore';
 import { useUiStore } from '@/state/uiStore';
 import { EASE, MOTION } from '@/theme/tokens';
 
 /**
- * NarrativeSentence (DESIGN_SYSTEM §5): "LAD 72 %, high. Typical chest pain and age push it up; a normal
- * FBS pulls it down." Template-built from the SHAP contributions (no LLM). Phrases have a dotted underline;
- * hovering one highlights its input row and SHAP row. Crossfades (160 ms) when the text changes.
+ * A linked phrase: dotted underline; hover or focus highlights the matching input row and SHAP row
+ * (`highlightFeature`, never anatomy); click or Enter opens the Inputs drawer at that field.
  */
-export function NarrativeSentence({ target }: { target: string }) {
-  const index = useSchemaIndex();
-  const prediction = usePatientStore((s) => s.prediction);
+export function PhraseLink({ part, className }: { part: NarrativePart; className?: string }) {
   const highlight = useUiStore((s) => s.highlightFeature);
-  const p = prediction?.predictions[target];
-  if (!p || !index) return null;
-  const parts = buildNarrative(target, p.probability, p.risk_band, prediction.explanations[target], (k) => index.byKey.get(k));
+  const lit = useUiStore((s) => part.feature !== undefined && s.highlightedFeature === part.feature);
+  const open = () => part.feature && useUiStore.getState().openDrawer('inputs', { field: part.feature });
+  return (
+    <button
+      type="button"
+      onClick={open}
+      onMouseEnter={() => highlight(part.feature ?? null)}
+      onMouseLeave={() => highlight(null)}
+      onFocus={() => highlight(part.feature ?? null)}
+      onBlur={() => highlight(null)}
+      aria-label={`${part.text}: edit this input`}
+      className={cn(
+        'inline rounded-xs text-left underline decoration-dotted decoration-1 underline-offset-[3px] outline-none transition-colors duration-instant',
+        'focus-visible:shadow-focus',
+        lit ? 'text-primary decoration-accent' : 'decoration-line-strong hover:text-primary hover:decoration-secondary',
+        className,
+      )}
+    >
+      {part.text}
+    </button>
+  );
+}
+
+export function NarrativeParts({ parts }: { parts: NarrativePart[] }) {
+  return (
+    <>
+      {parts.map((part, i) => (part.kind === 'phrase' ? <PhraseLink key={i} part={part} /> : <span key={i}>{part.text}</span>))}
+    </>
+  );
+}
+
+/**
+ * The template "why" sentence for one target (WORKSTATION_V2 §5.8 item 5, §5.10 grammar):
+ * "Driven mostly by typical angina and hypertension; normal wall motion pulls it down." No numbers.
+ * Crossfades over `fast` when the text changes (instant under reduced motion).
+ */
+export function NarrativeSentence({ target, className }: { target: string; className?: string }) {
+  const index = useSchemaIndex();
+  const explanation = usePatientStore((s) => selectDisplayedPrediction(s)?.explanations[target]);
+  const reduced = useIsReducedMotion();
+  const parts = useMemo(
+    () => (explanation && index ? buildNarrative(explanation, (k) => index.byKey.get(k)) : null),
+    [explanation, index],
+  );
+  if (!parts) return null;
   const text = narrativeText(parts);
 
   return (
-    <div className="relative min-h-[42px]">
+    <div className={cn('relative', className)}>
       <AnimatePresence initial={false} mode="popLayout">
         <motion.p
           key={text}
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
           exit={{ opacity: 0 }}
-          transition={{ duration: MOTION.fast / 1000, ease: EASE.out }}
-          className="text-narrative text-primary"
+          transition={{ duration: reduced ? 0 : MOTION.fast / 1000, ease: EASE.out }}
+          className="text-body-s text-secondary [line-height:20px]"
         >
-          {parts.map((part, i) =>
-            part.kind === 'phrase' ? (
-              <span
-                key={i}
-                tabIndex={0}
-                onMouseEnter={() => highlight(part.feature ?? null)}
-                onMouseLeave={() => highlight(null)}
-                onFocus={() => highlight(part.feature ?? null)}
-                onBlur={() => highlight(null)}
-                className="cursor-help underline decoration-tertiary decoration-dotted underline-offset-[3px] outline-none hover:decoration-primary focus-visible:rounded-xs focus-visible:shadow-focus"
-              >
-                {part.text}
-              </span>
-            ) : (
-              <span key={i}>{part.text}</span>
-            ),
-          )}
+          <NarrativeParts parts={parts} />
         </motion.p>
       </AnimatePresence>
     </div>
