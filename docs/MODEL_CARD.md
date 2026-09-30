@@ -58,8 +58,10 @@ slopes close to 1).
 
 ## 4. Factors
 
-* **Relevant groups:** sex (58 % male), age 30–86 years, diabetes, hypertension. The cohort is too small (61 test
-  patients) for reliable subgroup performance estimates; none are claimed.
+* **Relevant groups:** sex (58 % male), age 30–86 years, diabetes, hypertension. An exploratory subgroup analysis
+  by sex, age band and diabetes (§8, *Subgroups*) is reported with CIs; at 61 test patients the test-set subgroup
+  estimates are unstable, so the development-set out-of-fold estimates carry the signal. Vessel-level discrimination
+  is lower in patients over 65 and in patients with diabetes.
 * **Instrumentation:** single centre; laboratory assays, echo readers and ECG interpretation of one institution.
   Units follow the source paper (see `data/README.md`); some codings (functional class scale, `Region RWMA`,
   single blood-pressure value) are not documented by the dataset authors.
@@ -99,6 +101,12 @@ curve, ECE, calibration slope/intercept) and clinical utility (decision-curve ne
 6. The test set was scored with the frozen models; only the deployed ensemble and the pre-specified clinical
    baseline were evaluated on it. The deployed models never saw a test patient, so all 61 test patients in the demo
    cohort are genuinely unseen. The test set has been scored twice in total — once per release (§11).
+7. Descriptive validation analyses (`python -m cardiotwin_ml.analysis`; nothing in the deployed model depends on
+   them): **robustness** — the complete recipe (hyper-parameter search, OOF weight/Platt/threshold, refit) re-run on
+   200 random stratified 80/20 splits of all patients, validated by reproducing the deployed test probabilities bit
+   for bit on the locked split; **modality ablation** — cumulative, leave-one-modality-out and single-modality feature
+   sets on the development folds with Nadeau–Bengio corrected resampled t intervals and Holm adjustment;
+   **subgroups** — sex, age band and diabetes on the cross-fitted development predictions and the test set.
 
 ## 8. Quantitative analyses
 
@@ -148,6 +156,58 @@ Pre-specified baseline: logistic regression on age, sex, typical angina, diabete
 | LCX | 0.814 | 0.805 | +0.009 (−0.043 to +0.057) |
 | RCA | 0.759 | 0.744 | +0.015 (−0.023 to +0.054) |
 
+### Robustness across 200 random splits (Monte-Carlo repeated hold-out)
+
+Held-out ROC-AUC of the frozen recipe re-derived in each split: median (5th–95th percentile) and where the locked split
+falls (`docs/figures/robustness.png`).
+
+| Target | Locked test | Monte-Carlo ROC-AUC | Locked-split percentile | Dev-CV mean (its percentile) | Full panel > baseline | MC calibration slope |
+| --- | --- | --- | --- | --- | --- | --- |
+| CAD | 0.858 | 0.934 (0.864–0.975) | 3 | 0.937 (52) | 84 % of splits, mean Δ +0.024 | 1.02 (0.61–1.78) |
+| LAD | 0.742 | 0.844 (0.771–0.909) | 1.5 | 0.867 (78.5) | 92 % of splits, mean Δ +0.046 | 0.97 (0.59–1.62) |
+| LCX | 0.814 | 0.762 (0.672–0.833) | 84 | 0.738 (33) | 76 % of splits, mean Δ +0.010 | 1.04 (0.57–1.90) |
+| RCA | 0.759 | 0.751 (0.660–0.828) | 58 | 0.727 (30.5) | 69 % of splits, mean Δ +0.006 | 0.99 (0.60–1.71) |
+
+The locked split is one of the hardest for CAD and LAD (the clinical baseline also lands at its 4th / 14.5th
+percentile there), whereas the cross-fitted CV means sit in the middle of the Monte-Carlo distributions. The
+expected held-out performance of this recipe on a fresh split from the same population is therefore better described
+by the Monte-Carlo medians than by the single locked split. Re-searching hyper-parameters in every split vs reusing
+the deployed ones changes the mean ROC-AUC by ≤ 0.0007, so no tuning optimism was detected. Caveat: test parts overlap
+across splits, so these are not independent replications, and all splits come from the same single centre.
+
+### What each modality adds (development CV, 50 paired folds)
+
+Fixed model for every feature set (equal-weight LR + XGBoost with the ablation hyper-parameters); mean ROC-AUC with
+corrected-t 95 % CIs (`docs/figures/modality_ablation.png`).
+
+| Target | Demographics | + risk factors | + symptoms | + exam (bedside) | + ECG | + labs | + echo (full) | Full − bedside (95 % CI) |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| CAD | 0.669 | 0.794 | 0.915 | 0.916 | 0.922 | 0.923 | 0.944 | +0.028 (+0.002 to +0.054) |
+| LAD | 0.644 | 0.672 | 0.790 | 0.792 | 0.803 | 0.814 | 0.861 | +0.069 (+0.024 to +0.115) |
+| LCX | 0.685 | 0.686 | 0.706 | 0.696 | 0.691 | 0.732 | 0.725 | +0.028 (−0.025 to +0.082) |
+| RCA | 0.587 | 0.671 | 0.709 | 0.702 | 0.692 | 0.720 | 0.723 | +0.021 (−0.025 to +0.067) |
+
+Leave-one-modality-out: removing symptoms costs the most (CAD −0.077, LAD −0.054; Holm p ≤ 0.03), echo is the only
+instrumental modality with unique information for CAD/LAD (−0.021 and −0.047; Holm p 0.07 / 0.02), the ECG adds nothing
+once echo and labs are present (|Δ| ≤ 0.007 for every target), and labs matter most for LCX/RCA (−0.039 / −0.031, CIs
+include 0). The multimodal gain is real for overall CAD and the LAD but small next to history and symptoms.
+
+### Subgroups (exploratory)
+
+Cross-fitted development OOF ROC-AUC; 95 % patient-cluster bootstrap CIs and the test-set values are in
+`ml/reports/results.md` (most test subgroups have < 30 patients or < 10 per class and are flagged `small_n`).
+Δ = difference to the largest level of the factor; unadjusted for the 16 contrasts.
+
+| Subgroup (dev n) | CAD | LAD | LCX | RCA |
+| --- | --- | --- | --- | --- |
+| Female (100) / male (142) | 0.96 / 0.90 | 0.81 / 0.88 | 0.71 / 0.73 | 0.78 / 0.66 |
+| Age < 50 (47) / 50–65 (131) / > 65 (64) | 0.92 / 0.91 / 0.92 | 0.95 / 0.81 / 0.77 | 0.72 / 0.75 / 0.54 | 0.80 / 0.71 / 0.58 |
+| No diabetes (168) / diabetes (74) | 0.91 / 0.98 | 0.88 / 0.75 | 0.74 / 0.65 | 0.71 / 0.59 |
+
+Clear contrasts: LCX in patients over 65 (Δ −0.21, 95 % CI −0.36 to −0.05) and LAD with diabetes (Δ −0.14, −0.26 to
+−0.02); in these groups most patients are predicted stenotic (specificity 0.21–0.45) because stenosis is common and
+often multivessel there. Mean calibration (calibration-in-the-large) stays within ±0.09 in every subgroup.
+
 ### Explainability checks
 
 Ensemble SHAP additivity error ≤ 1.8e-15 on the test set; float64 TreeSHAP vs XGBoost `pred_contribs` and the
@@ -167,19 +227,25 @@ abnormality, ejection fraction and ESR for CAD/LAD; sex and diabetes for LCX/RCA
   a measure of ischaemia or outcome. One patient is labelled `Cath = Normal` despite a stenotic LAD; labels were
   used as published.
 * **Privacy.** The dataset is public and de-identified; no additional personal data are collected by the model.
-* **Fairness.** No subgroup analysis is statistically meaningful at this sample size; sex is an input, so predictions
-  differ by sex by design (as in clinical pre-test probability scores).
+* **Fairness.** The exploratory subgroup analysis (§8) finds no systematic miscalibration by sex, age band or
+  diabetes, but lower vessel-level discrimination in older and diabetic patients; the intervals are wide and no
+  subgroup-specific threshold or recalibration was derived. Sex is an input, so predictions differ by sex by design
+  (as in clinical pre-test probability scores).
 
 ## 10. Caveats and recommendations
 
 * **Small, single-centre cohort (303 patients, 61 in test).** Test CIs are wide (e.g. LAD ROC-AUC 0.61–0.86).
 * **Development-to-test gap.** CAD and LAD test ROC-AUCs are ~0.08–0.13 below their cross-fitted CV estimates; the
   clinical baseline drops by a similar amount (CAD 0.924 → 0.822, LAD 0.811 → 0.743), which points to a harder random
-  test split rather than overfitting specific to the full model — but it also shows how unstable single-split
-  estimates are at this size. The same split makes CAD/LAD predictions look over-confident on test (slopes 0.62/0.47).
-* **Limited added value per vessel.** On the test set the full clinical/ECG/lab/echo panel does not significantly
-  outperform the 5-feature clinical baseline for any target (all paired CIs include 0); vessel-level (LCX, RCA)
-  discrimination is modest (ROC-AUC ≈ 0.73–0.81 across CV and test).
+  test split rather than overfitting specific to the full model. The Monte-Carlo analysis (§8) confirms it: over 200
+  random splits the locked split ranks at the 3rd (CAD) and 1.5th (LAD) percentile of held-out ROC-AUC, while the CV
+  means sit mid-distribution. The same split makes CAD/LAD predictions look over-confident on test (slopes 0.62/0.47,
+  at the 6th / 1.5th percentile of the Monte-Carlo slopes, whose medians are 1.02 / 0.97).
+* **Limited added value per vessel.** On the locked test set the full clinical/ECG/lab/echo panel does not
+  significantly outperform the 5-feature clinical baseline for any target (all paired CIs include 0). Across 200
+  random splits it wins in 84 % (CAD) and 92 % (LAD) of splits but only 76 % / 69 % for LCX / RCA (mean ΔAUC +0.010 /
+  +0.006), and in development CV the ECG, labs and echo add significantly only for CAD and LAD. Vessel-level (LCX, RCA)
+  discrimination is modest (Monte-Carlo median ROC-AUC 0.76 / 0.75).
 * **Thresholds** were chosen to balance sensitivity and specificity on development data (Youden's J); a clinical
   deployment would need thresholds chosen for its own costs of false negatives and false positives (see the
   decision curves in `docs/figures/decision_curves.png`).
