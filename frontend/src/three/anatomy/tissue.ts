@@ -29,7 +29,7 @@ import {
 } from 'three';
 import { ANATOMY, LIGHTS } from '@/theme/tokens';
 import { BEAT_UNIFORMS } from './beatDeform';
-import type { TissueKind } from './classify';
+import { OUTER_KINDS, type TissueKind } from './classify';
 import { getNoiseTexture } from './noiseTexture';
 import { GHOST, REAL } from './palette';
 import { FRAME_UNIFORMS, IGN, NO_PATCH, patchKey, patchTissueShader, type PatchFlags } from './shaders';
@@ -402,6 +402,8 @@ export function createTissueMaterial(o: TissueOptions): TissueMaterial {
   const physical = realistic && (o.tier === 'A' || o.tier === 'B');
   const maps = realistic ? o.maps ?? null : null;
   const baked = !!maps?.map;
+  // Chest layers fade with alpha during the peel (PatchFlags.fadeAlpha); they still write depth when solid.
+  const fadeAlpha = OUTER_KINDS.has(o.kind);
   const params = {
     // A baked albedo IS the colour: multiply it by a light tint, never by the dark procedural base.
     color: baked ? L.baked?.tint ?? '#FFFFFF' : L.color,
@@ -411,7 +413,7 @@ export function createTissueMaterial(o: TissueOptions): TissueMaterial {
     envMapIntensity: L.env,
     side: L.interior || o.kind === 'myocardium' ? DoubleSide : FrontSide,
     // Clip-sphere vessels fade out with alpha at their trimmed ends (they keep writing depth).
-    transparent: !!L.transparent || !!clipOf(o.kind, o.shared),
+    transparent: !!L.transparent || !!clipOf(o.kind, o.shared) || fadeAlpha,
     opacity: L.transparent?.opacity ?? 1,
     depthWrite: !L.transparent,
   };
@@ -451,6 +453,7 @@ export function createTissueMaterial(o: TissueOptions): TissueMaterial {
     clipSphere: !!clipOf(o.kind, o.shared),
     desaturateMap: saturation < 0.995,
     cavity: !!o.cavity,
+    fadeAlpha,
     octaves: TIER_OCTAVES[o.tier],
   };
 

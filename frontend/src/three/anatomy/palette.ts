@@ -59,11 +59,13 @@ export const GHOST = {
     vein: '#7F93B8',
   },
   realistic: {
-    skin: '#E7B9A2',
-    lung: '#D9A9A6',
-    bone: '#E6D9C2',
-    muscle: '#B0605A',
-    diaphragm: '#A0625A',
+    // Thorax ghosts are near-achromatic (a warm grey, never a red or orange glow at the frame's edges):
+    // only the coronaries carry colour on the stage.
+    skin: '#C2B6B0',
+    lung: '#BFB0AE',
+    bone: '#D6D0C6',
+    muscle: '#A69A96',
+    diaphragm: '#A09692',
     heart: '#E09A8E',
     vessel: '#D8C8C0',
     vein: '#5E7BC0',

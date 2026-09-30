@@ -42,6 +42,7 @@ import {
   type TissueKind,
 } from './classify';
 import {
+  PEEL_SOLID_UNTIL,
   PEEL_SPRING_OMEGA,
   buildExplodeSpecs,
   explodeDelta,
@@ -154,6 +155,10 @@ export const GREAT_VESSEL_CLIP = { centre: [0, 0.05, -0.05] as const, radius: 0.
  * the diaphragm keep a trace of the thorax at the frame's edges.
  */
 const workstationGhost = (kind: TissueKind) => (kind === 'bone' || kind === 'cartilage' ? 0.15 : 0.3);
+/** Landing hero lung ghost strength: a trace of context, never a smear behind the copy or the cards. */
+const HERO_LUNG_GHOST = 0.55;
+/** Peel value from which the chest counts as set aside (the camera's thorax framing ends just below it). */
+const PEEL_CHEST_AWAY = 0.58;
 
 const damp = (from: number, to: number, lambda: number, dt: number) => to + (from - to) * Math.exp(-lambda * dt);
 
@@ -552,6 +557,7 @@ export class AnatomyRig {
     this.sectionPlanes[0]!.constant = n.dot(this.frame.cutPoint) + this.sectionS;
 
     const sel = inp.selected;
+    const chestAway = inp.stage === 'workstation' && this.e >= PEEL_CHEST_AWAY;
     const k = (dtLambda: number) => (inp.reduced ? 1 : 1 - Math.exp(-dtLambda * dt));
     const fadeK = k(LAMBDA_FADE);
 
@@ -593,7 +599,7 @@ export class AnatomyRig {
 
       // ---- visibility targets
       const outer = OUTER_KINDS.has(entry.kind);
-      const peeled = outer && kPeel >= 0.5;
+      const peeled = outer && kPeel >= PEEL_SOLID_UNTIL;
       const layerDefault = entry.layerId === 'lungs' ? inp.stage === 'hero' : true;
       const layerVisible = inp.layerVisibility[entry.layerId] ?? layerDefault;
       const isVessel = entry.kind === 'coronary' || entry.kind === 'leftMain';
@@ -617,7 +623,9 @@ export class AnatomyRig {
         ghostT = inp.ghostLayers || kPeel < 0.5 ? (1 - 0.85 * kPeel) * (inp.stage === 'workstation' ? workstationGhost(entry.kind) : 1) : 0;
       } else if (peeled || (entry.kind === 'lung' && inp.look === 'clinical')) {
         solidT = 0;
-        ghostT = peeled && !inp.ghostLayers ? 0 : inp.stage === 'workstation' ? workstationGhost(entry.kind) : 1;
+        ghostT = peeled && !inp.ghostLayers ? 0 : inp.stage === 'workstation' ? workstationGhost(entry.kind) : HERO_LUNG_GHOST;
+        // A peeled diaphragm has dropped under the heart, onto the toolbar: no warm glow there.
+        if (peeled && entry.kind === 'diaphragm' && inp.stage === 'workstation') ghostT = 0;
       } else if (inp.ghostOthers && sel && !selectedVessel && !outer) {
         solidT = 0;
         ghostT = isVessel ? 0.7 : entry.kind === 'myocardium' ? 1 : 0.6;
@@ -625,6 +633,11 @@ export class AnatomyRig {
       // Landing hero (V2 §6.1): the heart unboxed with the lungs as its only fresnel ghost — no skin, muscle,
       // rib, cartilage, diaphragm or bronchial-tree ghosts drifting in front of the lens or behind the copy.
       if (inp.stage === 'hero' && outer && entry.kind !== 'lung') ghostT = 0;
+      // Workstation with the chest open (Lungs aside, Open heart): the thorax has been set aside, so its
+      // ghosts leave the stage (no muddy smears at the frame's edges or behind the cards, and ~120 k fewer
+      // overdrawn triangles every frame). They come back as soon as the peel closes the chest again, and a
+      // layer switched on by hand in Layers keeps its ghost.
+      if (chestAway && outer && inp.layerVisibility[entry.layerId] !== true) ghostT = 0;
       entry.solidAmt += (solidT - entry.solidAmt) * fadeK;
       entry.ghostAmt += (ghostT - entry.ghostAmt) * fadeK;
       if (Math.abs(entry.solidAmt - solidT) < 2e-3) entry.solidAmt = solidT;

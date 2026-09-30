@@ -85,6 +85,11 @@ export interface PatchFlags {
   desaturateMap: boolean;
   /** Per-vertex cavity attribute `aCavity` (crease AO, vessel groove, fat along vessels). */
   cavity: boolean;
+  /**
+   * Outer layers (skin, muscle, ribs, lungs, diaphragm): the peel fades them with real alpha instead of the
+   * noise front, so a chest layer turning into its ghost never breaks into confetti or black holes.
+   */
+  fadeAlpha: boolean;
   /** Noise octaves (tier dependent). */
   octaves: number;
 }
@@ -100,6 +105,7 @@ export const NO_PATCH: PatchFlags = {
   clipSphere: false,
   desaturateMap: false,
   cavity: false,
+  fadeAlpha: false,
   octaves: 3,
 };
 
@@ -115,6 +121,7 @@ export function patchKey(f: PatchFlags): string {
     f.clipSphere ? 'c' : '',
     f.desaturateMap ? 'x' : '',
     f.cavity ? 'v' : '',
+    f.fadeAlpha ? 'a' : '',
     `o${f.octaves}`,
   ].join('');
 }
@@ -179,7 +186,7 @@ ${f.desaturateMap ? 'uniform float uSaturation;' : ''}`,
   fs = fs.replace(
     '#include <clipping_planes_fragment>',
     `#include <clipping_planes_fragment>
-${MATERIALISE}
+${f.fadeAlpha ? 'float ctEdge = 0.0;' : MATERIALISE}
 ${f.clipSphere ? `float ctClipKeep = 1.0 - smoothstep(uClipRadius - uClipFeather, uClipRadius, distance(vCtRest, uClipCentre));
 if (ctClipKeep <= 0.0) discard;` : ''}`,
   );
@@ -288,6 +295,13 @@ totalEmissiveRadiance += vec3(1.0, 0.62, 0.45) * (0.9 * ctEdge * uCtEdgeGain);`,
   }`,
     );
     fs = fs.replace('#include <lights_physical_pars_fragment>', lights);
+  }
+
+  if (f.fadeAlpha) {
+    // Smoothstep so the last few percent of a fade do not linger as a haze.
+    fs = fs.replace('#include <opaque_fragment>', `diffuseColor.a *= smoothstep(0.0, 1.0, uReveal);
+if (diffuseColor.a < 0.004) discard;
+#include <opaque_fragment>`);
   }
 
   if (f.clipSphere) {
