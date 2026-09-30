@@ -28,6 +28,7 @@ from sklearn.model_selection import train_test_split
 
 from . import MODEL_VERSION, data, explain, export
 from .ablation import run_ablations
+from .analysis.summary import build_metrics_summary, carry_over
 from .config import load_feature_registry, load_target_registry, load_training_config
 from .ensemble import (
     LogisticComponent,
@@ -514,7 +515,11 @@ def run(
         },
         "targets": target_reports,
     }
+    # Validation analyses (python -m cardiotwin_ml.analysis) survive a rerun only if model, data and config are
+    # unchanged; the compact landing-page summary is always rebuilt from the metrics just written.
+    metrics = carry_over(artifacts_dir / "metrics.json", metrics, artifacts_dir)
     export.write_json(artifacts_dir / "metrics.json", metrics)
+    export.write_json(artifacts_dir / "metrics_summary.json", build_metrics_summary(metrics, schema), compact=True)
 
     if figures_dir is not None or reports_dir is not None:
         from . import report  # noqa: PLC0415 - matplotlib only needed here

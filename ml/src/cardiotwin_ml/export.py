@@ -1,4 +1,4 @@
-"""Artifact export: schema.json, model.json, cohort.json, fixtures.json, metrics.json, joblib bundle.
+"""Artifact export: schema.json, model.json, cohort.json, fixtures.json, metrics.json(+ summary), joblib bundle.
 
 All JSON is written deterministically (stable key order, no timestamps except ``metrics.generated_at``)
 so a rerun of the pipeline produces byte-identical artifacts. Files are written to ``ml/artifacts`` and
@@ -26,7 +26,15 @@ from .preprocess import CKD_EPI_MIN_CREATININE, RATIO_MIN_DENOMINATOR, FeatureEn
 SCHEMA_VERSION = "1.0.0"
 PORTABLE_FORMAT = "cardiotwin-portable-model"
 PORTABLE_FORMAT_VERSION = "1.0.0"
-ARTIFACT_FILES = ("schema.json", "model.json", "metrics.json", "cohort.json", "fixtures.json", "cardiotwin_models.joblib")
+ARTIFACT_FILES = (
+    "schema.json",
+    "model.json",
+    "metrics.json",
+    "metrics_summary.json",
+    "cohort.json",
+    "fixtures.json",
+    "cardiotwin_models.joblib",
+)
 
 
 # --------------------------------------------------------------------------- helpers
