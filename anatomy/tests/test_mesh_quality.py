@@ -65,14 +65,16 @@ def welded(V: np.ndarray, F: np.ndarray) -> mo.Mesh:
 
 
 def test_budgets(meshes):
-    assert sum(len(m["F"]) for m in meshes.values()) <= 400_000
+    assert sum(len(m["F"]) for m in meshes.values()) <= 430_000  # 400k + fat and valve apparatus
     assert GLB.stat().st_size <= 16 * 1024 * 1024  # CONTRACTS §7.1 (baked textures)
 
 
 def test_scene_frame_and_heart_orientation(meshes, manifest):
     wall = np.concatenate([meshes[n]["V"] for n in ("Heart_Wall_Anterior", "Heart_Wall_Posterior")])
     lo, hi = wall.min(axis=0), wall.max(axis=0)
-    assert np.all(np.abs((lo + hi) / 2) < 0.01)  # origin = heart-wall bbox centre (within 1 mm)
+    # origin = the BodyParts3D heart-wall bbox centre (fixed, so node transforms never move); the derived wall (lowered
+    # right-atrial roof, stretched mitral isthmus) moves its own bbox centre by up to ~2 mm
+    assert np.all(np.abs((lo + hi) / 2) < 0.02)
     assert 1.0 < float(np.max(hi - lo)) < 1.4  # ~12 cm heart at 1 unit = 10 cm
     centre = {n: m["V"].mean(axis=0) for n, m in meshes.items()}
     assert centre["Spine_Thoracic"][2] < centre["Sternum"][2] - 1.0  # spine posterior (-Z)

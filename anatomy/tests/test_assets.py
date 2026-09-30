@@ -49,10 +49,24 @@ def vessels() -> dict:
 def test_glb_satisfies_contract_and_web_budgets():
     report = verify(GLB)
     assert report["ok"], report["errors"]
-    assert report["triangles_total"] <= 400_000
+    assert report["triangles_total"] <= 430_000  # 400k + fat and valve apparatus (anatomy/README.md)
     assert report["bytes"] <= 16 * 1024 * 1024  # CONTRACTS §7.1 budget with baked textures
     assert "COLOR_0" in report["nodes"]["Heart_Wall_Anterior"]["attributes"]
     assert "COLOR_0" in report["nodes"]["Heart_Wall_Posterior"]["attributes"]
+
+
+def test_vessel_meshes_carry_their_radius():
+    gltf = read_gltf_json(GLB)
+    by_name = {m["name"]: m for m in gltf["meshes"]}
+    for name in [n for n in by_name if n.startswith("Coronary_")] + ["CardiacVeins"]:
+        assert "_RADIUS" in by_name[name]["primitives"][0]["attributes"], f"{name} lacks _RADIUS"
+
+
+def test_atlas_samplers_clamp():
+    gltf = read_gltf_json(GLB)
+    for tex in gltf.get("textures", []):
+        sampler = gltf["samplers"][tex["sampler"]] if "sampler" in tex else {}
+        assert sampler.get("wrapS") == 33071 and sampler.get("wrapT") == 33071, tex.get("name")
 
 
 def test_glb_node_extras_carry_ids_and_targets():

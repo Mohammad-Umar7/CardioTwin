@@ -49,7 +49,7 @@ ADDITIVE_LAYERS: dict[str, tuple[str, ...]] = {
 }
 TERRITORY_NODES = ("Heart_Wall_Anterior", "Heart_Wall_Posterior")
 MAX_BYTES = 16 * 1024 * 1024  # CONTRACTS §7.1: <= 16 MB with baked textures
-MAX_TRIANGLES = 400_000
+MAX_TRIANGLES = 430_000  # 400k + the realistic epicardial fat and valve apparatus (anatomy/README.md)
 REQUIRED_EXTENSIONS = ("EXT_meshopt_compression",)
 
 
