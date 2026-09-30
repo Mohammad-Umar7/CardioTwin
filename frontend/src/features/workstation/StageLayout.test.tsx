@@ -49,9 +49,10 @@ describe('computeStageInsets', () => {
     expect(computeStageInsets({ ...base, chrome: 'focus', right: { width: 352, height: 244 } }).right).toBe(376);
   });
 
-  it('ignores empty slots and the hidden toolbar of the tour preset', () => {
+  it('ignores empty slots and the hidden toolbar of the tour preset, and frames above its chapter rail', () => {
     const insets = computeStageInsets({ ...base, chrome: 'tour', left: { width: 0, height: 0 } });
-    expect(insets).toEqual({ left: 0, right: 376, top: 12, bottom: 12 });
+    // Rail: 48 px above the status line, 40 px tall, plus the 12 px inset.
+    expect(insets).toEqual({ left: 0, right: 376, top: 12, bottom: 100 });
   });
 });
 

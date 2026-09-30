@@ -66,6 +66,12 @@ export interface UiState {
   tourOpen: boolean;
   tourStep: number;
   tourCompleted: boolean;
+  /**
+   * Width (px) of the guided demo's caption while it is docked in the left stage column, else 0. The left
+   * card is veiled (invisible, inert) meanwhile, and the stage insets reserve the caption's column, so the
+   * camera frames the heart beside it, never under it.
+   */
+  tourDockLeft: number;
   disclaimerAccepted: boolean;
   detailsOpen: boolean;
   shortcutsOpen: boolean;
@@ -89,12 +95,15 @@ export interface UiState {
   paletteOpen: boolean;
   /** Published by StageLayout; read by the 3D camera (view offset) and the label lanes. */
   stageInsets: StageInsets;
+  /** The same without the guided demo's docked caption (the demo decides where its caption goes from these). */
+  stageInsetsBase: StageInsets;
   /** The first-run canvas hint was shown or dismissed. Persisted. */
   hintSeen: boolean;
 
   openTour(step?: number): void;
   closeTour(completed?: boolean): void;
   setTourStep(step: number): void;
+  setTourDockLeft(width: number): void;
   openDetails(): void;
   closeDetails(): void;
   setShortcutsOpen(open: boolean): void;
@@ -118,7 +127,7 @@ export interface UiState {
   setPatientCardOpen(open: boolean): void;
   setPaletteOpen(open: boolean): void;
   /** No-op when the insets did not change (safe to call from a ResizeObserver). */
-  setStageInsets(insets: StageInsets): void;
+  setStageInsets(insets: StageInsets, base?: StageInsets): void;
   setHintSeen(seen?: boolean): void;
 }
 
@@ -144,6 +153,7 @@ export const useUiStore = create<UiState>()(
       tourOpen: false,
       tourStep: 0,
       tourCompleted: false,
+      tourDockLeft: 0,
       disclaimerAccepted: false,
       detailsOpen: false,
       shortcutsOpen: false,
@@ -159,12 +169,17 @@ export const useUiStore = create<UiState>()(
       patientCardOpen: true,
       paletteOpen: false,
       stageInsets: ZERO_INSETS,
+      stageInsetsBase: ZERO_INSETS,
       hintSeen: false,
 
       openTour: (step = 0) => set({ tourOpen: true, tourStep: step }),
       closeTour: (completed = false) =>
-        set((s) => ({ tourOpen: false, tourCompleted: s.tourCompleted || completed })),
+        set((s) => ({ tourOpen: false, tourDockLeft: 0, tourCompleted: s.tourCompleted || completed })),
       setTourStep: (tourStep) => set({ tourStep }),
+      setTourDockLeft: (width) => {
+        const tourDockLeft = Math.max(0, Math.round(width));
+        if (get().tourDockLeft !== tourDockLeft) set({ tourDockLeft });
+      },
       openDetails: () => set({ detailsOpen: true, disclaimerAccepted: true }),
       closeDetails: () => set({ detailsOpen: false }),
       setShortcutsOpen: (shortcutsOpen) => set({ shortcutsOpen }),
@@ -207,8 +222,12 @@ export const useUiStore = create<UiState>()(
       setFocusField: (focusField) => set({ focusField }),
       setPatientCardOpen: (patientCardOpen) => set({ patientCardOpen }),
       setPaletteOpen: (paletteOpen) => set({ paletteOpen }),
-      setStageInsets: (insets) => {
-        if (!sameInsets(get().stageInsets, insets)) set({ stageInsets: { ...insets } });
+      setStageInsets: (insets, base = insets) => {
+        const s = get();
+        const patch: Partial<Pick<UiState, 'stageInsets' | 'stageInsetsBase'>> = {};
+        if (!sameInsets(s.stageInsets, insets)) patch.stageInsets = { ...insets };
+        if (!sameInsets(s.stageInsetsBase, base)) patch.stageInsetsBase = { ...base };
+        if (patch.stageInsets || patch.stageInsetsBase) set(patch);
       },
       setHintSeen: (hintSeen = true) => set({ hintSeen }),
     }),

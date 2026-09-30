@@ -11,7 +11,8 @@ import { usePatientStore } from '@/state/patientStore';
 import { useUiStore } from '@/state/uiStore';
 import { useViewerStore } from '@/state/viewerStore';
 import { useTourClock } from './clock';
-import { keepOffHeart, placeCard, union, type Rect } from './geometry';
+import { TOUR_RAIL_BOTTOM, TOUR_RAIL_H } from '@/features/workstation/stageInsets';
+import { overlapsAny, pickDock, placeCard, union, type Dock, type Rect } from './geometry';
 import { planTransition } from './plan';
 import { PeelAnimator, buildCaptionContext, ensureShowcasePatient, executeAction, type ExecuteDeps } from './runtime';
 import { BEATS, CHAPTERS, CHAPTER_START, clampBeat } from './script';
@@ -24,22 +25,22 @@ import { waitForStage } from './waitFor';
 
 const DURATIONS = BEATS.map((b) => b.durationMs);
 const CARD_W = 360;
-/**
- * The chapter rail floats this far above the status line: clear of the stage's bottom row, where the
- * "Illustrative flow" caption must stay visible whenever flow particles are shown (clinical-safety copy).
- */
-const RAIL_BOTTOM = 48;
 /** Keep-out for the caption card: the rail (40 px) plus its offset and a 12 px gap. */
-const RAIL_CLEARANCE = RAIL_BOTTOM + 40 + 12;
+const RAIL_CLEARANCE = TOUR_RAIL_BOTTOM + TOUR_RAIL_H + 12;
 /** Stage cards and probability numerals the caption card never covers (the spotlit ones are beside it). */
 const KEEP_CLEAR =
   '[data-region="risk-card"], [data-region="patient-card"], [data-region="patient-rail"], [data-region="inspector"], [data-prob]';
+/** Gap between a docked caption and the stage edge or the card above it. */
+const DOCK_GAP = 12;
 
-/** Visible rectangles of the elements the caption card must stay clear of. */
-function keepClearRects(extra: readonly Rect[]): Rect[] {
+const toRect = (r: DOMRect): Rect => ({ left: r.left, top: r.top, width: r.width, height: r.height });
+
+/** Visible rectangles of the elements the caption card must stay clear of (`except`: a veiled column). */
+function keepClearRects(extra: readonly Rect[], except?: Element | null): Rect[] {
   const out: Rect[] = [...extra];
   document.querySelectorAll<HTMLElement>(KEEP_CLEAR).forEach((el) => {
     if (el.closest('[inert],[aria-hidden="true"]')) return;
+    if (except && except.contains(el)) return;
     const r = el.getBoundingClientRect();
     if (r.width < 1 || r.height < 1 || r.bottom < 0 || r.top > window.innerHeight) return;
     out.push({ left: r.left - 8, top: r.top - 8, width: r.width + 16, height: r.height + 16 });
@@ -47,20 +48,64 @@ function keepClearRects(extra: readonly Rect[]): Rect[] {
   return out;
 }
 
+interface StageZones {
+  /** The stage element's box. */
+  stage: Rect;
+  /** Where the heart is drawn: the whole free area on stage beats (selection views, the open heart spread
+   *  across it), else the centred heart and its great vessels. */
+  heart: Rect;
+  /** Visible vessel and chamber labels (and their room around them). */
+  labels: Rect[];
+  /** The left and right stage columns (slot boxes), when shown. */
+  left: HTMLElement | null;
+  right: HTMLElement | null;
+  /** Stage inset and the left column's width (CSS tokens). */
+  inset: number;
+  columnW: number;
+}
+
 /**
- * The heart's part of the stage while no beat shows the stage itself: the upper two thirds of the free area
- * (stage minus the chrome insets), centred. Null off the workstation.
+ * The parts of the workstation stage the caption card must never cover (V2 §6.3): the heart, from the
+ * free area the camera frames it into (stage minus the chrome insets), and every visible 3D label. Null off
+ * the workstation.
  */
-function heartKeepOut(): { heart: Rect; centreX: number } | null {
-  const stage = document.querySelector<HTMLElement>('[data-region="stage"]');
-  if (!stage || stage.closest('[inert],[aria-hidden="true"]')) return null;
-  const r = stage.getBoundingClientRect();
-  const i = useUiStore.getState().stageInsets;
+function stageZones(wholeFree: boolean): StageZones | null {
+  const stageEl = document.querySelector<HTMLElement>('[data-region="stage"]');
+  if (!stageEl || stageEl.closest('[inert],[aria-hidden="true"]')) return null;
+  const r = stageEl.getBoundingClientRect();
+  // The insets without the caption's own docked column: the decision below never feeds back on itself.
+  const i = useUiStore.getState().stageInsetsBase;
   const free = { left: r.left + i.left, top: r.top + i.top, width: r.width - i.left - i.right, height: r.height - i.top - i.bottom };
   if (free.width < 1 || free.height < 1) return null;
+  // At home the walls fill ~62 % of the free height, centred; the great vessels rise above them.
+  const w = Math.min(free.width, free.height * 0.7);
+  const h = free.height * 0.8;
+  const heart = wholeFree
+    ? free
+    : { left: free.left + (free.width - w) / 2, top: free.top + (free.height - h) / 2, width: w, height: h };
+  const labels: Rect[] = [];
+  stageEl.querySelectorAll<HTMLElement>('.z-labels button, [data-region="chamber-label"]').forEach((el) => {
+    const b = el.getBoundingClientRect();
+    if (b.width < 1 || b.height < 1 || Number(getComputedStyle(el).opacity) < 0.05) return;
+    labels.push({ left: b.left - 8, top: b.top - 8, width: b.width + 16, height: b.height + 16 });
+  });
+  const slot = (name: string) => {
+    const el = stageEl.querySelector<HTMLElement>(`[data-region="slot-${name}"]`);
+    return el && el.dataset.visible === 'true' && el.offsetWidth > 0 ? el : null;
+  };
+  const css = getComputedStyle(stageEl);
+  const px = (name: string, fallback: number) => {
+    const v = Number.parseFloat(css.getPropertyValue(name));
+    return Number.isFinite(v) ? v : fallback;
+  };
   return {
-    heart: { left: free.left + free.width * 0.18, top: free.top, width: free.width * 0.64, height: free.height * 0.66 },
-    centreX: free.left + free.width / 2,
+    stage: toRect(r),
+    heart,
+    labels,
+    left: slot('left'),
+    right: slot('right'),
+    inset: px('--stage-inset', 12),
+    columnW: px('--card-left-w', 256),
   };
 }
 
@@ -145,7 +190,7 @@ function ChapterRail({
     <nav
       aria-label="Guided demo chapters"
       className="fixed left-1/2 z-coachmark flex h-10 -translate-x-1/2 items-center gap-1 rounded-full bg-panel px-1.5 shadow-e2"
-      style={{ bottom: `calc(var(--status-h) + ${RAIL_BOTTOM}px)` }}
+      style={{ bottom: `calc(var(--status-h) + ${TOUR_RAIL_BOTTOM}px)` }}
     >
       {CHAPTERS.map((c, i) => (
         <button
@@ -212,7 +257,8 @@ function TourView() {
   const cardRef = useRef<HTMLDivElement>(null);
   const layerRef = useRef<HTMLDivElement>(null);
   const railRef = useRef<RailHandle | null>(null);
-  const [cardH, setCardH] = useState(196);
+  // The caption card's measured size, and the height of its text block (the part that reflows with width).
+  const [cardSize, setCardSize] = useState({ w: CARD_W, h: 196, text: 110 });
 
   const locationRef = useRef(location);
   locationRef.current = location;
@@ -353,10 +399,17 @@ function TourView() {
   useLayoutEffect(() => {
     const el = cardRef.current;
     if (!el || typeof ResizeObserver === 'undefined') return;
-    const ro = new ResizeObserver(() => setCardH(el.offsetHeight));
+    const read = () => {
+      const text = (el.children[1] as HTMLElement | undefined)?.offsetHeight ?? 110;
+      setCardSize((prev) =>
+        prev.w === el.offsetWidth && prev.h === el.offsetHeight && prev.text === text ? prev : { w: el.offsetWidth, h: el.offsetHeight, text },
+      );
+    };
+    const ro = new ResizeObserver(read);
     ro.observe(el);
+    if (el.children[1]) ro.observe(el.children[1]);
     return () => ro.disconnect();
-  }, []);
+  }, [index]);
 
   // Live caption values.
   const prediction = usePatientStore((s) => s.prediction);
@@ -391,14 +444,55 @@ function TourView() {
     return r !== null && spec !== undefined && !('stage' in spec);
   });
   const avoid = bounds.right > 0 ? keepClearRects(spotlitElements) : [];
-  const placed = bounds.right > 0 ? placeCard(anchorRect, { width: CARD_W, height: cardH }, cardBounds, 16, avoid) : null;
-  // Beats about the patient or the answer (not the stage) dock the card above the chapter rail rather than
-  // over the heart (chapter 1 at 1280 covered its upper third).
-  const offHeart = placed && !beat.spotlight.some((s) => 'stage' in s) ? heartKeepOut() : null;
-  const pos =
-    placed && offHeart
-      ? keepOffHeart(placed, { width: CARD_W, height: cardH }, cardBounds, offHeart.heart, avoid, anchorRect, offHeart.centreX)
-      : placed;
+  // Height of the card at another width: the chrome (header, buttons, padding) stays, the text reflows.
+  const heightAt = (w: number) =>
+    Math.ceil(cardSize.h - cardSize.text + (cardSize.text * Math.max(1, cardSize.w - 32)) / Math.max(1, w - 32)) + 8;
+  const placed = bounds.right > 0 ? placeCard(anchorRect, { width: CARD_W, height: heightAt(CARD_W) }, cardBounds, 16, avoid) : null;
+  // On the workstation the caption never covers the heart or a 3D label (V2 §6.3), and on stage beats it
+  // stays off the whole free area (selection views and the open heart use all of it). When the placement
+  // beside the spotlit region would, it docks in a stage column: below the left or right card when there is
+  // room, else in the left column itself, over the veiled left card, with the column reserved in the stage
+  // insets so the camera frames the heart beside the caption (it glides over, never under it).
+  const stageBeat = beat.spotlight.some((sp) => 'stage' in sp);
+  const zones = placed ? stageZones(stageBeat) : null;
+  let pos: { left: number; top: number } | null = placed;
+  let cardW = CARD_W;
+  let dockLeft = 0;
+  if (placed && zones) {
+    const rail = document.querySelector('nav[aria-label="Guided demo chapters"]')?.getBoundingClientRect();
+    const offLimits = [zones.heart, ...zones.labels, ...(rail ? [toRect(rail)] : [])];
+    const here = { left: placed.left, top: placed.top, width: CARD_W, height: heightAt(CARD_W) };
+    if (overlapsAny(here, offLimits)) {
+      const docks: Dock[] = [];
+      const lr = zones.left?.getBoundingClientRect();
+      const rr = zones.right?.getBoundingClientRect();
+      const leftBelow = lr && lr.width >= 240 ? { left: lr.left, top: lr.bottom + DOCK_GAP, width: lr.width, veil: false } : null;
+      const rw = rr ? Math.min(CARD_W, rr.width) : 0;
+      const rightBelow = rr && rw >= 240 ? { left: rr.right - rw, top: rr.bottom + DOCK_GAP, width: rw, veil: false } : null;
+      const anchorRight = !!(anchorRect && rr && anchorRect.left >= rr.left - 1 && anchorRect.left + anchorRect.width <= rr.right + 1);
+      for (const d of anchorRight ? [rightBelow, leftBelow] : [leftBelow, rightBelow]) if (d) docks.push({ ...d, height: heightAt(d.width) });
+      const inner = {
+        left: zones.stage.left + zones.inset,
+        top: zones.stage.top + zones.inset,
+        right: zones.stage.left + zones.stage.width - zones.inset,
+        bottom: zones.stage.top + zones.stage.height - zones.inset,
+      };
+      const pick = pickDock(docks, inner, [...offLimits, ...avoid]);
+      if (pick) {
+        pos = { left: pick.left, top: pick.top };
+        cardW = pick.width;
+      } else if (useUiStore.getState().drawer !== 'inputs') {
+        // The left column itself (the Inputs drawer owns it while open).
+        pos = { left: inner.left, top: inner.top };
+        cardW = zones.columnW;
+        dockLeft = zones.columnW;
+      }
+    }
+  }
+  useEffect(() => {
+    useUiStore.getState().setTourDockLeft(dockLeft);
+  }, [dockLeft]);
+  useEffect(() => () => useUiStore.getState().setTourDockLeft(0), []);
   const chapter = CHAPTERS[beat.chapter]!;
   const inChapter = beatInChapter(index);
 
@@ -412,8 +506,8 @@ function TourView() {
         aria-modal="true"
         aria-labelledby="tour-title"
         aria-describedby="tour-body"
-        className="fixed z-coachmark flex w-[360px] flex-col gap-2.5 rounded-lg bg-surface-3 p-4 shadow-e3 transition-[top,left,opacity] duration-base ease-out"
-        style={{ top: pos?.top ?? -9999, left: pos?.left ?? 0, opacity: pos ? 1 : 0 }}
+        className="fixed z-coachmark flex flex-col gap-2.5 rounded-lg bg-surface-3 p-4 shadow-e3 transition-[top,left,opacity] duration-base ease-out"
+        style={{ top: pos?.top ?? -9999, left: pos?.left ?? 0, width: cardW, opacity: pos ? 1 : 0 }}
       >
         <div className="flex items-center gap-2">
           <p className="eyebrow min-w-0 flex-1 truncate text-tertiary">

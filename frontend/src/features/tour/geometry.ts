@@ -175,26 +175,34 @@ export function placeCard(
   return [...base, ...slid].find(clear) ?? (clear(inside) ? inside : (strict[0] ?? inside));
 }
 
-/**
- * Keeps the caption card off the heart when the beat is not about the stage (V2 §6.3): a placement that
- * overlaps `heart` (the upper two thirds of the stage's free area) is replaced by the card docked at the
- * bottom of `bounds`, centred on `centreX` (the free area's centre, above the chapter rail), provided that
- * spot is clear of `avoid` and of the spotlit target. Otherwise the placement stands.
- */
-export function keepOffHeart(
-  p: Placement,
-  card: { width: number; height: number },
-  bounds: Bounds,
-  heart: Rect | null,
-  avoid: readonly Rect[],
-  target: Rect | null,
-  centreX: number = (bounds.left + bounds.right) / 2,
-): Placement {
-  if (!heart) return p;
-  const box = (q: Placement): Rect => ({ left: q.left, top: q.top, width: card.width, height: card.height });
-  if (!overlaps(box(p), heart)) return p;
-  const left = Math.min(Math.max(centreX - card.width / 2, bounds.left + 12), bounds.right - card.width - 12);
-  const docked: Placement = { left, top: bounds.bottom - card.height - 12, side: 'inside' };
-  if (avoid.some((a) => overlaps(box(docked), a)) || (target && overlaps(box(docked), target))) return p;
-  return docked;
+/** A column spot for the caption card (left or right stage column), with the card's size there. */
+export interface Dock {
+  left: number;
+  top: number;
+  width: number;
+  height: number;
+  /** The spot is over the left card, which the stage veils while the caption sits there. */
+  veil: boolean;
 }
+
+const dockRect = (d: Dock): Rect => ({ left: d.left, top: d.top, width: d.width, height: d.height });
+
+/**
+ * The first dock that fits inside `bounds` and is clear of every keep-out rectangle (the heart, its labels,
+ * the cards and spotlit regions it must not cover), or null.
+ */
+export function pickDock(docks: readonly Dock[], bounds: Bounds, keepOut: readonly Rect[]): Dock | null {
+  return (
+    docks.find(
+      (d) =>
+        d.left >= bounds.left - 0.5 &&
+        d.top >= bounds.top - 0.5 &&
+        d.left + d.width <= bounds.right + 0.5 &&
+        d.top + d.height <= bounds.bottom + 0.5 &&
+        !keepOut.some((k) => overlaps(dockRect(d), k)),
+    ) ?? null
+  );
+}
+
+/** True when `r` overlaps any of `rects`. */
+export const overlapsAny = (r: Rect, rects: readonly Rect[]): boolean => rects.some((k) => overlaps(r, k));

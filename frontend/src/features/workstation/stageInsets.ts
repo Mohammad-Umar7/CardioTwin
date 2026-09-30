@@ -16,6 +16,13 @@ export const CHROME_SLOTS: Record<Chrome, Record<Exclude<StageSlot, 'drawers' | 
   landing: { left: false, right: false, top: false, bottom: false, bottomLeft: false },
 };
 
+/**
+ * The guided demo's chapter rail floats this far above the stage's bottom edge (the status line), clear of
+ * the bottom row where the "Illustrative flow" caption must stay visible; it is TOUR_RAIL_H tall.
+ */
+export const TOUR_RAIL_BOTTOM = 48;
+export const TOUR_RAIL_H = 40;
+
 export interface InsetInput {
   chrome: Chrome;
   drawer: DrawerId | null;
@@ -26,6 +33,8 @@ export interface InsetInput {
   bottom: { width: number; height: number };
   drawerInputsWidth: number;
   drawerExplainWidth: number;
+  /** Width of the guided demo's caption docked in the left column (tour chrome), else 0. */
+  tourDockLeft?: number;
 }
 
 /**
@@ -42,8 +51,12 @@ export function computeStageInsets(m: InsetInput): StageInsets {
   let left = covers(show.left && m.drawer !== 'inputs', m.left, m.left.width);
   let right = covers(show.right && m.drawer !== 'explain', m.right, m.right.width);
   if (m.drawer === 'inputs') left = Math.max(left, m.drawerInputsWidth + g);
+  else if (m.chrome === 'tour' && m.tourDockLeft) left = Math.max(left, g + m.tourDockLeft + g);
   if (m.drawer === 'explain') right = Math.max(right, m.drawerExplainWidth + g);
-  const bottom = covers(show.bottom, m.bottom, m.bottom.height);
+  let bottom = covers(show.bottom, m.bottom, m.bottom.height);
+  // The demo's chapter rail sits over the bottom of the stage: frame the heart (and the open heart's label
+  // row) above it, never under it.
+  if (m.chrome === 'tour') bottom = Math.max(bottom, TOUR_RAIL_BOTTOM + TOUR_RAIL_H + g);
   const cardsShown = show.left || show.right || show.bottom;
   return { left, right, top: cardsShown ? g : 0, bottom: bottom || (cardsShown ? g : 0) };
 }

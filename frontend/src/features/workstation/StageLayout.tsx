@@ -41,6 +41,7 @@ function cssPx(el: Element, name: string, fallback: number): number {
 function Slot({
   name,
   visible,
+  veiled = false,
   hideTo,
   delay = 0,
   glide = 'top',
@@ -51,6 +52,8 @@ function Slot({
 }: {
   name: string;
   visible: boolean;
+  /** Shown for the layout (it keeps counting in the insets) but invisible and inert, e.g. under the demo's caption. */
+  veiled?: boolean;
   hideTo: 'left' | 'right' | 'top' | 'bottom' | 'none';
   delay?: number;
   /** Layout property that glides without the stagger: `translate` (centred slots) or `top`. */
@@ -63,8 +66,8 @@ function Slot({
   const ref = useRef<HTMLDivElement | null>(null);
   useEffect(() => {
     // Hidden chrome leaves the tab order and the accessibility tree while it slides off.
-    if (ref.current) ref.current.inert = !visible;
-  }, [visible]);
+    if (ref.current) ref.current.inert = !visible || veiled;
+  }, [visible, veiled]);
   return (
     <div
       ref={(el) => {
@@ -73,11 +76,12 @@ function Slot({
       }}
       data-region={`slot-${name}`}
       data-visible={visible}
-      aria-hidden={visible ? undefined : true}
+      data-veiled={veiled || undefined}
+      aria-hidden={visible && !veiled ? undefined : true}
       style={{ ...style, ...slotTransition(visible, delay, glide) }}
       className={cn(
         'absolute z-panels',
-        visible ? 'opacity-100' : 'pointer-events-none opacity-0',
+        visible && !veiled ? 'opacity-100' : 'pointer-events-none opacity-0',
         !visible && hideTo === 'left' && '-translate-x-3 motion-reduce:translate-x-0',
         !visible && hideTo === 'right' && 'translate-x-3 motion-reduce:translate-x-0',
         !visible && hideTo === 'top' && '-translate-y-1 motion-reduce:translate-y-0',
@@ -159,6 +163,7 @@ export function StageLayout({
   const storeChrome = useUiStore((s) => s.chrome);
   const drawer = useUiStore((s) => s.drawer);
   const insets = useUiStore((s) => s.stageInsets);
+  const dockLeft = useUiStore((s) => s.tourDockLeft);
   const chrome = chromeOverride ?? storeChrome;
   const show = CHROME_SLOTS[chrome];
   // Leaving focus mode is the exact reverse of entering it: the answer pill exits first (170 ms), then
@@ -182,7 +187,7 @@ export function StageLayout({
     const stage = stageRef.current;
     if (!stage) return;
     const box = (el: HTMLElement | null) => ({ width: el?.offsetWidth ?? 0, height: el?.offsetHeight ?? 0 });
-    const next = computeStageInsets({
+    const input = {
       chrome,
       drawer,
       stageInset: cssPx(stage, '--stage-inset', INSET_FALLBACK),
@@ -191,8 +196,11 @@ export function StageLayout({
       bottom: box(bottomRef.current),
       drawerInputsWidth: cssPx(stage, '--drawer-inputs-w', 400),
       drawerExplainWidth: cssPx(stage, '--drawer-explain-w', 440),
-    });
-    useUiStore.getState().setStageInsets(next);
+    };
+    const base = computeStageInsets(input);
+    // The guided demo's caption docked in the left column is chrome too: the heart is framed beside it.
+    const next = dockLeft > 0 ? computeStageInsets({ ...input, tourDockLeft: dockLeft }) : base;
+    useUiStore.getState().setStageInsets(next, base);
     const col = rightRef.current;
     if (col) setRightScrolls(columnOverflows(col));
     // The toolbar shares the bottom band with the legend chip (and a docked drawer): keep clear of both.
@@ -212,7 +220,7 @@ export function StageLayout({
       });
       setBottomDx((prev) => (prev !== null && Math.abs(prev - dx) < 0.5 ? prev : dx));
     }
-  }, [chrome, drawer]);
+  }, [chrome, drawer, dockLeft]);
 
   useLayoutEffect(() => {
     measure();
@@ -280,6 +288,7 @@ export function StageLayout({
       <Slot
         name="left"
         visible={show.left && drawer !== 'inputs'}
+        veiled={chrome === 'tour' && dockLeft > 0}
         hideTo="left"
         delay={show.left ? enterAfter + 60 : 0}
         slotRef={(el) => (leftRef.current = el)}

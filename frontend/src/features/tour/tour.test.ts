@@ -5,7 +5,7 @@ import { useUiStore } from '@/state/uiStore';
 import { PEEL_REST, useViewerStore } from '@/state/viewerStore';
 import { sampleCohort, samplePrediction, sampleSchema } from '@/test/fixtures';
 import { overallProgress, tick, type ClockState } from './clock';
-import { inflate, keepOffHeart, mergeOverlapping, placeCard, scrimPath, union, type Bounds } from './geometry';
+import { inflate, mergeOverlapping, pickDock, placeCard, scrimPath, union, type Bounds } from './geometry';
 import { planTransition } from './plan';
 import {
   PeelAnimator,
@@ -328,19 +328,20 @@ describe('snapshot', () => {
   });
 });
 
-describe('keepOffHeart', () => {
-  const card = { width: 360, height: 196 };
-  const bounds = { left: 0, top: 92, right: 1280, bottom: 592 };
-  const heart = { left: 400, top: 104, width: 420, height: 350 };
-  it('docks a card that would cover the heart at the bottom, centred on the free area', () => {
-    const p = keepOffHeart({ left: 565, top: 95, side: 'below' }, card, bounds, heart, [], null, 610);
-    expect(p).toEqual({ left: 430, top: 592 - 196 - 12, side: 'inside' });
+describe('pickDock', () => {
+  const inner = { left: 12, top: 52, right: 1268, bottom: 644 };
+  const heart = { left: 380, top: 52, width: 520, height: 500 };
+  const below = { left: 12, top: 420, width: 256, height: 260, veil: false };
+  const right = { left: 948, top: 400, width: 320, height: 220, veil: false };
+  it('takes the first column spot that fits in the stage and stays off the heart and its labels', () => {
+    // Below the left card is too tall for the stage (420 + 260 > 644): the right column wins.
+    expect(pickDock([below, right], inner, [heart])).toBe(right);
+    expect(pickDock([{ ...below, height: 200 }, right], inner, [heart])?.left).toBe(12);
   });
-  it('keeps a placement already off the heart, or when the docked spot is blocked', () => {
-    const off = { left: 20, top: 300, side: 'right' as const };
-    expect(keepOffHeart(off, card, bounds, heart, [], null, 610)).toBe(off);
-    const over = { left: 565, top: 95, side: 'below' as const };
-    const blocker = { left: 400, top: 380, width: 400, height: 200 };
-    expect(keepOffHeart(over, card, bounds, heart, [blocker], null, 610)).toBe(over);
+  it('rejects a spot over the heart, a label or a card, and returns null when nothing fits', () => {
+    const label = { left: 930, top: 390, width: 60, height: 30 };
+    expect(pickDock([right], inner, [heart, label])).toBeNull();
+    expect(pickDock([{ ...right, left: 700 }], inner, [heart])).toBeNull();
   });
 });
+
