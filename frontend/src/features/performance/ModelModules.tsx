@@ -1,4 +1,5 @@
 import { Tooltip } from '@/design';
+import { ASSOCIATION_LEGEND, ASSOCIATION_MARK, ASSOCIATION_NOTE, isAssociationOnly } from '@/lib/associations';
 import { cn } from '@/lib/cn';
 import { formatMetricValue } from '@/lib/format';
 import { featureName } from '@/lib/modelNames';
@@ -130,6 +131,9 @@ export function LeaderboardModule({ target, m, logisticId, height, nFolds, prove
 export function DriversModule({ target, m, byKey, height, provenance }: ModelModulesProps) {
   const rows = m.global_importance.slice(0, 9);
   const max = Math.max(...rows.map((g) => g.mean_abs_shap), 1e-9);
+  // Inputs with no established causal role carry the workstation's † mark here too.
+  const mark = (feature: string) => (isAssociationOnly(feature) ? ASSOCIATION_MARK : '');
+  const marked = rows.some((g) => isAssociationOnly(g.feature));
   return (
     <ChartModule
       id="chart-drivers"
@@ -137,13 +141,13 @@ export function DriversModule({ target, m, byKey, height, provenance }: ModelMod
       exportName={`cardiotwin-${target.toLowerCase()}-global-drivers`}
       exportImage={false}
       provenance={provenance}
-      howTo="How to read: average absolute SHAP contribution across patients (log-odds); longer bars move estimates more, in either direction. Hover a bar for its value."
+      howTo={`How to read: average absolute SHAP contribution across patients (log-odds); longer bars move estimates more, in either direction. Hover a bar for its value. Associations in this cohort, not causes${marked ? `; ${ASSOCIATION_LEGEND.toLowerCase()}` : ''}.`}
       height={height}
       table={{
         caption: `Global drivers for ${target}`,
         columns: ['Input', 'Mean |SHAP| (log-odds)'],
         numeric: [false, true],
-        rows: m.global_importance.map((g) => [featureName(g.feature, byKey), f2(g.mean_abs_shap)]),
+        rows: m.global_importance.map((g) => [`${featureName(g.feature, byKey)}${mark(g.feature)}`, f2(g.mean_abs_shap)]),
       }}
     >
       <ul
@@ -154,7 +158,10 @@ export function DriversModule({ target, m, byKey, height, provenance }: ModelMod
           const name = featureName(g.feature, byKey);
           return (
             <li key={g.feature}>
-              <Tooltip content={`${name}: mean |SHAP| ${f2(g.mean_abs_shap)} log-odds`} placement="right">
+              <Tooltip
+                content={`${name}: mean |SHAP| ${f2(g.mean_abs_shap)} log-odds${isAssociationOnly(g.feature) ? `. ${ASSOCIATION_NOTE}` : ''}`}
+                placement="right"
+              >
                 <div
                   tabIndex={0}
                   aria-label={`${name}, mean absolute SHAP ${f2(g.mean_abs_shap)} log-odds`}
@@ -162,6 +169,7 @@ export function DriversModule({ target, m, byKey, height, provenance }: ModelMod
                 >
                   <span className="truncate text-label font-normal text-secondary group-hover:text-primary">
                     {name}
+                    {mark(g.feature) && <span className="ml-0.5 text-tertiary">{mark(g.feature)}</span>}
                   </span>
                   <span className="relative h-2.5">
                     <span

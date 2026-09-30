@@ -6,6 +6,7 @@
  * Every number shown on the page is computed here from metrics.json; nothing is hard-coded. All
  * functions are total: missing fields produce `null` / shorter sentences, never exceptions.
  */
+import { ASSOCIATION_MARK, isAssociationOnly } from '@/lib/associations';
 import { formatMetricValue, formatPercent } from '@/lib/format';
 import { testSetRescoreItem } from '@/lib/testSetCopy';
 import {
@@ -433,7 +434,9 @@ export function driversFinding(
   m: TargetMetrics,
   byKey?: ReadonlyMap<string, FeatureSpec>,
 ): string {
-  const top = m.global_importance.slice(0, 3).map((g) => featureName(g.feature, byKey));
+  const top = m.global_importance
+    .slice(0, 3)
+    .map((g) => `${featureName(g.feature, byKey)}${isAssociationOnly(g.feature) ? ASSOCIATION_MARK : ''}`);
   if (top.length === 0) return `What drives ${target} estimates`;
   const [a, ...rest] = top;
   const lead = `${a} drives ${target} estimates most`;
