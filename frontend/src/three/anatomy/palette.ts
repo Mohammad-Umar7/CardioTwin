@@ -18,9 +18,9 @@ export const REAL = {
   /** Chamber interiors and cut faces: a lighter blood-muscle red, so the opened chambers read. */
   interior: '#5E2522',
   fat: '#8E7A5C',
-  /** Epicardial fat meshes (EpicardialFat_*), close to the mean of their baked albedo. */
-  fatMesh: '#C8B08A',
-  fatDeep: '#9C8460',
+  /** Epicardial fat meshes (EpicardialFat_*) before their bake arrives: close to the toned bake (golden). */
+  fatMesh: '#8A7E52',
+  fatDeep: '#5E5434',
   /** Cardiac veins: dark plum-grey, never the ramp's blue. */
   cardiacVein: '#4A3E48',
   wrapTint: '#E0503C',
@@ -57,6 +57,8 @@ export const GHOST = {
     heart: '#9FB4C8',
     vessel: '#B7C3D0',
     vein: '#7F93B8',
+    /** Clinical fat: a faint warm-grey veil in the grooves. */
+    fat: '#A8A092',
   },
   realistic: {
     // Thorax ghosts are near-achromatic (a warm grey, never a red or orange glow at the frame's edges):
@@ -69,5 +71,6 @@ export const GHOST = {
     heart: '#E09A8E',
     vessel: '#D8C8C0',
     vein: '#5E7BC0',
+    fat: '#B8A070',
   },
 } as const;

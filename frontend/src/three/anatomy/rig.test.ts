@@ -287,7 +287,8 @@ describe('anatomy rig: assembly on a time budget', () => {
       rig.update(inputs({ reduced: false, dt: 1 / 60 }));
       frames += 1;
     }
-    expect(frames).toBeGreaterThan(100);
-    expect(frames).toBeLessThan(160);
+    // ≈ 1.65 s of wall-clock motion (never less than 1.5 s).
+    expect(frames).toBeGreaterThanOrEqual(90);
+    expect(frames).toBeLessThan(130);
   });
 });

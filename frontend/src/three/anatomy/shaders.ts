@@ -90,6 +90,13 @@ export interface PatchFlags {
    * noise front, so a chest layer turning into its ghost never breaks into confetti or black holes.
    */
   fadeAlpha: boolean;
+  /**
+   * Fade along the vessel wall (`_dist_heart`, scene units from the cardiac end) instead of a sphere: the
+   * pulmonary trunk and veins stay opaque near the heart and fade only toward their cut ends.
+   */
+  clipAlong: boolean;
+  /** Darken grazing angles (a thin dark outline that separates the coronaries from the fat they lie on). */
+  edgeShade: boolean;
   /** Noise octaves (tier dependent). */
   octaves: number;
 }
@@ -106,6 +113,8 @@ export const NO_PATCH: PatchFlags = {
   desaturateMap: false,
   cavity: false,
   fadeAlpha: false,
+  clipAlong: false,
+  edgeShade: false,
   octaves: 3,
 };
 
@@ -122,6 +131,8 @@ export function patchKey(f: PatchFlags): string {
     f.desaturateMap ? 'x' : '',
     f.cavity ? 'v' : '',
     f.fadeAlpha ? 'a' : '',
+    f.clipAlong ? 'g' : '',
+    f.edgeShade ? 'e' : '',
     `o${f.octaves}`,
   ].join('');
 }
@@ -140,7 +151,8 @@ export function patchTissueShader(shader: Shader, uniforms: Record<string, IUnif
 ${BEAT_VERTEX_PARS}
 varying vec3 vCtRest;
 ${f.territory ? `attribute vec3 ${f.territory};\nvarying vec3 vCtTerritory;` : ''}
-${f.cavity ? 'attribute vec3 aCavity;\nvarying vec3 vCtCavity;' : ''}`,
+${f.cavity ? 'attribute vec3 aCavity;\nvarying vec3 vCtCavity;' : ''}
+${f.clipAlong ? 'attribute float _dist_heart;\nvarying float vCtAlong;' : ''}`,
   );
   vs = vs.replace(
     '#include <begin_vertex>',
@@ -148,7 +160,8 @@ ${f.cavity ? 'attribute vec3 aCavity;\nvarying vec3 vCtCavity;' : ''}`,
 vCtRest = transformed + uRestOffset;
 ${BEAT_VERTEX}
 ${f.territory ? `vCtTerritory = ${f.territory};` : ''}
-${f.cavity ? 'vCtCavity = aCavity;' : ''}`,
+${f.cavity ? 'vCtCavity = aCavity;' : ''}
+${f.clipAlong ? 'vCtAlong = _dist_heart;' : ''}`,
   );
   shader.vertexShader = vs;
 
@@ -179,6 +192,8 @@ ${f.interior ? 'uniform vec3 uInteriorColor;' : ''}
 ${f.territory ? 'uniform vec3 uP;\nuniform sampler2D uRiskLUT;\nuniform float uTerritoryOn;\nuniform vec3 uSelMask;\nuniform float uTerritoryGain;\nvarying vec3 vCtTerritory;' : ''}
 ${f.rim ? 'uniform vec3 uRimColor;\nuniform float uRimStrength;' : ''}
 ${f.clipSphere ? 'uniform vec3 uClipCentre;\nuniform float uClipRadius;\nuniform float uClipFeather;' : ''}
+${f.clipAlong ? 'varying float vCtAlong;\nuniform float uAlongStart;\nuniform float uAlongEnd;' : ''}
+${f.edgeShade ? 'uniform float uEdgeShade;' : ''}
 ${f.desaturateMap ? 'uniform float uSaturation;' : ''}`,
   );
 
@@ -187,14 +202,18 @@ ${f.desaturateMap ? 'uniform float uSaturation;' : ''}`,
     '#include <clipping_planes_fragment>',
     `#include <clipping_planes_fragment>
 ${f.fadeAlpha ? 'float ctEdge = 0.0;' : MATERIALISE}
-${f.clipSphere ? `float ctClipKeep = 1.0 - smoothstep(uClipRadius - uClipFeather, uClipRadius, distance(vCtRest, uClipCentre));
+${f.clipAlong ? `float ctClipKeep = 1.0 - smoothstep(uAlongStart, uAlongEnd, vCtAlong);
+if (ctClipKeep <= 0.0) discard;` : f.clipSphere ? `float ctClipKeep = 1.0 - smoothstep(uClipRadius - uClipFeather, uClipRadius, distance(vCtRest, uClipCentre));
 if (ctClipKeep <= 0.0) discard;` : ''}`,
   );
 
   fs = fs.replace(
     '#include <color_fragment>',
     `#include <color_fragment>
-${f.desaturateMap ? `diffuseColor.rgb = mix(vec3(dot(diffuseColor.rgb, vec3(0.2126, 0.7152, 0.0722))), diffuseColor.rgb, uSaturation);` : ''}
+${f.desaturateMap ? `#ifdef USE_MAP
+// Desaturate the BAKE only, then apply the material tint (a tint may carry the hue the bake should not).
+diffuseColor.rgb = diffuse * mix(vec3(dot(sampledDiffuseColor.rgb, vec3(0.2126, 0.7152, 0.0722))), sampledDiffuseColor.rgb, uSaturation);
+#endif` : ''}
 ${f.detail ? `
 vec3 ctP = vCtRest;
 ${f.fibre ? 'ctP += uFibreAxis * (dot(ctP, uFibreAxis) * (uFibreStretch - 1.0));' : ''}
@@ -304,7 +323,15 @@ if (diffuseColor.a < 0.004) discard;
 #include <opaque_fragment>`);
   }
 
-  if (f.clipSphere) {
+  if (f.edgeShade) {
+    fs = fs.replace(
+      '#include <opaque_fragment>',
+      `outgoingLight *= 1.0 - uEdgeShade * pow(1.0 - clamp(abs(dot(normalize(normal), normalize(vViewPosition))), 0.0, 1.0), 2.0);
+#include <opaque_fragment>`,
+    );
+  }
+
+  if (f.clipSphere || f.clipAlong) {
     // Fade the trimmed vessel out with real alpha (the material is transparent): no dither sparkle and no
     // black stub where a trimmed branch crosses the heart.
     fs = fs.replace('#include <opaque_fragment>', `diffuseColor.a *= ctClipKeep * ctClipKeep;\n#include <opaque_fragment>`);

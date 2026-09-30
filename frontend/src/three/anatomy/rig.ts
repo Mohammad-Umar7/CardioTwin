@@ -12,11 +12,11 @@
  */
 import {
   BufferAttribute,
+  BufferGeometry,
   Matrix4,
   Mesh,
   Plane,
   Vector3,
-  type BufferGeometry,
   type Material,
   type MeshStandardMaterial,
   type Object3D,
@@ -42,6 +42,7 @@ import {
   type TissueKind,
 } from './classify';
 import {
+  OPENING_WALL,
   PEEL_SOLID_UNTIL,
   PEEL_SPRING_OMEGA,
   buildExplodeSpecs,
@@ -55,6 +56,7 @@ import {
   type ManifestLike,
 } from './explode';
 import {
+  ALONG_FADE,
   VESSEL_INFLATE,
   createGhostMaterial,
   createSharedUniforms,
@@ -182,6 +184,128 @@ function defaultFlyIn(kind: TissueKind, restOffset: Vector3): Vector3 {
   }
 }
 
+/** Great vessels: their decimated tubes carry split normals along the UV seams (visible facets and seams). */
+const SMOOTH_KINDS: ReadonlySet<TissueKind> = new Set(['aorta', 'pulmonaryArtery', 'pulmonaryVeins', 'systemicVein']);
+
+/**
+ * Average the normals of coincident vertices (UV-seam duplicates) whose normals are within 60° of each
+ * other, so a tube shades smoothly across its seams while real creases (a cut end) stay sharp. In place and
+ * idempotent (marked on the geometry, which the GLB cache shares between mounts).
+ */
+export function smoothNormals(g: BufferGeometry): void {
+  if (g.userData.ctSmoothed) return;
+  const pos = g.getAttribute('position');
+  const nor = g.getAttribute('normal');
+  if (!pos || !nor) return;
+  g.userData.ctSmoothed = true;
+  const groups = new Map<string, number[]>();
+  for (let i = 0; i < pos.count; i += 1) {
+    const key = `${Math.round(pos.getX(i) * 1e5)},${Math.round(pos.getY(i) * 1e5)},${Math.round(pos.getZ(i) * 1e5)}`;
+    const list = groups.get(key);
+    if (list) list.push(i);
+    else groups.set(key, [i]);
+  }
+  const n = new Vector3();
+  const m = new Vector3();
+  const sum = new Vector3();
+  const out = new Float32Array(nor.count * 3);
+  for (let i = 0; i < nor.count; i += 1) {
+    n.fromBufferAttribute(nor, i);
+    out[i * 3] = n.x;
+    out[i * 3 + 1] = n.y;
+    out[i * 3 + 2] = n.z;
+  }
+  for (const list of groups.values()) {
+    if (list.length < 2) continue;
+    for (const i of list) {
+      n.fromBufferAttribute(nor, i);
+      sum.set(0, 0, 0);
+      for (const j of list) if (m.fromBufferAttribute(nor, j).dot(n) > 0.5) sum.add(m);
+      if (sum.lengthSq() < 1e-12) continue;
+      sum.normalize();
+      out[i * 3] = sum.x;
+      out[i * 3 + 1] = sum.y;
+      out[i * 3 + 2] = sum.z;
+    }
+  }
+  // setXYZ: the GLB's normals are quantised and interleaved (meshopt), so never write the raw array.
+  for (let i = 0; i < nor.count; i += 1) nor.setXYZ(i, out[i * 3]!, out[i * 3 + 1]!, out[i * 3 + 2]!);
+  const target = (nor as { data?: { needsUpdate: boolean } }).data ?? nor;
+  target.needsUpdate = true;
+}
+
+/** Upload order of the baked maps (kinds not listed follow). */
+const TEXTURE_ORDER: readonly TissueKind[] = ['myocardium', 'fat', 'cardiacVein', 'aorta', 'pulmonaryArtery', 'pulmonaryVeins', 'systemicVein'];
+
+/** Nodes split at the heart's cut plane at load (the anterior part rides the opening wall). */
+const SPLIT_VEINS = 'CardiacVeins';
+export const ANTERIOR_SUFFIX = '_Anterior';
+
+/**
+ * Split `node` (one mesh, riding the posterior wall) at the heart's cut plane: triangles whose centroid lies
+ * on the opening side (+cut normal) move to a sibling mesh `<node>_Anterior` that shares the vertex buffers
+ * (and so the `_VEIN` codes and baked maps) and rides the anterior wall with its explode vector. Idempotent
+ * (a rebuilt rig on the same scene finds the sibling already there).
+ */
+function splitAtCutPlane(root: Object3D, rootInverse: Matrix4, node: string, frame: HeartFrame, specs: Map<string, ExplodeSpec>, wall: string): void {
+  const name = `${node}${ANTERIOR_SUFFIX}`;
+  let found: Mesh | null = null;
+  let done = false;
+  root.traverse((o) => {
+    if (o.name === name) done = true;
+    if (!found && o instanceof Mesh && !o.userData.ctGhost && (o.name === node || (!o.name && o.parent?.name === node))) found = o;
+  });
+  const source = found as Mesh | null;
+  const base = specs.get(node);
+  const wallSpec = specs.get(wall);
+  if (source && base && wallSpec && !specs.has(name)) {
+    specs.set(name, { ...base, node: name, vector: wallSpec.vector.clone(), rides: wall, hinge: null });
+  }
+  if (done || !source) return;
+  const g = source.geometry as BufferGeometry;
+  const pos = g.getAttribute('position');
+  if (!pos) return;
+  const toRest = rootInverse.clone().multiply(source.matrixWorld);
+  const index = g.index;
+  const count = index ? index.count : pos.count;
+  const at = (i: number) => (index ? index.getX(i) : i);
+  const a = new Vector3();
+  const b = new Vector3();
+  const c = new Vector3();
+  const front: number[] = [];
+  const back: number[] = [];
+  const n = frame.cutNormal;
+  const d0 = n.dot(frame.cutPoint);
+  for (let i = 0; i + 2 < count; i += 3) {
+    const ia = at(i);
+    const ib = at(i + 1);
+    const ic = at(i + 2);
+    a.fromBufferAttribute(pos, ia).applyMatrix4(toRest);
+    b.fromBufferAttribute(pos, ib).applyMatrix4(toRest);
+    c.fromBufferAttribute(pos, ic).applyMatrix4(toRest);
+    const side = (n.dot(a) + n.dot(b) + n.dot(c)) / 3 - d0;
+    (side > 0 ? front : back).push(ia, ib, ic);
+  }
+  if (front.length === 0 || back.length === 0) return;
+  const part = (indices: number[]) => {
+    const out = new BufferGeometry();
+    for (const [key, attr] of Object.entries(g.attributes)) out.setAttribute(key, attr);
+    out.setIndex(indices);
+    out.computeBoundingBox();
+    out.computeBoundingSphere();
+    return out;
+  };
+  source.geometry = part(back);
+  const anterior = new Mesh(part(front), source.material);
+  anterior.name = name;
+  anterior.userData.ctSplitFrom = node;
+  anterior.matrix.copy(source.matrix);
+  anterior.matrix.decompose(anterior.position, anterior.quaternion, anterior.scale);
+  anterior.frustumCulled = source.frustumCulled;
+  source.parent?.add(anterior);
+  anterior.updateMatrixWorld(true);
+}
+
 const texturesOf = (e: RigEntry): Texture[] =>
   [e.maps?.map, e.maps?.normalMap, e.maps?.roughnessMap, e.maps?.aoMap].filter((t, i, all): t is Texture => !!t && all.indexOf(t) === i);
 
@@ -232,6 +356,7 @@ export class AnatomyRig {
 
     const specs = manifest ? buildExplodeSpecs(manifest as unknown as ManifestLike, this.frame) : new Map<string, ExplodeSpec>();
     const structures = new Map((manifest?.structures ?? []).map((s) => [s.node, s]));
+
     const layerIdOfNode = new Map<string, string>();
     for (const l of manifest?.layers ?? []) {
       layerIdOfNode.set(l.node, l.id);
@@ -240,6 +365,10 @@ export class AnatomyRig {
 
     root.updateWorldMatrix(true, true);
     const rootInverse = root.matrixWorld.clone().invert();
+    // The cardiac veins are one GLB node on the posterior wall: split them at the heart's cut plane so the
+    // anterior veins (the AIV beside the LAD, the anterior cardiac veins) open with the anterior half instead
+    // of floating across the opened chambers.
+    splitAtCutPlane(root, rootInverse, SPLIT_VEINS, this.frame, specs, OPENING_WALL);
     const meshes: Mesh[] = [];
     root.traverse((o) => {
       if (o instanceof Mesh && !o.userData.ctGhost) meshes.push(o);
@@ -250,7 +379,8 @@ export class AnatomyRig {
       for (let p: Object3D | null = mesh.parent; p; p = p.parent) if (p.name.startsWith('Layer_')) layerNode ||= p.name;
       const node = mesh.name || mesh.parent?.name || '';
       const kind = classifyNode(node, layerNode);
-      const s = structures.get(node);
+      // A split half answers to the structure it was cut from (label, definition, `_VEIN` codes).
+      const s = structures.get(node) ?? structures.get(mesh.userData.ctSplitFrom as string);
       const layerId = s?.layer ?? layerIdOfNode.get(node) ?? layerIdOfNode.get(layerNode) ?? layerNode.replace(/^Layer_/, '').toLowerCase();
       let target: TargetId | null = null;
       for (let p: Object3D | null = mesh; p && !target; p = p.parent) target = options.nodeTargets.get(p.name) ?? null;
@@ -260,6 +390,7 @@ export class AnatomyRig {
       const spec = specs.get(node) ?? null;
       const maps = bakedMaps(mesh.material);
 
+      if (SMOOTH_KINDS.has(kind)) smoothNormals(mesh.geometry as BufferGeometry);
       if (kind === 'myocardium' && !mesh.geometry.getAttribute('aCavity')) {
         // Filled in idle time by computeCavities(); zeros = no darkening until then.
         const count = mesh.geometry.getAttribute('position').count;
@@ -362,7 +493,18 @@ export class AnatomyRig {
       const k = entry.kind;
       if (k === 'myocardium') sample(entry, 500, (p) => heart.push(p.clone()));
       else if (k === 'aorta' || k === 'systemicVein') sample(entry, 300, (p) => visibleIn(GREAT_VESSEL_CLIP, p) && keep.push(p.clone()));
-      else if (k === 'pulmonaryArtery' || k === 'pulmonaryVeins') sample(entry, 300, (p) => visibleIn(PULMONARY_CLIP, p) && keep.push(p.clone()));
+      else if (k === 'pulmonaryArtery' || k === 'pulmonaryVeins') {
+        const along = (entry.mesh.geometry as BufferGeometry).getAttribute('_dist_heart');
+        const fade = ALONG_FADE[k];
+        if (along && fade) {
+          // Visible = the along-the-wall fade still leaves ≥ 10 % alpha.
+          const pos = (entry.mesh.geometry as BufferGeometry).getAttribute('position');
+          restWorld.copy(rootInverse).multiply(entry.mesh.matrixWorld);
+          const step = Math.max(1, Math.floor(pos.count / 300));
+          const limit = fade[0] + 0.35 * (fade[1] - fade[0]);
+          for (let i = 0; i < pos.count; i += step) if (along.getX(i) < limit) keep.push(v.fromBufferAttribute(pos, i).applyMatrix4(restWorld).clone());
+        } else sample(entry, 300, (p) => visibleIn(PULMONARY_CLIP, p) && keep.push(p.clone()));
+      }
       const vessel = k === 'aorta' || k === 'systemicVein' || k === 'pulmonaryArtery' || k === 'pulmonaryVeins';
       if (k === 'myocardium' || k === 'fat' || k === 'coronary' || k === 'leftMain' || vessel) {
         const spec = entry.spec;
@@ -371,9 +513,19 @@ export class AnatomyRig {
         else if (spec) explodeDelta(spec, 1, openDelta);
         else openDelta.identity();
         const clip = k === 'pulmonaryArtery' || k === 'pulmonaryVeins' ? PULMONARY_CLIP : GREAT_VESSEL_CLIP;
-        sample(entry, k === 'myocardium' ? 500 : 120, (p) => {
-          if (!vessel || visibleIn(clip, p)) open.push(p.clone().applyMatrix4(openDelta));
-        });
+        const along = (entry.mesh.geometry as BufferGeometry).getAttribute('_dist_heart');
+        const fade = ALONG_FADE[k];
+        if (vessel && along && fade) {
+          const pos = (entry.mesh.geometry as BufferGeometry).getAttribute('position');
+          restWorld.copy(rootInverse).multiply(entry.mesh.matrixWorld);
+          const step = Math.max(1, Math.floor(pos.count / 120));
+          const limit = fade[0] + 0.35 * (fade[1] - fade[0]);
+          for (let i = 0; i < pos.count; i += step)
+            if (along.getX(i) < limit) open.push(v.fromBufferAttribute(pos, i).applyMatrix4(restWorld).clone().applyMatrix4(openDelta));
+        } else
+          sample(entry, k === 'myocardium' ? 500 : 120, (p) => {
+            if (!vessel || visibleIn(clip, p)) open.push(p.clone().applyMatrix4(openDelta));
+          });
       }
     }
     const f = sceneRuntime.framing;
@@ -401,6 +553,7 @@ export class AnatomyRig {
         clippingPlanes: heart ? this.sectionPlanes : null,
         inflate: entry.kind === 'coronary' || entry.kind === 'leftMain' ? VESSEL_INFLATE : 0,
         cavity: !!geometry.getAttribute('aCavity'),
+        along: !!geometry.getAttribute('_dist_heart'),
       });
       entry.solid.set(key, m);
     }
@@ -447,7 +600,16 @@ export class AnatomyRig {
    * third of the GLB's texture memory is never uploaded in a normal session.
    */
   pendingTextures(): { entry: RigEntry; textures: Texture[] }[] {
-    return this.entries.filter((e) => !e.mapsReady && e.maps && !OUTER_KINDS.has(e.kind)).map((e) => ({ entry: e, textures: texturesOf(e) }));
+    // The walls first, then what lies on them (fat, veins), so nothing switches from its procedural look to
+    // its bake long after the heart has settled.
+    const order = (e: RigEntry) => {
+      const i = TEXTURE_ORDER.indexOf(e.kind);
+      return i < 0 ? TEXTURE_ORDER.length : i;
+    };
+    return this.entries
+      .filter((e) => !e.mapsReady && e.maps && !OUTER_KINDS.has(e.kind))
+      .sort((a, b) => order(a) - order(b))
+      .map((e) => ({ entry: e, textures: texturesOf(e) }));
   }
 
   /** An outer-layer mesh that is turning solid without its baked maps yet (upload them now, one a frame). */
@@ -561,12 +723,12 @@ export class AnatomyRig {
     const k = (dtLambda: number) => (inp.reduced ? 1 : 1 - Math.exp(-dtLambda * dt));
     const fadeK = k(LAMBDA_FADE);
 
+    // ---- assembly pose: walls (and everything flying on its own) first, then the riders copy their wall's
+    // pose of THIS frame - never last frame's, which on the first frame would show the fat, veins and
+    // coronaries fully materialised in front of a wall that has not appeared yet.
     for (const entry of this.entries) {
-      // ---- assembly pose (riders copy their wall's)
-      if (entry.flyInFrom) {
-        entry.assemblyMatrix.copy(entry.flyInFrom.assemblyMatrix);
-        entry.assemblyReveal = entry.flyInFrom.assemblyReveal;
-      } else if (this.assembly.done) {
+      if (entry.flyInFrom) continue;
+      if (this.assembly.done) {
         entry.assemblyMatrix.identity();
         entry.assemblyReveal = 1;
       } else {
@@ -574,6 +736,11 @@ export class AnatomyRig {
         explodeDelta(entry.flyIn, pose.offset, entry.assemblyMatrix, false);
         entry.assemblyReveal = pose.reveal;
       }
+    }
+    for (const entry of this.entries) {
+      if (!entry.flyInFrom) continue;
+      entry.assemblyMatrix.copy(entry.flyInFrom.assemblyMatrix);
+      entry.assemblyReveal = entry.flyInFrom.assemblyReveal;
     }
 
     for (const entry of this.entries) {
@@ -612,6 +779,11 @@ export class AnatomyRig {
       const inner = (entry.kind === 'valve' || entry.kind === 'papillary') && heartOpen < 0.02 && !inp.section;
       if (!layerVisible || inner || (inp.isolate && sel && !isolateMember) || (entry.kind === 'cardiacVein' && !inp.showVeins)) {
         solidT = 0;
+      } else if (entry.kind === 'fat' && inp.look === 'clinical') {
+        // Clinical: the fat is a translucent ghost over the clay, so the coronaries in their grooves are never
+        // hidden or out-shone by it.
+        solidT = 0;
+        ghostT = inp.isolate && sel ? 0 : 1;
       } else if (entry.kind === 'cardiacVein' && inp.look === 'clinical') {
         // Clinical: a translucent overlay, visibly "not modelled", never a solid tube that could be mistaken
         // for a low-risk artery (LUMEN §7.3: 20 % opacity). Realistic shows them solid in a greyed venous

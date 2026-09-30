@@ -100,6 +100,8 @@ export interface TissueOptions {
   inflate?: number;
   /** The geometry carries `aCavity` (crease AO, vessel groove, fat along the arteries). */
   cavity?: boolean;
+  /** The geometry carries `_dist_heart` (the pulmonary vessels fade along their wall, `ALONG_FADE`). */
+  along?: boolean;
 }
 
 /** Absolute display inflation of coronary walls (≈ the spec's 1.3×, documented in §7.3). */
@@ -132,10 +134,30 @@ interface Look {
    * itself. `saturation` < 1 greys the bake (great vessels and veins must never out-shout the coronary
    * ramp, V2 §5.15).
    */
-  baked?: { tint?: string; saturation?: number };
+  baked?: { tint?: string; saturation?: number; linear?: readonly [number, number, number] };
   /** Depth bias toward the camera (epicardial fat lying on the wall it covers). */
   polygonOffset?: boolean;
+  /** Pull the surface in along its normals (scene units): thinner fat, sitting flush in its groove. */
+  deflate?: number;
+  /** Dark grazing-angle outline strength (coronaries against the fat and the wall). */
+  edgeShade?: number;
 }
+
+/**
+ * Epicardial fat pulled 1.4 mm in along its normals: the synthetic lumps read as flush, lobulated fat in the
+ * grooves with the arteries partly embedded, not as raised piping the coronaries sit on.
+ */
+export const FAT_DEFLATE = 0.014;
+
+/**
+ * The pulmonary trunk fades along its own wall (`_dist_heart`, from the pulmonary valve) — opaque from the
+ * valve to its bifurcation, gone a little way into the branches — instead of inside the posterior sphere
+ * that left the anterior trunk half transparent ("glass"). The pulmonary veins keep the sphere (they enter
+ * the left atrium right at its centre).
+ */
+export const ALONG_FADE: Partial<Record<TissueKind, readonly [number, number]>> = {
+  pulmonaryArtery: [0.32, 0.52],
+};
 
 const CLINICAL: Partial<Record<TissueKind, Look>> = {
   myocardium: { color: ANATOMY.clay, roughness: 0.62, env: 0.25, sss: { wrap: 0.25, tint: ANATOMY.clayWrap, color: '#000000', strength: 0 }, interior: ANATOMY.cutFace, rim: { color: ANATOMY.fresnelRim, strength: 0.1 } },
@@ -178,21 +200,26 @@ const REALISTIC: Partial<Record<TissueKind, Look>> = {
     baked: { tint: '#FFFFFF', saturation: 0.94 },
   },
   fat: {
-    // Epicardial adipose tissue: soft, yellow, faintly translucent lobules in the grooves.
+    // Epicardial adipose tissue: warm golden-yellow lobules lying flush in the grooves, softly translucent
+    // (wrap + back-scatter), with a velvety sheen instead of a lacquer — and darker than the coronaries, so the
+    // risk-coloured arteries stay the brightest, most saturated thing on the stage (V2 §5.15).
     color: REAL.fatMesh,
-    roughness: 0.5,
-    env: 0.45,
-    clearcoat: 0.4,
-    clearcoatRoughness: 0.34,
-    sheen: 0.3,
-    sheenColor: '#FFF3DE',
-    sheenRoughness: 0.5,
-    detail: { freq: 16, bump: 0.004, colorVar: 0.14, roughVar: 0.1, deep: REAL.fatDeep },
-    sss: { wrap: 0.3, tint: '#FFF0D6', color: '#B89A6A', strength: 0.14 },
-    // The bake is a saturated ochre: grey it toward the pale ivory-yellow of real epicardial fat, well away
-    // from the ramp's high (apricot / orange) end so a high-risk artery never melts into its groove.
-    baked: { tint: '#F6EEE2', saturation: 0.5 },
+    roughness: 0.45,
+    env: 0.3,
+    clearcoat: 0.1,
+    clearcoatRoughness: 0.5,
+    sheen: 0.35,
+    sheenColor: '#DCD0A4',
+    sheenRoughness: 0.45,
+    // Lobules: a coarser, deeper bump than the bake's fine grain.
+    detail: { freq: 24, bump: 0.02, colorVar: 0.2, roughVar: 0.12, deep: REAL.fatDeep },
+    sss: { wrap: 0.5, tint: '#F0E8D0', color: '#625A38', strength: 0.16 },
+    // The bake is a bright saturated ochre: keep its hue (≈ 40°) at under half its chroma and ~45 % of its
+    // luminance, so on screen the fat is darker AND less chromatic than the coronaries (measured with
+    // `__ct.stats`: fat luminance 0.41 / chroma 0.30 against the coronaries' 0.57 / 0.33 at P-011).
+    baked: { tint: '#ACA88A', saturation: 0.42 },
     polygonOffset: true,
+    deflate: FAT_DEFLATE,
   },
   papillary: {
     color: REAL.papillary,
@@ -225,8 +252,8 @@ const REALISTIC: Partial<Record<TissueKind, Look>> = {
     clearcoat: 0.55,
     clearcoatRoughness: 0.2,
     detail: { freq: 45, bump: 0.0015, colorVar: 0.05, roughVar: 0.06, deep: '#000000' },
-    rim: { color: REAL.coronaryRim, strength: 0.1 },
     interior: '#1A0C0C',
+    edgeShade: 0.42,
   },
   leftMain: {
     color: REAL.leftMain,
@@ -236,6 +263,7 @@ const REALISTIC: Partial<Record<TissueKind, Look>> = {
     clearcoatRoughness: 0.25,
     detail: { freq: 45, bump: 0.0015, colorVar: 0.06, roughVar: 0.06, deep: '#5E4C46' },
     interior: '#1A0C0C',
+    edgeShade: 0.42,
   },
   aorta: {
     // Pale adventitia (a real specimen's cream-pink), greyed so its chroma stays under the coronary ramp.
@@ -258,7 +286,10 @@ const REALISTIC: Partial<Record<TissueKind, Look>> = {
     detail: { freq: 14, bump: 0.004, colorVar: 0.14, roughVar: 0.12, deep: REAL.adventitiaDeep },
     sss: { wrap: 0.35, tint: '#FFC2B0', color: '#9A4C3E', strength: 0.12 },
     interior: '#4A2322',
-    baked: { tint: '#E2D2CA', saturation: 0.3 },
+    // The bake is atlas blue (deoxygenated): a specimen's trunk is the same pale pink-tan adventitia as the
+    // aorta, so take the bake's detail and none of its hue, and lift its grey to the aorta's tone (a linear
+    // factor above 1: the bake's luminance is low).
+    baked: { tint: '#E6CBBE', saturation: 0, linear: [1.45, 0.66, 0.55] },
   },
   pulmonaryVeins: {
     color: REAL.pulmonaryVein,
@@ -429,6 +460,7 @@ export function createTissueMaterial(o: TissueOptions): TissueMaterial {
         })
       : new MeshStandardMaterial(params)
   ) as TissueMaterial;
+  if (baked && L.baked?.linear) material.color.setRGB(...L.baked.linear);
   if (maps?.map) material.map = maps.map;
   if (maps?.normalMap) material.normalMap = maps.normalMap;
   if (maps?.roughnessMap) material.roughnessMap = maps.roughnessMap;
@@ -440,6 +472,7 @@ export function createTissueMaterial(o: TissueOptions): TissueMaterial {
     material.polygonOffsetUnits = -1;
   }
   const saturation = baked ? L.baked?.saturation ?? 1 : 1;
+  const along = !!o.along && !!ALONG_FADE[o.kind];
 
   const flags: PatchFlags = {
     ...NO_PATCH,
@@ -450,7 +483,9 @@ export function createTissueMaterial(o: TissueOptions): TissueMaterial {
     interior: !!L.interior,
     territory: o.kind === 'myocardium' ? o.territoryAttribute ?? null : null,
     rim: !!L.rim,
-    clipSphere: !!clipOf(o.kind, o.shared),
+    clipSphere: !along && !!clipOf(o.kind, o.shared),
+    clipAlong: along,
+    edgeShade: !!L.edgeShade,
     desaturateMap: saturation < 0.995,
     cavity: !!o.cavity,
     fadeAlpha,
@@ -492,6 +527,11 @@ export function createTissueMaterial(o: TissueOptions): TissueMaterial {
   if (L.rim) Object.assign(uniforms, { uRimColor: { value: new Color(L.rim.color) }, uRimStrength: { value: L.rim.strength } });
   if (flags.territory) Object.assign(uniforms, o.shared.territory);
   if (flags.clipSphere) Object.assign(uniforms, clipOf(o.kind, o.shared));
+  if (flags.clipAlong) {
+    const [start, end] = ALONG_FADE[o.kind]!;
+    Object.assign(uniforms, { uAlongStart: { value: start }, uAlongEnd: { value: end } });
+  }
+  if (flags.edgeShade) uniforms.uEdgeShade = { value: L.edgeShade ?? 0 };
   if (flags.desaturateMap) uniforms.uSaturation = { value: saturation };
   if (flags.cavity) {
     Object.assign(uniforms, {
@@ -502,10 +542,18 @@ export function createTissueMaterial(o: TissueOptions): TissueMaterial {
     if (!flags.fat) Object.assign(uniforms, { uFatColor: { value: new Color(REAL.fat) } });
   }
 
+  // Fat is pulled in along its normals (thinner, flush in the groove); vessels are inflated for legibility.
+  if (L.deflate) uniforms.uInflate!.value = -L.deflate;
   material.userData.ct = { uniforms, kind: o.kind, look: o.look, flags, floorScale: realistic ? 0.45 : 1 };
   const inflate = (o.inflate ?? 0) > 0;
+  const deflate = !inflate && !!L.deflate;
   material.onBeforeCompile = (shader) => {
     patchTissueShader(shader, uniforms, flags);
+    if (deflate) {
+      shader.vertexShader = shader.vertexShader
+        .replace('#include <common>', '#include <common>\nuniform float uInflate;')
+        .replace('vCtRest = transformed + uRestOffset;', 'vCtRest = transformed + uRestOffset;\ntransformed += normalize(objectNormal) * uInflate;');
+    }
     if (inflate) {
       // Coronaries lie in their grooves under the epicardial fat: pull their DEPTH (not their screen
       // position) toward the camera so the risk-coloured artery reads through the thin fat over it, while
@@ -523,7 +571,7 @@ export function createTissueMaterial(o: TissueOptions): TissueMaterial {
         );
     }
   };
-  const key = `ct-tissue-${physical ? 'P' : 'S'}-${patchKey(flags)}-${inflate ? 'inf' : ''}`;
+  const key = `ct-tissue-${physical ? 'P' : 'S'}-${patchKey(flags)}-${inflate ? 'inf' : deflate ? 'def' : ''}`;
   material.customProgramCacheKey = () => key;
   return material;
 }
@@ -553,6 +601,7 @@ export const GHOST_MASK = { uGhostMask: { value: new Vector2(-1, 1) } as IUnifor
 /** Ghost opacity curves per kind (LUMEN §7.3): α = (base + rim·F^power) · fade. */
 const GHOST_CURVES: Partial<Record<TissueKind, [number, number, number]>> = {
   cardiacVein: [0.14, 0.3, 1.5],
+  fat: [0.05, 0.16, 2],
   skin: [0.02, 0.2, 3],
   lung: [0.02, 0.2, 2.5],
   airway: [0.02, 0.16, 2.5],
@@ -582,6 +631,8 @@ function ghostTint(kind: TissueKind, look: SceneLookId): string {
       return g.vessel;
     case 'cardiacVein':
       return g.vein;
+    case 'fat':
+      return g.fat;
     default:
       return g.heart;
   }
