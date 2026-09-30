@@ -138,22 +138,22 @@ def run(
     from .summary import build_metrics_summary, merge_analysis, read_metrics, write_metrics
 
     t0 = time.perf_counter()
-    selected = list(only or ANALYSES)
+    selected = list(ANALYSES if only is None else only)
     out_dir = out_dir or artifacts_dir
-    ctx = load_context(artifacts_dir, with_baseline="robustness" in selected)
-    settings = settings_from_config(ctx.cfg, fast)
+    ctx = load_context(artifacts_dir, with_baseline="robustness" in selected) if selected else None
+    settings = settings_from_config(ctx.cfg if ctx else {}, fast)
     for name, block in (overrides or {}).items():
         settings[name].update({k: v for k, v in block.items() if v is not None})
 
     blocks: dict[str, Any] = {}
     protocols: dict[str, Any] = {}
-    if "robustness" in selected:
+    if "robustness" in selected and ctx is not None:
         blocks["robustness"], protocols["robustness"] = compute_robustness(ctx, settings["robustness"], n_jobs, artifacts_dir, cache_dir)
         log.info("stage done: robustness (%.0f s)", time.perf_counter() - t0)
-    if "modality" in selected:
+    if "modality" in selected and ctx is not None:
         blocks["modality_ablation"], protocols["modality_ablation"] = compute_modality(ctx, settings["modality"], n_jobs)
         log.info("stage done: modality ablation (%.0f s)", time.perf_counter() - t0)
-    if "subgroups" in selected:
+    if "subgroups" in selected and ctx is not None:
         blocks["subgroups"], protocols["subgroups"] = compute_subgroups(ctx, settings["subgroups"], n_jobs, artifacts_dir, cache_dir)
         log.info("stage done: subgroups (%.0f s)", time.perf_counter() - t0)
 
@@ -190,7 +190,13 @@ def main(argv: list[str] | None = None) -> None:
     parser.add_argument("--no-figures", action="store_true", help="skip docs/figures and results.md")
     parser.add_argument("--no-mirror", action="store_true", help="do not copy to frontend/public/model")
     parser.add_argument("--cache", type=Path, default=None, help="memoise the expensive runs in this directory")
+    parser.add_argument(
+        "--republish", action="store_true",
+        help="recompute nothing: rebuild metrics_summary.json, figures and results.md from the published metrics.json",
+    )
     args = parser.parse_args(argv)
+    if args.republish and args.only:
+        parser.error("--republish and --only are mutually exclusive")
     if args.fast and args.out is None:
         parser.error("--fast results must not replace the published analyses; pass --out DIR")
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
@@ -198,7 +204,7 @@ def main(argv: list[str] | None = None) -> None:
     if custom and args.out.resolve() != ARTIFACTS_DIR.resolve():
         args.out.mkdir(parents=True, exist_ok=True)
     run(
-        only=args.only,
+        only=[] if args.republish else args.only,
         out_dir=args.out,
         frontend_dir=None if (custom or args.no_mirror) else FRONTEND_MODEL_DIR,
         figures_dir=None if (custom or args.no_figures) else FIGURES_DIR,

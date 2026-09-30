@@ -163,6 +163,13 @@ def _modality_summary(m: dict[str, Any]) -> dict[str, Any]:
     return out
 
 
+def ordinal(x: float) -> str:
+    """``3.0 -> '3rd'``, ``1.5 -> '2nd'``, ``84 -> '84th'`` (rounded half to even like ``round``)."""
+    n = int(round(x))
+    suffix = "th" if 10 <= n % 100 <= 20 else {1: "st", 2: "nd", 3: "rd"}.get(n % 10, "th")
+    return f"{n}{suffix}"
+
+
 def _headline(metrics: dict[str, Any], labels: dict[str, str]) -> dict[str, Any]:
     targets = list(metrics["targets"])
     out: dict[str, Any] = {}
@@ -170,8 +177,8 @@ def _headline(metrics: dict[str, Any], labels: dict[str, str]) -> dict[str, Any]
     if rob:
         n = rob[targets[0]]["n_splits"]
         parts = [
-            f"{t} median {rob[t]['roc_auc']['p50']:.2f} (90% of splits {rob[t]['roc_auc']['p05']:.2f}–{rob[t]['roc_auc']['p95']:.2f}; "
-            f"locked split at the {rob[t]['fixed_split_percentile']:.0f}th percentile)"
+            f"{t} median {rob[t]['roc_auc']['p50']:.2f} (middle 90% of splits {rob[t]['roc_auc']['p05']:.2f}–"
+            f"{rob[t]['roc_auc']['p95']:.2f}; locked split at the {ordinal(rob[t]['fixed_split_percentile'])} percentile)"
             for t in targets
         ]
         out["robustness"] = {

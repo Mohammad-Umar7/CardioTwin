@@ -16,7 +16,7 @@ from cardiotwin_ml.analysis.modality import columns_by_group, group_order, modal
 from cardiotwin_ml.analysis.robustness import fit_recipe, monte_carlo_splits, run_robustness
 from cardiotwin_ml.analysis.stats import corrected_t, distribution, holm, percentile_rank
 from cardiotwin_ml.analysis.subgroups import OOFPredictions, factors, point_metrics, run_subgroups
-from cardiotwin_ml.analysis.summary import build_metrics_summary, merge_analysis, serialise, write_metrics
+from cardiotwin_ml.analysis.summary import build_metrics_summary, merge_analysis, ordinal, serialise, write_metrics
 from cardiotwin_ml.paths import ARTIFACTS_DIR, FRONTEND_MODEL_DIR
 from cardiotwin_ml.preprocess import LEAKAGE_COLUMNS
 
@@ -231,6 +231,11 @@ def test_merge_is_additive_and_refuses_to_change_existing_keys(tmp_path: Path) -
     tampered = dict(merged, version="2.0.0")
     with pytest.raises(RuntimeError):
         write_metrics(path, tampered, text)
+
+
+def test_ordinal_suffixes() -> None:
+    values = (1, 1.5, 3.0, 11, 12, 13, 21, 22, 84, 100, 111)
+    assert [ordinal(v) for v in values] == ["1st", "2nd", "3rd", "11th", "12th", "13th", "21st", "22nd", "84th", "100th", "111th"]
 
 
 def test_carry_over_requires_an_unchanged_fingerprint(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
