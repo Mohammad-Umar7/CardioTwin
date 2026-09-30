@@ -1,5 +1,6 @@
 import { Suspense, lazy } from 'react';
 import { Outlet } from 'react-router-dom';
+import { ReportCommands } from '@/features/report/ReportCommands';
 import { SceneHost } from '@/three/SceneHost';
 import { AppBootstrap } from './AppBootstrap';
 import CommandPalette from './CommandPalette';
@@ -40,6 +41,7 @@ export function AppShell() {
       <StatusLine />
       <SceneHost />
       <AppBootstrap />
+      <ReportCommands />
       <DisclaimerModal />
       <Toaster />
       <CommandPalette />

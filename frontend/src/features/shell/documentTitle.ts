@@ -29,7 +29,12 @@ const PAGE_TITLES: Record<string, string> = {
   [ROUTES.methodology]: 'Methodology',
 };
 
-export function documentTitle(t: TitleInput): string {
+/** Routes that set their own title (the report names the PDF after the patient and the date). */
+const OWN_TITLE = [ROUTES.report];
+
+/** The tab title, or null on routes that manage `document.title` themselves. */
+export function documentTitle(t: TitleInput): string | null {
+  if (OWN_TITLE.some((r) => t.pathname.startsWith(r))) return null;
   if (t.pathname === ROUTES.landing) return LANDING_TITLE;
   const page = PAGE_TITLES[t.pathname];
   if (page) return `${page} — ${APP_TITLE}`;

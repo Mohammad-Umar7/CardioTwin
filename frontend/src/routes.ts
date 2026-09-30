@@ -4,6 +4,8 @@ export const ROUTES = {
   workstation: '/workstation',
   performance: '/performance',
   methodology: '/methodology',
+  /** Printable clinical report of the current workstation state (features/report). */
+  report: '/report',
 } as const;
 
 /** Routes whose page shows the 3D anatomy (the landing hero and the workstation stage). */
@@ -15,3 +17,4 @@ export const loadLanding = () => import('@/features/landing/LandingPage');
 export const loadWorkstation = () => import('@/features/workstation/WorkstationPage');
 export const loadPerformance = () => import('@/features/performance/PerformancePage');
 export const loadMethodology = () => import('@/features/methodology/MethodologyPage');
+export const loadReport = () => import('@/features/report/ReportPage');

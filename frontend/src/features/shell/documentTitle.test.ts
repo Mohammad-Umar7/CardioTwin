@@ -34,5 +34,7 @@ describe('documentTitle', () => {
     expect(documentTitle({ ...base, pathname: '/methodology' })).toBe('Methodology — CardioTwin');
     expect(documentTitle({ ...base, pathname: '/' })).toBe(LANDING_TITLE);
     expect(documentTitle({ ...base, patient: null })).toBe('Workstation — CardioTwin');
+    // The report names its own tab (and so the saved PDF).
+    expect(documentTitle({ ...base, pathname: '/report' })).toBeNull();
   });
 });

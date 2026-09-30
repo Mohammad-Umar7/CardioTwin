@@ -26,6 +26,6 @@ export function useDocumentTitle(): void {
   });
 
   useEffect(() => {
-    document.title = title;
+    if (title !== null) document.title = title;
   }, [title]);
 }
