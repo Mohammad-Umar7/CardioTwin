@@ -117,6 +117,15 @@ describe('planTransition', () => {
     ]);
   });
 
+  it('flies home before the dissection and simply clears afterwards', () => {
+    expect(planTransition(byId('select'), byId('dissect'), 'LAD')).toEqual([{ kind: 'home' }, { kind: 'peel', to: 'dissect' }]);
+    expect(planTransition(byId('dissect'), byId('why'), 'LAD')).toEqual([
+      { kind: 'select', target: null },
+      { kind: 'drawer', drawer: { id: 'explain', tab: 'why' } },
+      { kind: 'peel', to: 'rest' },
+    ]);
+  });
+
   it('changes route last when leaving the workstation and first when coming back', () => {
     const out = planTransition(byId('reveal'), byId('performance'), 'LAD');
     expect(out[out.length - 1]).toEqual({ kind: 'route', to: 'performance' });
@@ -130,6 +139,7 @@ describe('planTransition', () => {
       for (const a of actions) {
         if (a.kind === 'route') out = { ...out, route: a.to };
         if (a.kind === 'select') out = { ...out, selection: a.target };
+        if (a.kind === 'home') out = { ...out, selection: 'home' };
         if (a.kind === 'drawer') out = { ...out, drawer: a.drawer };
         if (a.kind === 'peel') out = { ...out, peel: a.to };
         if (a.kind === 'reveal') out = { ...out, revealed: a.revealed };

@@ -21,8 +21,11 @@ export const CHAPTERS: readonly Chapter[] = [
   { id: 'cath', title: 'Check against the cath' },
 ];
 
-/** Selection a beat wants: a fixed target, the highest-risk vessel, or nothing. */
-export type SelectionSpec = TargetId | 'top' | null;
+/**
+ * Selection a beat wants: a fixed target, the highest-risk vessel, nothing (the camera returns to where it
+ * was before the selection), or 'home' (nothing selected and the camera at the home pose).
+ */
+export type SelectionSpec = TargetId | 'top' | 'home' | null;
 
 export type DrawerSpec = null | { id: 'explain'; tab: ExplainTab } | { id: 'inputs'; field?: string };
 
@@ -75,14 +78,13 @@ export const LEVER_KEY = 'Typical Chest Pain';
 
 export const SEL = {
   patientChip:
-    '[data-region="patient-chip"], [data-tour="patient-chip"], [data-region="patient-switcher"], [data-tour="patient-picker"], [data-region="patient-card"]',
+    '[data-region="patient-chip"], [data-tour="patient-chip"], header button[aria-label^="Patient "], [data-tour="patient-picker"], [data-region="patient-card"]',
   riskCard: '[data-region="risk-card"], [data-tour="cad-card"]',
   vesselRows: '[data-region="vessel-rows"], [data-region="vessels"], [data-tour="vessels"], [data-region="risk-card"]',
   inspector: '[data-region="inspector"]',
   explainDrawer: '[data-region="explain-drawer"], [data-tour="why"]',
   inputsDrawer: '[data-region="inputs-drawer"], [data-tour="inputs"]',
-  protocol:
-    '[data-region="protocol"], [data-tour="protocol"], #protocol, [data-region="performance-summary"], main h1',
+  performance: '[data-region="performance-summary"], [data-tour="performance-summary"], #summary, main h1',
 } as const;
 
 const REST: BeatState = { route: 'workstation', selection: null, drawer: null, peel: 'rest', flips: [], revealed: false };
@@ -140,7 +142,7 @@ export const BEATS: readonly Beat[] = [
       'open, so the coronary tree stands on its own. It all comes back together when you move on.',
     spotlight: [{ stage: true }],
     durationMs: 12000,
-    state: s({ peel: 'dissect' }),
+    state: s({ selection: 'home', peel: 'dissect' }),
   },
   // 3 · Why -----------------------------------------------------------------------------------------
   {
@@ -223,7 +225,7 @@ export const BEATS: readonly Beat[] = [
     caption: (c) =>
       `Model performance: every figure was scored once on ${c.nTest ?? 'the'} held-out patients, with confidence ` +
       'intervals. CardioTwin is decision support for education and research, not a diagnosis.',
-    spotlight: [{ selector: SEL.protocol }],
+    spotlight: [{ selector: SEL.performance }],
     durationMs: 7000,
     state: s({ route: 'performance' }),
   },

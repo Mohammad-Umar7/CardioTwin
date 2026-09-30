@@ -31,10 +31,26 @@ function stageFreeArea(): Rect | null {
   return { left: r.left + i.left, top: r.top + i.top, width: r.width - i.left - i.right, height: r.height - i.top - i.bottom };
 }
 
-export function measureSpotlights(specs: readonly SpotlightSpec[], bounds: Bounds): (Rect | null)[] {
+/** Brings a spotlit element into view once (pages that scroll, e.g. Model performance). */
+function revealOnce(el: HTMLElement, bounds: Bounds, done: WeakSet<HTMLElement>): void {
+  if (done.has(el)) return;
+  done.add(el);
+  const r = el.getBoundingClientRect();
+  if (r.top < bounds.top || r.bottom > bounds.bottom) {
+    const reduced = typeof matchMedia === 'function' && matchMedia('(prefers-reduced-motion: reduce)').matches;
+    el.scrollIntoView({ block: r.height > bounds.bottom - bounds.top ? 'start' : 'center', behavior: reduced ? 'auto' : 'smooth' });
+  }
+}
+
+export function measureSpotlights(
+  specs: readonly SpotlightSpec[],
+  bounds: Bounds,
+  revealed: WeakSet<HTMLElement> = new WeakSet(),
+): (Rect | null)[] {
   return specs.map((spec) => {
     const raw = 'stage' in spec ? stageFreeArea() : (() => {
       const el = findVisible(spec.selector);
+      if (el) revealOnce(el, bounds, revealed);
       return el ? toRect(el.getBoundingClientRect()) : null;
     })();
     if (!raw) return null;
@@ -67,9 +83,10 @@ export function useSpotlightRects(specs: readonly SpotlightSpec[]): { rects: (Re
   }));
   useEffect(() => {
     let raf = 0;
+    const revealed = new WeakSet<HTMLElement>();
     const frame = () => {
       const bounds = viewportBounds();
-      const rects = measureSpotlights(specs, bounds);
+      const rects = measureSpotlights(specs, bounds, revealed);
       setState((prev) => {
         const b = prev.bounds;
         const boundsSame =

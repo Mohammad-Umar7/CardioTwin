@@ -122,6 +122,9 @@ export function executeAction(action: TourAction, deps: ExecuteDeps): void {
     case 'select':
       if (viewer.selectedStructure !== action.target) viewer.select(action.target);
       break;
+    case 'home':
+      viewer.flyHome();
+      break;
     case 'drawer': {
       const d = action.drawer;
       if (d === null) {

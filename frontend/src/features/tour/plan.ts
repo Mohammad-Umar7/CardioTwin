@@ -10,6 +10,7 @@ import type { BeatState, DrawerSpec, SelectionSpec } from './script';
 export type TourAction =
   | { kind: 'route'; to: BeatState['route'] }
   | { kind: 'select'; target: TargetId | null }
+  | { kind: 'home' }
   | { kind: 'drawer'; drawer: DrawerSpec }
   | { kind: 'peel'; to: BeatState['peel'] }
   | { kind: 'flip'; key: string; flipped: boolean }
@@ -24,7 +25,7 @@ const sameDrawer = (a: DrawerSpec, b: DrawerSpec): boolean => {
 };
 
 export function resolveSelection(spec: SelectionSpec, top: TargetId | null): TargetId | null {
-  return spec === 'top' ? top : spec;
+  return spec === 'top' ? top : spec === 'home' ? null : spec;
 }
 
 export function planTransition(prev: BeatState | null, next: BeatState, top: TargetId | null): TourAction[] {
@@ -43,7 +44,11 @@ export function planTransition(prev: BeatState | null, next: BeatState, top: Tar
   if (all || prev.revealed !== next.revealed) actions.push({ kind: 'reveal', revealed: next.revealed });
 
   const target = resolveSelection(next.selection, top);
-  if (all || resolveSelection(prev.selection, top) !== target) actions.push({ kind: 'select', target });
+  if (next.selection === 'home') {
+    if (all || prev.selection !== 'home') actions.push({ kind: 'home' });
+  } else if (all || prev.selection === 'home' || resolveSelection(prev.selection, top) !== target) {
+    actions.push({ kind: 'select', target });
+  }
   if (all || !sameDrawer(prev.drawer, next.drawer)) actions.push({ kind: 'drawer', drawer: next.drawer });
   if (all || prev.peel !== next.peel) actions.push({ kind: 'peel', to: next.peel });
 

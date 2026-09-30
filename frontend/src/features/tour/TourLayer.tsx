@@ -280,10 +280,20 @@ function TourView() {
     return () => document.removeEventListener('keydown', onKey, true);
   }, [exit, next, back]);
 
-  // Focus the primary control when the demo opens.
+  // Focus the primary control when the demo opens, and keep focus in the demo: drawers the demo opens
+  // move focus to their first field, which would otherwise leave the dialog.
   useEffect(() => {
-    const t = setTimeout(() => cardRef.current?.querySelector<HTMLElement>('[data-primary]')?.focus({ preventScroll: true }), 60);
-    return () => clearTimeout(t);
+    const focusPrimary = () => cardRef.current?.querySelector<HTMLElement>('[data-primary]')?.focus({ preventScroll: true });
+    const t = setTimeout(focusPrimary, 60);
+    const onFocusIn = (e: FocusEvent) => {
+      const target = e.target as Node | null;
+      if (layerRef.current && target && !layerRef.current.contains(target)) focusPrimary();
+    };
+    document.addEventListener('focusin', onFocusIn);
+    return () => {
+      clearTimeout(t);
+      document.removeEventListener('focusin', onFocusIn);
+    };
   }, []);
 
   useLayoutEffect(() => {
@@ -317,8 +327,9 @@ function TourView() {
   const { rects, bounds } = useSpotlightRects(beat.spotlight);
   const found = rects.filter((r): r is Rect => r !== null);
   const anchorRect = beat.anchor !== undefined ? (rects[beat.anchor] ?? null) : union(found);
-  // The rail sits at the bottom centre; the card never covers it.
-  const cardBounds = { ...bounds, bottom: bounds.bottom - 64 };
+  // The card never covers the chapter rail (bottom centre) or the stage's context slot (selection chip,
+  // what-if pill: 12 px inset + 32 px).
+  const cardBounds = { ...bounds, top: bounds.top + 44, bottom: bounds.bottom - 64 };
   const pos = bounds.right > 0 ? placeCard(anchorRect, { width: CARD_W, height: cardH }, cardBounds) : null;
   const chapter = CHAPTERS[beat.chapter]!;
 
@@ -337,7 +348,7 @@ function TourView() {
       >
         <div className="flex items-center gap-2">
           <p className="eyebrow min-w-0 flex-1 truncate text-tertiary">
-            Chapter {beat.chapter + 1} of {CHAPTERS.length} · {chapter.title}
+            {beat.chapter + 1} of {CHAPTERS.length} · {chapter.title}
           </p>
           <IconButton
             label={playing ? 'Pause the demo' : 'Play the demo'}
