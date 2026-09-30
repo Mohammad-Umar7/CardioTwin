@@ -9,6 +9,7 @@ import {
   bandSentence,
   cadReconciliation,
   cadVerdictDisplay,
+  cadVerdictShort,
   cadVerdictLine,
   cathComparison,
   flaggedCount,
@@ -162,5 +163,16 @@ describe('cadVerdictDisplay', () => {
     expect(p015.text).toMatch(/^Below CAD’s 75\s%\sdecision threshold$/);
     expect(cadVerdictDisplay(tp(0.62, 0.75), vessels(0.1, 0.1, 0.1)).glyph).toBeNull();
     expect(cadVerdictDisplay(tp(0.4, 0.75), vessels(0.6, 0.1, 0.1)).glyph).toBeNull();
+  });
+});
+
+describe('cadVerdictShort (landing Predict tile)', () => {
+  const vessels = (lad: number) => [{ p: tp(lad, 0.55) }, { p: tp(0.1, 0.33) }, { p: tp(0.1, 0.32) }];
+  it('never shows a hollow "Not flagged" beside a High band', () => {
+    const high = cadVerdictShort(tp(0.62, 0.75), vessels(0.1));
+    expect(high.glyph).toBeNull();
+    expect(high.text).toMatch(/^Below CAD’s 75\s%\sthreshold$/);
+    expect(cadVerdictShort(tp(0.3, 0.75), vessels(0.1))).toEqual({ glyph: '○', text: 'Not flagged' });
+    expect(cadVerdictShort(tp(0.9, 0.75), vessels(0.9))).toEqual({ glyph: '●', text: 'Flagged' });
   });
 });

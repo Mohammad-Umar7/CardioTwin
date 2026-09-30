@@ -2,7 +2,7 @@ import { ChevronRight } from 'lucide-react';
 import { useMemo, type MouseEvent, type ReactNode } from 'react';
 import { Link } from 'react-router-dom';
 import { BandChip, Probability, RiskPip, Skeleton } from '@/design';
-import { verdictFor } from '@/features/risk/verdict';
+import { cadVerdictShort } from '@/features/risk/verdict';
 import { useSchemaIndex } from '@/hooks/useData';
 import { useResource } from '@/hooks/useResource';
 import { cn } from '@/lib/cn';
@@ -26,12 +26,19 @@ export interface LandingDestination {
 // ------------------------------------------------------------------------------ micro-visuals
 
 function PredictVisual() {
-  const cad = usePatientStore((s) => s.prediction?.predictions.CAD);
+  const prediction = usePatientStore((s) => s.prediction);
   const stale = usePatientStore((s) => s.status === 'loading');
+  const schema = useSchemaIndex();
+  const cad = prediction?.predictions.CAD;
   if (!cad) return <Skeleton className="h-6 w-24" />;
-  // The CAD verdict sits under the band, like "k of 3 flagged" under the Map pips: a High band that is not
-  // flagged (CAD's threshold is 75 %) then never reads as a contradiction of the vessel count beside it.
-  const verdict = verdictFor(cad);
+  // The CAD verdict sits under the band, like "k of 3 flagged" under the Map pips, in the workstation's
+  // wording (§3.2): a High band or a flagged artery under an unflagged CAD reads "Below CAD's 75 % threshold",
+  // never a hollow "Not flagged" beside a High band.
+  const vessels = (schema?.vessels ?? []).flatMap((v) => {
+    const p = prediction?.predictions[v.id];
+    return p ? [{ p }] : [];
+  });
+  const verdict = cadVerdictShort(cad, vessels);
   return (
     <span className="flex items-center gap-2">
       <span data-prob="CAD">
@@ -39,11 +46,13 @@ function PredictVisual() {
       </span>
       <span className="flex flex-col items-start gap-1">
         <BandChip band={cad.risk_band} pending={stale} size="sm" showMeter={false} />
-        <span className={cn('whitespace-nowrap text-label font-normal text-tertiary', stale && 'opacity-50')}>
-          <span aria-hidden className="mr-1">
-            {verdict.glyph}
-          </span>
-          {verdict.word}
+        <span className={cn('max-w-[88px] text-pretty text-label font-normal leading-4 text-tertiary', stale && 'opacity-50')}>
+          {verdict.glyph && (
+            <span aria-hidden className="mr-1">
+              {verdict.glyph}
+            </span>
+          )}
+          {verdict.text}
         </span>
       </span>
     </span>

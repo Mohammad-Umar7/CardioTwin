@@ -78,6 +78,21 @@ export function cadVerdictDisplay(
   return { glyph: '○', text: cadVerdictLine(cad) };
 }
 
+/**
+ * The compact form of `cadVerdictDisplay` for tiles (landing Predict pillar): "● Flagged", "○ Not flagged", or
+ * the neutral "Below CAD’s 75 % threshold" under the same rule, so a High band never sits beside a hollow
+ * "Not flagged" anywhere in the app.
+ */
+export function cadVerdictShort(
+  cad: Pick<TargetPrediction, 'probability' | 'threshold' | 'risk_band'> & { label?: number | null },
+  vessels: readonly { p: Pick<TargetPrediction, 'probability' | 'threshold'> & { label?: number | null } }[],
+): CadVerdictDisplay {
+  const full = cadVerdictDisplay(cad, vessels);
+  const v = verdictFor(cad);
+  if (full.glyph === null) return { glyph: null, text: `${v.marginal ? 'Just below' : 'Below'} CAD’s ${formatPercent(cad.threshold)} threshold` };
+  return { glyph: full.glyph, text: v.word };
+}
+
 /** Inspector clause: "Flagged: above LAD's 55 % threshold." */
 export function vesselDecisionSentence(target: TargetId, p: Pick<TargetPrediction, 'probability' | 'threshold'> & { label?: number | null }): string {
   const v = verdictFor(p);
