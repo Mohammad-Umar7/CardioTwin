@@ -26,7 +26,7 @@ export function PipelineDiagram({ phases, nTest, onJump }: PipelineDiagramProps)
   };
   return (
     <figure className="flex flex-col gap-3" aria-labelledby="pipeline-caption">
-      <ol className="grid grid-cols-1 gap-6 min-[1100px]:grid-cols-[1.15fr_1.25fr_1fr_0.95fr_0.8fr] min-[1100px]:gap-0">
+      <ol className="grid grid-cols-1 gap-6 min-[1100px]:grid-cols-[1.05fr_1.2fr_1fr_0.95fr_1.05fr] min-[1100px]:gap-0">
         {phases.map((phase, i) => {
           const last = i === phases.length - 1;
           return (
@@ -89,7 +89,7 @@ export function PipelineDiagram({ phases, nTest, onJump }: PipelineDiagramProps)
         })}
       </ol>
       {/* The locked test split rides underneath the development phases, untouched. */}
-      <div className="grid grid-cols-1 min-[1100px]:grid-cols-[1.15fr_1.25fr_1fr_0.95fr_0.8fr]">
+      <div className="grid grid-cols-1 min-[1100px]:grid-cols-[1.05fr_1.2fr_1fr_0.95fr_1.05fr]">
         <div aria-hidden className="relative hidden min-[1100px]:block">
           <span className="absolute left-[4.5px] top-0 h-1/2 border-l border-dashed border-line-strong" />
           <span className="absolute left-[4.5px] right-0 top-1/2 border-t border-dashed border-line-strong" />
