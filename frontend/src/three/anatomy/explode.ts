@@ -30,6 +30,13 @@ export const PEEL_WINDOWS: Readonly<Record<string, readonly [number, number]>> =
   coronary: [0.7, 1],
 };
 
+/**
+ * An outer layer (skin, muscle, ribs, lungs, diaphragm) is solid only in the first 30 % of its window: it fades
+ * to its ghost while it has barely moved, so no opaque piece ever flies past the framed thorax or under a
+ * card (and a closing chest turns solid only once it is nearly home).
+ */
+export const PEEL_SOLID_UNTIL = 0.3;
+
 /** Peel detents (V2 §5.11): Closed · Skin off · Ribs open · Lungs aside ◆ · Open heart. */
 export const PEEL_DETENTS = [
   { id: 'closed', label: 'Closed', value: 0 },
@@ -230,6 +237,11 @@ export const OPENING_WALL = 'Heart_Wall_Anterior';
  */
 export const GREAT_VESSEL_LIFT: Vec3 = [0, 0.26, 0];
 const LIFTS_OFF_THE_BASE = /^GreatVessel_/;
+/**
+ * The great vessels lift FIRST (from rest), so ▶ Explode opens with the roots rising off the base before the
+ * anterior half swings (the heart's own window starts at 0.7): the separation reads even on a slow GPU.
+ */
+export const GREAT_VESSEL_WINDOW: readonly [number, number] = [0.6, 0.88];
 
 /**
  * One ExplodeSpec per structure node: vector = layer + structure explode, the layer's peel window, the
@@ -245,11 +257,12 @@ export function buildExplodeSpecs(manifest: ManifestLike, frame: HeartFrame | nu
     if (vector.lengthSq() < 1e-8 && s.layer === 'heart' && LIFTS_OFF_THE_BASE.test(s.node)) vector.set(...GREAT_VESSEL_LIFT);
     let hinge = manifestHinge(s) ?? (layer ? manifestHinge(layer) : null);
     if (!hinge && s.node === OPENING_WALL && frame) hinge = defaultHeartHinge(frame);
+    const lifts = s.layer === 'heart' && LIFTS_OFF_THE_BASE.test(s.node);
     specs.set(s.node, {
       node: s.node,
       layerId: s.layer,
       vector,
-      window: PEEL_WINDOWS[s.layer] ?? [0, 1],
+      window: lifts ? GREAT_VESSEL_WINDOW : (PEEL_WINDOWS[s.layer] ?? [0, 1]),
       hinge,
       rides: s.rides && s.rides !== s.node ? s.rides : null,
     });

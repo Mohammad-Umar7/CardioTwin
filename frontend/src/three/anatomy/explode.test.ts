@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest';
 import {
   DEFAULT_HEART_HINGE_DEG,
   GREAT_VESSEL_LIFT,
+  GREAT_VESSEL_WINDOW,
   PEEL_DETENTS,
   PEEL_SPRING_OMEGA,
   PEEL_WINDOWS,
@@ -96,7 +97,10 @@ describe('explode specs from the manifest', () => {
       frame,
     );
     expect(withVessels.get('GreatVessel_Aorta')!.vector.toArray()).toEqual([...GREAT_VESSEL_LIFT]);
-    expect(withVessels.get('GreatVessel_Aorta')!.window).toEqual(PEEL_WINDOWS.heart);
+    // They lift first, from rest, before the anterior half swings (its window starts at 0.7).
+    expect(withVessels.get('GreatVessel_Aorta')!.window).toEqual(GREAT_VESSEL_WINDOW);
+    expect(GREAT_VESSEL_WINDOW[0]).toBeLessThan(PEEL_WINDOWS.heart![0]);
+    expect(GREAT_VESSEL_WINDOW[0]).toBeGreaterThanOrEqual(0.6);
     // A structure with its own vector keeps it; the posterior wall stays put.
     expect(withVessels.get('Heart_Wall_Posterior')!.vector.toArray()).toEqual([0, 0, 0]);
   });

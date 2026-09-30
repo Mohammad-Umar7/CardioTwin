@@ -1,6 +1,6 @@
 /**
  * Peel control logic for the canvas toolbar (WORKSTATION_V2 §5.11): the five detents, magnetic snapping,
- * detent stepping for ←/→ and the ▶ Dissect / ⟲ Assemble player. The scene's own spring smooths every
+ * detent stepping for ←/→ and the ▶ Explode / ⟲ Assemble player. The scene's own spring smooths every
  * change of `viewerStore.explode`; the player drives the target value along LUMEN's peel timeline.
  * Pure helpers are unit-tested in hud.test.ts.
  */
@@ -52,10 +52,17 @@ export function peelValueText(value: number): string {
 
 // ------------------------------------------------------------------------------------ player
 
-/** LUMEN peel timings: 1400 ms forward, 1100 ms assemble; closing before a dissection is quicker. */
-export const PEEL_FORWARD_MS = 1400;
-export const PEEL_ASSEMBLE_MS = 1100;
-export const PEEL_CLOSE_MS = 500;
+/**
+ * Peel timings. ▶ Explode from rest is heart-centric and unhurried (the owner's "separates and comes back"):
+ * the great vessels lift, then the anterior half swings open over PEEL_OPEN_MS while the thorax stays
+ * ghosted — one camera move. From a closed chest the whole dissection plays (PEEL_FORWARD_MS for 0 → 1).
+ * ⟲ Assemble takes PEEL_ASSEMBLE_MS from the open heart back to rest (scaled by the distance).
+ */
+export const PEEL_OPEN_MS = 2400;
+export const PEEL_FORWARD_MS = 2800;
+export const PEEL_ASSEMBLE_MS = 1500;
+/** Shortest segment (a nudge from just below Open heart still reads as motion). */
+const MIN_SEGMENT_MS = 500;
 
 export interface PeelSegment {
   from: number;
@@ -63,13 +70,23 @@ export interface PeelSegment {
   ms: number;
 }
 
-/** ▶ Dissect closes the chest first so the whole dissection plays (skin, ribs, lungs, heart); ⟲ goes to rest. */
+/**
+ * ▶ Explode: from rest (or anywhere in the heart's range) straight to the open heart; from a closed chest, the
+ * whole dissection (skin, ribs, lungs, then the heart) in one sweep — never closing the chest first.
+ * ⟲ Assemble: back to rest.
+ */
 export function peelPlan(current: number, to: 'dissect' | 'assemble'): PeelSegment[] {
-  if (to === 'assemble') return Math.abs(current - PEEL_REST) < 1e-3 ? [] : [{ from: current, to: PEEL_REST, ms: PEEL_ASSEMBLE_MS }];
-  const segs: PeelSegment[] = [];
-  if (current > 0.02) segs.push({ from: current, to: 0, ms: PEEL_CLOSE_MS });
-  segs.push({ from: current > 0.02 ? 0 : current, to: 1, ms: PEEL_FORWARD_MS });
-  return segs;
+  if (to === 'assemble') {
+    const span = Math.abs(current - PEEL_REST);
+    if (span < 1e-3) return [];
+    return [{ from: current, to: PEEL_REST, ms: Math.max(MIN_SEGMENT_MS, Math.round((PEEL_ASSEMBLE_MS * span) / (1 - PEEL_REST))) }];
+  }
+  if (current >= 1 - 1e-3) return [];
+  const ms =
+    current >= PEEL_REST - 0.02
+      ? (PEEL_OPEN_MS * (1 - current)) / (1 - PEEL_REST)
+      : PEEL_FORWARD_MS * (1 - current);
+  return [{ from: current, to: 1, ms: Math.max(MIN_SEGMENT_MS, Math.round(ms)) }];
 }
 
 /** LUMEN `peel` easing, cubic-bezier(.65,0,.35,1) ≈ ease-in-out cubic. */

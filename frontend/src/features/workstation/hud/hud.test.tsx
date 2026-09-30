@@ -9,7 +9,19 @@ import { useCameraState } from '@/three/camera/cameraState';
 import { CanvasToolbar } from './CanvasToolbar';
 import { layerDefault, layerIsDefault, layerVisible, resetLayers } from './layers';
 import { LegendChip } from './LegendChip';
-import { OPEN_AT, nearestDetent, peelAt, peelPlan, peelValueText, snapToDetent, stepDetent, usePeelPlayer } from './peel';
+import {
+  OPEN_AT,
+  PEEL_ASSEMBLE_MS,
+  PEEL_FORWARD_MS,
+  PEEL_OPEN_MS,
+  nearestDetent,
+  peelAt,
+  peelPlan,
+  peelValueText,
+  snapToDetent,
+  stepDetent,
+  usePeelPlayer,
+} from './peel';
 import { qualityValue, setQuality, tierSummary } from './quality';
 import { SelectionChip } from './SelectionChip';
 
@@ -44,16 +56,19 @@ describe('peel detents (V2 §5.11)', () => {
     expect(peelValueText(0.7)).toMatch(/70 percent open/);
   });
 
-  it('dissects by closing first, then opening to the heart; assembles to rest', () => {
+  it('explodes heart-centric from rest in one unhurried sweep; dissects a closed chest in one pass; assembles to rest', () => {
     const plan = peelPlan(0.6, 'dissect');
-    expect(plan.map((s) => s.to)).toEqual([0, 1]);
-    expect(peelPlan(0, 'dissect')).toHaveLength(1);
-    expect(peelPlan(1, 'assemble')).toEqual([{ from: 1, to: PEEL_REST, ms: 1100 }]);
+    expect(plan).toEqual([{ from: 0.6, to: 1, ms: PEEL_OPEN_MS }]);
+    // Never closes the chest first: a single segment from wherever the peel is.
+    expect(peelPlan(0, 'dissect')).toEqual([{ from: 0, to: 1, ms: PEEL_FORWARD_MS }]);
+    expect(peelPlan(0.3, 'dissect')).toHaveLength(1);
+    expect(peelPlan(1, 'dissect')).toEqual([]);
+    expect(peelPlan(1, 'assemble')).toEqual([{ from: 1, to: PEEL_REST, ms: PEEL_ASSEMBLE_MS }]);
     expect(peelPlan(PEEL_REST, 'assemble')).toEqual([]);
-    const total = plan.reduce((a, s) => a + s.ms, 0);
+    expect(PEEL_OPEN_MS).toBeGreaterThanOrEqual(2400);
     expect(peelAt(plan, 0).value).toBeCloseTo(0.6, 5);
-    expect(peelAt(plan, plan[0]!.ms).value).toBeCloseTo(0, 5);
-    expect(peelAt(plan, total + 1)).toEqual({ value: 1, done: true });
+    expect(peelAt(plan, PEEL_OPEN_MS / 2).value).toBeCloseTo(0.8, 5);
+    expect(peelAt(plan, PEEL_OPEN_MS + 1)).toEqual({ value: 1, done: true });
   });
 
   it('jumps straight to the end under reduced motion; P toggles dissect / assemble', () => {

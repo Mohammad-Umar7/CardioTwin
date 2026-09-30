@@ -35,8 +35,9 @@ export interface CanvasToolbarProps {
 }
 
 /**
- * Explode / Assemble (P): the icon says what it does — two halves pulled apart (explode: peel the thorax and
- * open the heart) or pushed together (assemble back to the rest state), never a media "play" triangle.
+ * Explode / Assemble (P): the icon says what it does — two halves pulled apart (explode: the great vessels
+ * lift and the heart opens; from a closed chest the whole dissection plays) or pushed together (assemble back
+ * to the rest state), never a media "play" triangle.
  */
 function DissectButton() {
   const reduced = useIsReducedMotion();
@@ -47,7 +48,7 @@ function DissectButton() {
     <IconButton
       label={name}
       tooltip={withShortcut(
-        playing ? 'Stop the peel' : open ? 'Assemble · close the heart' : 'Explode · peel the chest and open the heart',
+        playing ? 'Stop the peel' : open ? 'Assemble · close the heart' : 'Explode · open the heart',
         SHORTCUT.peel,
       )}
       icon={playing ? <Square className="!size-3.5 fill-current" /> : open ? <FoldHorizontal /> : <UnfoldHorizontal />}
