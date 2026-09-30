@@ -70,7 +70,7 @@ from .splits import holdout_split, joint_patterns
 
 log = logging.getLogger("cardiotwin_ml.train")
 
-FAST_MODELS = ("dummy_prior", "lr_l2", "lr_l1", "xgboost")
+FAST_MODELS = ("dummy_prior", "lr_l2", "lr_l1", "lr_core", "xgboost")
 
 
 def fast_config(cfg: dict[str, Any]) -> dict[str, Any]:
@@ -84,7 +84,7 @@ def fast_config(cfg: dict[str, Any]) -> dict[str, Any]:
     for m in cfg["models"].values():
         if "n_iter" in m:
             m["n_iter"] = 3
-    cfg["ensemble"]["logistic_candidates"] = ["lr_l2", "lr_l1"]
+    cfg["ensemble"]["logistic_candidates"] = ["lr_l2", "lr_l1", "lr_core"]
     return cfg
 
 
@@ -138,8 +138,8 @@ def _paired_delta_auc(y: np.ndarray, p_a: np.ndarray, p_b: np.ndarray, n: int, s
     }
 
 
-def _final_fit_task(spec, X, y, seed, final_tuning, inner_seed, inner_repeats):  # noqa: ANN001, ANN202
-    return fit_estimator(spec, X, y, seed, final_tuning, inner_seed, inner_repeats=inner_repeats)
+def _final_fit_task(spec, X, y, seed, final_tuning, inner_seed, inner_repeats, columns):  # noqa: ANN001, ANN202
+    return fit_estimator(spec, X, y, seed, final_tuning, inner_seed, inner_repeats=inner_repeats, columns=columns)
 
 
 # --------------------------------------------------------------------------- pipeline
@@ -152,7 +152,9 @@ def run(
     reports_dir: Path | None = REPORTS_DIR,
     frontend_dir: Path | None = FRONTEND_MODEL_DIR,
     n_jobs: int = -1,
+    dev_only: bool = False,
 ) -> dict[str, Any]:
+    """Run the pipeline. ``dev_only`` stops before the final refit and never touches the test set."""
     t_start = time.perf_counter()
     cfg = load_training_config()
     if fast:
@@ -210,12 +212,10 @@ def run(
 
     log.info("stage done: ablations (%.1f s elapsed)", time.perf_counter() - t_start)
     # ---------------------------------------------------------------- nested-CV leaderboard (dev only)
-    bl_cfg = cfg["baseline"]
-    bl_encoder = FeatureEncoder([f for f in used if f.key in bl_cfg["features"]])
-    X_dev_bl = bl_encoder.transform(dev_values)
-    X_test_bl = bl_encoder.transform(test_values)
-    jobs = [CVJob(f"{m}|{t}", specs[m], t, X_dev, y_dev[t], folds[t]) for t in target_ids for m in specs]
-    jobs += [CVJob(f"baseline|{t}", specs[bl_cfg["model"]], t, X_dev_bl, y_dev[t], folds[t]) for t in target_ids]
+    bl_name = cfg["baseline"]["model"]
+    bl_spec = specs[bl_name]
+    columns = encoder.columns
+    jobs = [CVJob(f"{m}|{t}", specs[m], t, X_dev, y_dev[t], folds[t], columns=columns) for t in target_ids for m in specs]
     log.info("running %d CV jobs x %d folds", len(jobs), len(folds[target_ids[0]]))
     cv = run_cv_jobs(jobs, seed, cfg["tuning"], n_jobs)
 
@@ -260,19 +260,36 @@ def run(
             t, lr_name, fit.weight, fit.platt_a, fit.platt_b, thr.youden, fit.oof_auc,
         )
 
+    if dev_only:
+        summary = {
+            "fast_mode": fast,
+            "ablations": ablations,
+            "targets": {
+                t: {
+                    "logistic": per_target[t]["lr_name"],
+                    "weight_lr": per_target[t]["fit"].weight,
+                    "oof_auc_pooled": per_target[t]["fit"].oof_auc,
+                    "cv": per_target[t]["cv"],
+                    "leaderboard": per_target[t]["leaderboard"],
+                    "baseline_cv_auc": cv[f"{bl_name}|{t}"].summary()["roc_auc"],
+                }
+                for t in target_ids
+            },
+        }
+        export.write_json(artifacts_dir / "dev_summary.json", summary)
+        log.info("dev-only run: test set untouched; summary written to %s", artifacts_dir / "dev_summary.json")
+        return summary
     # ---------------------------------------------------------------- final refit on the full dev set
     final_tuning = {"inner_splits": cfg["final_tuning"]["inner_splits"], "scoring": cfg["tuning"]["scoring"]}
     inner_repeats = int(cfg["final_tuning"]["inner_repeats"])
     fit_keys = []
     tasks = []
     for t in target_ids:
-        for comp in (per_target[t]["lr_name"], tree_name):
+        for comp in dict.fromkeys((per_target[t]["lr_name"], tree_name, bl_name)):
             fit_keys.append((t, comp))
-            tasks.append(delayed(_final_fit_task)(specs[comp], X_dev, y_dev[t], seed, final_tuning, seed + 7, inner_repeats))
-        fit_keys.append((t, "baseline"))
-        tasks.append(
-            delayed(_final_fit_task)(specs[bl_cfg["model"]], X_dev_bl, y_dev[t], seed, final_tuning, seed + 7, inner_repeats)
-        )
+            tasks.append(
+                delayed(_final_fit_task)(specs[comp], X_dev, y_dev[t], seed, final_tuning, seed + 7, inner_repeats, columns)
+            )
     fitted = dict(zip(fit_keys, Parallel(n_jobs=n_jobs, backend="loky", batch_size=1)(tasks), strict=True))
 
     models: dict[str, TargetModel] = {}
@@ -307,9 +324,9 @@ def run(
         info = per_target[t]
         yt = y_test[t]
         p_test = tm.predict_proba(X_test)
-        bl_pipe, bl_params = fitted[(t, "baseline")]
-        p_bl_test = bl_pipe.predict_proba(X_test_bl)[:, 1]
-        bl_cv = cv[f"baseline|{t}"]
+        bl_pipe, bl_params = fitted[(t, bl_name)]
+        p_bl_test = bl_pipe.predict_proba(X_test)[:, 1]
+        bl_cv = cv[f"{bl_name}|{t}"]
         bl_thr = youden_threshold(np.tile(y_dev[t], bl_cv.n_repeats), bl_cv.proba.ravel())
         bl_fold = [binary_metrics(y_dev[t][f.test], bl_cv.proba[f.repeat, f.test], bl_thr) for f in folds[t]]
         s = seed + 101 * (k + 1)
@@ -344,8 +361,8 @@ def run(
             },
             "leaderboard": info["leaderboard"],
             "baseline": {
-                "model": bl_cfg["model"],
-                "features": list(bl_cfg["features"]),
+                "model": bl_name,
+                "features": list(bl_spec.features or ()),
                 "params": clean_params(bl_params),
                 "threshold": round_float(bl_thr),
                 "cv": _metric_block(bl_fold),
@@ -405,11 +422,10 @@ def run(
     fixtures = build_fixtures(predictor, cohort, schema, portable, n_test_cases=20)
     export.write_json(artifacts_dir / "fixtures.json", fixtures)
 
-    # Server predictor must agree with the vectorised evaluation used for the test metrics.
+    # The online predictor (scalar path) must reproduce the vectorised test-set evaluation exactly.
+    api = [predictor.predict(pt["features"])["predictions"] for pt in cohort["patients"] if pt["split"] == "test"]
     for t in target_ids:
-        p_api = [predictor.predict(pt["features"])["predictions"][t]["probability"] for pt in cohort["patients"] if pt["split"] == "test"]
-        assert np.allclose(p_api, target_reports[t]["_p_test"], atol=1e-12)
-        target_reports[t].pop("_p_test")
+        assert np.allclose([r[t]["probability"] for r in api], target_reports[t].pop("_p_test"), atol=1e-12)
 
     patterns = joint_patterns(labels)
     co = labels.T.dot(labels)
@@ -507,7 +523,8 @@ def _protocol(cfg: dict[str, Any], fast: bool) -> dict[str, Any]:
             "threshold held fixed at its development-set value."
         ),
         "baseline": (
-            f"Pre-specified clinical baseline: {cfg['baseline']['model']} on {', '.join(cfg['baseline']['features'])} "
+            f"Pre-specified clinical baseline: {cfg['baseline']['model']} on "
+            f"{', '.join(cfg['models'][cfg['baseline']['model']]['features'])} "
             "(nested-CV tuned, Youden threshold on OOF), to quantify what the full clinical/ECG/lab/echo panel adds."
         ),
         "explainability": (
@@ -525,6 +542,9 @@ def main(argv: list[str] | None = None) -> None:
     parser.add_argument("--no-figures", action="store_true", help="skip figures and results.md")
     parser.add_argument("--no-mirror", action="store_true", help="do not copy artifacts to frontend/public/model")
     parser.add_argument("--jobs", type=int, default=-1, help="parallel workers (default: all cores)")
+    parser.add_argument(
+        "--dev-only", action="store_true", help="development-set CV only (writes dev_summary.json; never touches the test set)"
+    )
     args = parser.parse_args(argv)
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
     custom_out = args.out is not None
@@ -535,6 +555,7 @@ def main(argv: list[str] | None = None) -> None:
         reports_dir=None if (args.no_figures or custom_out) else REPORTS_DIR,
         frontend_dir=None if (args.no_mirror or custom_out) else FRONTEND_MODEL_DIR,
         n_jobs=args.jobs,
+        dev_only=args.dev_only,
     )
 
 
