@@ -43,10 +43,28 @@ CALIBRE = {
     "LM": (4.3, 4.0), "LAD": (3.9, 1.3), "LCX": (3.3, 1.9), "RCA": (3.3, 2.4),
     "D": (2.2, 1.0), "D2": (1.9, 0.9), "OM": (2.2, 1.0), "OM2": (1.9, 0.9), "RVb": (1.1, 0.6),
     "S1": (1.8, 0.8), "S": (1.4, 0.7), "IS": (1.2, 0.6), "PDA": (2.1, 1.0), "PL": (1.9, 0.9),
-    "AM": (1.7, 0.8), "am": (1.2, 0.6), "CB": (1.3, 0.6), "SAN": (1.1, 0.55), "br": (1.0, 0.5),
+    "AM": (1.7, 0.8), "am": (1.2, 0.6), "CB": (1.3, 0.6), "LCB": (1.0, 0.5), "SAN": (1.1, 0.55), "br": (1.0, 0.5),
 }
-#: Height of the vessel wall above the epicardium (mm): the vessels lie in the epicardial fat.
-LIFT = {"groove": 1.0, "trunk": 0.7, "branch": 0.45}
+#: Branch origins along the LAD (arc length from the left-main bifurcation, mm): the first septal perforator (so the
+#: proximal LAD is ~38 mm: more proximally the septum under this LAD is the membranous / outflow region and a
+#: perforator would not stay intramyocardial), the BodyParts3D first diagonal re-attached in D1_ORIGIN_MM (joining its own course
+#: D1_JOIN_MM along it), the second diagonal D2_AFTER_MM beyond D1, and the left conus branch.
+S1_ON_LAD_MM = 38.0
+D1_ORIGIN_MM = (24.0, 32.0)
+D1_JOIN_MM = 16.0
+D2_AFTER_MM = 24.0
+LEFT_CONUS_ON_LAD_MM = 8.0
+#: Shortest left main (ostium -> bifurcation chord); in vivo 10 +/- 5 mm.
+LM_MIN_MM = 9.0
+#: The circumflex runs this far on the ventricular side of the left AV groove bottom (never above h = -2 mm).
+LCX_BELOW_CREASE_MM = 0.5
+#: The (right) conus branch crosses the anterior infundibulum this far below the pulmonary-valve centre, over this
+#: fraction of the way from its origin to the anterior interventricular groove.
+CONUS_BELOW_PV_MM = 11.0
+CONUS_REACH = 0.55
+#: Height of the vessel wall above the epicardium (mm, on the calibrated wall field): the vessels lie on the heart, in
+#: the epicardial fat of the grooves; a branch touches the epicardium.
+LIFT = {"groove": 0.6, "trunk": 0.3, "branch": 0.15}
 
 
 class Tree:
@@ -75,10 +93,33 @@ def _nearest_s(P: np.ndarray, q: np.ndarray) -> tuple[int, float]:
 
 
 def lv_side(P: np.ndarray, lad: np.ndarray) -> np.ndarray:
-    """True for points on the patient-left (LV) side of the LAD at the same height (scene +X = left, +Z up)."""
+    """True for points on the patient-left (LV) side of the LAD at the same height (scene +X = left, +Z up); above or
+    below the LAD's height range the nearest end of the LAD decides (a branch climbing over the right-ventricular
+    outflow tract from the proximal LAD is on the RV side)."""
     order = np.argsort(lad[:, 2])
-    xl = np.interp(P[:, 2], lad[order, 2], lad[order, 0], left=np.nan, right=np.nan)
-    return np.where(np.isnan(xl), True, P[:, 0] >= xl - 2 * MM)
+    xl = np.interp(P[:, 2], lad[order, 2], lad[order, 0])
+    return P[:, 0] >= xl - 2 * MM
+
+
+def lv_dir(geo, P: np.ndarray, k: int) -> np.ndarray:
+    """Unit epicardial tangent at ``P[k]`` perpendicular to the path, pointing to the patient's left (LV side)."""
+    t = vs.tangent(P, k)
+    n = geo.normal(P[k][None])[0]
+    b = mo.unit(np.cross(n, t))
+    return b if b[0] >= 0 else -b
+
+
+def grow_branch(geo, parent: np.ndarray, s0: float, angle_deg: float, side: np.ndarray, length: float, goal: np.ndarray,
+                *, R: float, lift: float, goal_weight: float = 0.05) -> np.ndarray:
+    """A branch leaving ``parent`` at arc length ``s0`` at ``angle_deg`` to it, towards ``side`` (a unit epicardial
+    tangent), grown over the epicardium and bending gently towards ``goal``."""
+    k = int(np.clip(np.searchsorted(vs.arclen(parent), s0), 2, len(parent) - 3))
+    t = vs.tangent(parent, k)
+    a = math.radians(angle_deg)
+    d = mo.unit(math.cos(a) * t + math.sin(a) * side)
+    P = geo.grow(parent[k] + d * 0.8 * MM, d, length, R=R, lift=lift, goal=goal, goal_weight=goal_weight)
+    P = vs.resample(np.vstack([parent[k], P]), SPACING)
+    return vs.smooth(P, 3)
 
 
 def _bridge_to(geo, start: np.ndarray, t_start: np.ndarray, path: np.ndarray, s_join: float, *, R: float,
@@ -161,7 +202,10 @@ def _border(geo, z: float, back: float = 0.0) -> np.ndarray:
 def _front(geo, z: float, x: float) -> np.ndarray:
     """The most anterior epicardial point at height ``z`` and patient-left position ``x``."""
     E = geo.E
-    band = (np.abs(E[:, 2] - z) < 3 * MM) & (np.abs(E[:, 0] - x) < 3 * MM)
+    for tol in (3.0, 6.0, 10.0):
+        band = (np.abs(E[:, 2] - z) < 3 * MM) & (np.abs(E[:, 0] - x) < tol * MM)
+        if band.any():
+            break
     Q = E[band] if band.any() else E[np.abs(E[:, 2] - z) < 3 * MM]
     return Q[int(np.argmin(Q[:, 1]))]
 
@@ -264,13 +308,16 @@ def design(parts, geo, ostia: dict, log, *, svc_V: np.ndarray, pv_valve_V: np.nd
            for L_ in (10.5, 13.0)]
     Bs = [geo.seat((O_L + d_ * MM)[None], 2.0 * MM, LIFT["trunk"] * MM, snap=False, iterations=4)[0] for d_ in fan]
     # the left main must stay a leftward course (its chord mostly +X) after seating
-    ok_ = [b_ for b_ in Bs if (b_ - O_L)[0] >= 0.75 * np.linalg.norm(b_ - O_L)] or Bs
+    ok_ = [b_ for b_ in Bs if (b_ - O_L)[0] >= 0.75 * np.linalg.norm(b_ - O_L) and np.linalg.norm(b_ - O_L) >= LM_MIN_MM * MM] or Bs
     B = ok_[int(np.argmin([ring_ma.dist(b_[None])[0] for b_ in ok_]))]
     in_groove = (np.degrees(th_all) >= 88) & (np.degrees(th_all) <= 150) & (ring_ma.dist(G_ma) <= 15.0 * MM)
     kj = int(np.flatnonzero(in_groove)[np.argmin(np.linalg.norm(G_ma[in_groove] - B, axis=1))])
     th_B = float(th_all[kj])
     th_lcx = np.arange(th_B, deg(190.0), deg(1.5))
-    groove_lcx = vs.resample(geo.groove("MA", th_lcx, h_mm=-2.0, R=1.5 * MM, lift=LIFT["groove"] * MM, max_mm=9.5), SPACING)
+    # the circumflex runs on the ventricular side of the groove bottom (which laterally lies below the hinge plane)
+    h_lcx = np.minimum(-2.0, geo.crease_h("MA", th_lcx) - LCX_BELOW_CREASE_MM)
+    groove_lcx = vs.resample(geo.groove("MA", th_lcx, h_mm=h_lcx, R=1.5 * MM, lift=LIFT["groove"] * MM, max_mm=9.5,
+                                        radial_seat=True), SPACING)
     k_in = min(len(groove_lcx) - 2, int(5 * MM / SPACING))
     t_lcx0 = mo.unit(mo.unit(groove_lcx[k_in] - B) + 0.4 * np.array([1.0, 0.18, 0.0]))
     lead = vs.hermite(B, t_lcx0, groove_lcx[k_in], vs.tangent(groove_lcx, k_in), SPACING, tension=0.5)
@@ -289,7 +336,7 @@ def design(parts, geo, ostia: dict, log, *, svc_V: np.ndarray, pv_valve_V: np.nd
         f"({ring_ma.dist(B[None])[0] / MM:.0f} mm from the mitral hinge ring)")
     L_lcx = vs.arclen(lcx)[-1]
     R_lcx = vs.radius_law(vs.arclen(lcx), L_lcx, *CALIBRE["LCX"], tip_frac=0.3, tip_ratio=0.55)
-    lcx = _settle(geo, lcx, R_lcx, LIFT["groove"] * MM, pin_start=2)
+    lcx = vs.smooth(lcx, 3)  # radially seated in the groove (the final lift clears any dip into the wall)
     lcx[0] = B
     i_lcx = trees["Coronary_LCX"].add(lcx, R_lcx, attach="LM", code="pCx", role="trunk")
 
@@ -325,8 +372,17 @@ def design(parts, geo, ostia: dict, log, *, svc_V: np.ndarray, pv_valve_V: np.nd
         L = vs.arclen(P)[-1]
         if par == 0:
             ko, so = _nearest_s(lad, P[0])
-            onlv = lv_side(P, lad).mean() >= 0.5
-            if onlv and L >= 15 * MM:
+            # LV side = the branch ends on the patient-left side of the LAD (in the epicardial tangent plane there)
+            ke = int(np.argmin(np.linalg.norm(lad - P[-1], axis=1)))
+            onlv = float((P[-1] - lad[ke]) @ lv_dir(geo, lad, ke)) > 0.0
+            if onlv and L >= 40 * MM and not diag_origins:
+                # the BodyParts3D diagonal: re-attached more proximally (D1 usually leaves within the first 20-30 mm)
+                # with a 40-55 deg take-off
+                P, ko = _attach(geo, lad, P, s_join=D1_JOIN_MM * MM, R=1.0 * MM, lift=LIFT["branch"] * MM,
+                                trunk_range=(D1_ORIGIN_MM[0] * MM, D1_ORIGIN_MM[1] * MM))
+                so = float(s_lad[ko])
+                code, cal = "D", CALIBRE["D"]
+            elif onlv and L >= 15 * MM:
                 code, cal = "D", CALIBRE["D"]
             elif not onlv:
                 if L < 8 * MM:
@@ -357,25 +413,34 @@ def design(parts, geo, ostia: dict, log, *, svc_V: np.ndarray, pv_valve_V: np.nd
             P = geo.seat(P, R, LIFT["branch"] * MM, snap=True, pin_start=2)
             idx_map[j] = trees["Coronary_LAD"].add(P, R, parent=idx_map[par], code=parent_seg["code"])
     diag_origins.sort(key=lambda x: x[0])
-    # second diagonal: 22 mm distal to D1, over the anterolateral LV between the LAD and the left border
-    if diag_origins:
-        s_d1, _, D1 = diag_origins[0]
-        k2 = int(np.searchsorted(s_lad, s_d1 + 22 * MM))
-        o2 = lad[k2]
-        way = [o2]
-        for dz, frac in ((8.0, 0.3), (19.0, 0.42), (30.0, 0.5), (40.0, 0.5)):
-            z = o2[2] - dz * MM
-            xl = float(np.interp(z, lad[np.argsort(lad[:, 2]), 2], lad[np.argsort(lad[:, 2]), 0]))
-            xb = float(_border(geo, z)[0])
-            way.append(_front(geo, z, xl + frac * (xb - xl)))
-        D2 = surface_path(geo, np.array(way), R=0.9 * MM, lift=LIFT["branch"] * MM)
-        d0 = min(CALIBRE["D2"][0], 1.8 * float(R_lad[k2]) / MM)
-        R = vs.radius_law(vs.arclen(D2), vs.arclen(D2)[-1], d0, CALIBRE["D2"][1])
-        trees["Coronary_LAD"].add(geo.seat(D2, R, LIFT["branch"] * MM, pin_start=2), R, parent=i_lad, code="D2")
+    # second diagonal: leaves the LAD D2_AFTER_MM distal to D1 at ~45 deg and fans over the anterolateral left
+    # ventricle between D1 and the LAD, towards the lateral apical third (never running alongside the LAD)
+    s_d1 = diag_origins[0][0] if diag_origins else 28 * MM
+    s_d2 = s_d1 + D2_AFTER_MM * MM
+    k2 = int(np.searchsorted(s_lad, s_d2))
+    z_goal = lad[k2][2] - 45 * MM
+    order_z = np.argsort(lad[:, 2])
+    xl = float(np.interp(z_goal, lad[order_z, 2], lad[order_z, 0]))
+    goal = _front(geo, z_goal, xl + 0.55 * (float(_border(geo, z_goal)[0]) - xl))
+    D2 = grow_branch(geo, lad, s_d2, 45.0, lv_dir(geo, lad, k2), 58 * MM, goal, R=0.9 * MM, lift=LIFT["branch"] * MM)
+    d0 = min(CALIBRE["D2"][0], 1.8 * float(R_lad[k2]) / MM)
+    R = vs.radius_law(vs.arclen(D2), vs.arclen(D2)[-1], d0, CALIBRE["D2"][1])
+    trees["Coronary_LAD"].add(geo.seat(D2, R, LIFT["branch"] * MM, pin_start=2), R, parent=i_lad, code="D2")
+    # left conus branch (the LAD's contribution to the ring of Vieussens): a twig from the first 10 mm of the LAD over
+    # the infundibulum towards the RCA's conus branch
+    k_lc = int(np.searchsorted(s_lad, LEFT_CONUS_ON_LAD_MM * MM))
+    side_rv = -lv_dir(geo, lad, k_lc)
+    z_cb = pv_valve_V.mean(axis=0)[2] - CONUS_BELOW_PV_MM * MM
+    lcb_goal = _front(geo, z_cb, lad[int(np.searchsorted(s_lad, 14 * MM))][0] - 16 * MM)
+    LCB = grow_branch(geo, lad, LEFT_CONUS_ON_LAD_MM * MM, 70.0, side_rv, 20 * MM, lcb_goal, R=0.5 * MM,
+                      lift=LIFT["branch"] * MM, goal_weight=0.06)
+    R = vs.radius_law(vs.arclen(LCB), vs.arclen(LCB)[-1], *CALIBRE["LCB"])
+    trees["Coronary_LAD"].add(geo.seat(LCB, R, LIFT["branch"] * MM, pin_start=2), R, parent=i_lad, code="CB")
 
-    # septal perforators: 4 regrown from the proximal / mid LAD at ~70 deg to it, into the mid-septum
+    # septal perforators: 3 regrown from the proximal / mid LAD at ~55-70 deg to it, into the mid-septum; the first
+    # leaves S1_ON_LAD_MM from the bifurcation (proximal LAD 15-20 mm)
     pda_src = sk["PDA"][0]["P"]
-    s_first = max(12 * MM, (diag_origins[0][0] if diag_origins else 28 * MM) - 4 * MM)
+    s_first = S1_ON_LAD_MM * MM
     for n, (ds, L, d0) in enumerate(((0.0, 36.0, CALIBRE["S1"][0]), (11.0, 30.0, 1.5), (22.0, 25.0, 1.3))):
         k = int(np.searchsorted(s_lad, s_first + ds * MM))
         kp = int(np.argmin(np.linalg.norm(pda_src - (lad[k] + geo.u_ba * 15 * MM), axis=1)))
@@ -440,11 +505,22 @@ def design(parts, geo, ostia: dict, log, *, svc_V: np.ndarray, pv_valve_V: np.nd
     log(f"coronary: RCA {s_rca[-1] / MM:.0f} mm (crux at s = {s_crux / MM:.0f} mm), mid-course ring distance "
         f"{np.median(ring_ta.dist(rca[mid])) / MM:.1f} mm median / {ring_ta.dist(rca[mid]).max() / MM:.1f} max")
 
-    # conus branch (first RCA branch, over the right-ventricular outflow tract) and sinoatrial-nodal artery
-    k_cb = int(np.searchsorted(s_rca, 7 * MM))
-    goal_cb = 0.5 * (pv_valve_V.mean(axis=0) + lad[int(np.searchsorted(s_lad, 25 * MM))])
-    cb = geo.grow(rca[k_cb], mo.unit(goal_cb - rca[k_cb]), 30 * MM, R=0.6 * MM, lift=LIFT["branch"] * MM, goal=goal_cb,
-                  goal_weight=0.08)
+    # conus branch (first RCA branch): from the proximal RCA forwards and leftwards over the anterior surface of the
+    # infundibulum, CONUS_BELOW_PV_MM below the pulmonary valve, towards the anterior interventricular groove (where
+    # the LAD's left conus branch meets it: the ring of Vieussens)
+    # origin: where the proximal RCA comes nearest the front of the heart (it first runs forwards from the deep aortic
+    # root between the outflow tract and the right auricle)
+    prox = np.flatnonzero((s_rca >= 4 * MM) & (s_rca <= 40 * MM))
+    k_cb = int(prox[np.argmin(rca[prox, 1])])
+    pv_c = pv_valve_V.mean(axis=0)
+    z_cb = pv_c[2] - CONUS_BELOW_PV_MM * MM
+    x0 = rca[k_cb][0] + 6 * MM
+    # it crosses about half the infundibulum; the LAD's left conus branch comes from the other side (ring of Vieussens)
+    x1 = x0 + CONUS_REACH * (lad[int(np.searchsorted(s_lad, 14 * MM))][0] - x0)
+    way = [rca[k_cb]]
+    for f in (0.12, 0.35, 0.6, 0.85):
+        way.append(_front(geo, z_cb + (1 - f) * 3 * MM, x0 + f * (x1 - x0)))
+    cb = surface_path(geo, np.array(way), R=0.6 * MM, lift=LIFT["branch"] * MM)
     R = vs.radius_law(vs.arclen(cb), vs.arclen(cb)[-1], *CALIBRE["CB"])
     trees["Coronary_RCA"].add(geo.seat(cb, R, LIFT["branch"] * MM, pin_start=2), R, parent=i_rca, code="CB")
     k_sn = int(np.searchsorted(s_rca, 13 * MM))
@@ -491,9 +567,73 @@ def design(parts, geo, ostia: dict, log, *, svc_V: np.ndarray, pv_valve_V: np.nd
     i_pl = trees["Coronary_RCA_PL"].add(pl, R_pl, attach="RCA", code="R-PLB", role="trunk")
     _children(trees["Coronary_RCA_PL"], i_pl, sk["PL"], geo, code="R-PLB", max_d=1.0)
 
-    landmarks = {"bifurcation": B, "theta_B": th_B, "theta_B_deg": math.degrees(th_B), "crux": crux, "s_crux": s_crux, "lcx": lcx, "lad": lad, "rca": rca,
+    lift = lift_clear(geo, trees)
+    log(f"coronary: deepest tube-wall penetration into the myocardium before -> after the lift, outside tunnels (mm): {lift}")
+    lad, lcx, rca = trees["Coronary_LAD"].segs[0]["P"], trees["Coronary_LCX"].segs[0]["P"], trees["Coronary_RCA"].segs[0]["P"]
+    pda, om1 = trees["Coronary_RCA_PDA"].segs[0]["P"], trees["Coronary_LCX"].segs[1]["P"]
+    # the trees resampled their paths (Tree.add) and the lift moved them: find the crux again on the final trunk
+    k_crux = int(np.argmin(np.linalg.norm(rca - crux, axis=1)))
+    s_crux = float(vs.arclen(rca)[k_crux])
+    crux = rca[k_crux]
+    B = trees["Coronary_LM"].segs[0]["P"][-1]
+    am_main = trees["Coronary_RCA_Marginal"].segs[0]["P"] if trees["Coronary_RCA_Marginal"].segs else None
+    landmarks = {"am": am_main, "bifurcation": B, "theta_B": th_B, "theta_B_deg": math.degrees(th_B), "crux": crux, "s_crux": s_crux, "lcx": lcx, "lad": lad, "rca": rca,
                  "pda": pda, "om1": om1, "ma_groove": (th_all, G_ma), "k_crux": k_crux}
     return {"trees": trees, "landmarks": landmarks}
+
+
+#: Every coronary tube wall lies at least this far outside the epicardium (septal perforators excepted).
+CLEAR_MM = 0.15
+#: Trees in dependency order (a branch's parent is lifted before the branch is re-anchored on it).
+LIFT_ORDER = ("Coronary_LM", "Coronary_LAD", "Coronary_LAD_Septal", "Coronary_LCX", "Coronary_RCA", "Coronary_RCA_Marginal",
+              "Coronary_RCA_PDA", "Coronary_RCA_PL", "Coronary_RCA_Septal")
+ATTACH_NODE = {"LM": "Coronary_LM", "LAD": "Coronary_LAD", "RCA": "Coronary_RCA", "RCA_PDA": "Coronary_RCA_PDA"}
+
+
+def lift_clear(geo, trees: dict[str, Tree]) -> dict:
+    """Final pass: lift every epicardial vessel so its tube wall clears the epicardium by CLEAR_MM, parents first; a
+    branch origin follows its (lifted) parent. Septal perforators are intramyocardial and only re-anchored."""
+    report = {}
+    import os
+    if os.environ.get("CT_NO_LIFT"):
+        return report
+    for node in LIFT_ORDER:
+        t = trees[node]
+        worst_before, worst_after = 0.0, 0.0
+        for sg in t.segs:
+            P = sg["P"].copy()
+            host = None
+            if sg["parent"] is not None:
+                host = t.segs[sg["parent"]]["P"]
+            elif sg["attach"] not in (None, "aorta") and sg["attach"] in ATTACH_NODE:
+                host = np.vstack([g["P"] for g in trees[ATTACH_NODE[sg["attach"]]].segs[:1]])
+            if host is not None:
+                k = int(np.argmin(np.linalg.norm(host - P[0], axis=1)))
+                delta = host[k] - P[0]
+                # a septal perforator dives into the septum at once: its origin follows the parent over 4 mm only
+                n = min(5 if "Septal" in node else 10, len(P))
+                P[:n] += delta[None] * (1.0 - np.linspace(0.0, 1.0, n))[:, None]
+            if "Septal" in node:
+                sg["P"] = P
+                continue
+            worst_before = max(worst_before, float(vs.tube_depth(geo, P, sg["R"])[3:].max()) if len(P) > 4 else 0.0)
+            pin = 2 if host is not None else 3
+            P = vs.clear_tube(geo, P, sg["R"], margin=CLEAR_MM * MM, pin_start=pin)
+            # where the lift moved neighbouring points by very different amounts (a capped lift beside a tunnel, a
+            # crease crossed at right angles) give the path its uniform spacing back (both ends kept, so a branch
+            # origin stays on its parent) and lift the chords the resampling drew across the crease once more
+            for rnd in range(3):
+                if np.linalg.norm(np.diff(P, axis=0), axis=1).max() <= 2.0 * SPACING:
+                    break
+                P, sg["R"] = vs.resample(P, SPACING, sg["R"])
+                if rnd < 2:
+                    P = vs.clear_tube(geo, P, sg["R"], margin=CLEAR_MM * MM, pin_start=pin)
+            free = ~vs.tunnel_mask(geo, P)
+            free[:3] = False
+            worst_after = max(worst_after, float(vs.tube_depth(geo, P, sg["R"])[free].max()) if free.any() else 0.0)
+            sg["P"] = P
+        report[node] = [round(worst_before / MM, 2), round(worst_after / MM, 2)]
+    return report
 
 
 def meshes(trees: dict[str, Tree]) -> dict[str, mo.Mesh]:
