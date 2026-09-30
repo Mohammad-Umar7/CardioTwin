@@ -44,6 +44,12 @@ FOV_DEG = 35.0
 EXPLODED_ASPECT = 16.0 / 9.0
 #: Nodes left out of the exploded framing: the skin is an enclosing shell that the viewer fades out.
 EXPLODED_FRAMING_SKIP = {"Skin_Torso"}
+#: Label anchor per model target (DESIGN_SYSTEM §7.6 / §7.8): fraction of arc length along the vessel's
+#: first centreline segment — proximal-mid LAD in the anterior interventricular groove, the LCX in the
+#: left AV groove as it turns onto the lateral wall, the RCA in the anterior right AV groove.
+LABEL_ANCHORS = {"Coronary_LAD": 0.30, "Coronary_LCX": 0.35, "Coronary_RCA": 0.25}
+#: Standard angiographic projections per target (azimuth + = LAO, elevation + = cranial), DESIGN_SYSTEM §7.5.
+BEST_VIEWS = {"LAD": (-30.0, 25.0), "LCX": (-30.0, -25.0), "RCA": (40.0, 0.0)}
 
 
 def _unit(v: np.ndarray) -> np.ndarray:
@@ -84,7 +90,16 @@ def exploded_preset(structures: list[dict], layer_explode: dict[str, list[float]
             "aspect": round(EXPLODED_ASPECT, 4)}
 
 
-def build_manifest(cfg: dict, report: dict) -> dict:
+def label_anchor(vessel: dict, fraction: float, heart_center: np.ndarray) -> tuple[list[float], list[float]]:
+    """Point at ``fraction`` of the arc length of the vessel's first segment, with an outward normal
+    (from the heart centre through the point) for the viewer's far-side label test."""
+    P = np.array(vessel["segments"][0]["points"], dtype=float)
+    s = np.concatenate([[0.0], np.cumsum(np.linalg.norm(np.diff(P, axis=0), axis=1))])
+    p = P[int(np.searchsorted(s, fraction * s[-1]))]
+    return _r(p), _r(_unit(p - heart_center))
+
+
+def build_manifest(cfg: dict, report: dict, vessels: dict | None = None) -> dict:
     layers_cfg = layer_by_id(cfg)
     nodes = {n["node"]: n for n in report["nodes"]}
     cut_normal = _unit(np.array(report["heart"]["cut_plane"]["normal"], dtype=float))  # glTF, anterior-facing
@@ -137,6 +152,18 @@ def build_manifest(cfg: dict, report: dict) -> dict:
         }
         if "feeds" in spec:
             entry["feeds"] = spec["feeds"]
+        # DESIGN_SYSTEM §7.8 additive fields: the wall a structure rides on, label anchors, best views.
+        if spec.get("rides_on") in half_explode:
+            entry["rides"] = f"Heart_Wall_{spec['rides_on'].title()}"
+        elif spec["layer"] == "coronary" or spec["node"] == "CardiacVeins":
+            side = "Anterior" if float((center - cut_point) @ cut_normal) >= 0 else "Posterior"
+            entry["rides"] = f"Heart_Wall_{side}"
+        if vessels and spec["node"] in LABEL_ANCHORS:
+            vessel = next(v for v in vessels["vessels"] if v["node"] == spec["node"])
+            entry["labelAnchor"], entry["labelNormal"] = label_anchor(vessel, LABEL_ANCHORS[spec["node"]], heart_center)
+        if spec.get("target") in BEST_VIEWS and spec["node"] in LABEL_ANCHORS:
+            az, el = BEST_VIEWS[spec["target"]]
+            entry["bestView"] = {"azimuth": az, "elevation": el, "distance": round(fit_distance(0.85), 3)}
         if spec.get("split"):
             entry["territory_weights"] = {
                 "attribute": "COLOR_0",
@@ -248,7 +275,9 @@ def build_manifest(cfg: dict, report: dict) -> dict:
 def main() -> int:
     cfg = load_config()
     report = read_json(BUILD_REPORT)
-    manifest = build_manifest(cfg, report)
+    vessels_path = PUBLIC_DIR / VESSELS
+    vessels = read_json(vessels_path) if vessels_path.exists() else None
+    manifest = build_manifest(cfg, report, vessels)
     write_json(MANIFEST, manifest)
     print(f"[manifest] wrote {MANIFEST} ({len(manifest['structures'])} structures, {len(manifest['layers'])} layers)")
     return 0

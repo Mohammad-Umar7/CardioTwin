@@ -190,3 +190,24 @@ def test_vessels_flow_proximal_to_distal_from_their_parent(vessels):
                 d_end = np.min(np.linalg.norm(parent_pts - end, axis=1))
                 assert d_start < 0.002, v["id"]  # starts on the parent's centreline (< 0.2 mm)
                 assert d_end > d_start  # and flows away from it
+
+
+def test_design_system_additive_fields(manifest, vessels):
+    by_node = {s["node"]: s for s in manifest["structures"]}
+    walls = {"Heart_Wall_Anterior", "Heart_Wall_Posterior"}
+    for s in manifest["structures"]:
+        if s["layer"] == "coronary" or s["node"] == "CardiacVeins":
+            assert s["rides"] in walls, s["node"]
+        if "rides" in s:  # a structure riding on a wall moves exactly with it
+            assert np.allclose(s["explode"], by_node[s["rides"]]["explode"], atol=1e-4), s["node"]
+    lines = {v["node"]: np.vstack([np.array(seg["points"]) for seg in v["segments"]]) for v in vessels["vessels"]}
+    for node, target in (("Coronary_LAD", "LAD"), ("Coronary_LCX", "LCX"), ("Coronary_RCA", "RCA")):
+        s = by_node[node]
+        anchor, normal = np.array(s["labelAnchor"]), np.array(s["labelNormal"])
+        assert np.min(np.linalg.norm(lines[node] - anchor, axis=1)) < 1e-3  # on the vessel's centreline
+        assert np.linalg.norm(normal) == pytest.approx(1.0, abs=1e-3)
+        assert set(s["bestView"]) == {"azimuth", "elevation", "distance"} and s["bestView"]["distance"] > 2.0
+    # radiological sanity: the LAD label faces the viewer, the LCX label the patient's left and back
+    assert by_node["Coronary_LAD"]["labelNormal"][2] > 0.3
+    assert by_node["Coronary_LCX"]["labelNormal"][0] > 0.3 and by_node["Coronary_LCX"]["labelNormal"][2] < 0
+    assert by_node["Coronary_RCA"]["labelNormal"][0] < 0
