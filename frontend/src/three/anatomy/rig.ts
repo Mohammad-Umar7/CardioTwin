@@ -112,6 +112,11 @@ export interface RigInputs {
   layerVisibility: Readonly<Record<string, boolean>>;
   ghostLayers: boolean;
   selected: TargetId | null;
+  /**
+   * Trim the great vessels to their roots (a selection or a projection view): from lateral and posterior
+   * angles the arch and the descending aorta would stand in front of the heart.
+   */
+  trimGreatVessels?: boolean;
   isolate: boolean;
   ghostOthers: boolean;
   showVeins: boolean;
@@ -154,9 +159,10 @@ export const PULMONARY_CLIP = { centre: [0, 0.22, -0.15] as const, radius: 0.56,
  */
 export const GREAT_VESSEL_CLIP = { centre: [0, 0.05, -0.05] as const, radius: 0.8, feather: 0.24 } as const;
 /**
- * While a vessel is selected the systemic sphere moves anterior and shrinks: the ascending aorta, its root and
- * the SVC stay, the arch and the descending aorta fade — from a lateral or posterior best view (the LCX's) the
- * descending aorta would otherwise run as a full-height column in front of the lateral wall and the marginals.
+ * While a vessel is selected (or a projection is shown) the systemic sphere moves anterior and shrinks: the
+ * ascending aorta, its root and the SVC stay, the arch and the descending aorta fade — from a lateral or
+ * posterior view (the LCX's) the descending aorta would otherwise run as a full-height column in front of the
+ * lateral wall and the marginals.
  */
 export const GREAT_VESSEL_CLIP_SELECTED = { centre: [0, 0.15, 0.22] as const, radius: 0.62, feather: 0.2 } as const;
 /**
@@ -786,7 +792,7 @@ export class AnatomyRig {
     const chestAway = inp.stage === 'workstation' && this.e >= PEEL_CHEST_AWAY;
 
     // Great-vessel clip sphere: tighter while a vessel is selected (GREAT_VESSEL_CLIP_SELECTED), gliding.
-    const clipGoal = sel && inp.stage === 'workstation' ? GREAT_VESSEL_CLIP_SELECTED : GREAT_VESSEL_CLIP;
+    const clipGoal = (sel || inp.trimGreatVessels) && inp.stage === 'workstation' ? GREAT_VESSEL_CLIP_SELECTED : GREAT_VESSEL_CLIP;
     const clip = this.shared.clipGreat;
     const kClip = inp.reduced ? 1 : 1 - Math.exp(-LAMBDA_SECTION * dt);
     clip.uClipCentre.value.x += (clipGoal.centre[0] - clip.uClipCentre.value.x) * kClip;

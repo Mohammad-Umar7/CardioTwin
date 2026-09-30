@@ -7,6 +7,7 @@ import { useReducedMotion } from '@/hooks/useMediaQuery';
 import { useUiStore } from '@/state/uiStore';
 import { PEEL_REST, useViewerStore } from '@/state/viewerStore';
 import type { AnatomyManifest, TargetId, TargetSpec } from '@/types/contracts';
+import { useCameraState } from '../camera/cameraState';
 import { debugHandles } from '../stage/debug';
 import { pickPointer, usePickStore } from '../stage/pickStore';
 import { readScene, useSceneControls } from '../stage/sceneControls';
@@ -298,6 +299,8 @@ export function GlbAnatomy({ url }: { url: string }) {
     inp.layerVisibility = viewer.layerVisibility;
     inp.ghostLayers = viewer.ghostLayers;
     inp.selected = hero ? null : viewer.selectedStructure;
+    const viewKind = useCameraState.getState().viewKind;
+    inp.trimGreatVessels = !hero && (viewKind === 'preset' || viewKind === 'focus');
     inp.isolate = read.isolate;
     inp.ghostOthers = read.ghostOthers;
     inp.showVeins = controls.showVeins;
