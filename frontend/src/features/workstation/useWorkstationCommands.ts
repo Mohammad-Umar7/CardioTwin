@@ -48,9 +48,10 @@ const lastPreset = () => {
 /**
  * Workstation commands and the lower half of the Esc chain (WORKSTATION_V2 §4.10).
  *
- * The vessel, view and layer commands here are INTERIM (priority −1): they keep the existing keys working
- * until their owners (C: vessels, D: views and layers) register the same ids from `CMD` at priority 0.
- * The Esc layers are A's: isolate/ghost → selection → focus mode, below palette, menus and drawers.
+ * The vessel, view and layer commands in `interim` are fallbacks (priority −1): the owners (C: vessels,
+ * D: views and layers) register the same ids from `CMD` at priority 0 and replace them. Isolate and ghost
+ * (O, G) and the Esc layers are A's: isolate/ghost → selection → focus mode, below palette, menus and
+ * drawers.
  */
 export function useWorkstationCommands(): void {
   const index = useSchemaIndex();
@@ -184,10 +185,19 @@ export function useWorkstationCommands(): void {
       run: () => viewer().cycleTerritoryMode(),
     },
     { id: CMD.labels, group: 'views', title: 'Labels', shortcut: SHORTCUT.labels, icon: Tags, run: () => viewer().toggle('labels') },
+  ];
+
+  useRegisterCommands('workstation.interim', interim, [index, selected], { priority: -1 });
+
+  // Isolate and ghost are the selection's verbs (V2 §4.10, "New, selection only"); they exist only while
+  // a vessel is selected, and Esc undoes them before it clears the selection (the Esc layers below).
+  const selection: Command[] = [
     {
       id: CMD.isolate,
       group: 'views',
-      title: selected ? `Isolate ${selected}` : 'Isolate the selected vessel',
+      title: selected ? (isolate ? 'Show everything again' : `Isolate ${selected}`) : 'Isolate the selected vessel',
+      subtitle: 'Heart, the artery and its territory only',
+      keywords: ['isolate', 'solo', 'hide others'],
       shortcut: SHORTCUT.isolate,
       icon: Focus,
       when: () => viewer().selectedStructure !== null,
@@ -196,15 +206,16 @@ export function useWorkstationCommands(): void {
     {
       id: CMD.ghost,
       group: 'views',
-      title: 'Ghost other structures',
+      title: selected ? (ghostOthers ? 'Solid anatomy again' : `Ghost everything but ${selected}`) : 'Ghost other structures',
+      subtitle: 'Fade the other structures to glass',
+      keywords: ['ghost', 'x-ray', 'transparent', 'fade'],
       shortcut: SHORTCUT.ghost,
       icon: EyeOff,
       when: () => viewer().selectedStructure !== null,
       run: () => viewer().setGhostOthers(!viewer().ghostOthers),
     },
   ];
-
-  useRegisterCommands('workstation.interim', interim, [index, selected], { priority: -1 });
+  useRegisterCommands('workstation.selection', selection, [selected, isolate, ghostOthers]);
 
   useEscapeLayer(
     isolate || ghostOthers,
