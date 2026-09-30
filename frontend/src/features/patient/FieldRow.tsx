@@ -93,7 +93,7 @@ export function RowLabel({
     ) : null;
   const Tag = htmlFor ? 'label' : 'span';
   return (
-    <span className="flex min-w-0 items-center gap-1.5">
+    <span className="flex min-w-0 items-center gap-1">
       <span aria-hidden className={cn('size-1.5 shrink-0 rounded-full transition-colors duration-fast', edited ? 'bg-accent' : 'bg-transparent')} />
       {edited && <span className="sr-only">Edited: </span>}
       <Tooltip content={tip} delay={400} placement="top">
@@ -318,7 +318,8 @@ export function NumericRow({ spec, rowId, expanded, suffix, className }: RowProp
       )}
     >
       <EditFlash value={field.value} />
-      <div className={cn('grid grid-cols-[minmax(0,1fr)_56px_44px_56px] items-center gap-1.5 pl-1 pr-2', ROW)}>
+      {/* The last column holds "was 170 ▲" without clipping: 72 px, 64 px in the 360 px drawer at 1280. */}
+      <div className={cn('grid grid-cols-[minmax(0,1fr)_56px_44px_72px] items-center gap-1.5 pl-1 pr-2 max-[1439.98px]:grid-cols-[minmax(0,1fr)_56px_44px_64px]', ROW)}>
         <RowLabel spec={spec} htmlFor={inputId} labelId={labelId} edited={field.edited} imputed={field.imputed} suffix={suffix} />
         <input
           id={inputId}
@@ -341,11 +342,11 @@ export function NumericRow({ spec, rowId, expanded, suffix, className }: RowProp
         <span className="truncate text-label text-tertiary" title={spec.unit ?? undefined}>
           {unit}
         </span>
-        <span className="flex min-w-0 items-center justify-end gap-1.5">
+        <span className="flex min-w-0 items-center justify-end gap-1">
           {field.edited && Number.isFinite(recorded) && (
             <span className="num truncate text-label font-normal text-tertiary">was {formatNumber(recorded, step)}</span>
           )}
-          <span aria-hidden className="w-3 shrink-0 text-center text-label text-secondary">
+          <span aria-hidden className="w-2.5 shrink-0 text-center text-label text-secondary">
             {glyph}
           </span>
           {glyph && <span className="sr-only">{glyph === '▲' ? 'above normal' : 'below normal'}</span>}

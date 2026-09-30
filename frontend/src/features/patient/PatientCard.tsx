@@ -80,14 +80,15 @@ function KeyRow({ item, value, recorded, target, compare }: { item: KeyInput; va
       className={cn(
         // At 1280 the 256 px card tightens the gaps and the mark column (the mark overflows into the row's
         // padding), so full schema labels such as "Fasting blood sugar" fit next to "101 mg/dL ▲".
-        '-mx-2 grid w-[calc(100%+16px)] grid-cols-[minmax(0,1fr)_auto_24px] items-center gap-2 rounded-sm px-2 text-left transition-colors duration-instant',
+        'relative -mx-2 grid w-[calc(100%+16px)] grid-cols-[minmax(0,1fr)_auto_24px] items-center gap-2 rounded-sm px-2 text-left transition-colors duration-instant',
         'max-[1439.98px]:grid-cols-[minmax(0,1fr)_auto_20px] max-[1439.98px]:gap-x-1.5',
         ROW_H,
         highlighted ? 'bg-surface-1' : 'hover:bg-surface-1',
       )}
     >
-      <span className="flex min-w-0 items-center gap-1.5">
-        {edited && <span aria-hidden className="size-1.5 shrink-0 rounded-full bg-accent" />}
+      <span className="flex min-w-0 items-center">
+        {/* The edited dot sits in the row's left gutter, so an edit never costs the label any width. */}
+        {edited && <span aria-hidden className="absolute left-0 top-1/2 size-1.5 -translate-y-1/2 rounded-full bg-accent" />}
         <Tooltip content={edited ? `${item.spec.label} · was ${displayValue(item.spec, recorded)}` : truncatedLabel} placement="right">
           <span className="min-w-0 truncate text-body-s text-secondary">{label}</span>
         </Tooltip>
@@ -96,7 +97,7 @@ function KeyRow({ item, value, recorded, target, compare }: { item: KeyInput; va
         <span className="num text-body-s font-medium text-primary">{v}</span>
         {unit && <span className="text-label text-tertiary">{unit}</span>}
         {glyph && (
-          <span aria-hidden className="w-2.5 text-center text-label text-secondary max-[1439.98px]:w-2">
+          <span aria-hidden className="w-2.5 text-center text-label text-secondary">
             {glyph}
           </span>
         )}
