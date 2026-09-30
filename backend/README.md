@@ -162,4 +162,16 @@ request ─► RequestContextMiddleware (X-Request-ID, X-Response-Time-ms, acces
 ```
 
 The integration suite checks SHAP additivity (1e-6), label/threshold/band consistency, cohort predictions,
-batch/single parity and parity with the ML package's `fixtures.json`.
+batch/single parity and parity with every case in the ML package's `fixtures.json` (|Δp| < 1e-6,
+|Δshap| < 1e-5).
+
+Measured on a Windows 11 laptop CPU (no GPU) with the trained model, 200 calls per scenario, while other
+build jobs were running (so tails are noisy):
+
+| Scenario | p50 | p95 |
+| --- | --- | --- |
+| In-process, new patient every call (model + exact SHAP for 4 targets) | ≈ 54 ms | ≈ 110 ms |
+| HTTP via uvicorn, new patient every call | ≈ 62 ms | ≈ 290 ms |
+| Repeated input (LRU cache hit), in-process / HTTP | ≈ 2–3 ms | ≈ 4–6 ms |
+
+Nearly all cold-path time is the ML package's pure-Python TreeSHAP; the API itself adds about 2 ms.
