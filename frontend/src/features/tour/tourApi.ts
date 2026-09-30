@@ -22,7 +22,7 @@ export function takeTourOrigin(): string | null {
  */
 export function startGuidedDemo(navigate: NavigateFunction, from: string, step = 0): void {
   origin = from;
-  void loadWorkstation();
+  loadWorkstation().catch(() => undefined);
   if (!from.startsWith(ROUTES.workstation)) navigate(ROUTES.workstation);
   useUiStore.getState().openTour(step);
 }

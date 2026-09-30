@@ -33,6 +33,7 @@ export default function LandingPage() {
   const reduced = useReducedMotion();
   const heroRef = useRef<HTMLElement>(null);
   const bandsRef = useRef<HTMLDivElement>(null);
+  const copyRef = useRef<HTMLDivElement>(null);
   const schema = useSchemaIndex();
   const vessels = useMemo(() => schema?.vessels.map((t) => t.id) ?? ['LAD', 'LCX', 'RCA'], [schema]);
   const tourOpen = useUiStore((s) => s.tourOpen);
@@ -40,12 +41,13 @@ export default function LandingPage() {
   const { leaving, leave } = useLeaveTransition(reduced);
 
   useLandingChrome();
-  useHeroInsets(heroRef, bandsRef);
+  useHeroInsets(heroRef, bandsRef, copyRef);
   const attract = useAttractMode(heroRef, vessels, !reduced && !tourOpen && !leaving && hasPrediction);
 
   useEffect(() => {
     // Same canvas, same patient: preload the workstation chunk so the glide never waits on the network.
-    void loadWorkstation();
+    // A failed preload is harmless; the route's own lazy import retries on navigation.
+    loadWorkstation().catch(() => undefined);
   }, []);
 
   const go = (destination: LandingDestination) =>
@@ -75,6 +77,7 @@ export default function LandingPage() {
         </CanvasSlot>
 
         <div
+          ref={copyRef}
           className="relative z-panels order-1 px-6 pb-8 pt-8 min-[1100px]:pointer-events-none min-[1100px]:absolute min-[1100px]:inset-x-0 min-[1100px]:top-0 min-[1100px]:flex min-[1100px]:items-center min-[1100px]:py-0 min-[1100px]:pl-[clamp(24px,5.4vw,88px)]"
           style={{ bottom: 'var(--landing-bands-h, 0px)' }}
         >

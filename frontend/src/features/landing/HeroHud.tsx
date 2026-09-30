@@ -149,8 +149,8 @@ export function HeroHud({ attract, vessels, leaving }: HeroHudProps) {
           leaving ? 'opacity-0 ease-exit' : 'ease-out',
         )}
       >
-        {/* Free-area centre: 66 % of the width when the copy covers the left 32 %, else the middle. */}
-        <div className="absolute left-1/2 top-4 flex -translate-x-1/2 justify-center min-[1100px]:left-[66%]" aria-live="off">
+        {/* Free-area centre (published with the stage insets); the middle when the landing stacks. */}
+        <div className="absolute left-1/2 top-4 flex -translate-x-1/2 justify-center min-[1100px]:left-[var(--landing-free-cx,66%)]" aria-live="off">
           {attract && <AttractCaption target={attract} index={Math.max(0, vessels.indexOf(attract))} />}
         </div>
         {anatomySource === 'procedural' && (
@@ -159,7 +159,7 @@ export function HeroHud({ attract, vessels, leaving }: HeroHudProps) {
           </span>
         )}
         <div
-          className="absolute left-1/2 flex -translate-x-1/2 justify-center whitespace-nowrap min-[1100px]:left-[66%]"
+          className="absolute left-1/2 flex -translate-x-1/2 justify-center whitespace-nowrap min-[1100px]:left-[var(--landing-free-cx,66%)]"
           style={{ bottom: 'calc(var(--landing-bands-h, 0px) + 16px)' }}
         >
           <PatientCaption />
