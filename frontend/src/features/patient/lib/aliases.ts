@@ -1,0 +1,65 @@
+/**
+ * Search aliases for the 53 inputs (WORKSTATION_V2 §4.9, §5.6): raw dataset keys and the abbreviations a
+ * clinician types ("EF", "RWMA", "HbA", "SOB"). Search matches them; results always show the human label.
+ * Keys not listed here still match on their label and raw key.
+ */
+export const INPUT_ALIASES: Readonly<Record<string, readonly string[]>> = {
+  Age: ['years old'],
+  Weight: ['kg', 'mass'],
+  Length: ['height', 'stature'],
+  Sex: ['gender', 'male', 'female'],
+  BMI: ['body mass index', 'obesity'],
+  DM: ['diabetes mellitus', 'diabetic', 'T2DM'],
+  HTN: ['hypertension', 'high blood pressure', 'hypertensive'],
+  'Current Smoker': ['smoking', 'tobacco', 'cigarettes'],
+  'EX-Smoker': ['ex-smoker', 'former smoker', 'quit smoking'],
+  FH: ['family history', 'premature CAD in family'],
+  Obesity: ['overweight', 'BMI > 25'],
+  CRF: ['chronic renal failure', 'CKD', 'kidney disease'],
+  CVA: ['stroke', 'cerebrovascular accident', 'TIA'],
+  'Airway disease': ['COPD', 'asthma', 'lung disease'],
+  'Thyroid Disease': ['hypothyroidism', 'hyperthyroidism'],
+  DLP: ['dyslipidemia', 'dyslipidaemia', 'hyperlipidaemia', 'cholesterol', 'lipids'],
+  'Typical Chest Pain': ['typical chest pain', 'angina', 'exertional chest pain'],
+  Atypical: ['atypical chest pain'],
+  Nonanginal: ['non-anginal', 'nonanginal', 'chest pain not angina'],
+  'LowTH Ang': ['low-threshold angina', 'low threshold', 'unstable angina'],
+  Dyspnea: ['dyspnoea', 'SOB', 'breathlessness', 'short of breath'],
+  'Function Class': ['NYHA', 'functional class', 'CCS class'],
+  BP: ['blood pressure', 'systolic', 'SBP'],
+  PR: ['pulse', 'heart rate', 'HR', 'bpm'],
+  Edema: ['oedema', 'ankle swelling', 'leg swelling'],
+  'Weak Peripheral Pulse': ['peripheral pulses', 'PAD', 'peripheral arterial disease'],
+  'Lung rales': ['rales', 'crackles', 'crepitations'],
+  'Systolic Murmur': ['murmur', 'systolic'],
+  'Diastolic Murmur': ['murmur', 'diastolic'],
+  'Q Wave': ['Q waves', 'pathological Q', 'old infarct'],
+  'St Elevation': ['STE', 'ST elevation', 'STEMI'],
+  'St Depression': ['STD', 'ST depression', 'ischaemia', 'ischemia'],
+  Tinversion: ['T inversion', 'TWI', 'T-wave'],
+  LVH: ['left ventricular hypertrophy', 'hypertrophy'],
+  'Poor R Progression': ['PRWP', 'poor R wave progression'],
+  BBB: ['bundle branch block', 'LBBB', 'RBBB'],
+  FBS: ['fasting glucose', 'blood sugar', 'glucose', 'FPG'],
+  CR: ['creatinine', 'Cr', 'kidney function'],
+  TG: ['triglycerides', 'TGs'],
+  LDL: ['LDL-C', 'bad cholesterol'],
+  HDL: ['HDL-C', 'good cholesterol'],
+  BUN: ['urea', 'blood urea nitrogen'],
+  ESR: ['sed rate', 'erythrocyte sedimentation rate', 'inflammation'],
+  HB: ['haemoglobin', 'hemoglobin', 'Hb', 'Hgb', 'anaemia', 'anemia'],
+  K: ['potassium', 'K+'],
+  Na: ['sodium', 'Na+'],
+  WBC: ['white cells', 'white blood cells', 'leukocytes', 'white count'],
+  Lymph: ['lymphocytes', 'lymphs'],
+  Neut: ['neutrophils', 'neuts'],
+  PLT: ['platelets', 'plts'],
+  'EF-TTE': ['EF', 'LVEF', 'ejection fraction', 'TTE', 'echo EF'],
+  'Region RWMA': ['RWMA', 'wall motion', 'regional wall motion', 'hypokinesia'],
+  VHD: ['valve disease', 'valvular', 'valvular heart disease'],
+};
+
+/** Every search term of an input: its raw key plus its aliases. */
+export function aliasesFor(key: string): string[] {
+  return [key, ...(INPUT_ALIASES[key] ?? [])];
+}
