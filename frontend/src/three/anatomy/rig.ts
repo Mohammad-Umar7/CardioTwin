@@ -30,6 +30,7 @@ import { sceneRuntime } from '../stage/sceneRuntime';
 import { AssemblyClock, stageById, stagePose, type AssemblyStage } from './assembly';
 import { BEAT_UNIFORMS, beatMatrix, setBeatFrame } from './beatDeform';
 import { cavityAttribute, type CentrelinePoint } from './cavity';
+import { axial, correctWeights, meanAngle, rvShare } from './territory';
 import { FRAME_UNIFORMS } from './shaders';
 import {
   BEATS_WITH_HEART,
@@ -616,6 +617,40 @@ export class AnatomyRig {
   nextSolidWithoutMaps(): { entry: RigEntry; textures: Texture[] } | null {
     for (const e of this.entries) if (!e.mapsReady && e.maps && OUTER_KINDS.has(e.kind) && e.solidAmt > 1e-3) return { entry: e, textures: texturesOf(e) };
     return null;
+  }
+
+  /**
+   * Re-assign the right-ventricular free wall's supplied territory to the RCA (territory.ts): the GLB's
+   * COLOR_0 gives it to the LAD. Needs the centrelines (the grooves' angles); in place, once per geometry.
+   */
+  correctTerritories(vessels: readonly { id?: string; segments: readonly { points: readonly (readonly number[])[] }[] }[]): void {
+    const trunk = (id: string, lo: number, hi: number): Vector3[] => {
+      const pts = vessels.find((v) => v.id === id)?.segments[0]?.points ?? [];
+      return pts.slice(Math.floor(pts.length * lo), Math.max(Math.floor(pts.length * lo) + 1, Math.floor(pts.length * hi))).map((q) => new Vector3(q[0], q[1], q[2]));
+    };
+    const frame = { apex: this.frame.apex, axis: this.frame.axis, length: this.frame.length };
+    const lad = meanAngle(frame, trunk('LAD', 0.2, 0.8));
+    const pda = meanAngle(frame, trunk('RCA_PDA', 0.2, 0.9));
+    const margin = meanAngle(frame, trunk('RCA_MARGINAL', 0.3, 1));
+    if (lad === null || pda === null || margin === null) return;
+    const arc = { lad, pda, margin };
+    const p = new Vector3();
+    for (const e of this.entries) {
+      if (e.kind !== 'myocardium') continue;
+      const g = e.mesh.geometry as BufferGeometry;
+      const col = g.getAttribute('color');
+      const pos = g.getAttribute('position');
+      if (!col || !pos || g.userData.ctRvTerritory) continue;
+      g.userData.ctRvTerritory = true;
+      for (let i = 0; i < pos.count; i += 1) {
+        const share = rvShare(arc, axial(frame, p.fromBufferAttribute(pos, i).add(e.restOffset)));
+        if (share <= 1e-3) continue;
+        const [r, gg, b] = correctWeights([col.getX(i), col.getY(i), col.getZ(i)], share);
+        col.setXYZ(i, r, gg, b);
+      }
+      const target = (col as { data?: { needsUpdate: boolean } }).data ?? col;
+      target.needsUpdate = true;
+    }
   }
 
   /**

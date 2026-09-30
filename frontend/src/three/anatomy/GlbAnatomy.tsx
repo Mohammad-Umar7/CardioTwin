@@ -135,6 +135,8 @@ export function GlbAnatomy({ url }: { url: string }) {
   // Cavity attribute (crease AO, vessel grooves, fat along the arteries): one heart wall per idle slice.
   useEffect(() => {
     if (!rig || !vessels?.vessels) return;
+    // The RV free wall's territory belongs to the RCA (the GLB's COLOR_0 gives it to the LAD).
+    rig.correctTerritories(vessels.vessels as unknown as Parameters<AnatomyRig['correctTerritories']>[0]);
     const jobs = rig.cavityJobs(vessels.vessels as unknown as Parameters<AnatomyRig['cavityJobs']>[0]);
     let cancelled = false;
     let handle: ReturnType<typeof setTimeout> | null = null;

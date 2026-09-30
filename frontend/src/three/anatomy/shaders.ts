@@ -77,6 +77,11 @@ export interface PatchFlags {
   interior: boolean;
   /** Supplied-territory tint from a vertex attribute (name). */
   territory: string | null;
+  /**
+   * Realistic territory: a luminance-preserving hue overlay capped at 25 %, hue only from the High band (see
+   * the shader), instead of the Clinical clay's straight mix toward the ramp.
+   */
+  territoryOverlay: boolean;
   /** Fresnel rim added to emission. */
   rim: boolean;
   /** Dithered sphere clip (pulmonary trees, V2 §5.15). */
@@ -108,6 +113,7 @@ export const NO_PATCH: PatchFlags = {
   sss: false,
   interior: false,
   territory: null,
+  territoryOverlay: false,
   rim: false,
   clipSphere: false,
   desaturateMap: false,
@@ -125,7 +131,7 @@ export function patchKey(f: PatchFlags): string {
     f.fat ? 't' : '',
     f.sss ? 's' : '',
     f.interior ? 'i' : '',
-    f.territory ? `T${f.territory}` : '',
+    f.territory ? `T${f.territory}${f.territoryOverlay ? 'O' : ''}` : '',
     f.rim ? 'r' : '',
     f.clipSphere ? 'c' : '',
     f.desaturateMap ? 'x' : '',
@@ -241,8 +247,22 @@ ${f.territory ? `{
     vec3 ctTint = ctW.x * texture2D(uRiskLUT, vec2(uP.x, 0.5)).rgb
                 + ctW.y * texture2D(uRiskLUT, vec2(uP.y, 0.5)).rgb
                 + ctW.z * texture2D(uRiskLUT, vec2(uP.z, 0.5)).rgb;
-    float ctStrength = (0.10 + uTerritoryGain * dot(ctW, uP)) * dot(ctW, uSelMask) * uTerritoryOn * (1.0 - ctNeutral);
-    diffuseColor.rgb = mix(diffuseColor.rgb, ctTint, ctStrength);
+    float ctPw = dot(ctW, uP);
+    float ctMask = dot(ctW, uSelMask) * uTerritoryOn * (1.0 - ctNeutral);
+    ${f.territoryOverlay ? `// Realistic: luminance-preserving hue overlay (max 25 percent), hue only from the High band.
+    float ctL = dot(diffuseColor.rgb, vec3(0.2126, 0.7152, 0.0722));
+    vec3 ctHue = ctTint * (ctL / max(dot(ctTint, vec3(0.2126, 0.7152, 0.0722)), 1e-3));
+    float ctWarm = smoothstep(0.45, 0.55, ctPw);
+    float ctStrength = min(0.25, 0.06 + uTerritoryGain * ctPw) * ctMask;
+    diffuseColor.rgb = mix(diffuseColor.rgb, ctHue, ctStrength * ctWarm);
+    diffuseColor.rgb *= 1.0 + 0.5 * ctStrength * (1.0 - ctWarm);` : `float ctStrength = (0.10 + uTerritoryGain * ctPw) * ctMask;
+    diffuseColor.rgb = mix(diffuseColor.rgb, ctTint, ctStrength);`}
+    // Hairline seam where the two largest territory weights cross.
+    float ctHi = max(ctW.x, max(ctW.y, ctW.z));
+    float ctLo = ctW.x + ctW.y + ctW.z - ctHi - min(ctW.x, min(ctW.y, ctW.z));
+    float ctGap = ctHi - ctLo;
+    float ctSeam = 1.0 - smoothstep(0.0, 1.5 * fwidth(ctGap) + 1e-4, ctGap);
+    diffuseColor.rgb *= 1.0 - 0.35 * ctSeam * ctMask;
   }
 }` : ''}
 ${f.interior ? `if (!gl_FrontFacing) diffuseColor.rgb = uInteriorColor * (1.0 + 0.35 * ctDetail.x);` : ''}`,

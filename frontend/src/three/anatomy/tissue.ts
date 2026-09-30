@@ -482,6 +482,7 @@ export function createTissueMaterial(o: TissueOptions): TissueMaterial {
     sss: !!L.sss,
     interior: !!L.interior,
     territory: o.kind === 'myocardium' ? o.territoryAttribute ?? null : null,
+    territoryOverlay: realistic && o.kind === 'myocardium' && !!o.territoryAttribute,
     rim: !!L.rim,
     clipSphere: !along && !!clipOf(o.kind, o.shared),
     clipAlong: along,
