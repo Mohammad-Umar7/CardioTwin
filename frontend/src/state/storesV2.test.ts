@@ -183,6 +183,16 @@ describe('viewerStore · territory mode, isolate and ghost', () => {
   });
 });
 
+describe('viewerStore · render tier lock', () => {
+  it('locks on a user choice and unlocks for Auto without changing the tier', () => {
+    useViewerStore.setState({ tier: 'B', tierLocked: false });
+    useViewerStore.getState().setTier('C', true);
+    expect(useViewerStore.getState()).toMatchObject({ tier: 'C', tierLocked: true });
+    useViewerStore.getState().unlockTier();
+    expect(useViewerStore.getState()).toMatchObject({ tier: 'C', tierLocked: false });
+  });
+});
+
 describe('patientStore · blank patient, automatic baseline, compare', () => {
   it('starts a blank patient with zero edits', () => {
     usePatientStore.getState().loadPatient(sampleCohort.patients[0]!);

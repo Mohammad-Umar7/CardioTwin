@@ -29,7 +29,7 @@ export function setQuality(value: QualityValue): void {
   const viewer = useViewerStore.getState();
   if (viewer.tier === 'D' || !qualityAvailable(value)) return;
   if (value === 'auto' && !probeWebGL().halfFloat) return;
-  // The store has no "unlock" action; Auto clears the lock so the monitor may move again.
-  if (value === 'auto') useViewerStore.setState({ tierLocked: false });
+  // Auto clears the lock so the monitor may move again.
+  if (value === 'auto') viewer.unlockTier();
   else viewer.setTier(value, true);
 }

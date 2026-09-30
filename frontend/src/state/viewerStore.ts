@@ -83,6 +83,8 @@ export interface ViewerState {
   toggle(key: 'heartbeat' | 'bloodFlow' | 'territories' | 'labels' | 'ghostLayers' | 'autoRotate' | 'calm'): void;
   set<K extends keyof ViewerSettable>(key: K, value: ViewerSettable[K]): void;
   setTier(tier: RenderTier, lock?: boolean): void;
+  /** Quality "Auto": clears the lock so the performance monitor may move the tier again. */
+  unlockTier(): void;
   setFps(fps: number | null): void;
   setStage(stage: Stage): void;
   setAnatomySource(source: AnatomySource, progress?: { loaded: number; total: number } | null): void;
@@ -167,6 +169,7 @@ export const useViewerStore = create<ViewerState>()((set) => ({
         : ({ [key]: value } as Partial<ViewerState>),
     ),
   setTier: (tier, lock = false) => set((s) => ({ tier, tierLocked: lock || s.tierLocked })),
+  unlockTier: () => set({ tierLocked: false }),
   setFps: (fps) => set({ fps }),
   setStage: (stage) => set({ stage }),
   setAnatomySource: (anatomySource, anatomyProgress = null) => set({ anatomySource, anatomyProgress }),
