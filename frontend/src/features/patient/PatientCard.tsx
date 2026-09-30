@@ -1,7 +1,7 @@
 import { AnimatePresence, motion } from 'framer-motion';
 import { ArrowLeftToLine, ChevronRight, PanelLeftOpen, PencilLine, Search } from 'lucide-react';
 import { useEffect, useRef } from 'react';
-import { Button, IconButton, Kbd, Skeleton, StageCard, Tooltip, withShortcut } from '@/design';
+import { Button, ExitInert, IconButton, Kbd, Skeleton, StageCard, Tooltip, withShortcut } from '@/design';
 import { useSchemaIndex } from '@/hooks/useData';
 import { useIsReducedMotion } from '@/hooks/useMediaQuery';
 import { useCommandShortcut } from '@/hooks/useRegisterCommands';
@@ -238,9 +238,12 @@ export function PatientCard({ className }: PatientCardProps) {
   const exit = reduced ? { opacity: 0, transition: { duration: 0.12 } } : { opacity: 0, x: -12, transition: { duration: 0.17, ease: EASE.exit } };
 
   return (
-    <AnimatePresence initial={false} mode="wait">
+    // popLayout: the leaving variant is lifted out of the slot at once, so the slot (and the published stage
+    // insets) take the new size immediately; ExitInert takes it out of the tab order and the accessibility
+    // tree while it fades (the Explain drawer collapses the card to its rail).
+    <AnimatePresence initial={false} mode="popLayout">
       {expanded ? (
-        <motion.div key="card" initial={reduced ? { opacity: 0 } : { opacity: 0, x: -12 }} animate={{ opacity: 1, x: 0 }} exit={exit} transition={{ duration: MOTION.base / 1000, ease: EASE.out }}>
+        <ExitInert key="card" initial={reduced ? { opacity: 0 } : { opacity: 0, x: -12 }} animate={{ opacity: 1, x: 0 }} exit={exit} transition={{ duration: MOTION.base / 1000, ease: EASE.out }}>
           <StageCard
             as="aside"
             aria-label="Patient record"
@@ -251,9 +254,9 @@ export function PatientCard({ className }: PatientCardProps) {
           >
             <CardBody />
           </StageCard>
-        </motion.div>
+        </ExitInert>
       ) : (
-        <motion.div
+        <ExitInert
           key="rail"
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
@@ -263,7 +266,7 @@ export function PatientCard({ className }: PatientCardProps) {
           <StageCard as="nav" aria-label="Patient record" region="patient-rail" shape="bare" noEnter={mounted.current} className={cn('w-[var(--rail-w)]', className)}>
             <Rail />
           </StageCard>
-        </motion.div>
+        </ExitInert>
       )}
     </AnimatePresence>
   );

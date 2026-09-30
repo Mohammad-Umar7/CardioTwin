@@ -4,6 +4,7 @@ import { useIsReducedMotion } from '@/hooks/useMediaQuery';
 import { cn } from '@/lib/cn';
 import { EASE, MOTION } from '@/theme/tokens';
 import { ESCAPE_PRIORITY, useEscapeLayer } from './escapeStack';
+import { ExitInert } from './ExitInert';
 
 export interface DrawerProps {
   open: boolean;
@@ -131,7 +132,8 @@ export function Drawer({
   return (
     <AnimatePresence>
       {open && (
-        <motion.div
+        // Inert from the moment it starts closing: an exiting drawer is never tabbable or read out.
+        <ExitInert
           key="drawer"
           ref={panel}
           role="dialog"
@@ -166,7 +168,7 @@ export function Drawer({
           >
             {children}
           </motion.div>
-        </motion.div>
+        </ExitInert>
       )}
     </AnimatePresence>
   );

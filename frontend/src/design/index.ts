@@ -4,6 +4,7 @@ export { AnimatedNumber } from './AnimatedNumber';
 export { Badge, type BadgeTone } from './Badge';
 export { Button, type ButtonProps, type ButtonVariant } from './Button';
 export { Drawer, DrawerPresentation, type DrawerPresentationMode, type DrawerProps } from './Drawer';
+export { ExitInert } from './ExitInert';
 export { ESCAPE_PRIORITY, pushEscapeLayer, useEscapeLayer } from './escapeStack';
 export { EmptyState, HairlineProgress, ProgressRing, Skeleton, Stat } from './Feedback';
 export { IconButton } from './IconButton';
