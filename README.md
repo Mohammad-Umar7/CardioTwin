@@ -24,7 +24,7 @@ model runs on a FastAPI server and, bit for bit, inside the browser, so the demo
 
 <table>
   <tr>
-    <td width="50%"><img src="docs/media/renders/hero_heart.jpg" alt="BodyParts3D heart with the coronary tree coloured by an example risk profile: LAD high (red), LCX moderate (amber), RCA low (teal)"></td>
+    <td width="50%"><img src="docs/media/renders/hero_heart.jpg" alt="BodyParts3D heart with the coronary tree coloured by an example risk profile: LAD very high (red), LCX moderate (amber), RCA low (teal)"></td>
     <td width="50%"><img src="docs/media/renders/territories.jpg" alt="Perfusion territories on the heart wall, tinted by the risk of the supplying artery; anterior and posterior-inferior views"></td>
   </tr>
   <tr>
@@ -66,7 +66,7 @@ Cycles renders of the published asset. A 7-second turntable is at
   reading an echo, an ECG and a lipid panel wants to know which territory is at stake, and which findings drive it.
 * **A black box is not usable at the bedside.** A probability without its reasons cannot be checked against the
   clinician's own reading of the case. CardioTwin shows every input's signed contribution, in percentage points
-  that add up exactly to the number on screen.
+  that add up exactly from a typical patient's risk to this patient's.
 * **Referred patients are not all diseased.** In the source cohort, all 303 patients were already referred for
   invasive angiography, yet 87 (29 %) had no ≥ 50 % stenosis ([`data/README.md`](data/README.md)).
 
@@ -91,7 +91,7 @@ Cycles renders of the published asset. A 7-second turntable is at
 Beyond the brief:
 
 * **What-if analysis.** Edit any input and all four estimates, the explanations and the 3D colours update live.
-* **ICE strips** in every numeric input show how the risk would change across that input's range.
+* **ICE strips** on the numeric inputs show how the risk would change across each input's range.
 * **Ground-truth reveal.** For the 61 test patients, the prediction can be compared with the angiogram result.
 * **Guided tour** of five chapters, a command palette (`Ctrl K`) and full keyboard control.
 * **Printable report.** A two-page clinical report prints on A4 or Letter.
