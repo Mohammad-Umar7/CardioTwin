@@ -79,7 +79,7 @@ def create_app(settings: Settings | None = None, predictor: Predictor | None = N
             except (PredictorLoadError, StartupError) as exc:
                 app.state.load_error = str(exc)
                 log.critical("CardioTwin API cannot start: %s", exc)
-                raise StartupError(f"CardioTwin API cannot start: {exc}") from exc
+                raise StartupError(f"CardioTwin API cannot start: {exc}") from None
         runtime: Runtime = app.state.runtime
         if runtime.kind == "fake":
             log.warning("serving the FakePredictor: predictions are synthetic (CARDIOTWIN_PREDICTOR=fake)")
