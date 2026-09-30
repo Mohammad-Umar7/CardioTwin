@@ -7,6 +7,7 @@ import { useMediaQuery } from '@/hooks/useMediaQuery';
 import { cn } from '@/lib/cn';
 import { formatMetricValue } from '@/lib/format';
 import { deployedModelPhrase } from '@/lib/modelNames';
+import { TEST_SET } from '@/lib/testSetCopy';
 import { TARGET_ORDER, type KnownTargetId, type MetricsReport } from '@/types/contracts';
 import {
   AcrossTargetsModule,
@@ -225,7 +226,7 @@ export default function PerformancePage() {
               {
                 value: 'test',
                 label: 'Held-out test',
-                title: 'Patients never seen during development; scored once',
+                title: TEST_SET.split,
               },
               {
                 value: 'cv',

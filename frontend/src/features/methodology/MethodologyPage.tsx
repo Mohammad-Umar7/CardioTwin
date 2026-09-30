@@ -7,6 +7,7 @@ import { scrollToSection, useActiveSection } from '@/features/performance/useAct
 import { useManifest, useMetrics, useSchema } from '@/hooks/useData';
 import { cn } from '@/lib/cn';
 import { formatPercent } from '@/lib/format';
+import { TEST_SET } from '@/lib/testSetCopy';
 import { ROUTES } from '@/routes';
 import { TARGET_ORDER } from '@/types/contracts';
 import {
@@ -273,7 +274,7 @@ export default function MethodologyPage() {
                 ['Clinical inputs', facts.nInputs, 'routine work-up'],
                 ['Modalities', facts.nModalities, 'bedside to echo'],
                 ['Targets', facts.nTargets, TARGET_ORDER.join(' · ')],
-                ['Locked test', facts.nTest, 'scored once'],
+                ['Locked test', facts.nTest, TEST_SET.stat],
               ].map(([label, value, sub]) => (
                 <div key={label as string} className="flex flex-col gap-1 bg-panel px-4 py-3">
                   <dt className="eyebrow text-tertiary">{label}</dt>
@@ -423,8 +424,8 @@ export default function MethodologyPage() {
           id="validation"
           index={4}
           name="Validation protocol"
-          title="Nested, repeated and cross-fitted, with a test split scored once"
-          lede="Two questions are kept apart. How well does the recipe work? Repeated nested cross-validation on the development set answers that. How well does the deployed model work on patients it never saw? The locked test split answers that, once."
+          title="Nested, repeated and cross-fitted, with a locked test split"
+          lede="Two questions are kept apart. How well does the recipe work? Repeated nested cross-validation on the development set answers that. How well does the deployed model work on patients it never saw? The locked test split answers that, with every re-score disclosed."
           aside={
             <>
               <Note term="Why nested">

@@ -100,8 +100,8 @@ export function PipelineDiagram({ phases, nTest, onJump }: PipelineDiagramProps)
             <span className="font-semibold text-primary">
               Locked test split{nTest !== null ? ` · ${nTest} patients` : ''}.
             </span>{' '}
-            Untouched while steps {stepRange(['develop', 'explain'])} are made, then scored once with the
-            frozen model.
+            Untouched while steps {stepRange(['develop', 'explain'])} are made, then scored with the frozen
+            model; one re-score after a calibration fix is disclosed.
           </p>
         </div>
         <div className="relative hidden items-center gap-2 pl-0 min-[1100px]:flex">

@@ -7,6 +7,7 @@
  * functions are total: missing fields produce `null` / shorter sentences, never exceptions.
  */
 import { formatMetricValue, formatPercent } from '@/lib/format';
+import { testSetRescoreItem } from '@/lib/testSetCopy';
 import {
   DEPLOYED_SHORT_NAME,
   deployedModelName,
@@ -666,7 +667,7 @@ export function protocolItems(report: MetricsReport, facts: SplitFacts): string[
   ];
   if (history > 1)
     items.push(
-      `Test set re-scored ${history - 1 === 1 ? 'once' : `${history - 1} times`} after an independent review found a calibration defect; disclosed, no model choice changed`,
+      testSetRescoreItem(history - 1),
     );
   return items;
 }

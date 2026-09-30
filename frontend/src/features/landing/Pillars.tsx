@@ -5,6 +5,7 @@ import { BandChip, Probability, RiskPip, Skeleton } from '@/design';
 import { useSchemaIndex } from '@/hooks/useData';
 import { useResource } from '@/hooks/useResource';
 import { cn } from '@/lib/cn';
+import { TEST_SET } from '@/lib/testSetCopy';
 import { ROUTES } from '@/routes';
 import { memoize, metricsResource } from '@/services/staticData';
 import { usePatientStore } from '@/state/patientStore';
@@ -229,7 +230,7 @@ export function Pillars({ onNavigate, className }: { onNavigate(destination: Lan
       <Pillar
         n="04"
         verb="Validate"
-        sentence="Scored once on unseen patients."
+        sentence={TEST_SET.pillar}
         visual={<ValidateVisual />}
         destination={{ to: ROUTES.performance }}
         linkLabel="Opens model performance."

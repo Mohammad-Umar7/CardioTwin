@@ -363,7 +363,7 @@ export function leakagePolicy(report?: MetricsReport | null): PolicyItem[] {
       body: 'The ensemble weight, the Platt calibration and the decision threshold are fitted on out-of-fold predictions. The cross-validated numbers are cross-fitted: each outer fold re-makes those choices without itself.',
     },
     {
-      title: 'The test set is scored once per release',
+      title: history > 1 ? 'The test set is locked, and every re-score is disclosed' : 'The test set is scored once, after every decision is frozen',
       body:
         history > 1
           ? `Only the deployed model and the pre-specified baseline are scored on it. It has been scored ${history} times in total, once per release; the re-score followed an independent review and changed no model choice.`

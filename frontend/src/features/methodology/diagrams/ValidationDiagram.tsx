@@ -147,9 +147,9 @@ export function ValidationDiagram({ facts }: { facts: KeyFacts }) {
               <Lock className="size-4 stroke-[1.5] text-secondary" aria-hidden />
             </span>
           </div>
-          <p className="text-body-s font-semibold text-primary">Scored once</p>
+          <p className="text-body-s font-semibold text-primary">Scored when frozen</p>
           <p className="text-label font-normal text-tertiary text-pretty">
-            With the frozen model.
+            With the frozen model; one disclosed re-score.
             {facts.nBootstrap
               ? ` ${facts.nBootstrap.toLocaleString('en-US')} bootstrap resamples give the 95 % intervals.`
               : ''}
@@ -167,7 +167,7 @@ export function ValidationDiagram({ facts }: { facts: KeyFacts }) {
       </div>
       <figcaption id="validation-caption" className="sr-only">
         Validation protocol: a locked test split, nested repeated cross-validation on the development set,
-        out-of-fold calibration and threshold, one-time scoring of the test split, and Monte-Carlo re-splits
+        out-of-fold calibration and threshold, scoring of the test split with the frozen model (one disclosed re-score), and Monte-Carlo re-splits
         for robustness.
       </figcaption>
     </figure>

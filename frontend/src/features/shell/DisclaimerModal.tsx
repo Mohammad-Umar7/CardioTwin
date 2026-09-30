@@ -1,6 +1,7 @@
 import { Button, Modal, RiskLegend, RiskPip } from '@/design';
 import { useMetrics } from '@/hooks/useData';
 import { formatPercent } from '@/lib/format';
+import { TEST_SET } from '@/lib/testSetCopy';
 import { RISK_BAND_STYLES } from '@/theme/risk';
 import { useUiStore } from '@/state/uiStore';
 
@@ -61,7 +62,7 @@ export function DisclaimerModal() {
         <Section title="Calibration and validation">
           <p>
             Probabilities are Platt-calibrated and thresholds were tuned on development folds, then frozen before the
-            held-out test split was scored once. The model has not been externally validated; performance on other
+            held-out test split was scored. {TEST_SET.rescore} The model has not been externally validated; performance on other
             populations, devices or sites is unknown.
           </p>
         </Section>

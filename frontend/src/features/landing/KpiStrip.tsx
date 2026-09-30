@@ -5,6 +5,7 @@ import { Skeleton, Tooltip } from '@/design';
 import { useSchemaIndex } from '@/hooks/useData';
 import { cn } from '@/lib/cn';
 import { EN_DASH, THIN_SPACE, formatCi, formatMetricValue } from '@/lib/format';
+import { TEST_SET } from '@/lib/testSetCopy';
 import { ROUTES } from '@/routes';
 import { formatCv, performanceFor, reconcileTestAndCv, useLandingMetrics, type LandingMetrics } from './landingMetrics';
 
@@ -83,11 +84,11 @@ function AucTable({ lm }: { lm: LandingMetrics }) {
 
 const PROTOCOL = [
   { anchor: 'leakage', text: 'Targets never used as inputs', hint: 'LAD, LCX, RCA and the cath result are never model inputs; a unit test enforces it.' },
-  { anchor: 'validation', text: 'Test set scored once', hint: 'The held-out split was scored once, after every modelling decision was frozen on the development set.' },
+  { anchor: 'validation', text: TEST_SET.check, hint: TEST_SET.hint },
   { anchor: 'engines', text: 'Server/edge parity', hint: 'The in-browser engine reproduces the server to |Δp| < 1e-6 on every fixture case.' },
 ] as const;
 
-/** ✓ Targets never used as inputs · ✓ Test set scored once · ✓ Server/edge parity (V2 §6.1). */
+/** ✓ Targets never used as inputs · ✓ Locked test, 1 disclosed re-score · ✓ Server/edge parity (V2 §6.1). */
 export function ProtocolLine({ className }: { className?: string }) {
   return (
     <ul className={cn('flex flex-wrap items-center gap-x-4 gap-y-1 text-label', className)} aria-label="Validation protocol">

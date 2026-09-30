@@ -223,8 +223,8 @@ export const BEATS: readonly Beat[] = [
     chapter: 4,
     title: 'How well it performs',
     caption: (c) =>
-      `Model performance: every figure was scored once on ${c.nTest ?? 'the'} held-out patients, with confidence ` +
-      'intervals. CardioTwin is decision support for education and research, not a diagnosis.',
+      `Model performance: every figure comes from ${c.nTest ?? 'the'} locked held-out patients, with confidence ` +
+      'intervals and one disclosed re-score. CardioTwin is decision support for education and research, not a diagnosis.',
     spotlight: [{ selector: SEL.performance }],
     durationMs: 7000,
     state: s({ route: 'performance' }),
