@@ -9,6 +9,7 @@ import {
   decisionTexts,
   driverPanel,
   driverSentence,
+  featureText,
   fnv1a,
   formatPoints,
   formatReportDate,
@@ -216,10 +217,24 @@ describe('driverPanel', () => {
   });
 });
 
+describe('featureText', () => {
+  it('reads ordinal classes as "Class n" and defers to lib/format otherwise', () => {
+    const fc = { key: 'Function Class', label: 'Functional class', group: 'symptoms', type: 'numeric' as const, unit: 'class' };
+    expect(featureText(fc, 2)).toBe('Class 2');
+    expect(featureText(sampleSchema.features.find((f) => f.key === 'BP')!, 140)).toBe(`140${T}mmHg`);
+  });
+});
+
 describe('phraseForInput', () => {
   const byKey = new Map(sampleSchema.features.map((f) => [f.key, f]));
   it('describes binary, numeric and categorical inputs in words', () => {
-    expect(phraseForInput(byKey.get('BP'), 'BP', 140)).toBe(`blood pressure 140${T}mmHg`);
+    expect(phraseForInput(byKey.get('BP'), 'BP', 140)).toBe('high blood pressure');
+    expect(phraseForInput(byKey.get('BP'), 'BP', 110)).toBe('normal blood pressure');
+    expect(phraseForInput(byKey.get('EF-TTE'), 'EF-TTE', 40)).toBe('low ejection fraction');
+    expect(phraseForInput(byKey.get('Age'), 'Age', 62)).toBe(`age 62${T}y`);
+    const rwma = { ...byKey.get('Region RWMA')!, normal: { low: 0, high: 0 } };
+    expect(phraseForInput(rwma, 'Region RWMA', 0)).toBe('no regional wall motion abnormality');
+    expect(phraseForInput(rwma, 'Region RWMA', 2)).toBe('regional wall motion abnormality (2)');
     expect(phraseForInput(byKey.get('BBB'), 'BBB', 'LBBB')).toBe('LBBB');
     expect(phraseForInput(byKey.get('BBB'), 'BBB', 'N')).toBe('no bundle branch block');
     expect(phraseForInput(undefined, 'Mystery', 1)).toBe('Mystery');
@@ -289,7 +304,7 @@ describe('buildReport', () => {
     expect(r.header).toMatchObject({
       patientLabel: 'P-017',
       splitTag: 'TEST',
-      splitText: 'Held-out test patient — never seen in training',
+      splitText: 'Held-out test patient, unseen in training',
       demographics: `Male · 62${T}y`,
       generatedText: '30 Sep 2026, 10:42',
       engineLabel: 'Server',
@@ -325,7 +340,7 @@ describe('buildReport', () => {
     const r = buildReport(
       input({ patient: { id: null, split: null }, mode: 'custom', features: { ...patient.features, BP: 118 } }),
     );
-    expect(r.header).toMatchObject({ patientLabel: 'Custom patient', splitTag: null, splitText: 'Custom inputs — not a cohort patient' });
+    expect(r.header).toMatchObject({ patientLabel: 'Custom patient', splitTag: null, splitText: 'Custom inputs, not a cohort patient' });
     expect(r.editedCount).toBe(1);
   });
 

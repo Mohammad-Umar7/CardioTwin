@@ -413,12 +413,21 @@ export function phraseForInput(spec: FeatureSpec | undefined, feature: string, v
     const on = value === 1 || value === true || value === '1';
     return on ? label : `no ${label}`;
   }
-  const text = formatFeatureValue(spec, value as FeatureValue);
+  const text = featureText(spec, value);
   if (spec.type === 'categorical') {
     if (text === 'None') return `no ${label}`;
     if (/^[A-Z0-9]{2,}$/.test(text)) return text;
     return `${text.toLowerCase()} ${label}`;
   }
+  // Numeric: words instead of numbers where the schema has a reference range ("low ejection fraction").
+  const normal = spec.normal;
+  if (normal && normal.low === 0 && normal.high === 0 && isNum(value)) {
+    return value === 0 ? `no ${label}` : `${label} (${text})`;
+  }
+  const status = rangeStatus(value as FeatureValue, normal);
+  if (status === 'within') return `normal ${label}`;
+  if (status === 'above') return `high ${label}`;
+  if (status === 'below') return `low ${label}`;
   return `${label} ${text}`;
 }
 
@@ -463,7 +472,7 @@ export function driverPanel(
     return {
       feature: c.feature,
       label: fs?.label ?? c.feature,
-      valueText: fs ? formatFeatureValue(fs, c.value as FeatureValue) : String(c.value ?? '–'),
+      valueText: fs ? featureText(fs, c.value) : String(c.value ?? '–'),
       pp: v,
       ppText: fmt(v),
       direction: v >= 0 ? 'raises' : 'lowers',
@@ -488,6 +497,12 @@ export function driverPanel(
 
 // ---------------------------------------------------------------------------------------- inputs
 
+/** formatFeatureValue, except ordinal classes read "Class 2" rather than "2 class". */
+export function featureText(spec: FeatureSpec, value: unknown): string {
+  if (spec.type === 'numeric' && spec.unit === 'class' && isNum(value)) return `Class ${Math.round(value)}`;
+  return formatFeatureValue(spec, value as FeatureValue);
+}
+
 const isOn = (v: unknown) => v === 1 || v === true || v === '1' || (typeof v === 'string' && v.toUpperCase() === 'Y');
 
 /** Categorical "finding": any value other than the schema's "none" option (N). Sex has no such option. */
@@ -511,14 +526,14 @@ export function inputRow(
     key: spec.key,
     label: spec.label,
     type: spec.type,
-    valueText: formatFeatureValue(spec, value),
+    valueText: featureText(spec, value),
     refText: spec.type === 'numeric' ? formatNormalRange(spec.normal, spec.step).replace(/^ref /, '') : '',
     status,
     flagText: flagged ? (status === 'above' ? 'above normal' : 'below normal') : null,
     finding: spec.type === 'binary' ? isOn(value) : spec.type === 'categorical' ? categoricalFinding(spec, value) : false,
     imputed: imputed.has(spec.key),
     edited,
-    wasText: edited ? formatFeatureValue(spec, recorded[spec.key]) : null,
+    wasText: edited ? featureText(spec, recorded[spec.key]) : null,
   };
 }
 
@@ -581,10 +596,10 @@ export function reportHeader(input: ReportInput): ReportHeader {
   const splitTag = split === 'test' ? 'TEST' : split === 'dev' ? 'DEV' : null;
   const splitText =
     split === 'test'
-      ? 'Held-out test patient — never seen in training'
+      ? 'Held-out test patient, unseen in training'
       : split === 'dev'
-        ? 'Development cohort patient — used to train the model'
-        : 'Custom inputs — not a cohort patient';
+        ? 'Development patient, used in training'
+        : 'Custom inputs, not a cohort patient';
   const engine = prediction?.engine ?? null;
   const e = engine ? ENGINE_TEXT[engine] : undefined;
   return {
