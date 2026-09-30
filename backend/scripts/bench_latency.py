@@ -53,7 +53,7 @@ def random_patient(schema: dict[str, Any], rng: random.Random) -> dict[str, Any]
             value = rng.uniform(lo, hi)
             if step:
                 value = min(hi, max(lo, round(round((value - lo) / step) * step + lo, 6)))
-            features[spec["key"]] = int(value) if float(step).is_integer() and step else value
+            features[spec["key"]] = int(value) if float(value).is_integer() else value
     return features
 
 
