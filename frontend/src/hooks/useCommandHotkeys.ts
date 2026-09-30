@@ -48,6 +48,14 @@ export function commandForKey(event: KeyLike, candidates: Command[], ctx: Hotkey
 }
 
 /**
+ * A modal dialog is open: an `aria-modal="true"` element that is not on its way out (closing layers are
+ * marked `data-exiting` and made inert the moment their exit starts, and must not swallow the next key).
+ */
+function modalIsOpen(): boolean {
+  return [...document.querySelectorAll('[aria-modal="true"]')].some((el) => !el.closest('[inert],[data-exiting]'));
+}
+
+/**
  * Binds every registered command's shortcut on window keydown. Mount once (the app shell). A handler that
  * already called `preventDefault()` (a focused canvas, a slider, a field's own keys) wins.
  */
@@ -59,7 +67,7 @@ export function useCommandHotkeys(): void {
       const command = commandForKey(event, candidates, {
         editable: isEditableTarget(event.target),
         paletteOpen: useUiStore.getState().paletteOpen,
-        modalOpen: document.querySelector('[aria-modal="true"]') !== null,
+        modalOpen: modalIsOpen(),
       });
       if (!command) return;
       event.preventDefault();

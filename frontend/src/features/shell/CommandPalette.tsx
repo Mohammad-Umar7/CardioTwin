@@ -1,6 +1,6 @@
-import { AnimatePresence, motion } from 'framer-motion';
+import { AnimatePresence, motion, useIsPresent } from 'framer-motion';
 import { CornerDownLeft, Keyboard, Search, SlidersHorizontal } from 'lucide-react';
-import { useEffect, useId, useMemo, useRef, useState, type KeyboardEvent as ReactKeyboardEvent } from 'react';
+import { useEffect, useId, useLayoutEffect, useMemo, useRef, useState, type KeyboardEvent as ReactKeyboardEvent } from 'react';
 import { createPortal } from 'react-dom';
 import { ESCAPE_PRIORITY, Kbd, Shortcut, Skeleton, useEscapeLayer } from '@/design';
 import { useCohort, useSchema } from '@/hooks/useData';
@@ -69,6 +69,13 @@ function usePrewarm(open: boolean): boolean {
 
 
 function PalettePanel({ reduced, prewarm = false }: { reduced: boolean; prewarm?: boolean }) {
+  // Closing: leave the tab order and stop counting as an open modal the moment the exit starts, so the
+  // next single-key shortcut (I, E, 1…) is never swallowed while the panel fades out.
+  const present = useIsPresent();
+  const layer = useRef<HTMLDivElement | null>(null);
+  useLayoutEffect(() => {
+    if (layer.current) layer.current.inert = !present;
+  }, [present]);
   const listId = useId();
   const input = useRef<HTMLInputElement>(null);
   const opener = useRef<Element | null>(null);
@@ -279,7 +286,12 @@ function PalettePanel({ reduced, prewarm = false }: { reduced: boolean; prewarm?
   const showSkeleton = !query.trim() && !level && cohortLoading;
 
   return (
-    <div className="fixed inset-0 z-scrim">
+    <div
+      ref={layer}
+      className="fixed inset-0 z-scrim"
+      data-exiting={present ? undefined : ''}
+      aria-hidden={present ? undefined : true}
+    >
       <motion.div
         aria-hidden
         className="absolute inset-0 bg-[var(--scrim-palette)]"

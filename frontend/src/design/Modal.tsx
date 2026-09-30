@@ -1,6 +1,6 @@
-import { useEffect, useId, useRef, type ReactNode } from 'react';
+import { useEffect, useId, useLayoutEffect, useRef, type ReactNode } from 'react';
 import { createPortal } from 'react-dom';
-import { AnimatePresence, motion } from 'framer-motion';
+import { AnimatePresence, motion, useIsPresent } from 'framer-motion';
 import { X } from 'lucide-react';
 import { cn } from '@/lib/cn';
 import { EASE, MOTION } from '@/theme/tokens';
@@ -18,6 +18,24 @@ export interface ModalProps {
   footer?: ReactNode;
   width?: number;
   className?: string;
+}
+
+/**
+ * The keyed child of `AnimatePresence`: inert, hidden and marked `data-exiting` the moment its exit starts,
+ * so a closing dialog (held on screen by its exit animation, longer in a throttled tab) no longer counts as
+ * an open modal — the single-key shortcuts resume at once instead of swallowing the next key.
+ */
+function PresenceLayer({ className, children }: { className: string; children: ReactNode }) {
+  const present = useIsPresent();
+  const ref = useRef<HTMLDivElement>(null);
+  useLayoutEffect(() => {
+    if (ref.current) ref.current.inert = !present;
+  }, [present]);
+  return (
+    <div ref={ref} className={className} data-exiting={present ? undefined : ''} aria-hidden={present ? undefined : true}>
+      {children}
+    </div>
+  );
 }
 
 /**
@@ -54,7 +72,7 @@ export function Modal({ open, onClose, title, description, children, footer, wid
   return createPortal(
     <AnimatePresence>
       {open && (
-        <div className="fixed inset-0 z-popover flex items-center justify-center p-4">
+        <PresenceLayer key="modal" className="fixed inset-0 z-popover flex items-center justify-center p-4">
           <motion.div
             className="absolute inset-0 bg-[var(--scrim)]"
             initial={{ opacity: 0 }}
@@ -97,7 +115,7 @@ export function Modal({ open, onClose, title, description, children, footer, wid
             <div className="panel-scroll min-h-0 flex-1 px-5 py-4">{children}</div>
             {footer && <footer className="flex justify-end gap-2 border-t border-line px-5 py-3">{footer}</footer>}
           </motion.div>
-        </div>
+        </PresenceLayer>
       )}
     </AnimatePresence>,
     document.body,
