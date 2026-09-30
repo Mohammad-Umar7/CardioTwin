@@ -108,6 +108,8 @@ def run_ablations(
             }
             for t in targets
         },
+        "min_gain": float(cfg["min_gain"]),
+        "n_repeats": int(cfg["n_repeats"]),
         "variants": {},
     }
     for variant in ("derived", "selection", "chain"):
