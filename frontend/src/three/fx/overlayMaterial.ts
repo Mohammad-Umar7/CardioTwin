@@ -150,8 +150,8 @@ export function createOverlayMaterial(shared: OverlayShared, arclenAttribute: st
         if (uIgniteAmp > 0.0) {
           float y = uIgnite - vArc;
           float front = exp(-(y * y) / (0.035 * 0.035));
-          float glow = y > 0.0 ? 0.45 * exp(-y / 0.22) : 0.0;
-          col += uTrace * (uIgniteAmp * (1.6 * front + glow));
+          float glow = y > 0.0 ? 0.5 * exp(-y / 0.22) : 0.0;
+          col += uTrace * (uIgniteAmp * (2.4 * front + glow)); // the crest blooms (vessels are bloom-selected)
         }
 
         // Tier-C flow beads, moving distally at the integrated flow speed: short, soft, only along the
