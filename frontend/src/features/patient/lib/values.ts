@@ -55,12 +55,30 @@ export function numericValue(value: FeatureValue | undefined): number {
   return Number.NaN;
 }
 
+/** Compact units for the 52 px unit column (the full unit stays in the label tooltip). */
+const SHORT_UNITS: Readonly<Record<string, string>> = {
+  'beats/min': 'bpm',
+  'cells/µL': '/µL',
+  '×10³/µL': '10³/µL',
+};
+
+/** Display unit of a numeric input ("y", "mg/dL", "bpm"). */
+export function unitOf(spec: FeatureSpec): string {
+  const unit = formatUnit(spec.unit);
+  return SHORT_UNITS[unit] ?? unit;
+}
+
 /** Value and unit split for tabular display: { value: "101", unit: "mg/dL" }; binaries read Yes / No. */
 export function displayParts(spec: FeatureSpec, value: FeatureValue | undefined): { value: string; unit: string } {
   if (spec.type !== 'numeric') return { value: formatFeatureValue(spec, value), unit: '' };
   const n = numericValue(value);
   if (!Number.isFinite(n)) return { value: '–', unit: '' };
-  return { value: formatNumber(n, spec.step), unit: formatUnit(spec.unit) };
+  return { value: formatNumber(n, spec.step), unit: unitOf(spec) };
+}
+
+/** Short on-screen label of a categorical option: "None", "Mild", "Mod.", "LBBB" (full term in a tooltip). */
+export function optionShort(label: string): string {
+  return label.length > 6 && !/^[A-Z0-9]+$/.test(label) ? `${label.slice(0, 3)}.` : label;
 }
 
 /** "70 y", "Yes", "LBBB" — the one-line value used in tooltips, "was" captions and toasts. */
@@ -106,3 +124,24 @@ export function inRange(spec: FeatureSpec, n: number): boolean {
 
 /** The value a binary input takes when flipped. */
 export const flipped = (value: FeatureValue | undefined): 0 | 1 => (isPresent(value) ? 0 : 1);
+
+/**
+ * Card labels (V2 §5.5): the schema label, abbreviated only where it cannot fit the 150 px column
+ * ("Wall-motion abn." as in the spec). The full label stays in the tooltip and the aria-label.
+ */
+const CARD_LABELS: Readonly<Record<string, string>> = {
+  'Region RWMA': 'Wall-motion abn.',
+  'Poor R Progression': 'Poor R-wave progr.',
+  LVH: 'LV hypertrophy',
+  'Weak Peripheral Pulse': 'Weak periph. pulse',
+  Nonanginal: 'Non-anginal pain',
+  'Thyroid Disease': 'Thyroid disease',
+  'EX-Smoker': 'Former smoker',
+  CRF: 'Chronic renal failure',
+  BUN: 'Urea nitrogen',
+  VHD: 'Valve disease',
+};
+
+export function cardLabel(spec: FeatureSpec): string {
+  return CARD_LABELS[spec.key] ?? spec.label;
+}
