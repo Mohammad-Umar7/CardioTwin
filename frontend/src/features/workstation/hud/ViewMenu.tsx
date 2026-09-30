@@ -33,8 +33,9 @@ export function ViewMenu({ iconOnly = false }: { iconOnly?: boolean }) {
           iconOnly={iconOnly}
           {...props}
         >
-          {/* Fixed width: the toolbar keeps its size and position whatever the view is called. */}
-          <span className="num inline-block w-12 text-left max-[1439.98px]:w-11">{shortViewLabel(label)}</span>
+          {/* Fixed minimum width sized to the longest short name ("LAO 150", tabular numerals), so the toolbar keeps
+              its size and position whatever the view is called and the name is never clipped. */}
+          <span className="num inline-block min-w-[3.75rem] whitespace-nowrap text-left tabular-nums">{shortViewLabel(label)}</span>
         </ToolbarTextButton>
       )}
     >
