@@ -3,6 +3,7 @@ import type { TargetMetrics } from '@/types/contracts';
 import { readCalibrationSummary, readModalityAblation, readRobustness, readSubgroups } from './extras';
 import { cadMetrics, sampleReport } from './fixtures.test-data';
 import {
+  acrossFinding,
   calibrationFinding,
   challengerNote,
   confusionFinding,
@@ -20,6 +21,7 @@ import {
   pageTakeaway,
   pointMetrics,
   reconcileSentence,
+  robustnessAcross,
   robustnessFinding,
   rocFinding,
   splitFacts,
@@ -220,6 +222,21 @@ describe('analysis findings', () => {
     expect(robustnessFinding(r)).toBe(
       'Held-out ROC-AUC spans 0.84–0.96 across 200 re-splits; the published split was a hard one (13th percentile)',
     );
+  });
+
+  it('lines up every target with a published re-split analysis and states the cross-target finding', () => {
+    const rows = robustnessAcross(sampleReport, ['CAD', 'LAD'], readRobustness);
+    expect(rows.map((r) => r.target)).toEqual(['CAD']);
+    expect(rows[0]).toMatchObject({ p50: 0.91, fixed: 0.858, fixedPercentile: 12.5 });
+    expect(rows[0]!.cv).toBeCloseTo(0.9367, 4);
+    const row = (target: string, cv: number, pct: number) => ({ target, p05: 0.8, p25: 0.85, p50: 0.88, p75: 0.9, p95: 0.95, fixed: 0.86, fixedPercentile: pct, cv });
+    expect(acrossFinding([row('CAD', 0.94, 3), row('LAD', 0.87, 1.5), row('LCX', 0.9, 84), row('RCA', 0.85, 58)])).toBe(
+      'Cross-validation lands inside the re-split range for every target; the locked split was a hard draw for CAD and LAD and an easy one for LCX',
+    );
+    expect(acrossFinding([row('CAD', 0.99, 50)])).toBe(
+      'Cross-validation lands inside the re-split range for no target; the locked split was a typical draw',
+    );
+    expect(acrossFinding([])).toBe('Held-out ROC-AUC across random re-splits');
   });
 
   it('makes the multimodal gain the headline', () => {

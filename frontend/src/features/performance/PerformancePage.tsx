@@ -9,6 +9,7 @@ import { formatMetricValue } from '@/lib/format';
 import { deployedModelPhrase } from '@/lib/modelNames';
 import { TARGET_ORDER, type KnownTargetId, type MetricsReport } from '@/types/contracts';
 import {
+  AcrossTargetsModule,
   CumulativeModule,
   LeaveOneOutModule,
   MultimodalHeadline,
@@ -34,6 +35,7 @@ import {
   operatingPoints,
   pageTakeaway,
   reconcileSentence,
+  robustnessAcross,
   splitFacts,
   testPrevalence,
   type Split,
@@ -178,6 +180,8 @@ export default function PerformancePage() {
     [m, report, target],
   );
 
+  const across = useMemo(() => robustnessAcross(report, TARGET_ORDER, readRobustness), [report]);
+
   const modelVersion = (report as { model_version?: string } | undefined)?.model_version ?? report?.version ?? '';
   const provenance = `CardioTwin model ${modelVersion} · ${target} · held-out test (n = ${facts.nTest})`;
   const provenanceCv = `CardioTwin model ${modelVersion} · ${target} · development cross-validation (n = ${facts.nDev})`;
@@ -310,6 +314,16 @@ export default function PerformancePage() {
                   <div className="lg:col-span-5">
                     <RobustnessStatsModule target={target} r={extras.robustness} height={H} />
                   </div>
+                  {across.length > 1 && (
+                    <div className="lg:col-span-12">
+                      <AcrossTargetsModule
+                        rows={across}
+                        nSplits={extras.robustness.nSplits}
+                        height={H - 24}
+                        provenance={`CardioTwin model ${modelVersion} · all targets · ${extras.robustness.nSplits} Monte-Carlo re-splits`}
+                      />
+                    </div>
+                  )}
                 </div>
               </Section>
             )}

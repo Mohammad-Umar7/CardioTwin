@@ -7,7 +7,7 @@ import { ChartModule } from './charts/ChartModule';
 import { formatTick, niceAxis } from './charts/scale';
 import { useElementWidth } from './charts/useElementWidth';
 import type { BaselineResult, ModalityAblation, ModalityRow, RobustnessResult, SubgroupSource, Subgroups } from './extras';
-import { modalityFinding, modalityInSentence, ordinal, robustnessFinding, subgroupFinding } from './model';
+import { acrossFinding, modalityFinding, modalityInSentence, ordinal, robustnessFinding, subgroupFinding, type AcrossTargetRow } from './model';
 
 const f2 = (v: number | null | undefined) => formatMetricValue(v);
 /** Signed two-decimal delta; anything that rounds to zero reads "0.00" (no "−0.00"). */
@@ -368,6 +368,95 @@ export function RobustnessModule({ target, r, height, provenance }: { target: st
             Held-out ROC-AUC
           </text>
         </svg>
+      </div>
+    </ChartModule>
+  );
+}
+
+const ACROSS_GRID = 'grid-cols-[56px_minmax(0,1fr)_196px]';
+
+function AcrossKey({ kind }: { kind: 'band' | 'median' | 'cv' | 'locked' }) {
+  return (
+    <svg width="18" height="12" aria-hidden className="shrink-0">
+      {kind === 'band' && (
+        <>
+          <line x1="0" x2="18" y1="6" y2="6" stroke={UI.textTertiary} strokeWidth="1.5" />
+          <rect x="4" y="3" width="10" height="6" rx="1.5" fill="rgba(255,255,255,0.22)" />
+        </>
+      )}
+      {kind === 'median' && <line x1="9" x2="9" y1="1" y2="11" stroke={UI.textSecondary} strokeWidth="2" />}
+      {kind === 'cv' && <rect x="5" y="2" width="8" height="8" transform="rotate(45 9 6)" fill={UI.bgPanel} stroke={UI.textSecondary} strokeWidth="1.25" />}
+      {kind === 'locked' && <circle cx="9" cy="6" r="4.5" fill={UI.textPrimary} stroke={UI.bgPanel} strokeWidth="2" />}
+    </svg>
+  );
+}
+
+/**
+ * Every target at once: where the locked split and the cross-validation estimate fall inside the
+ * Monte-Carlo distribution of held-out ROC-AUC. It answers "why is test below CV?" for all four
+ * targets in one picture.
+ */
+export function AcrossTargetsModule({ rows, nSplits, height, provenance }: { rows: AcrossTargetRow[]; nSplits: number; height: number; provenance: string }) {
+  const vals = rows.flatMap((r) => [r.p05, r.p95, r.fixed ?? r.p50, r.cv ?? r.p50]);
+  const axis = niceAxis(Math.min(...vals), Math.min(1, Math.max(...vals)), [0, 1]);
+  const pos = (v: number) => ((v - axis.domain[0]) / (axis.domain[1] - axis.domain[0])) * 100;
+  return (
+    <ChartModule
+      id="chart-robustness-across"
+      title={acrossFinding(rows)}
+      howTo={`How to read: for each target, the bar spans the middle half and the line the 5th–95th percentile of held-out ROC-AUC over ${nSplits} re-splits of the whole recipe. The dot is the locked split, the diamond the cross-validation estimate.`}
+      height={height}
+      exportName="cardiotwin-robustness-all-targets"
+      exportImage={false}
+      provenance={provenance}
+      table={{
+        caption: 'Held-out ROC-AUC across random re-splits, all targets',
+        columns: ['Target', 'Median', '5th–95th percentile', 'Locked split', 'Locked percentile', 'Cross-validation'],
+        numeric: [false, true, true, true, true, true],
+        rows: rows.map((r) => [
+          r.target,
+          f2(r.p50),
+          `${f2(r.p05)}–${f2(r.p95)}`,
+          f2(r.fixed),
+          r.fixedPercentile !== null ? ordinal(r.fixedPercentile) : '–',
+          f2(r.cv),
+        ]),
+      }}
+    >
+      <div className="flex h-full flex-col">
+        <ul className="flex flex-wrap items-center gap-x-4 gap-y-1 pb-2 text-label font-normal text-tertiary" aria-label="Legend">
+          <li className="flex items-center gap-1.5"><AcrossKey kind="band" />Re-splits</li>
+          <li className="flex items-center gap-1.5"><AcrossKey kind="median" />Median</li>
+          <li className="flex items-center gap-1.5"><AcrossKey kind="locked" />Locked split</li>
+          <li className="flex items-center gap-1.5"><AcrossKey kind="cv" />Cross-validation</li>
+        </ul>
+        <ol className="flex flex-1 flex-col justify-around">
+          {rows.map((r) => (
+            <li key={r.target} className={cn('grid items-center gap-3 text-label font-normal', ACROSS_GRID)}>
+              <span className="text-body-s font-semibold text-primary">{r.target}</span>
+              <svg className="h-4 w-full overflow-visible" aria-hidden>
+                <GridLines ticks={axis.ticks} pos={pos} />
+                <line x1={`${pos(r.p05)}%`} x2={`${pos(r.p95)}%`} y1="8" y2="8" stroke={UI.textTertiary} strokeWidth="1.5" strokeLinecap="round" />
+                {r.p25 !== null && r.p75 !== null && (
+                  <rect x={`${pos(r.p25)}%`} y="4" width={`${pos(r.p75) - pos(r.p25)}%`} height="8" rx="2" fill="rgba(255,255,255,0.22)" />
+                )}
+                <line x1={`${pos(r.p50)}%`} x2={`${pos(r.p50)}%`} y1="2" y2="14" stroke={UI.textSecondary} strokeWidth="2" />
+                {r.cv !== null && (
+                  <svg x={`${pos(r.cv)}%`} y="0" width="1" height="16" overflow="visible">
+                    <rect x="-4" y="4" width="8" height="8" transform="rotate(45 0 8)" fill={UI.bgPanel} stroke={UI.textSecondary} strokeWidth="1.25" />
+                  </svg>
+                )}
+                {r.fixed !== null && <circle cx={`${pos(r.fixed)}%`} cy="8" r="4.5" fill={UI.textPrimary} stroke={UI.bgPanel} strokeWidth="2" />}
+              </svg>
+              <span className="num whitespace-nowrap text-right text-secondary">
+                locked {f2(r.fixed)}
+                {r.fixedPercentile !== null && <span className="text-tertiary"> · {ordinal(r.fixedPercentile)} pct.</span>}
+                <span className="text-tertiary"> · CV {f2(r.cv)}</span>
+              </span>
+            </li>
+          ))}
+        </ol>
+        <AxisRow ticks={axis.ticks} step={axis.step} pos={pos} label="" grid={ACROSS_GRID} />
       </div>
     </ChartModule>
   );

@@ -496,6 +496,62 @@ export function robustnessFinding(r: RobustnessResult): string {
   return `${range}; the published split was ${kind} (${ordinal(pct)} percentile)`;
 }
 
+export interface AcrossTargetRow {
+  target: string;
+  /** Monte-Carlo held-out ROC-AUC distribution of the frozen recipe. */
+  p05: number;
+  p25: number | null;
+  p50: number;
+  p75: number | null;
+  p95: number;
+  /** The locked (published) split and its percentile. */
+  fixed: number | null;
+  fixedPercentile: number | null;
+  /** Cross-fitted development CV mean. */
+  cv: number | null;
+}
+
+/** One row per target that has a published Monte-Carlo analysis, in contract order. */
+export function robustnessAcross(report: MetricsReport | undefined, targets: readonly string[], read: (r: MetricsReport | undefined, t: string) => RobustnessResult | null): AcrossTargetRow[] {
+  return targets.flatMap((t) => {
+    const r = read(report, t);
+    if (!r) return [];
+    const d = r.rocAuc;
+    return [
+      {
+        target: t,
+        p05: d.p05,
+        p25: d.p25,
+        p50: d.p50,
+        p75: d.p75,
+        p95: d.p95,
+        fixed: d.fixed,
+        fixedPercentile: r.fixedPercentile,
+        cv: report?.targets[t as keyof MetricsReport['targets']]?.cv.roc_auc?.mean ?? r.cvEstimate?.rocAuc ?? null,
+      },
+    ];
+  });
+}
+
+const listAnd = (xs: string[]) => (xs.length > 1 ? `${xs.slice(0, -1).join(', ')} and ${xs.at(-1)}` : (xs[0] ?? ''));
+
+/** "Cross-validation lands inside the re-split range for every target; the locked split was a hard draw for CAD and LAD." */
+export function acrossFinding(rows: AcrossTargetRow[]): string {
+  if (rows.length === 0) return 'Held-out ROC-AUC across random re-splits';
+  const inside = rows.filter((r) => r.cv !== null && r.cv >= r.p05 && r.cv <= r.p95);
+  const lead =
+    inside.length === rows.length
+      ? 'Cross-validation lands inside the re-split range for every target'
+      : `Cross-validation lands inside the re-split range for ${listAnd(inside.map((r) => r.target)) || 'no target'}`;
+  const hard = rows.filter((r) => r.fixedPercentile !== null && r.fixedPercentile < 25).map((r) => r.target);
+  const easy = rows.filter((r) => r.fixedPercentile !== null && r.fixedPercentile > 75).map((r) => r.target);
+  const parts = [
+    hard.length ? `a hard draw for ${listAnd(hard)}` : null,
+    easy.length ? `an easy one for ${listAnd(easy)}` : null,
+  ].filter(Boolean);
+  return parts.length ? `${lead}; the locked split was ${parts.join(' and ')}` : `${lead}; the locked split was a typical draw`;
+}
+
 /** Modality name mid-sentence: "labs", "echo", but "ECG". */
 export function modalityInSentence(id: string): string {
   const short = modalityName(id, 'short');
