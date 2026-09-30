@@ -12,7 +12,21 @@ import {
 } from 'react';
 import { createPortal } from 'react-dom';
 import { cn } from '@/lib/cn';
+import { isReturningFocus } from './focus';
 import { computePosition, type Placement } from './position';
+
+/**
+ * `:focus-visible` (keyboard focus). True where it cannot be told (a synthetic focus event on an element that
+ * is not the active one, or a browser without the selector), so focus still opens the tooltip there.
+ */
+function focusVisible(el: Element): boolean {
+  if (el.ownerDocument.activeElement !== el) return true;
+  try {
+    return el.matches(':focus-visible');
+  } catch {
+    return true;
+  }
+}
 
 export interface TooltipProps {
   content: ReactNode;
@@ -121,6 +135,8 @@ export function Tooltip({ content, children, placement = 'top', delay = 120, dis
     },
     onFocus: (e: React.FocusEvent) => {
       child.props.onFocus?.(e);
+      // Keyboard focus only: not a focus handed back after a menu closes, nor one that follows a click.
+      if (isReturningFocus(e.currentTarget) || !focusVisible(e.currentTarget)) return;
       show(true);
     },
     onBlur: (e: React.FocusEvent) => {

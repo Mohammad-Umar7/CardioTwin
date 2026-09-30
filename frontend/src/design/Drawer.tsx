@@ -6,6 +6,7 @@ import { canTakeFocus, focusableMatch, takeOpener } from '@/lib/focusReturn';
 import { EASE, MOTION } from '@/theme/tokens';
 import { ESCAPE_PRIORITY, useEscapeLayer } from './escapeStack';
 import { ExitInert } from './ExitInert';
+import { returnFocusQuietly } from './focus';
 
 export interface DrawerProps {
   open: boolean;
@@ -120,7 +121,7 @@ export function Drawer({
         const lost = active === document.body || active === null || (closing?.contains(active) ?? false);
         if (!lost) return;
         const back = canTakeFocus(opener.current) ? opener.current : focusableMatch(returnFocus);
-        back?.focus({ preventScroll: true });
+        returnFocusQuietly(back);
       }, 0);
     };
   }, [open, initialFocus, inline, openerKey, returnFocus]);

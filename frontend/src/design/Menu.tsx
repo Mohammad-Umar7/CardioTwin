@@ -14,6 +14,7 @@ import {
 import { createPortal } from 'react-dom';
 import { cn } from '@/lib/cn';
 import { ESCAPE_PRIORITY, useEscapeLayer } from './escapeStack';
+import { returnFocusQuietly } from './focus';
 import { Shortcut } from './Kbd';
 import { computePosition, type Placement } from './position';
 
@@ -79,7 +80,7 @@ export function Menu({ label, trigger, children, placement = 'bottom', width = 2
   const close = useCallback(
     ({ returnFocus = true }: { returnFocus?: boolean } = {}) => {
       setOpenState(false);
-      if (returnFocus) anchor.current?.focus({ preventScroll: true });
+      if (returnFocus) returnFocusQuietly(anchor.current);
     },
     [setOpenState],
   );

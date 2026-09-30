@@ -256,3 +256,16 @@ describe('Drawer presentations (compact, V2 §4.7)', () => {
     expect(dialog.style.width).toBe('100%');
   });
 });
+
+describe('Tooltip · quiet focus return', () => {
+  it('stays closed when focus is handed back to its trigger after a menu or popover closes', async () => {
+    const { returnFocusQuietly } = await import('./focus');
+    render(
+      <Tooltip content="Female · 66 y">
+        <button type="button">P-015</button>
+      </Tooltip>,
+    );
+    returnFocusQuietly(screen.getByRole('button', { name: 'P-015' }));
+    expect(screen.queryByRole('tooltip')).not.toBeInTheDocument();
+  });
+});

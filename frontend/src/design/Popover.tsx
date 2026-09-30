@@ -10,6 +10,7 @@ import {
 import { createPortal } from 'react-dom';
 import { cn } from '@/lib/cn';
 import { ESCAPE_PRIORITY, useEscapeLayer } from './escapeStack';
+import { returnFocusQuietly } from './focus';
 import { computePosition, type Placement } from './position';
 
 export interface PopoverProps {
@@ -43,7 +44,7 @@ export function Popover({ trigger, children, placement = 'bottom', label, classN
   const close = useCallback(() => {
     setOpen(false);
     setPos(null);
-    anchor.current?.focus();
+    returnFocusQuietly(anchor.current);
   }, []);
 
   useLayoutEffect(() => {
