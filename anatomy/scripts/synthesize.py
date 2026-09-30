@@ -1,26 +1,25 @@
 """Stage 1b — correct and complete the BodyParts3D anatomy before the Blender build.
 
-BodyParts3D is a segmentation of one (cadaveric) body. Some structures are collapsed, sunk into the
-heart wall or simply absent. This stage writes *derived* meshes (``anatomy/build/synth/*.ply``, in the
-BodyParts3D millimetre frame so the Blender build treats them exactly like source parts) and a
-machine-readable report. Everything here is deterministic.
+BodyParts3D is a segmentation of one (cadaveric) body. Some structures are collapsed, sunk into the heart wall,
+placed where the reference anatomy says they cannot be, or simply absent. This stage writes *derived* meshes
+(``anatomy/build/synth/*.ply``, in the BodyParts3D millimetre frame so the Blender build treats them exactly like
+source parts), their design centrelines and a machine-readable report. Everything here is deterministic.
 
-What is synthesised (each item is documented in ``anatomy/README.md`` and ``docs/anatomy``):
+What is synthesised or corrected (docs/anatomy/SYNTHESIS.md lists every item and its reference):
 
-* **Cardiac veins** (``SYN_CardiacVeins``) — the five BodyParts3D vein parts are skeletonised, labelled
-  (CS / GCV / AIV / MCV / PVLV / ACV), joined into one tree that drains through the coronary-sinus
-  ostium, given in-vivo calibres (BodyParts3D veins are collapsed: CS 4.7 mm instead of ~9 mm) and
-  re-seated *outside* the epicardium (54 % of the source vein vertices lay inside the myocardium).
-  The coronary sinus is lifted onto the atrial side of the mitral hinge and its ostium placed in
-  front of the IVC orifice. The course of every vein is the BodyParts3D course.
-* **Aortic root and valve** (``SYN_AorticRoot``, ``SYN_AorticValve``) — BodyParts3D has no aortic
-  root or valve: the aorta ends in a flat cap 29 mm from the mitral valve. A root with three sinuses
-  of Valsalva (right / left / non-coronary, placed by the coronary ostia) is lofted from an annulus
-  towards the anterior mitral leaflet up to the sino-tubular junction, with three semilunar cusps.
-* **Ascending aorta calibre** (``SYN_AortaAscending``) — the 22 mm BodyParts3D tube is inflated
-  radially about its own centreline (in-vivo 25-33 mm), fading back to the source calibre at the arch.
-* **Epicardial fat** (``SYN_EpicardialFat``) — lobulated fat filling the atrioventricular and
-  interventricular grooves (about 7 mm), with the coronary trunks and veins lying in shallow channels.
+* **Aortic root and valve** (``SYN_AorticRoot``, ``SYN_AorticValve``) — BodyParts3D has no root or valve and its
+  aorta ends 22 mm from the mitral valve. A root with three sinuses of Valsalva (placed by the coronary ostia) is
+  lofted from a 23 mm annulus to the sino-tubular junction and translated down the outflow tract until the
+  annulus meets the anterior mitral hinge (aorto-mitral continuity); three semilunar cusps with nodules.
+* **Ascending aorta** (``SYN_AortaAscending``) — rounded to an in-vivo calibre and blended onto the moved root.
+* **Heart wall** (``SYN_HeartWall``) — the BodyParts3D wall, with the tissue around the moved root pushed out of
+  it by a smooth field (the only change to the wall).
+* **Coronary arteries** (``SYN_Coronary_*``, ``coronary.py``) — BodyParts3D courses where they agree with the
+  reference; the left main, circumflex, RCA and septal perforators re-routed into the atrioventricular grooves /
+  septum; D2, OM2, conus branch and sinoatrial-nodal artery grown; in-vivo calibres with tapered tips.
+* **Cardiac veins** (``SYN_CardiacVeins``, ``veins.py``) — one labelled tree draining through a coronary sinus
+  that runs in the posterior AV groove and opens flush into the right atrium beside the crux, plus anterior
+  cardiac veins opening into the right atrium.
 
 Usage::
 
@@ -33,42 +32,21 @@ import sys
 import time
 from pathlib import Path
 
-import networkx as nx
 import numpy as np
 import trimesh
-from scipy import ndimage
 from scipy.spatial import cKDTree
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "blender"))
 import meshops as mo  # noqa: E402
 from common import BUILD_DIR, RAW_DIR, load_config, write_json  # noqa: E402
-from extract_centerlines import decompose, prune_spurs, smooth_resample  # noqa: E402
 
 SYNTH_DIR = BUILD_DIR / "synth"
 REPORT = SYNTH_DIR / "synth_report.json"
 VEIN_LINES = SYNTH_DIR / "vein_centerlines.json"
+CORONARY_LINES = SYNTH_DIR / "coronary_centerlines.json"
 MM = 0.01  # the synthesis works in scene units (Blender frame, 1 u = 10 cm) and writes millimetres
 T0 = time.perf_counter()
-
-#: BodyParts3D cardiac-vein parts and the label of their main course.
-VEIN_PARTS = {"FMA4706": "CS", "FMA4707": "GCV", "FMA4713": "MCV", "FMA76751": "PVLV", "FMA71567": "ACV"}
-#: Vein label codes for the ``_VEIN`` vertex attribute (manifest ``veins`` table).
-VEIN_CODES = {"CS": 1, "GCV": 2, "AIV": 3, "MCV": 4, "PVLV": 5, "ACV": 6}
-#: Coronary-sinus length from the ostium to the valve of Vieussens / vein of Marshall (CT 30 mm, 21-40;
-#: REFERENCE.md §6.2). The BodyParts3D "coronary sinus" part is 68 mm long; beyond this it is labelled GCV.
-CS_LENGTH_MM = 40.0
-#: In-vivo lumen radii (mm) along each labelled course, from its drainage end: (radius at s=0, radius at
-#: s=ref_mm, radius at the distal tip). REFERENCE.md §6.2-6.4 (CT / CMR calibres).
-RADIUS_PROFILE_MM = {
-    "CS": (5.0, 4.1, 4.0),
-    "GCV": (3.0, 2.7, 2.5),
-    "AIV": (2.0, 1.25, 0.8),
-    "MCV": (2.4, 1.6, 0.8),
-    "PVLV": (1.7, 1.2, 0.7),
-    "ACV": (1.0, 0.8, 0.55),
-}
-PROFILE_REF_MM = {"CS": CS_LENGTH_MM, "GCV": 50.0, "AIV": 50.0, "MCV": 40.0, "PVLV": 30.0, "ACV": 20.0}
 
 
 def log(msg: str) -> None:
@@ -144,396 +122,6 @@ def heart_frame(parts: Parts) -> dict:
 
 
 # =============================================================================================
-# Skeletons of the source vein parts
-# =============================================================================================
-PITCH = 0.3 * MM
-
-
-def tree_paths(V: np.ndarray, F: np.ndarray, root_hint) -> list[tuple[np.ndarray, int | None]]:
-    """Centreline paths of one connected vessel piece, rooted at the leaf chosen by ``root_hint``.
-
-    ``root_hint(points) -> index`` picks the drainage end among the skeleton leaves.
-    """
-    mesh = trimesh.Trimesh(V, F, process=False)
-    vg = mesh.voxelized(PITCH).fill()
-    grid = np.pad(vg.matrix, 2)
-    origin = vg.transform[:3, 3] - 2 * PITCH
-    edt = ndimage.distance_transform_edt(grid)
-    # extract_centerlines' helpers use its own PITCH; rebuild the graph at this pitch
-    from skimage.morphology import skeletonize
-
-    skel = skeletonize(grid)
-    idx = np.argwhere(skel)
-    if len(idx) < 4:
-        return []
-    pos = origin + idx * PITCH
-    lookup = {tuple(v): i for i, v in enumerate(idx)}
-    g = nx.Graph()
-    g.add_nodes_from(range(len(idx)))
-    offs = [(a, b, c) for a in (-1, 0, 1) for b in (-1, 0, 1) for c in (-1, 0, 1) if (a, b, c) > (0, 0, 0)]
-    for i, (x, y, z) in enumerate(idx):
-        for dx, dy, dz in offs:
-            j = lookup.get((x + dx, y + dy, z + dz))
-            if j is not None:
-                g.add_edge(i, j, weight=PITCH * math.sqrt(dx * dx + dy * dy + dz * dz))
-    local_r = edt[idx[:, 0], idx[:, 1], idx[:, 2]] * PITCH
-    comp = max(nx.connected_components(g), key=len)
-    tree = nx.minimum_spanning_tree(g.subgraph(comp), weight="weight")
-    leaves = [n for n in tree.nodes if tree.degree(n) <= 1] or list(tree.nodes)
-    root = leaves[int(root_hint(pos[leaves]))]
-    tree = prune_spurs(tree, root, np.maximum(local_r, 3 * PITCH))
-    out = []
-    for path, parent in decompose(tree, root):
-        P = pos[path]
-        L = float(np.linalg.norm(np.diff(P, axis=0), axis=1).sum())
-        if parent is not None and L < 4.0 * MM:
-            continue
-        out.append((smooth_resample(P, 0.8 * MM), parent))
-    # re-index parents after dropping short twigs (nearest earlier path to each start point)
-    fixed = []
-    for i, (P, parent) in enumerate(out):
-        if i == 0:
-            fixed.append((P, None))
-            continue
-        d = [np.min(np.linalg.norm(out[j][0] - P[0], axis=1)) for j in range(i)]
-        fixed.append((P, int(np.argmin(d))))
-    return fixed
-
-
-def arclen(P: np.ndarray) -> np.ndarray:
-    return np.r_[0.0, np.cumsum(np.linalg.norm(np.diff(P, axis=0), axis=1))]
-
-
-def resample(P: np.ndarray, spacing: float) -> np.ndarray:
-    s = arclen(P)
-    n = max(2, int(round(s[-1] / spacing)) + 1)
-    t = np.linspace(0, s[-1], n)
-    return np.column_stack([np.interp(t, s, P[:, k]) for k in range(3)])
-
-
-def smooth_polyline(P: np.ndarray, iterations: int = 10, pin_ends: bool = True) -> np.ndarray:
-    P = P.copy()
-    for _ in range(iterations):
-        Q = P.copy()
-        Q[1:-1] = 0.25 * P[:-2] + 0.5 * P[1:-1] + 0.25 * P[2:]
-        if not pin_ends:
-            Q[0], Q[-1] = P[0], P[-1]
-        P = Q
-    return P
-
-
-# =============================================================================================
-# Tube sweeping
-# =============================================================================================
-def frames(P: np.ndarray) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
-    """Rotation-minimising frames (double reflection, Wang et al. 2008) along a polyline."""
-    T = np.gradient(P, axis=0)
-    T /= np.maximum(np.linalg.norm(T, axis=1, keepdims=True), 1e-12)
-    n = len(P)
-    N = np.zeros_like(P)
-    a = np.array([0.0, 0.0, 1.0]) if abs(T[0][2]) < 0.9 else np.array([1.0, 0.0, 0.0])
-    N[0] = mo.unit(np.cross(T[0], a))
-    for i in range(n - 1):
-        v1 = P[i + 1] - P[i]
-        c1 = v1 @ v1
-        if c1 < 1e-20:
-            N[i + 1] = N[i]
-            continue
-        rL = N[i] - (2 / c1) * (v1 @ N[i]) * v1
-        tL = T[i] - (2 / c1) * (v1 @ T[i]) * v1
-        v2 = T[i + 1] - tL
-        c2 = v2 @ v2
-        N[i + 1] = rL - (2 / c2) * (v2 @ rL) * v2 if c2 > 1e-20 else rL
-        N[i + 1] = mo.unit(N[i + 1] - (N[i + 1] @ T[i + 1]) * T[i + 1])
-    B = np.cross(T, N)
-    return T, N, B
-
-
-def sweep_tube(P: np.ndarray, R: np.ndarray, sides: int, *, cap_start: str = "flat", cap_end: str = "round") -> mo.Mesh:
-    """Closed tube along ``P`` with radii ``R``; caps are 'flat' or 'round' (hemispherical)."""
-    T, N, B = frames(P)
-    ang = np.linspace(0, 2 * np.pi, sides, endpoint=False)
-    ca, sa = np.cos(ang), np.sin(ang)
-    verts = []
-    ring_list = []
-
-    def add_ring(c, r, n_, b_):
-        start = len(verts)
-        for k in range(sides):
-            verts.append(c + r * (ca[k] * n_ + sa[k] * b_))
-        ring_list.append(start)
-
-    # round start cap rings (inside the parent usually, so 'flat' is the default)
-    if cap_start == "round":
-        for f in (0.35, 0.7, 0.92):
-            t = math.sqrt(1 - f * f)
-            add_ring(P[0] - T[0] * R[0] * t, R[0] * f, N[0], B[0])
-    for i in range(len(P)):
-        add_ring(P[i], R[i], N[i], B[i])
-    if cap_end == "round":
-        for f in (0.92, 0.7, 0.35):
-            t = math.sqrt(1 - f * f)
-            add_ring(P[-1] + T[-1] * R[-1] * t, R[-1] * f, N[-1], B[-1])
-    V = np.array(verts)
-    F = []
-    for a, b in zip(ring_list[:-1], ring_list[1:]):
-        for k in range(sides):
-            k2 = (k + 1) % sides
-            F.append((a + k, b + k, b + k2))
-            F.append((a + k, b + k2, a + k2))
-    # end fans
-    c0 = len(V)
-    first = P[0] - T[0] * R[0] * (1.0 if cap_start == "round" else 0.0)
-    last = P[-1] + T[-1] * R[-1] * (1.0 if cap_end == "round" else 0.0)
-    V = np.vstack([V, first, last])
-    a, b = ring_list[0], ring_list[-1]
-    for k in range(sides):
-        k2 = (k + 1) % sides
-        F.append((c0, a + k2, a + k))
-        F.append((c0 + 1, b + k, b + k2))
-    F = np.array(F, dtype=np.int64)
-    if mo.signed_volume(V, F) < 0:
-        F = F[:, ::-1]
-    return V, F
-
-
-# =============================================================================================
-# Cardiac veins
-# =============================================================================================
-def radius_profile(label: str, s_mm: np.ndarray, s0_mm: float = 0.0) -> np.ndarray:
-    r0, r1, r2 = RADIUS_PROFILE_MM[label]
-    ref = PROFILE_REF_MM[label]
-    s = s_mm + s0_mm
-    return np.where(s <= ref, r0 + (r1 - r0) * s / ref, r1 + (r2 - r1) * np.clip((s - ref) / 60.0, 0, 1)) * MM
-
-
-def build_veins(parts: Parts, hf: dict, surf: Surface) -> tuple[mo.Mesh, dict]:
-    """One cardiac-vein tree (list of labelled, radius-annotated paths) and its tube mesh."""
-    ivc_V, _ = parts.scene("FMA10951")
-    ivc_top = ivc_V[ivc_V[:, 2] >= ivc_V[:, 2].max() - 3.0 * MM].mean(axis=0)
-    lm_V, _ = parts.scene("FMA4685")
-    rca_V, _ = parts.scene("FMA3802")
-    aorta_V, _ = parts.scene("FMA3736")
-    # LM bifurcation ~ the left-main vertex farthest from the aorta
-    lm_bif = lm_V[np.argmax(cKDTree(aorta_V).query(lm_V)[0])]
-
-    paths: list[dict] = []  # {label, P, parent (index into paths), s0 (mm offset for the profile)}
-
-    # --- coronary sinus: root = end nearest the IVC orifice (the ostium) ---------------------
-    V, F = parts.scene("FMA4706")
-    cs_pieces = tree_paths(V, F, lambda L: np.argmin(np.linalg.norm(L - ivc_top, axis=1)))
-    cs_main = cs_pieces[0][0]
-    s = arclen(cs_main) / MM
-    k_split = int(np.searchsorted(s, CS_LENGTH_MM))
-    paths.append({"label": "CS", "P": cs_main[: k_split + 1], "parent": None, "s0": 0.0})
-    cs_idx = 0
-    if k_split < len(cs_main) - 2:
-        paths.append({"label": "GCV", "P": cs_main[k_split:], "parent": cs_idx, "s0": 0.0, "continues": True})
-    gcv_from_cs = len(paths) - 1 if k_split < len(cs_main) - 2 else None
-    log(f"veins: CS part {s[-1]:.0f} mm -> CS {min(s[-1], CS_LENGTH_MM):.0f} mm + GCV {max(0.0, s[-1] - CS_LENGTH_MM):.0f} mm")
-
-    trunk_pts = lambda: np.vstack([p["P"] for p in paths if p["label"] in ("CS", "GCV", "AIV")])  # noqa: E731
-
-    # --- great cardiac vein / anterior interventricular vein --------------------------------
-    V, F = parts.scene("FMA4707")
-    cs_end = paths[-1]["P"][-1]
-    g_pieces = tree_paths(V, F, lambda L: np.argmin(np.linalg.norm(L - cs_end, axis=1)))
-    base_idx = len(paths)
-    for i, (P, parent) in enumerate(g_pieces):
-        if i == 0:
-            # split the main course at the turn beside the LM bifurcation: GCV (AV groove) | AIV (IV groove)
-            k_turn = int(np.argmin(np.linalg.norm(P - lm_bif, axis=1)))
-            P = np.vstack([cs_end, P]) if np.linalg.norm(P[0] - cs_end) > 0.2 * MM else P
-            k_turn = int(np.argmin(np.linalg.norm(P - lm_bif, axis=1)))
-            parent_idx = gcv_from_cs if gcv_from_cs is not None else cs_idx
-            paths.append({"label": "GCV", "P": P[: k_turn + 1], "parent": parent_idx, "s0": float(arclen(paths[parent_idx]["P"])[-1] / MM) if gcv_from_cs is not None else 0.0})
-            gcv_idx = len(paths) - 1
-            paths.append({"label": "AIV", "P": P[k_turn:], "parent": gcv_idx, "s0": 0.0, "continues": True})
-            continue
-        par = base_idx + (parent if parent is not None else 0)
-        # sub-branches of the GCV part hang off whichever labelled piece is nearest
-        best = min(range(base_idx, len(paths)), key=lambda j: np.min(np.linalg.norm(paths[j]["P"] - P[0], axis=1)))
-        paths.append({"label": paths[best]["label"], "P": P, "parent": best, "s0": 25.0, "side": True})
-    log(f"veins: GCV part -> {sum(1 for p in paths if p['label'] in ('GCV', 'AIV'))} labelled paths")
-
-    # --- tributaries of the CS/GCV trunk ------------------------------------------------------
-    for pid, label in (("FMA4713", "MCV"), ("FMA76751", "PVLV")):
-        V, F = parts.scene(pid)
-        labels = mo.face_components(F, len(V))
-        for lab in np.unique(labels):
-            sel = labels == lab
-            if sel.sum() < 60:
-                continue
-            Vc, Fc = mo.compact(V, F, sel)
-            tp = trunk_pts()
-            tt = cKDTree(tp)
-            pieces = tree_paths(Vc, Fc, lambda L: np.argmin(tt.query(L)[0]))
-            if not pieces:
-                continue
-            first = len(paths)
-            for i, (P, parent) in enumerate(pieces):
-                if i == 0:
-                    d, j = tt.query(P[0])
-                    # which trunk path does it drain into?
-                    owner = min((k for k, p in enumerate(paths) if p["label"] in ("CS", "GCV", "AIV") and not p.get("side")),
-                                key=lambda k: np.min(np.linalg.norm(paths[k]["P"] - tp[j], axis=1)))
-                    if d > 0.3 * MM:  # bridge the gap onto the trunk centreline
-                        P = np.vstack([tp[j], P])
-                    paths.append({"label": label, "P": P, "parent": owner, "s0": 0.0})
-                else:
-                    paths.append({"label": label, "P": P, "parent": first + (parent or 0), "s0": 20.0, "side": True})
-    # --- anterior cardiac veins: separate small trees draining straight into the RA -----------
-    V, F = parts.scene("FMA71567")
-    labels = mo.face_components(F, len(V))
-    rt = cKDTree(rca_V)
-    for lab in np.unique(labels):
-        sel = labels == lab
-        if sel.sum() < 40:
-            continue
-        Vc, Fc = mo.compact(V, F, sel)
-        pieces = tree_paths(Vc, Fc, lambda L: np.argmin(rt.query(L)[0]))
-        first = len(paths)
-        for i, (P, parent) in enumerate(pieces):
-            paths.append({"label": "ACV", "P": P, "parent": None if i == 0 else first + (parent or 0), "s0": 0.0 if i == 0 else 10.0, "side": i > 0})
-    log(f"veins: {len(paths)} labelled paths " + str({k: sum(1 for p in paths if p['label'] == k) for k in VEIN_CODES}))
-
-    # --- radii ---------------------------------------------------------------------------------
-    for p in paths:
-        s_mm = arclen(p["P"]) / MM
-        r = radius_profile(p["label"], s_mm, p["s0"])
-        if p["parent"] is not None:
-            par = paths[p["parent"]]
-            k = int(np.argmin(np.linalg.norm(par["P"] - p["P"][0], axis=1)))
-            if p.get("continues"):
-                r = np.minimum(r, par["R"][-1])
-            else:
-                r = np.minimum(r, 0.8 * par["R"][k])
-        p["R"] = np.maximum(r, 0.45 * MM)
-
-    # --- lift the coronary sinus onto the atrial side of the mitral hinge ----------------------
-    ma_c, ma_n = hf["MA"]["c"], hf["MA"]["n"]
-    for p in paths:
-        if p["label"] not in ("CS", "GCV") or p.get("side"):
-            continue
-        h = (p["P"] - ma_c) @ ma_n
-        near_ring = np.linalg.norm((p["P"] - ma_c) - np.outer(h, ma_n), axis=1) < hf["MA"]["r"] + 25 * MM
-        need = np.where(near_ring, np.maximum(0.0, p["R"] + 2.0 * MM - h), 0.0)
-        need = ndimage.gaussian_filter1d(need, 6, mode="nearest")
-        p["P"] = p["P"] + np.outer(need, ma_n)
-
-    # --- CS ostium in front of (anterior to) and medial to the IVC orifice ---------------------
-    cs = paths[cs_idx]
-    s_cs = arclen(cs["P"]) / MM
-    o = cs["P"][0]
-    target = o.copy()
-    target[1] = min(o[1], ivc_top[1] - 6.0 * MM)  # Blender -Y = anterior
-    target[0] = max(o[0], ivc_top[0] + 3.0 * MM)  # +X = medial (patient-left of the right-sided IVC)
-    target[2] = max(o[2], ivc_top[2] + 2.0 * MM)
-    w = 1.0 - mo.smoothstep(0.0, 16.0, s_cs)
-    cs["P"] = cs["P"] + np.outer(w, target - o)
-
-    # --- seat every vein on the epicardium (centre >= radius + clearance outside the wall) ----
-    squeezed = 0
-    for p in paths:
-        P, R = p["P"], p["R"]
-        ostium = p is cs
-        n_os = max(2, int(6.0 / 0.8))
-        for _ in range(4):
-            q, n, sd = surf.closest(P)
-            push = np.maximum(0.0, R + 0.25 * MM - sd)
-            if ostium:  # the ostium itself opens into the right atrium
-                push[:n_os] *= np.linspace(0.0, 1.0, n_os)[: len(push[:n_os])]
-            disp = ndimage.gaussian_filter1d(n * ndimage.maximum_filter1d(push, 5)[:, None], 2.0, axis=0, mode="nearest")
-            P = P + disp
-        # tube-wall test: sample the tube surface and push out where it still dips into the wall; the
-        # displacement field is smoothed along the vein so the course stays smooth
-        ang = np.linspace(0, 2 * np.pi, 12, endpoint=False)
-        for _ in range(5):
-            T, N, B = frames(P)
-            ring = P[:, None, :] + R[:, None, None] * (np.cos(ang)[None, :, None] * N[:, None, :] + np.sin(ang)[None, :, None] * B[:, None, :])
-            q, n, sd = surf.closest(ring.reshape(-1, 3))
-            depth = np.maximum(0.0, -sd + 0.15 * MM).reshape(len(P), -1)
-            dirs = n.reshape(len(P), -1, 3)
-            disp = (dirs * depth[..., None]).max(axis=1)
-            if ostium:
-                disp[:n_os] = 0.0
-            if depth.max() < 0.05 * MM:
-                break
-            P = P + ndimage.gaussian_filter1d(disp, 1.5, axis=0, mode="nearest")
-        # a vein squeezed into a crevice (e.g. the GCV under the left auricle) is compressed rather than
-        # pushed into the opposite wall: shrink the lumen there by the depth that could not be cleared
-        T, N, B = frames(P)
-        ring = P[:, None, :] + R[:, None, None] * (np.cos(ang)[None, :, None] * N[:, None, :] + np.sin(ang)[None, :, None] * B[:, None, :])
-        _, _, sd = surf.closest(ring.reshape(-1, 3))
-        left = np.maximum(0.0, -sd.reshape(len(P), -1) + 0.1 * MM).max(axis=1)
-        if ostium:
-            left[:n_os] = 0.0
-        if left.max() > 0:
-            squeezed += int((left > 0).sum())
-            R = np.maximum(R - ndimage.maximum_filter1d(left, 5), 0.55 * R)
-            R = ndimage.gaussian_filter1d(R, 2.0, mode="nearest")
-        # the moves stretch the path unevenly: resample at 0.8 mm and relax it so the course stays smooth
-        s_old = arclen(P)
-        P2 = resample(smooth_polyline(P, 6), 0.8 * MM)
-        R2 = np.interp(arclen(P2) / max(arclen(P2)[-1], 1e-9) * s_old[-1], s_old, R)
-        p["P"], p["R"] = smooth_polyline(P2, 8), R2
-    log(f"veins: {squeezed} centreline points narrowed where a groove is narrower than the vein")
-
-    # --- the coronary sinus is the last CS_LENGTH_MM of the course (arc length after re-seating) ------
-    if gcv_from_cs is not None:
-        gc = paths[gcv_from_cs]
-        both_P = np.vstack([cs["P"], gc["P"][1:]])
-        k = int(np.searchsorted(arclen(both_P) / MM, CS_LENGTH_MM))
-        cs["P"], gc["P"] = both_P[: k + 1], both_P[k:]
-        cs["R"] = np.maximum(radius_profile("CS", arclen(cs["P"]) / MM), 0.45 * MM)
-        gc["R"] = np.minimum(radius_profile("GCV", arclen(gc["P"]) / MM), cs["R"][-1])
-        for p in paths:
-            if p["parent"] in (cs_idx, gcv_from_cs) and not p.get("continues"):
-                p["parent"] = min((cs_idx, gcv_from_cs), key=lambda j: np.min(np.linalg.norm(paths[j]["P"] - p["P"][0], axis=1)))
-
-    # --- reconnect children to their (moved) parents, parents first ---------------------------------
-    for p in paths:
-        if p["parent"] is None:
-            continue
-        par = paths[p["parent"]]
-        k = len(par["P"]) - 1 if p.get("continues") else int(np.argmin(np.linalg.norm(par["P"] - p["P"][0], axis=1)))
-        delta = par["P"][k] - p["P"][0]
-        w = np.clip(1.0 - arclen(p["P"]) / (8.0 * MM), 0.0, 1.0)
-        p["P"] = p["P"] + np.outer(w, delta)
-        if p.get("continues"):
-            p["R"] = np.minimum(p["R"], par["R"][-1])
-
-    # --- tubes -----------------------------------------------------------------------------------
-    meshes = []
-    for p in paths:
-        sides = 20 if p["R"].max() > 2.0 * MM else 14 if p["R"].max() > 1.0 * MM else 10
-        if p is cs:
-            t0 = mo.unit(p["P"][0] - p["P"][3])
-            ext = p["P"][0] + np.outer(np.linspace(1.0, 0.25, 4) * p["R"][0], t0)
-            meshes.append(sweep_tube(np.vstack([ext, p["P"]]), np.r_[np.full(4, p["R"][0]), p["R"]], sides, cap_start="flat", cap_end="round"))
-            continue
-        start = "flat" if p["parent"] is not None or p["label"] == "CS" else "round"
-        if p["label"] == "ACV" and p["parent"] is None:
-            start = "flat"  # the drainage end sits in the right atrial wall
-        meshes.append(sweep_tube(p["P"], p["R"], sides, cap_start=start, cap_end="round"))
-    V, F = mo.concat(meshes)
-    info = {
-        "paths": [
-            {"label": p["label"], "code": VEIN_CODES[p["label"]], "parent": p["parent"],
-             "length_mm": round(float(arclen(p["P"])[-1] / MM), 1),
-             "radius_mm": [round(float(p["R"][0] / MM), 2), round(float(p["R"][-1] / MM), 2)]}
-            for p in paths
-        ],
-        "cs_ostium_scene": np.round(paths[cs_idx]["P"][0], 5).tolist(),
-        "ivc_top_scene": np.round(ivc_top, 5).tolist(),
-    }
-    lines = [{"label": p["label"], "code": VEIN_CODES[p["label"]], "parent": p["parent"], "side": bool(p.get("side")),
-              "points_mm": np.round(parts.to_mm(p["P"]), 4).tolist(), "radius_mm": np.round(p["R"] / MM, 4).tolist()}
-             for p in paths]
-    return (V, F), {"info": info, "lines": lines}
-
-
-# =============================================================================================
 # Aorta: ascending calibre, root with sinuses of Valsalva, aortic valve
 # =============================================================================================
 #: Aortic root design (mm). Heights are along the root axis from the annulus; the annulus plane is parallel
@@ -602,7 +190,25 @@ def inflate_ascending(V: np.ndarray, F: np.ndarray, C: np.ndarray) -> np.ndarray
     return V + rad / np.maximum(rho, 1e-9)[:, None] * (target - rho)[:, None]
 
 
-def build_aorta(parts: Parts, hf: dict) -> tuple[mo.Mesh, mo.Mesh, mo.Mesh, dict]:
+#: The annulus must meet the anterior mitral hinge (aorto-mitral fibrous continuity, intervalvular fibrosa
+#: <= 10 mm; REFERENCE.md §4.3). In BodyParts3D the aorta ends 22 mm from the mitral valve, at the top of the
+#: left-ventricular outflow tract, so the whole root (annulus, sinuses, valve, coronary ostia) is translated
+#: down the outflow tract towards the anterior mitral hinge (the smallest move that brings the annulus nearest to
+#: the mitral valve inside ROOT_MOVE_BOX_MM), and the proximal ascending aorta follows with a smooth fade
+#: (ASC_BLEND_MM). The box keeps the other valve relations: the aortic valve stays anterior to the mitral centre and
+#: to the right of the mitral and pulmonary valves (REFERENCE.md §4.2), and near the 3rd costal cartilage (§4.1).
+#: The remaining gap is bridged by the synthesised intervalvular fibrosa (SYN_AortoMitralCurtain).
+ROOT_TO_MITRAL_MM = 3.5
+ROOT_MOVE_BOX_MM = {"x": (-6.0, 3.5), "y": (-4.0, 10.0), "z": (-10.0, 3.0)}  # scene: +x left, +y posterior, +z up
+ASC_BLEND_MM = (12.0, 45.0)  # ascending-aorta points up to 12 mm above the source cap move with the root, fading out by 45 mm
+#: Coronary ostia: centre of the left / right sinus at these heights above the annulus, along the root axis (the
+#: checks measure from the tilted annulus plane, which gives ~3 mm less; MDCT 14.4 +/- 2.9 and 17.2 +/- 3.3 mm,
+#: REFERENCE.md §5.1). They sit in the upper sinus, just below the sino-tubular junction, which keeps the left
+#: main level with the start of the left AV groove after the root moved down the outflow tract.
+OSTIUM_HEIGHT_MM = {"LM": 18.5, "RCA": 19.5}
+
+
+def build_aorta(parts: Parts, hf: dict, mitral_V: np.ndarray | None = None) -> tuple[mo.Mesh, mo.Mesh, mo.Mesh, dict]:
     V, F = parts.scene("FMA3736")
     tm = trimesh.Trimesh(V, F, process=False)
     c0 = V.mean(axis=0)
@@ -614,27 +220,26 @@ def build_aorta(parts: Parts, hf: dict) -> tuple[mo.Mesh, mo.Mesh, mo.Mesh, dict
     n_cap = mo.unit((fn[cap] * fa[cap, None]).sum(axis=0))  # outward (inferior, tilted)
     C = march_centreline(tm, cap_c, a0)
     a_root = mo.unit(C[min(4, len(C) - 1)] - C[0])
-    V_asc = inflate_ascending(V, F, C)
     log(f"aorta: ascending centreline {arclen(C)[-1] / MM:.0f} mm; cap tilt {math.degrees(math.acos(abs(n_cap @ a_root))):.0f} deg")
 
-    # --- ostia (first points of the source LM / RCA parts nearest the aorta) -------------------
-    ostia = {}
+    # --- source ostia (first points of the BodyParts3D LM / RCA parts nearest the aorta) ----------------
+    src_ostia = {}
     for key, pid in (("LM", "FMA4685"), ("RCA", "FMA3802")):
         X, _ = parts.scene(pid)
-        ostia[key] = X[np.argmin(cKDTree(V).query(X)[0])]
+        src_ostia[key] = X[np.argmin(cKDTree(V).query(X)[0])]
 
     # --- root frame -----------------------------------------------------------------------------
-    c_ann = cap_c - a_root * ROOT_EXTENSION_MM * MM
+    c_src = cap_c - a_root * ROOT_EXTENSION_MM * MM
     right = np.array([-1.0, 0.0, 0.0])
     shift = mo.unit(right - (right @ a_root) * a_root) * ROOT_RIGHTWARD_MM * MM
     e1 = mo.unit(np.cross(a_root, [1.0, 0.0, 0.0]))
     e2 = np.cross(a_root, e1)
 
-    def azimuth(p):
-        d = p - c_ann
+    def azimuth(p, c):
+        d = p - c
         return math.atan2(d @ e2, d @ e1)
 
-    th_R, th_L = azimuth(ostia["RCA"]), azimuth(ostia["LM"])
+    th_R, th_L = azimuth(src_ostia["RCA"], c_src), azimuth(src_ostia["LM"], c_src)
     # non-coronary sinus: bisector of the larger arc between the two coronary sinuses
     diff = (th_L - th_R) % (2 * math.pi)
     th_N = th_R + diff / 2 + (math.pi if diff < math.pi else 0.0)
@@ -664,15 +269,51 @@ def build_aorta(parts: Parts, hf: dict) -> tuple[mo.Mesh, mo.Mesh, mo.Mesh, dict
     def bulge(u):
         return SINUS_BULGE_MM * MM * np.sin(np.pi * np.clip(u / 0.95, 0, 1)) ** 1.3
 
-    def wall(u, theta):
-        """Root wall point (annulus plane parallel to the source cap, tilt fading out by the STJ)."""
-        u = np.asarray(u, float)
-        theta = np.asarray(theta, float)
-        R = base_radius(u) + bulge(u) * lobe(theta)
-        e = np.cos(theta)[..., None] * e1 + np.sin(theta)[..., None] * e2
-        z0 = -(R[..., None] * e @ n_cap) / (a_root @ n_cap)
-        h = z0 * (1.0 - u) + u * H
-        return c_ann + R[..., None] * e + h[..., None] * a_root + (1.0 - u)[..., None] * shift
+    def make_wall(c_ann):
+        def wall(u, theta):
+            """Root wall point (annulus plane parallel to the source cap, tilt fading out by the STJ)."""
+            u = np.asarray(u, float)
+            theta = np.asarray(theta, float)
+            R = base_radius(u) + bulge(u) * lobe(theta)
+            e = np.cos(theta)[..., None] * e1 + np.sin(theta)[..., None] * e2
+            z0 = -(R[..., None] * e @ n_cap) / (a_root @ n_cap)
+            h = z0 * (1.0 - u) + u * H
+            return c_ann + R[..., None] * e + h[..., None] * a_root + (1.0 - u)[..., None] * shift
+        return wall
+
+    # --- aorto-mitral continuity: translate the root towards the anterior mitral hinge ----------------
+    move = np.zeros(3)
+    gap0 = gap = float("nan")
+    if mitral_V is not None and len(mitral_V):
+        mtree = cKDTree(mitral_V)
+        th_s = np.linspace(0.0, 2 * math.pi, 180, endpoint=False)
+        rim0 = make_wall(c_src)(np.zeros_like(th_s), th_s)
+        gap0 = float(mtree.query(rim0)[0].min())
+        bx = ROOT_MOVE_BOX_MM
+        best = None
+        for dx in np.arange(bx["x"][0], bx["x"][1] + 1e-6, 1.0):
+            for dy in np.arange(bx["y"][0], bx["y"][1] + 1e-6, 1.0):
+                for dz in np.arange(bx["z"][0], bx["z"][1] + 1e-6, 1.0):
+                    m_ = np.array([dx, dy, dz]) * MM
+                    g_ = float(mtree.query(rim0 + m_)[0].min())
+                    key = (max(g_, ROOT_TO_MITRAL_MM * MM), float(np.linalg.norm(m_)))
+                    if best is None or key < best[0]:
+                        best = (key, m_)
+        move = best[1]
+        gap = float(mtree.query(rim0 + move)[0].min())
+        log(f"aorta: root moved {np.linalg.norm(move) / MM:.1f} mm towards the anterior mitral hinge "
+            f"(along the root axis {move @ a_root / MM:+.1f} mm); annulus-to-mitral gap {gap0 / MM:.1f} -> {gap / MM:.1f} mm")
+    c_ann = c_src + move
+    wall = make_wall(c_ann)
+
+    # --- ascending aorta: calibre, then follow the root over ASC_BLEND_MM ---------------------------------
+    V_asc = inflate_ascending(V, F, C)
+    if np.linalg.norm(move) > 0:
+        s_c = arclen(C)
+        _, kk = cKDTree(C).query(V_asc)
+        s_v = s_c[kk] + np.minimum(0.0, (V_asc - C[0]) @ a_root)  # points below the cap count as s <= 0
+        w = 1.0 - mo.smoothstep(ASC_BLEND_MM[0] * MM, ASC_BLEND_MM[1] * MM, s_v)
+        V_asc = V_asc + np.outer(w, move)
 
     # --- root surface (closed: flat annulus cap, open top closed by a cap inside the ascending aorta) -
     nu, nt = 36, 96
@@ -695,32 +336,41 @@ def build_aorta(parts: Parts, hf: dict) -> tuple[mo.Mesh, mo.Mesh, mo.Mesh, dict
     if mo.signed_volume(W, RF) < 0:
         RF = RF[:, ::-1]
 
-    # --- aortic valve: three closed semilunar cusps -----------------------------------------------
+    # --- aortic valve: three closed semilunar cusps ------------------------------------------------
+    # Each cusp is a pocket hinged along a U-shaped line in its sinus (nadir at the annulus, rising to the
+    # commissures near the STJ); the free edge runs from commissure to the centre of the root, where the three
+    # cusps coapt, with a nodule of Arantius at its midpoint; the belly sags towards the ventricle (closed valve).
     cusp_meshes = []
     for i, (name, th) in enumerate(centres):
         lo, hi = comm[(i - 1) % 3], comm[i]
         width = (hi - lo) % (2 * math.pi)
-        nt_c, nv_c = 28, 12
+        nt_c, nv_c = 34, 16
         tt = np.linspace(-1.0, 1.0, nt_c)
         vv = np.linspace(0.0, 1.0, nv_c)
         phi = lo + (tt + 1.0) / 2.0 * width
-        u_h = 0.03 + 0.86 * np.abs(tt) ** 1.6
-        hinge = wall(u_h, phi) - 0.5 * MM * (np.cos(phi)[:, None] * e1 + np.sin(phi)[:, None] * e2)
+        u_h = 0.02 + 0.84 * np.abs(tt) ** 1.8
+        hinge = wall(u_h, phi) - 0.6 * MM * (np.cos(phi)[:, None] * e1 + np.sin(phi)[:, None] * e2)
         comm_lo, comm_hi = hinge[0], hinge[-1]
-        centre = c_ann + a_root * 0.62 * H + 0.38 * shift
+        centre = c_ann + a_root * 0.60 * H + 0.4 * shift
+        # free edge: a slightly sagging line from each commissure to the coaptation centre
         free = np.where((tt < 0)[:, None], centre + np.abs(tt)[:, None] * (comm_lo - centre), centre + np.abs(tt)[:, None] * (comm_hi - centre))
+        free = free - (1.2 * MM * np.sin(np.pi * np.abs(tt)))[:, None] * a_root
         S = hinge[:, None, :] * (1 - vv)[None, :, None] + free[:, None, :] * vv[None, :, None]
-        belly = 3.0 * MM * np.sin(np.pi * vv)[None, :] * (1 - tt ** 2)[:, None]
+        belly = 5.0 * MM * np.sin(np.pi * vv ** 0.85)[None, :] * (1 - tt ** 2)[:, None] ** 0.8
         S = S - belly[..., None] * a_root
         du = np.gradient(S, axis=0)
         dv = np.gradient(S, axis=1)
         nrm = np.cross(du, dv)
         nrm /= np.maximum(np.linalg.norm(nrm, axis=2, keepdims=True), 1e-12)
-        half = 0.5 * CUSP_THICKNESS_MM * MM
+        # thickness: 1.4 mm at the hinge thinning to 0.9 mm (lunula), ~2.2 mm at the nodule of Arantius
+        nod = np.exp(-((tt[:, None] / 0.16) ** 2) - ((vv[None, :] - 0.97) / 0.10) ** 2)
+        thick = (1.4 - 0.5 * vv[None, :] + 1.3 * nod) * MM
+        half = 0.5 * thick[..., None]
         A_, B_ = (S + half * nrm).reshape(-1, 3), (S - half * nrm).reshape(-1, 3)
         n = nt_c * nv_c
         Vc = np.vstack([A_, B_])
         fc_ = []
+
         def idx(a, b, _n=nv_c):
             return a * _n + b
         for a in range(nt_c - 1):
@@ -738,42 +388,253 @@ def build_aorta(parts: Parts, hf: dict) -> tuple[mo.Mesh, mo.Mesh, mo.Mesh, dict
             Fc = Fc[:, ::-1]
         cusp_meshes.append((Vc, Fc))
     valve = mo.concat(cusp_meshes)
+
+    # --- coronary ostia on the moved root: centre of the left / right sinus ----------------------------------
+    ostia = {}
+    for key, th in (("LM", th_L), ("RCA", th_R)):
+        u = OSTIUM_HEIGHT_MM[key] / ROOT_HEIGHT_MM
+        p = wall(u, th)
+        e = math.cos(th) * e1 + math.sin(th) * e2
+        ostia[key] = {"point": p, "normal": mo.unit(e - 0.15 * a_root), "theta": th}
+
     info = {
         "annulus_centre_scene": np.round(c_ann, 5).tolist(),
         "root_axis": np.round(a_root, 4).tolist(),
         "annulus_normal": np.round(-n_cap, 4).tolist(),
         "sinus_order": [c[0] for c in centres],
-        "ostium_height_mm": {k: round(float(((p - c_ann) @ n_cap) / (a_root @ n_cap) / MM), 1) for k, p in ostia.items()},
+        "root_move_mm": np.round(move / MM, 2).tolist(),
+        "annulus_to_mitral_mm": [round(gap0 / MM, 1), round(gap / MM, 1)],
+        "ostium_height_mm": {k: round(float(((o["point"] - c_ann) @ n_cap) / (a_root @ n_cap) / MM), 1) for k, o in ostia.items()},
         "ascending_min_radius_mm": ASC_MIN_RADIUS_MM,
         "root_mm": {"annulus_D": 2 * ROOT_R_ANNULUS_MM, "intersinus_D": 2 * ROOT_R_SINUS_MM,
                     "sinus_D": 2 * (ROOT_R_SINUS_MM + SINUS_BULGE_MM), "stj_D": 2 * ROOT_R_STJ_MM, "height": ROOT_HEIGHT_MM},
     }
+    info["_ostia"] = ostia
+    info["_frame"] = {"c_ann": c_ann, "a_root": a_root, "e1": e1, "e2": e2, "wall": wall, "shift": shift}
+    th_r = np.linspace(0.0, 2 * math.pi, 180, endpoint=False)
+    info["_rim"] = wall(np.zeros_like(th_r), th_r)
     log(f"aorta: root sinuses {info['sinus_order']}, ostium heights {info['ostium_height_mm']} mm")
     return (V_asc, F), (W, RF), valve, info
 
 
 # =============================================================================================
+# Intervalvular fibrosa (aorto-mitral curtain)
+# =============================================================================================
+CURTAIN_THICKNESS_MM = 1.0
+CURTAIN_CLEARANCE_MM = 1.2   # stops this short of the aortic annulus (the root is a separate node)
+
+
+def aortomitral_curtain(rim: np.ndarray, mitral_V: np.ndarray, *, reach_mm: float) -> tuple[mo.Mesh, dict]:
+    """The fibrous sheet between the aortic annulus (left / non-coronary sector) and the anterior mitral hinge.
+
+    For every annulus sample within ``reach_mm`` of the mitral valve, the sheet runs from the nearest mitral vertex
+    (the anterior leaflet at its hinge) to just short of the annulus; the samples are smoothed along the annulus, the
+    sheet bows slightly into the outflow tract and is given a thickness (a closed solid, like the cusps)."""
+    tree = cKDTree(mitral_V)
+    d, j = tree.query(rim)
+    sel = d <= d.min() + reach_mm * MM
+    idx = np.flatnonzero(sel)
+    if len(idx) < 4:
+        return (np.zeros((0, 3)), np.zeros((0, 3), dtype=np.int64)), {"width_mm": 0.0}
+    # keep the contiguous run around the closest sample (the rim is cyclic)
+    k0 = int(np.argmin(d))
+    n = len(rim)
+    run = [k0]
+    for step in (1, -1):
+        k = k0
+        while True:
+            k = (k + step) % n
+            if not sel[k] or k in run:
+                break
+            if step == 1:
+                run.append(k)
+            else:
+                run.insert(0, k)
+    run = np.array(run)
+    top = rim[run]
+    bot = mitral_V[j[run]]
+    for _ in range(6):  # smooth both edges along the annulus
+        top[1:-1] = 0.5 * top[1:-1] + 0.25 * (top[:-2] + top[2:])
+        bot[1:-1] = 0.5 * bot[1:-1] + 0.25 * (bot[:-2] + bot[2:])
+    dirv = top - bot
+    L = np.linalg.norm(dirv, axis=1, keepdims=True)
+    top = bot + dirv * np.maximum(0.0, 1.0 - CURTAIN_CLEARANCE_MM * MM / np.maximum(L, 1e-9))
+    nu, nv = len(run), 10
+    tv = np.linspace(0.0, 1.0, nv)
+    S = bot[:, None, :] * (1 - tv)[None, :, None] + top[:, None, :] * tv[None, :, None]
+    # taper the width at both ends (the sheet ends at the fibrous trigones)
+    du = np.gradient(S, axis=0)
+    dv = np.gradient(S, axis=1)
+    nrm = np.cross(du, dv)
+    nrm /= np.maximum(np.linalg.norm(nrm, axis=2, keepdims=True), 1e-12)
+    bow = 0.8 * MM * np.sin(np.pi * tv)[None, :] * np.sin(np.pi * np.linspace(0, 1, nu))[:, None]
+    S = S + nrm * bow[..., None]
+    half = 0.5 * CURTAIN_THICKNESS_MM * MM
+    A_, B_ = (S + half * nrm).reshape(-1, 3), (S - half * nrm).reshape(-1, 3)
+    m = nu * nv
+    Vc = np.vstack([A_, B_])
+    F = []
+
+    def idx_(a, b):
+        return a * nv + b
+    for a in range(nu - 1):
+        for b in range(nv - 1):
+            p00, p10, p01, p11 = idx_(a, b), idx_(a + 1, b), idx_(a, b + 1), idx_(a + 1, b + 1)
+            F += [(p00, p10, p11), (p00, p11, p01), (m + p00, m + p11, m + p10), (m + p00, m + p01, m + p11)]
+    border = [idx_(a, 0) for a in range(nu)] + [idx_(nu - 1, b) for b in range(1, nv)] + \
+             [idx_(a, nv - 1) for a in range(nu - 2, -1, -1)] + [idx_(0, b) for b in range(nv - 2, 0, -1)]
+    for k in range(len(border)):
+        p_, q_ = border[k], border[(k + 1) % len(border)]
+        F += [(p_, m + p_, m + q_), (p_, m + q_, q_)]
+    F = np.array(F, dtype=np.int64)
+    if mo.signed_volume(Vc, F) < 0:
+        F = F[:, ::-1]
+    width = float(arclen(bot)[-1] / MM)
+    return (Vc, F), {"width_mm": round(width, 1), "height_mm": [round(float(L.min() / MM), 1), round(float(L.max() / MM), 1)]}
+
+
+# =============================================================================================
+# Heart wall: the tissue around the moved aortic root yields to it
+# =============================================================================================
+#: Clearance between the moved aortic root / proximal ascending aorta and the heart wall, and the reach of the
+#: smooth dent (the wall slab between the root and the atria moves as a whole instead of folding).
+ROOT_CLEARANCE_MM = 1.0
+ROOT_YIELD_REACH_MM = 16.0
+
+
+def yield_wall_to(V: np.ndarray, F: np.ndarray, solids: list[mo.Mesh], centre: np.ndarray, *, margin: float,
+                  reach: float) -> tuple[np.ndarray, dict]:
+    """Push heart-wall vertices out of ``solids`` (closed meshes) with a smooth, spatially decaying field.
+
+    Wall vertices inside a solid (or closer than ``margin`` to it) get a displacement to its surface +
+    ``margin`` along the solid's outward normal; every wall vertex within ``reach`` of such a vertex takes the
+    largest decayed displacement (quadratic falloff), so both faces of the wall slab move together. The field
+    is then relaxed over the mesh edges until no face is folded over."""
+    near = np.flatnonzero(np.linalg.norm(V - centre, axis=1) < 70 * MM)
+    P = V[near]
+    vec = np.zeros_like(P)
+    mag = np.zeros(len(P))
+    for Vs, Fs in solids:
+        tm = trimesh.Trimesh(Vs, Fs, process=False)
+        lo, hi = tm.bounds[0] - 3 * MM, tm.bounds[1] + 3 * MM
+        box = np.flatnonzero(np.all((P >= lo) & (P <= hi), axis=1))
+        for ch in np.array_split(box, max(1, len(box) // 1500)):
+            if not len(ch):
+                continue
+            _, dist, tri = trimesh.proximity.closest_point(tm, P[ch])
+            inside = tm.contains(P[ch])
+            need = margin + np.where(inside, dist, -dist)
+            nrm = tm.face_normals[tri]
+            upd = (need > 0) & (need > mag[ch])
+            vec[ch[upd]] = nrm[upd] * need[upd, None]
+            mag[ch[upd]] = need[upd]
+    src = np.flatnonzero(mag > 0)
+    info = {"penetrating_vertices": int(len(src)), "max_depth_mm": round(float(mag.max()) / MM, 2) if len(src) else 0.0}
+    if not len(src):
+        return V, info
+    kd = cKDTree(P[src])
+    disp = np.zeros_like(P)
+    for i, nb in enumerate(kd.query_ball_point(P, reach)):
+        if not nb:
+            continue
+        nb = np.asarray(nb)
+        fall = (1.0 - np.linalg.norm(P[src[nb]] - P[i], axis=1) / reach) ** 2
+        # Shepard blend of the penetration vectors (weighted by depth), scaled by the strongest decayed one:
+        # smooth in direction, full strength where the wall is penetrated
+        w = fall * mag[src[nb]]
+        dirv = (vec[src[nb]] * w[:, None]).sum(axis=0) / max(w.sum(), 1e-12)
+        amp = float((mag[src[nb]] * fall).max())
+        disp[i] = mo.unit(dirv) * amp
+    D = np.zeros_like(V)
+    D[near] = disp
+    fn0 = mo.face_normals(V, F)
+    e = mo.unique_edges(F)
+    deg = np.maximum(np.bincount(e.ravel(), minlength=len(V)), 1).astype(float)
+    moved = np.linalg.norm(D, axis=1) > 1e-6
+    for it in range(40):
+        folded = int(((mo.face_normals(V + D, F) * fn0).sum(axis=1) < 0).sum())
+        if folded == 0:
+            break
+        acc = np.zeros_like(D)
+        for k in range(3):
+            acc[:, k] = np.bincount(e[:, 0], weights=D[e[:, 1], k], minlength=len(V)) + np.bincount(e[:, 1], weights=D[e[:, 0], k], minlength=len(V))
+        D = np.where(moved[:, None], 0.5 * D + 0.5 * acc / deg[:, None], D)
+    info.update({"moved_vertices": int((np.linalg.norm(D, axis=1) > 0.5 * MM).sum()),
+                 "max_shift_mm": round(float(np.linalg.norm(D, axis=1).max()) / MM, 2),
+                 "folded_faces": int(((mo.face_normals(V + D, F) * fn0).sum(axis=1) < 0).sum()), "relax_iterations": it})
+    return V + D, info
+
+
+# =============================================================================================
+def arclen(P: np.ndarray) -> np.ndarray:
+    return np.r_[0.0, np.cumsum(np.linalg.norm(np.diff(P, axis=0), axis=1))]
+
+
 def main() -> int:
+    import coronary
+    import vascular
+    import veins
+
     cfg = load_config()
     SYNTH_DIR.mkdir(parents=True, exist_ok=True)
     parts = Parts(cfg)
     log(f"origin (heart-wall bbox centre) {np.round(parts.origin_mm, 4).tolist()} mm")
     hf = heart_frame(parts)
-    wall_V, wall_F = parts.scene("FMA7274")
-    surf = Surface(wall_V, wall_F)
     report: dict = {"origin_mm": np.round(parts.origin_mm, 4).tolist()}
 
-    (vV, vF), veins = build_veins(parts, hf, surf)
-    mo.write_ply(SYNTH_DIR / "SYN_CardiacVeins.ply", parts.to_mm(vV), vF)
-    write_json(VEIN_LINES, {"frame": "BodyParts3D millimetres", "codes": VEIN_CODES, "paths": veins["lines"]}, indent=None)
-    report["veins"] = veins["info"]
-    log(f"veins: {len(vF)} tube triangles -> {SYNTH_DIR / 'SYN_CardiacVeins.ply'}")
-
-    asc, root, valve, aorta_info = build_aorta(parts, hf)
+    # --- aortic root at the anterior mitral hinge, ascending aorta blended onto it ---------------------------
+    mitral_V, _ = parts.scene("FMA7235")
+    asc, root, valve, aorta_info = build_aorta(parts, hf, mitral_V)
     for name, (V, F) in (("SYN_AortaAscending", asc), ("SYN_AorticRoot", root), ("SYN_AorticValve", valve)):
         mo.write_ply(SYNTH_DIR / f"{name}.ply", parts.to_mm(V), F)
-    report["aorta"] = aorta_info
+    curtain, cinfo = aortomitral_curtain(aorta_info["_rim"], mitral_V, reach_mm=5.0)
+    mo.write_ply(SYNTH_DIR / "SYN_AortoMitralCurtain.ply", parts.to_mm(curtain[0]), curtain[1])
+    log(f"aorto-mitral curtain (intervalvular fibrosa): {cinfo}")
+    report["aortomitral_curtain"] = cinfo
 
+    # --- heart wall yields to the moved root --------------------------------------------------------------
+    wall_V, wall_F = parts.scene("FMA7274")
+    wall_V, yinfo = yield_wall_to(wall_V, wall_F, [root, asc], np.array(aorta_info["annulus_centre_scene"]),
+                                  margin=ROOT_CLEARANCE_MM * MM, reach=ROOT_YIELD_REACH_MM * MM)
+    mo.write_ply(SYNTH_DIR / "SYN_HeartWall.ply", parts.to_mm(wall_V), wall_F)
+    log(f"heart wall: yields to the root {yinfo}")
+    report["heart_wall_yield"] = yinfo
+
+    # --- coronary arteries and cardiac veins on the corrected heart ----------------------------------------
+    # vessels are seated on the wall as the build will show it: the build Taubin-smooths the wall (10 + 5 passes)
+    # before decimating, which fills grooves slightly, so the seating surface gets the same smoothing
+    seat_V = mo.taubin_smooth(wall_V, wall_F, iterations=15)
+    geo = vascular.HeartGeo((seat_V, wall_F), parts.scene("FMA7235"), parts.scene("FMA7234"),
+                            cache=SYNTH_DIR / "_cache" / "wall_sdf.pkl")
+    log(f"heart geometry: MA ring D {2 * geo.rings['MA'].R / MM:.1f} mm, TA ring D {2 * geo.rings['TA'].R / MM:.1f} mm")
+    cor = coronary.design(parts, geo, aorta_info["_ostia"], log, svc_V=parts.scene("FMA4720")[0],
+                          pv_valve_V=parts.scene("FMA7246")[0])
+    cmesh = coronary.meshes(cor["trees"])
+    for node, (V, F) in cmesh.items():
+        mo.write_ply(SYNTH_DIR / f"SYN_{node}.ply", parts.to_mm(V), F)
+    write_json(CORONARY_LINES, {"frame": "BodyParts3D millimetres",
+                                "nodes": coronary.centrelines_json(cor["trees"], parts.to_mm)}, indent=None)
+    lmk = cor["landmarks"]
+    report["coronary"] = {
+        "triangles": {n: int(len(F)) for n, (V, F) in cmesh.items()},
+        "segments": {n: [(sg["code"], round(float(arclen(sg["P"])[-1] / MM), 1)) for sg in t.segs] for n, t in cor["trees"].items()},
+        "lm_bifurcation_to_mitral_ring_mm": round(float(geo.rings["MA"].dist(lmk["bifurcation"][None])[0] / MM), 1),
+        "rca_crux_s_mm": round(float(lmk["s_crux"] / MM), 1),
+    }
+    vtree = veins.design(parts, geo, cor, log, ivc_V=parts.scene("FMA10951")[0])
+    vV, vF = veins.mesh(vtree)
+    mo.write_ply(SYNTH_DIR / "SYN_CardiacVeins.ply", parts.to_mm(vV), vF)
+    write_json(VEIN_LINES, {"frame": "BodyParts3D millimetres", "codes": veins.CODES, "names": veins.NAMES,
+                            "paths": veins.lines_json(vtree, parts.to_mm)}, indent=None)
+    report["veins"] = {
+        "triangles": int(len(vF)),
+        "cs_ostium_scene": np.round(vtree.ostium, 5).tolist(),
+        "cs_ostium_to_crux_mm": round(float(np.linalg.norm(vtree.ostium - vtree.crux) / MM), 1),
+        "paths": [{"label": sg["label"], "parent": sg["parent"], "length_mm": round(float(arclen(sg["P"])[-1] / MM), 1),
+                   "diameter_mm": [round(float(2 * sg["R"][0] / MM), 2), round(float(2 * sg["R"][-1] / MM), 2)]}
+                  for sg in vtree.segs],
+    }
+    report["aorta"] = {k: v for k, v in aorta_info.items() if not k.startswith("_")}
     write_json(REPORT, report)
     log("done")
     return 0
