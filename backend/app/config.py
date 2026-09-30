@@ -17,6 +17,7 @@ REPO_ROOT: Path = Path(__file__).resolve().parents[2]
 
 PredictorKind = Literal["real", "fake"]
 LogFormat = Literal["json", "text"]
+RangePolicy = Literal["reject", "warn"]
 
 ENV_PREFIX = "CARDIOTWIN_"
 DEFAULT_CORS_ORIGINS: tuple[str, ...] = (
@@ -50,6 +51,9 @@ class Settings:
         model_card_path: Markdown served by ``GET /api/model-card``.
         cache_size: Capacity of the LRU cache of identical predictions (0 disables it).
         batch_max_rows: Maximum rows accepted by ``POST /api/predict/batch`` (<= 256).
+        out_of_range: Numeric values outside the schema ``min``/``max`` (the training-cohort range):
+            ``"reject"`` answers 422 with the allowed range; ``"warn"`` predicts anyway and lists them
+            in the response ``warnings``.
         log_level: Python logging level name.
         log_format: ``"json"`` (one JSON object per line) or ``"text"``.
         gzip_min_size: Responses smaller than this many bytes are not compressed.
@@ -63,6 +67,7 @@ class Settings:
     model_card_path: Path = REPO_ROOT / "docs" / "MODEL_CARD.md"
     cache_size: int = 2048
     batch_max_rows: int = MAX_BATCH_ROWS_LIMIT
+    out_of_range: RangePolicy = "reject"
     log_level: str = "INFO"
     log_format: LogFormat = "json"
     gzip_min_size: int = 1024
@@ -70,6 +75,8 @@ class Settings:
     def __post_init__(self) -> None:
         if self.predictor not in get_args(PredictorKind):
             raise SettingsError(f"predictor must be one of {get_args(PredictorKind)}, got {self.predictor!r}")
+        if self.out_of_range not in get_args(RangePolicy):
+            raise SettingsError(f"out_of_range must be one of {get_args(RangePolicy)}, got {self.out_of_range!r}")
         if self.log_format not in get_args(LogFormat):
             raise SettingsError(f"log_format must be one of {get_args(LogFormat)}, got {self.log_format!r}")
         if self.cache_size < 0:
@@ -106,6 +113,7 @@ class Settings:
         ``CARDIOTWIN_MODEL_CARD``       markdown file for ``/api/model-card``
         ``CARDIOTWIN_CACHE_SIZE``       LRU capacity (default 2048, 0 disables)
         ``CARDIOTWIN_BATCH_MAX_ROWS``   batch limit (default and maximum 256)
+        ``CARDIOTWIN_OUT_OF_RANGE``     ``reject`` (default) or ``warn``
         ``CARDIOTWIN_LOG_LEVEL``        ``DEBUG``/``INFO``/... (default ``INFO``)
         ``CARDIOTWIN_LOG_FORMAT``       ``json`` (default) or ``text``
         ``CARDIOTWIN_GZIP_MIN_SIZE``    bytes (default 1024)
@@ -145,6 +153,8 @@ class Settings:
             kwargs["cache_size"] = _int("CACHE_SIZE", value)
         if (value := get("BATCH_MAX_ROWS")) is not None:
             kwargs["batch_max_rows"] = _int("BATCH_MAX_ROWS", value)
+        if (value := get("OUT_OF_RANGE")) is not None:
+            kwargs["out_of_range"] = value.lower()
         if (value := get("LOG_LEVEL")) is not None:
             kwargs["log_level"] = value.upper()
         if (value := get("LOG_FORMAT")) is not None:

@@ -10,7 +10,7 @@ from starlette.responses import Response
 from app.deps import JSON, RuntimeDep, SettingsDep
 from app.models import BatchPredictRequest, BatchPredictResponse, ErrorResponse, PredictRequest, PredictResponse
 from app.runtime import dumps
-from app.validation import FeatureValidationError, Issue
+from app.validation import FeatureValidationError, Issue, ValidatedFeatures
 
 router = APIRouter(tags=["predict"])
 
@@ -95,11 +95,11 @@ def predict_batch(body: BatchPredictRequest, runtime: RuntimeDep, settings: Sett
         )
 
     validator = runtime.service.validator
-    normalized: list[dict[str, Any]] = []
+    validated: list[ValidatedFeatures] = []
     issues: list[Issue] = []
     for index, row in enumerate(body.rows):
         try:
-            normalized.append(validator.normalize(row.features, ("body", "rows", index, "features")))
+            validated.append(validator.validate(row.features, ("body", "rows", index, "features")))
         except FeatureValidationError as exc:
             issues.extend(exc.issues)
     if issues:
@@ -107,8 +107,9 @@ def predict_batch(body: BatchPredictRequest, runtime: RuntimeDep, settings: Sett
 
     parts: list[bytes] = []
     hits = 0
-    for index, (row, features) in enumerate(zip(body.rows, normalized, strict=True)):
-        result, hit = runtime.service.predict_normalized(features, ("body", "rows", index, "features"))
+    for index, (row, checked) in enumerate(zip(body.rows, validated, strict=True)):
+        loc = ("body", "rows", index, "features")
+        result, hit = runtime.service.predict_normalized(checked.values, loc, checked.warnings)
         hits += hit
         parts.append(b'{"index":%d,"id":%s,"prediction":%s}' % (index, dumps(row.id), result.body))
 

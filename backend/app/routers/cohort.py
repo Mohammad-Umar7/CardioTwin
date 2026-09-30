@@ -57,13 +57,16 @@ def cohort_prediction(patient_id: str, runtime: RuntimeDep) -> Response:
     patient = _patient_or_404(runtime, patient_id)
     service = runtime.service
     try:
-        features: dict[str, Any] = service.validator.normalize(patient.features, ("cohort", patient.id, "features"))
+        validated = service.validator.validate(patient.features, ("cohort", patient.id, "features"))
+        features: dict[str, Any] = validated.values
+        warnings = validated.warnings
     except FeatureValidationError as exc:
         # Cohort rows come from the ML artifacts, not from users: predict on the raw values, but flag the drift.
         log.warning("cohort patient does not validate against the schema", extra={"patient": patient.id,
                                                                                     "error": str(exc)})
         features = {k: v for k, v in patient.features.items() if k in service.validator.specs and v is not None}
-    result, hit = service.predict_normalized(features)
+        warnings = []
+    result, hit = service.predict_normalized(features, warnings=warnings)
 
     predictions = result.data["predictions"]
     agreement = {

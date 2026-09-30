@@ -29,7 +29,7 @@ from app.models import (
     PredictResponse,
 )
 from app.predictors.base import Predictor, PredictorContractError
-from app.validation import FeatureValidationError, FeatureValidator, Issue, Loc
+from app.validation import FeatureValidationError, FeatureValidator, Issue, Loc, RangePolicy
 
 log = get_logger("runtime")
 
@@ -79,9 +79,16 @@ class PredictionResult:
 class PredictionService:
     """Validate features, consult the LRU cache, call the predictor, enforce the output contract."""
 
-    def __init__(self, predictor: Predictor, schema: FeatureSchema, targets: list[str], cache_size: int) -> None:
+    def __init__(
+        self,
+        predictor: Predictor,
+        schema: FeatureSchema,
+        targets: list[str],
+        cache_size: int,
+        out_of_range: RangePolicy = "reject",
+    ) -> None:
         self.predictor = predictor
-        self.validator = FeatureValidator(schema)
+        self.validator = FeatureValidator(schema, out_of_range)
         self.targets = targets
         self.cache: LRUCache[str, PredictionResult] = LRUCache(cache_size)
         # Serialise calls into the model: SHAP explainers are not guaranteed to be thread-safe.
@@ -89,12 +96,21 @@ class PredictionService:
 
     def predict(self, features: Mapping[str, Any], loc: Loc = ("body", "features")) -> tuple[PredictionResult, bool]:
         """Return ``(result, cache_hit)``; raises ``FeatureValidationError`` on bad input."""
-        return self.predict_normalized(self.validator.normalize(features, loc), loc)
+        validated = self.validator.validate(features, loc)
+        return self.predict_normalized(validated.values, loc, validated.warnings)
 
     def predict_normalized(
-        self, features: Mapping[str, Any], loc: Loc = ("body", "features")
+        self,
+        features: Mapping[str, Any],
+        loc: Loc = ("body", "features"),
+        warnings: list[dict[str, Any]] | None = None,
     ) -> tuple[PredictionResult, bool]:
-        """Predict already-validated features. ``loc`` locates the input in error reports."""
+        """Predict already-validated features.
+
+        ``loc`` locates the input in error reports; non-empty ``warnings`` (out-of-range values under the
+        ``warn`` policy) are added to the response as ``warnings``. They depend only on the features, so
+        they are cached together with the prediction.
+        """
         key = json.dumps(features, sort_keys=True, separators=(",", ":"), default=str)
         cached = self.cache.get(key)
         if cached is not None:
@@ -107,12 +123,12 @@ class PredictionService:
             # The ML package validates inputs too; a value it rejects is still a client error, not a 500.
             log.warning("model rejected validated input", extra={"error": str(exc)})
             raise FeatureValidationError([Issue("model_rejected_input", loc, f"The model rejected the input: {exc}")])
-        result = self._conform(raw)
+        result = self._conform(raw, warnings or [])
         self.cache.put(key, result)
         log.debug("model inference", extra={"inference_ms": round((time.perf_counter() - started) * 1000, 3)})
         return result, False
 
-    def _conform(self, raw: Any) -> PredictionResult:
+    def _conform(self, raw: Any, warnings: list[dict[str, Any]]) -> PredictionResult:
         data = to_jsonable(raw)
         try:
             model = PredictResponse.model_validate(data)
@@ -122,6 +138,8 @@ class PredictionService:
         if missing:
             raise PredictorContractError(f"Predictor output lacks predictions/explanations for {missing}")
         dumped = model.model_dump(mode="json")
+        if warnings:
+            dumped["warnings"] = to_jsonable(warnings)
         return PredictionResult(body=dumps(dumped), data=dumped)
 
 
@@ -142,7 +160,7 @@ class Runtime:
     started_at: float
 
     @classmethod
-    def build(cls, predictor: Predictor, kind: str, cache_size: int) -> Runtime:
+    def build(cls, predictor: Predictor, kind: str, cache_size: int, out_of_range: RangePolicy = "reject") -> Runtime:
         """Validate the predictor's documents against the contract and precompute responses.
 
         Raises:
@@ -178,7 +196,7 @@ class Runtime:
             schema=schema,
             targets=targets,
             model_version=str(predictor.version),
-            service=PredictionService(predictor, schema, targets, cache_size),
+            service=PredictionService(predictor, schema, targets, cache_size, out_of_range),
             schema_doc=StaticDocument.from_obj(schema_raw),
             metrics_doc=StaticDocument.from_obj(metrics_raw),
             cohort_doc=StaticDocument.from_obj(cohort_raw),

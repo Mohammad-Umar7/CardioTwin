@@ -11,11 +11,12 @@ import difflib
 import math
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
-from typing import Any
+from typing import Any, Literal, get_args
 
 from app.models import LEAKAGE_KEYS, FeatureSchema, FeatureSpec
 
 Loc = tuple[str | int, ...]
+RangePolicy = Literal["reject", "warn"]
 
 _BINARY_TRUE = frozenset({"1", "y", "yes", "true", "t"})
 _BINARY_FALSE = frozenset({"0", "n", "no", "false", "f"})
@@ -49,11 +50,27 @@ class FeatureValidationError(Exception):
         super().__init__("; ".join(issue.msg for issue in self.issues))
 
 
-class FeatureValidator:
-    """Schema-driven validator; build once per loaded model."""
+@dataclass(frozen=True, slots=True)
+class ValidatedFeatures:
+    """API-normalised values plus non-fatal warnings (out-of-range values under the ``warn`` policy)."""
 
-    def __init__(self, schema: FeatureSchema) -> None:
+    values: dict[str, Any]
+    warnings: list[dict[str, Any]]
+
+
+class FeatureValidator:
+    """Schema-driven validator; build once per loaded model.
+
+    Numeric ``min``/``max`` in the schema are the range the model was trained and validated on.
+    ``out_of_range="reject"`` (default) turns values outside it into 422 errors; ``"warn"`` accepts
+    them (the model extrapolates) and reports each one in the response ``warnings``.
+    """
+
+    def __init__(self, schema: FeatureSchema, out_of_range: RangePolicy = "reject") -> None:
+        if out_of_range not in get_args(RangePolicy):
+            raise ValueError(f"out_of_range must be one of {get_args(RangePolicy)}")
         self.schema = schema
+        self.out_of_range = out_of_range
         self.specs: dict[str, FeatureSpec] = {f.key: f for f in schema.features}
         self._lower_keys = {k.lower(): k for k in self.specs}
         self._options: dict[str, dict[str, str | int]] = {}
@@ -71,12 +88,17 @@ class FeatureValidator:
         return list(self.specs)
 
     def normalize(self, features: Mapping[str, Any], loc: Loc = ("body", "features")) -> dict[str, Any]:
-        """Return API-normalised features or raise :class:`FeatureValidationError`.
+        """Return API-normalised features or raise :class:`FeatureValidationError`."""
+        return self.validate(features, loc).values
+
+    def validate(self, features: Mapping[str, Any], loc: Loc = ("body", "features")) -> ValidatedFeatures:
+        """Normalise every value, collecting all problems before raising :class:`FeatureValidationError`.
 
         ``None`` values are dropped so the predictor imputes them (and lists them in ``imputed``).
         """
         clean: dict[str, Any] = {}
         issues: list[Issue] = []
+        warnings: list[dict[str, Any]] = []
         for key, value in features.items():
             here = (*loc, key)
             spec = self.specs.get(key)
@@ -88,11 +110,32 @@ class FeatureValidator:
             result = self._coerce(spec, value, here)
             if isinstance(result, Issue):
                 issues.append(result)
-            else:
-                clean[key] = result
+                continue
+            if spec.type == "numeric" and _outside(result, spec.min, spec.max):
+                bounds = _range(spec.min, spec.max, spec.unit)
+                ctx = {"min": spec.min, "max": spec.max, "unit": spec.unit}
+                if self.out_of_range == "reject":
+                    issues.append(Issue(
+                        "out_of_range",
+                        here,
+                        f"{key}={_fmt(result)} is outside the allowed range {bounds} (the range of the training "
+                        "cohort; predictions are not validated beyond it)",
+                        value,
+                        ctx,
+                    ))
+                    continue
+                warnings.append({
+                    "type": "out_of_range",
+                    "feature": key,
+                    "value": result,
+                    **ctx,
+                    "msg": f"{key}={_fmt(result)} is outside the training range {bounds}; the model extrapolates "
+                    "and is not validated there",
+                })
+            clean[key] = result
         if issues:
             raise FeatureValidationError(issues)
-        return clean
+        return ValidatedFeatures(clean, warnings)
 
     # -- per-type coercion ----------------------------------------------------------------
 
@@ -120,16 +163,6 @@ class FeatureValidator:
             number = value
         if isinstance(number, float) and not math.isfinite(number):
             return Issue("finite_number", loc, f"'{spec.key}' must be a finite number", value)
-
-        lo, hi = spec.min, spec.max
-        if (lo is not None and number < lo) or (hi is not None and number > hi):
-            return Issue(
-                "out_of_range",
-                loc,
-                f"{spec.key}={_fmt(number)} is outside the allowed range {_range(lo, hi, spec.unit)}",
-                value,
-                {"min": lo, "max": hi, "unit": spec.unit},
-            )
         return number
 
     def _binary(self, spec: FeatureSpec, value: Any, loc: Loc) -> Any:
@@ -203,6 +236,10 @@ class FeatureValidator:
         if spec.min is not None or spec.max is not None:
             ctx |= {"min": spec.min, "max": spec.max, "unit": spec.unit}
         return Issue("type_error", loc, f"'{spec.key}' must be {expected}, got {type(value).__name__}", value, ctx)
+
+
+def _outside(number: float | int, lo: float | None, hi: float | None) -> bool:
+    return (lo is not None and number < lo) or (hi is not None and number > hi)
 
 
 def _json_safe(value: Any) -> Any:

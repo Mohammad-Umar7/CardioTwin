@@ -53,7 +53,9 @@ class StartupError(RuntimeError):
 
 def _build_runtime(predictor: Predictor, kind: str, settings: Settings) -> Runtime:
     try:
-        return Runtime.build(predictor, kind=kind, cache_size=settings.cache_size)
+        return Runtime.build(
+            predictor, kind=kind, cache_size=settings.cache_size, out_of_range=settings.out_of_range
+        )
     except PredictorContractError as exc:
         raise StartupError(f"The loaded model does not satisfy the API contract: {exc}") from exc
 
