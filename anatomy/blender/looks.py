@@ -213,7 +213,7 @@ def attribute(g: "G", name: str):
 def myocardium(name="L_Myocardium", tone=1.0):
     """Epicardial surface of the heart: a smooth, wet serous layer over deep red-brown muscle. No fibre striation on
     the surface (it only shows where the epicardium is removed): a low-contrast subepicardial mottle, faint streaks
-    of subepicardial fat, a fine 'orange-peel' micro-relief and gentle large undulations, subsurface scattering and
+    of subepicardial fat, a faint serous micro-relief and gentle large undulations, subsurface scattering and
     a thin, broken wet coat. The flat faces of the long-axis cut (``ct_cap`` face attribute written by the build)
     get a paler, matte cut-muscle look with faint fibre bundles."""
     g = G(name)
@@ -226,7 +226,7 @@ def myocardium(name="L_Myocardium", tone=1.0):
     base = g.ramp(mott, [(0.25, MYO_DARK), (0.55, MYO), (0.85, MYO_LIGHT)])
     base = g.mixc(g.maprange(fatn, 0.62, 0.78, 0.0, 0.22), base, EPI_FAT)
     rough = g.maprange(g.math("ADD", g.math("MULTIPLY", fine, 0.6), g.math("MULTIPLY", mott, 0.4)), 0.25, 0.75, 0.30, 0.48)
-    h = g.math("ADD", g.math("MULTIPLY", fine, 0.35), g.math("MULTIPLY", swell, 0.65))
+    h = g.math("ADD", g.math("MULTIPLY", fine, 0.15), g.math("MULTIPLY", swell, 0.85))
     # cut faces
     sep = g.n("ShaderNodeSeparateXYZ")
     g.link(p, sep.inputs[0])
@@ -242,27 +242,27 @@ def myocardium(name="L_Myocardium", tone=1.0):
     base = g.mixc(cap, base, cut)
     rough = g.math("ADD", g.math("MULTIPLY", rough, g.math("SUBTRACT", 1.0, cap)), g.math("MULTIPLY", cap, 0.72))
     h = g.math("ADD", g.math("MULTIPLY", h, g.math("SUBTRACT", 1.0, cap)), g.math("MULTIPLY", g.math("MULTIPLY", fibres, 0.3), cap))
-    nrm = g.bump(h, 0.8, 0.004)
+    nrm = g.bump(h, 0.6, 0.004)
     g.set(Subsurface_Weight=0.15, Subsurface_Radius=(1.0, 0.2, 0.1), Subsurface_Scale=0.012,
           Coat_Weight=0.22, Coat_Roughness=0.16, Sheen_Weight=0.04, Specular_IOR_Level=0.45)
     return g.finish(base=base, rough=rough, normal=nrm, category="Myocardium")
 
 
 def fat(name="L_Fat"):
-    """Epicardial adipose tissue: pale butter-yellow, softly lobulated (rounded 2-4 mm lobules as relief only - no
-    cell-edge lines in the colour), faintly translucent and moist."""
+    """Epicardial adipose tissue: golden yellow, softly lobulated (rounded 2-4 mm lobules as relief only - no
+    cell-edge lines in the colour), faintly translucent (short, warm sub-millimetre scattering) and moist."""
     g = G(name)
     p = g.heart()
     lob = g.voronoi(p, 30.0, "SMOOTH_F1", "Distance", randomness=0.9, smooth=1.0)   # ~3.3 mm lobules
     sub = g.voronoi(p, 70.0, "SMOOTH_F1", "Distance", randomness=0.9, smooth=1.0)   # ~1.4 mm
     tint = g.noise(p, 8.0, detail=3.0)
     fine = g.noise(p, 180.0, detail=2.0)
-    base = g.ramp(tint, [(0.3, srgb("#dcc07c")), (0.55, srgb("#e8d196")), (0.8, srgb("#f0ddaa"))])
-    base = g.mixc(g.maprange(lob, 0.15, 0.75, 0.0, 0.10), base, srgb("#cfa968"))       # slightly deeper between lobules
+    base = g.ramp(tint, [(0.3, srgb("#c99a40")), (0.55, srgb("#d6ab52")), (0.8, srgb("#e0bb66"))])
+    base = g.mixc(g.maprange(lob, 0.15, 0.75, 0.0, 0.14), base, srgb("#b38230"))       # slightly deeper between lobules
     dome = g.math("ADD", g.math("SUBTRACT", 1.0, lob), g.math("MULTIPLY", g.math("SUBTRACT", 1.0, sub), 0.35))
     nrm = g.bump(g.math("ADD", dome, g.math("MULTIPLY", fine, 0.04)), 1.0, 0.005)
     rough = g.maprange(lob, 0.1, 0.8, 0.28, 0.44)
-    g.set(Subsurface_Weight=0.3, Subsurface_Radius=(1.0, 0.8, 0.45), Subsurface_Scale=0.02,
+    g.set(Subsurface_Weight=0.25, Subsurface_Radius=(1.0, 0.55, 0.25), Subsurface_Scale=0.008,
           Coat_Weight=0.3, Coat_Roughness=0.18, Specular_IOR_Level=0.5)
     return g.finish(base=base, rough=rough, normal=nrm, category="Fat")
 
