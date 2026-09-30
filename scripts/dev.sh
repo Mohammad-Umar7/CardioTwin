@@ -253,7 +253,7 @@ cmd_lint() {
   ensure_python
   ensure_node_modules
   say "ruff";  "$VENV_PY" -m ruff check backend scripts && (cd ml && "$VENV_PY" -m ruff check .)
-  say "mypy";  (cd backend && "$VENV_PY" -m mypy app) && "$VENV_PY" -m mypy --strict --ignore-missing-imports scripts/e2e_check.py scripts/probe.py
+  say "mypy";  (cd backend && "$VENV_PY" -m mypy app) && "$VENV_PY" -m mypy --strict --ignore-missing-imports scripts/e2e_check.py scripts/probe.py scripts/runtime_requirements.py
   say "eslint"; npm --prefix frontend run lint
   ok "lint clean"
 }
