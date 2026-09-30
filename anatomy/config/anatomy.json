@@ -94,7 +94,7 @@
         0.0,
         0.0
       ],
-      "description": "Five pulmonary lobes, trachea and main bronchi."
+      "description": "Five pulmonary lobes, trachea, main bronchi and the oesophagus behind them."
     },
     {
       "id": "diaphragm",
@@ -118,7 +118,7 @@
         0.0,
         0.0
       ],
-      "description": "Myocardium, valves, papillary muscles, great vessels and cardiac veins."
+      "description": "Myocardium, epicardial fat, valves, papillary muscles, great vessels and their arch branches, and the cardiac veins."
     },
     {
       "id": "coronary",
@@ -142,7 +142,7 @@
       "parts": [
         "FMA7163"
       ],
-      "budget": 22000,
+      "budget": 18500,
       "material": "Skin",
       "crop": {
         "type": "skin_outer_shell"
@@ -164,7 +164,7 @@
         "FMA79980",
         "FMA34691"
       ],
-      "budget": 7000,
+      "budget": 6000,
       "material": "Muscle",
       "explode": [
         1.55,
@@ -189,7 +189,7 @@
         "FMA79979",
         "FMA34690"
       ],
-      "budget": 7000,
+      "budget": 6000,
       "material": "Muscle",
       "explode": [
         -1.55,
@@ -224,7 +224,7 @@
         "FMA8532",
         "FMA8534"
       ],
-      "budget": 22000,
+      "budget": 19000,
       "material": "Bone",
       "explode": [
         1.95,
@@ -253,7 +253,7 @@
         "FMA8531",
         "FMA8533"
       ],
-      "budget": 22000,
+      "budget": 19000,
       "material": "Bone",
       "explode": [
         -1.95,
@@ -286,7 +286,7 @@
         "BP24",
         "BP28"
       ],
-      "budget": 14000,
+      "budget": 12000,
       "material": "Cartilage",
       "explode": [
         0.0,
@@ -371,7 +371,7 @@
         "FMA10059",
         "FMA10081"
       ],
-      "budget": 26000,
+      "budget": 21000,
       "material": "Bone",
       "explode": [
         0.0,
@@ -390,7 +390,7 @@
         "FMA7370",
         "FMA7371"
       ],
-      "budget": 18000,
+      "budget": 16000,
       "material": "Lung",
       "explode": [
         0.8,
@@ -410,7 +410,7 @@
         "FMA7383",
         "FMA7337"
       ],
-      "budget": 20000,
+      "budget": 18000,
       "material": "Lung",
       "explode": [
         -0.8,
@@ -433,14 +433,35 @@
       "material": "Airway",
       "explode": [
         0.0,
-        0.5,
-        -0.5
+        0.3,
+        -0.8
       ],
       "target": null,
       "description": "Trachea and bronchial tree; the tracheal bifurcation (carina) lies just above and behind the left atrium.",
       "crop": {
         "type": "thorax_limits"
       }
+    },
+    {
+      "node": "Oesophagus",
+      "id": "oesophagus",
+      "layer": "lungs",
+      "label": "Oesophagus",
+      "parts": [
+        "FMA7131"
+      ],
+      "budget": 3000,
+      "material": "Oesophagus",
+      "crop": {
+        "type": "thorax_limits"
+      },
+      "explode": [
+        0.0,
+        0.0,
+        -0.9
+      ],
+      "target": null,
+      "description": "Muscular tube of the posterior mediastinum, behind the trachea and directly behind the left atrium below about T5; the descending aorta lies to its left and, near the diaphragm, behind it."
     },
     {
       "node": "Diaphragm",
@@ -450,7 +471,7 @@
       "parts": [
         "FMA13295"
       ],
-      "budget": 9000,
+      "budget": 8000,
       "material": "Diaphragm",
       "explode": [
         0.0,
@@ -570,6 +591,24 @@
       "description": "Semilunar valve at the right-ventricular outflow into the pulmonary trunk."
     },
     {
+      "node": "Valve_Aortic",
+      "id": "valve_aortic",
+      "layer": "heart",
+      "label": "Aortic valve",
+      "parts": [
+        "SYN_AorticValve"
+      ],
+      "budget": 3000,
+      "material": "Valve",
+      "explode": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "target": null,
+      "description": "Tricuspid semilunar valve at the left-ventricular outflow: right, left and non-coronary cusps hinged in the sinuses of Valsalva (synthesised; BodyParts3D has no aortic valve)."
+    },
+    {
       "node": "Papillary_Muscles",
       "id": "papillary_muscles",
       "layer": "heart",
@@ -597,7 +636,8 @@
       "layer": "heart",
       "label": "Aorta",
       "parts": [
-        "FMA3736",
+        "SYN_AorticRoot",
+        "SYN_AortaAscending",
         "FMA3768",
         "FMA3784"
       ],
@@ -612,8 +652,33 @@
         0.0
       ],
       "target": null,
-      "description": "Ascending aorta, aortic arch and thoracic descending aorta. Both coronary arteries arise from the aortic sinuses just above the aortic valve.",
+      "description": "Aortic root with the three sinuses of Valsalva (right / left / non-coronary, synthesised), ascending aorta, arch and descending thoracic aorta. The right sinus gives the right coronary artery and the left sinus the left main.",
       "remesh_mm": 0.6
+    },
+    {
+      "node": "GreatVessel_Aorta_ArchBranches",
+      "id": "aortic_arch_branches",
+      "layer": "heart",
+      "label": "Aortic arch branches",
+      "parts": [
+        "FMA3932nsn",
+        "FMA3941",
+        "FMA3953",
+        "FMA4058",
+        "FMA4694"
+      ],
+      "budget": 5000,
+      "material": "Artery",
+      "crop": {
+        "type": "thorax_limits"
+      },
+      "explode": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "target": null,
+      "description": "Brachiocephalic trunk (dividing into the right common carotid and right subclavian arteries), left common carotid and left subclavian arteries, from right to left along the arch."
     },
     {
       "node": "GreatVessel_PulmonaryArtery",
@@ -623,7 +688,7 @@
       "parts": [
         "FMA66326"
       ],
-      "budget": 8000,
+      "budget": 7000,
       "material": "PulmonaryArtery",
       "explode": [
         0.0,
@@ -641,7 +706,7 @@
       "parts": [
         "FMA66643"
       ],
-      "budget": 8000,
+      "budget": 7000,
       "material": "PulmonaryVein",
       "explode": [
         0.0,
@@ -670,6 +735,32 @@
       "description": "Superior vena cava draining the upper body into the right atrium."
     },
     {
+      "node": "GreatVessel_SVC_BrachiocephalicVeins",
+      "id": "brachiocephalic_veins",
+      "layer": "heart",
+      "label": "Brachiocephalic veins",
+      "parts": [
+        "FMA4751",
+        "FMA4761",
+        "FMA4754",
+        "FMA4762",
+        "FMA4755",
+        "FMA4763"
+      ],
+      "budget": 5000,
+      "material": "Vein",
+      "crop": {
+        "type": "thorax_limits"
+      },
+      "explode": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "target": null,
+      "description": "Right and left brachiocephalic veins, each formed behind the sternoclavicular joint by the internal jugular and subclavian veins; they join behind the right first costal cartilage to form the superior vena cava. The left vein crosses in front of the arch branches."
+    },
+    {
       "node": "GreatVessel_IVC",
       "id": "ivc",
       "layer": "heart",
@@ -696,13 +787,9 @@
       "layer": "heart",
       "label": "Cardiac veins",
       "parts": [
-        "FMA4706",
-        "FMA4707",
-        "FMA4713",
-        "FMA71567",
-        "FMA76751"
+        "SYN_CardiacVeins"
       ],
-      "budget": 14000,
+      "budget": 16000,
       "material": "CardiacVein",
       "explode": [
         0.0,
@@ -710,7 +797,46 @@
         0.0
       ],
       "target": null,
-      "description": "Coronary sinus with the great, middle, anterior and posterior LV cardiac veins, which run alongside the coronary arteries and drain the myocardium into the right atrium."
+      "description": "Coronary venous tree draining through the coronary sinus into the right atrium: coronary sinus, great cardiac vein and anterior interventricular vein (beside the LAD and LCX), middle cardiac vein (with the PDA), posterior veins of the left ventricle, plus the anterior cardiac veins that cross the RCA and open directly into the right atrium.",
+      "remesh_mm": 0.25
+    },
+    {
+      "node": "EpicardialFat_Anterior",
+      "id": "epicardial_fat_anterior",
+      "layer": "heart",
+      "label": "Epicardial fat (anterior half)",
+      "parts": [],
+      "generate": "epicardial_fat",
+      "fat_side": "anterior",
+      "rides_on": "anterior",
+      "budget": 7000,
+      "material": "Fat",
+      "explode": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "target": null,
+      "description": "Epicardial adipose tissue filling the atrioventricular and interventricular grooves around the coronary trunks and veins (synthesised)."
+    },
+    {
+      "node": "EpicardialFat_Posterior",
+      "id": "epicardial_fat_posterior",
+      "layer": "heart",
+      "label": "Epicardial fat (posterior half)",
+      "parts": [],
+      "generate": "epicardial_fat",
+      "fat_side": "posterior",
+      "rides_on": "posterior",
+      "budget": 7000,
+      "material": "Fat",
+      "explode": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "target": null,
+      "description": "Epicardial adipose tissue filling the atrioventricular and interventricular grooves around the coronary trunks and veins (synthesised)."
     },
     {
       "node": "Coronary_LM",
@@ -952,6 +1078,190 @@
       "valve_part": "FMA7246",
       "radius_mm": 50.0
     },
-    "smooth_iterations": 6
-  }
+    "smooth_iterations": 6,
+    "standard_blend": {
+      "_comment": "Blend of the nearest-artery weights towards the AHA-17 standard territories (Cerqueira 2002) on ventricular myocardium; septal segments are split between the LAD and RCA septal perforators. Targets: LAD ~42 %, LCX ~29 %, RCA ~26 % of the LV (REFERENCE.md §5.10).",
+      "alpha": 0.55,
+      "septal_width_mm": 4.0,
+      "smooth_iterations": 4
+    }
+  },
+  "synthesis": {
+    "_comment": "Inputs and outputs of anatomy/scripts/synthesize.py (build stage 'synth'); parameters live in that script and are documented in docs/anatomy/SYNTHESIS.md.",
+    "source_parts": [
+      "FMA7274",
+      "FMA7235",
+      "FMA7234",
+      "FMA3736",
+      "FMA10951",
+      "FMA4685",
+      "FMA3802",
+      "FMA4706",
+      "FMA4707",
+      "FMA4713",
+      "FMA76751",
+      "FMA71567"
+    ],
+    "derived_parts": {
+      "SYN_CardiacVeins": {
+        "what": "Cardiac-vein tree re-swept along the BodyParts3D vein centrelines with in-vivo calibres, joined into one lumen and seated outside the epicardium; coronary sinus on the atrial side of the mitral hinge",
+        "from": [
+          "FMA4706",
+          "FMA4707",
+          "FMA4713",
+          "FMA76751",
+          "FMA71567",
+          "FMA7274",
+          "FMA7235",
+          "FMA10951"
+        ]
+      },
+      "SYN_AortaAscending": {
+        "what": "Ascending aorta rounded to an in-vivo calibre (>= 25.6 mm) about its own centreline",
+        "from": [
+          "FMA3736"
+        ]
+      },
+      "SYN_AorticRoot": {
+        "what": "Aortic root: annulus 23 mm, three sinuses of Valsalva placed at the coronary ostia, STJ 26 mm",
+        "from": [
+          "FMA3736",
+          "FMA4685",
+          "FMA3802"
+        ]
+      },
+      "SYN_AorticValve": {
+        "what": "Three closed semilunar cusps hinged in the synthesised sinuses",
+        "from": [
+          "FMA3736",
+          "FMA4685",
+          "FMA3802"
+        ]
+      }
+    }
+  },
+  "collisions": [
+    {
+      "_comment": "Display-only neighbours yield to the structures they touch (push_out in build_anatomy.py): vertices inside or within margin_mm of a master surface move out along its normal and the dent is spread smoothly. Applied in this order."
+    },
+    {
+      "yielder": "GreatVessel_Aorta",
+      "masters": [
+        "Heart_Wall_Anterior",
+        "Heart_Wall_Posterior"
+      ],
+      "margin_mm": 1.5,
+      "mask": "descending_aorta"
+    },
+    {
+      "yielder": "Spine_Thoracic",
+      "masters": [
+        "GreatVessel_Aorta"
+      ],
+      "margin_mm": 1.0
+    },
+    {
+      "yielder": "Trachea_Bronchi",
+      "masters": [
+        "GreatVessel_Aorta",
+        "GreatVessel_Aorta_ArchBranches"
+      ],
+      "margin_mm": 0.8
+    },
+    {
+      "yielder": "GreatVessel_PulmonaryArtery",
+      "masters": [
+        "GreatVessel_Aorta"
+      ],
+      "margin_mm": 0.3
+    },
+    {
+      "yielder": "GreatVessel_SVC",
+      "masters": [
+        "GreatVessel_Aorta"
+      ],
+      "margin_mm": 0.3
+    },
+    {
+      "yielder": "GreatVessel_SVC_BrachiocephalicVeins",
+      "masters": [
+        "GreatVessel_Aorta",
+        "GreatVessel_Aorta_ArchBranches",
+        "Trachea_Bronchi"
+      ],
+      "margin_mm": 0.4
+    },
+    {
+      "yielder": "Oesophagus",
+      "masters": [
+        "GreatVessel_Aorta",
+        "Trachea_Bronchi",
+        "Spine_Thoracic",
+        "Heart_Wall_Anterior",
+        "Heart_Wall_Posterior",
+        "EpicardialFat_Anterior",
+        "EpicardialFat_Posterior"
+      ],
+      "margin_mm": 0.5
+    },
+    {
+      "yielder": "Lung_L",
+      "masters": [
+        "Heart_Wall_Anterior",
+        "Heart_Wall_Posterior",
+        "EpicardialFat_Anterior",
+        "EpicardialFat_Posterior",
+        "CardiacVeins",
+        "GreatVessel_Aorta",
+        "Coronary_LM",
+        "Coronary_LAD",
+        "Coronary_LAD_Septal",
+        "Coronary_LCX",
+        "Coronary_RCA",
+        "Coronary_RCA_Marginal",
+        "Coronary_RCA_PDA",
+        "Coronary_RCA_PL",
+        "Coronary_RCA_Septal"
+      ],
+      "margin_mm": 0.6
+    },
+    {
+      "yielder": "Lung_R",
+      "masters": [
+        "Heart_Wall_Anterior",
+        "Heart_Wall_Posterior",
+        "EpicardialFat_Anterior",
+        "EpicardialFat_Posterior",
+        "CardiacVeins",
+        "GreatVessel_Aorta",
+        "GreatVessel_SVC",
+        "Coronary_LM",
+        "Coronary_LAD",
+        "Coronary_LAD_Septal",
+        "Coronary_LCX",
+        "Coronary_RCA",
+        "Coronary_RCA_Marginal",
+        "Coronary_RCA_PDA",
+        "Coronary_RCA_PL",
+        "Coronary_RCA_Septal"
+      ],
+      "margin_mm": 0.6
+    },
+    {
+      "yielder": "Diaphragm",
+      "masters": [
+        "Heart_Wall_Anterior",
+        "Heart_Wall_Posterior",
+        "EpicardialFat_Anterior",
+        "EpicardialFat_Posterior",
+        "CardiacVeins",
+        "Coronary_RCA",
+        "Coronary_RCA_PDA",
+        "Coronary_RCA_PL",
+        "Coronary_RCA_Marginal",
+        "Coronary_LAD"
+      ],
+      "margin_mm": 0.5
+    }
+  ]
 }

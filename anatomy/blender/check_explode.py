@@ -88,12 +88,17 @@ def main() -> int:
 
     rest = intersections(meshes, offsets, 0.0)
     per_t = {t: intersections(meshes, offsets, t) for t in ts}
+    # Two nodes that move by the same offset (e.g. the epicardial fat riding on its heart half) keep their
+    # relative position: any change in their overlap count is floating-point noise, not a collision.
+    def moves_together(pair):
+        return bool(np.allclose(offsets[pair[0]], offsets[pair[1]], atol=1e-9))
+
     collisions = {
         pair: {"rest": rest.get(pair, 0), "exploded": n}
         for pair, n in per_t[1.0].items()
-        if n > rest.get(pair, 0)
+        if n > rest.get(pair, 0) and not moves_together(pair)
     }
-    transient = sorted({pair for t in ts if t < 1.0 for pair, n in per_t[t].items() if n > rest.get(pair, 0)})
+    transient = sorted({pair for t in ts if t < 1.0 for pair, n in per_t[t].items() if n > rest.get(pair, 0) and not moves_together(pair)})
     report = {
         "t": ts,
         "pairs_embedded_at_rest": len(rest),

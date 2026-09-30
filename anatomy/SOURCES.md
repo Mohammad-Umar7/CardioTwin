@@ -80,34 +80,59 @@ input files the committed assets were built from.
 | `FMA7337` | lower lobe of right lung | `Lung_R` | 65,592 | 3,279,684 | `cfb1641ad8443abd6da3919d3f7565f7d119dc740b7cf91d51d17ae9f2f67eda` |
 | `FMA7394` | trachea | `Trachea_Bronchi` | 13,870 | 693,584 | `6cc38ce5ad2602ba214ef47e9bc94f7f44ef650772258caeee7060e20f6deda0` |
 | `FMA7409` | bronchus | `Trachea_Bronchi` | 115,630 | 5,781,584 | `05f5c75914a9aaba435d7f28e5de60ba9853665db5b02dcd309cf6fbbea132ac` |
+| `FMA7131` | esophagus | `Oesophagus` | 2,642 | 132,184 | `7783e109c2f4c81936632e1662686c9081460f4be2b5f1f51f8ebd439d0e464f` |
 | `FMA13295` | diaphragm | `Diaphragm` | 210,666 | 10,533,384 | `c795e5300bf93f81805de8e2788449d9230da2c1bc93a005bb995c691b3fae84` |
-| `FMA7274` | wall of heart | `Heart_Wall_Anterior`, `Heart_Wall_Posterior` | 331,592 | 16,579,684 | `ed570773264c7abf73db5f5da20e5e4f69943315e8c5995da850a2821988b0a2` |
-| `FMA7235` | mitral valve | `Valve_Mitral` | 19,102 | 955,184 | `e434d63f98d789acff6943ae244713d524d2abf6aa6020445a46bd24bc03d70c` |
-| `FMA7234` | tricuspid valve | `Valve_Tricuspid` | 47,268 | 2,363,484 | `96e2470c9ddd5fa0970014235abe2686d4c6084b1ed514edfec37677a7ae377e` |
+| `FMA7274` | wall of heart | `Heart_Wall_Anterior`, `Heart_Wall_Posterior`, `synthesis` | 331,592 | 16,579,684 | `ed570773264c7abf73db5f5da20e5e4f69943315e8c5995da850a2821988b0a2` |
+| `FMA7235` | mitral valve | `Valve_Mitral`, `synthesis` | 19,102 | 955,184 | `e434d63f98d789acff6943ae244713d524d2abf6aa6020445a46bd24bc03d70c` |
+| `FMA7234` | tricuspid valve | `Valve_Tricuspid`, `synthesis` | 47,268 | 2,363,484 | `96e2470c9ddd5fa0970014235abe2686d4c6084b1ed514edfec37677a7ae377e` |
 | `FMA7246` | pulmonary valve | `Valve_Pulmonary` | 18,202 | 910,184 | `b1436a72cf5727be01c02fe08bda7eaefd667af6cfbbcd6261f915a61e7f48dc` |
 | `FMA7260` | anterior papillary muscle of right ventricle | `Papillary_Muscles` | 3,860 | 193,084 | `e6fe30295f9d229c227411f001c1616bb763520ca28d0006e51db89137561fa4` |
 | `FMA7261` | posterior papillary muscle of right ventricle | `Papillary_Muscles` | 2,730 | 136,584 | `4ebf10dbcb09df59008bc24ea456c1cdc29e1a41bf567e12f03eca0440450853` |
 | `FMA7262` | septal papillary muscle of right ventricle | `Papillary_Muscles` | 1,898 | 94,984 | `1026d3e20fc4b58313f8dffb8f874e871916446091b0adcf4649e32409d0ae0a` |
 | `FMA7266` | posterior papillary muscle of left ventricle | `Papillary_Muscles` | 3,902 | 195,184 | `def197ade00b5fca69d916f1329377e51cc589856f96fc6358ede93bbfbe60aa` |
 | `FMA9352nsn` | papillary muscle of left ventricle, nsn | `Papillary_Muscles` | 4,084 | 204,284 | `9c881e0cc650b690288d7d5814c324bd1f888c61d0c48ebb7ac767e08d665618` |
-| `FMA3736` | ascending aorta | `GreatVessel_Aorta` | 2,156 | 107,884 | `c99fcd415e7d7df717446f32601324b53656a96c41ff9190c766e39381e108e3` |
 | `FMA3768` | arch of aorta | `GreatVessel_Aorta` | 3,282 | 164,184 | `d45fa63a0dda6f6cea8e5db8bdd3fba851fe8e4dd5c679afe68ae47eb6ad56eb` |
 | `FMA3784` | descending aorta | `GreatVessel_Aorta` | 23,808 | 1,190,484 | `b6bf061b1b50163b91ac0b11c3fb8dd0b5a28a18a3ee4d95d395a622448e4c16` |
+| `FMA3932nsn` | brachiocephalic artery, nsn | `GreatVessel_Aorta_ArchBranches` | 1,210 | 60,584 | `4d0ef7d674f6c4788a5ff6099fe2f3b6387c554cf23e23733ddbf97a0b9b19a1` |
+| `FMA3941` | right common carotid artery | `GreatVessel_Aorta_ArchBranches` | 4,424 | 221,284 | `96f222b2fdb5cff8e1e018fc6b54ce35765b0823d73f496385766d798917b3c0` |
+| `FMA3953` | right subclavian artery | `GreatVessel_Aorta_ArchBranches` | 2,260 | 113,084 | `cdc259455af237044c11af557a9a9f0dd99accb463472b97b162d4e936f484f0` |
+| `FMA4058` | left common carotid artery | `GreatVessel_Aorta_ArchBranches` | 698 | 34,984 | `81d0a45cb5ce9947ddebaf9e35c7324b2e2d5195885e85487937b1e83962a036` |
+| `FMA4694` | left subclavian artery | `GreatVessel_Aorta_ArchBranches` | 3,234 | 161,784 | `d4fc1c72acb2df558ced1ba9e0f18e29a0b9448ab38552295a69919e535c494e` |
 | `FMA66326` | pulmonary artery | `GreatVessel_PulmonaryArtery` | 116,948 | 5,847,484 | `3067ec3d6f6c9a98ac2797d6de36f3eb39c7e2569edc6da7f44b6e545dde8af3` |
 | `FMA66643` | pulmonary vein | `GreatVessel_PulmonaryVeins` | 72,548 | 3,627,484 | `01f8c137a94b67eadee60ca6eb1de16565a420c81f8d08fce64951f7c5ad0d6c` |
 | `FMA4720` | superior vena cava | `GreatVessel_SVC` | 1,532 | 76,684 | `5be118bf9a3112718d16876762df66eb6d8998e433dd417f3ff0042057a08e10` |
-| `FMA10951` | inferior vena cava | `GreatVessel_IVC` | 7,686 | 384,384 | `627622da12b0716e3b564c2f4812c6a5b0fbec0d49e0cbdc018c70247b66b609` |
-| `FMA4706` | coronary sinus | `CardiacVeins` | 1,922 | 96,184 | `03542a2590c4fa570efccc5e81c9b7936b0968cbad5b4c6d435e1e788481acf3` |
-| `FMA4707` | great cardiac vein | `CardiacVeins` | 7,476 | 373,884 | `52b0738f4c0f57ea75314c2b548af1853dc7cd818e7c5e8972a0d8516202ea2b` |
-| `FMA4713` | middle cardiac vein | `CardiacVeins` | 4,326 | 216,384 | `fdbc7add270558e42f20604c651e5f8aa17d3c9024bebb8d85aabce5e4cd3509` |
-| `FMA71567` | set of anterior cardiac veins | `CardiacVeins` | 5,712 | 285,684 | `514806aee1f1ccb70037913eae0d54d3d00b17b97bda5fbc88690f6bb0942e6c` |
-| `FMA76751` | set of posterior veins of left ventricle | `CardiacVeins` | 4,318 | 215,984 | `1c29635b820858b0a792f3c74d140b0a900fadd0dc47470c2c074ee974a71a1e` |
-| `FMA4685` | stem of left coronary artery | `Coronary_LM` | 252 | 12,684 | `1f255ab043b03785f60b080af66ec385c660797ff8796491880d4eed4ca54aad` |
+| `FMA4751` | right brachiocephalic vein | `GreatVessel_SVC_BrachiocephalicVeins` | 1,400 | 70,084 | `109f8f13294643633dd6aa43c4ad6095001fe62d735c44b398f7dec1a09e4618` |
+| `FMA4761` | left brachiocephalic vein | `GreatVessel_SVC_BrachiocephalicVeins` | 1,918 | 95,984 | `f5b05af3b7c8f34ae753f37c2e01fa7055f0331eaf2ba2bcc7fb074dc98b35a6` |
+| `FMA4754` | right internal jugular vein | `GreatVessel_SVC_BrachiocephalicVeins` | 580 | 29,084 | `00e5838b6bdeddee3a0ccc6d7d0c59fcc0ebbc3e8d886ceddc27462b9023f606` |
+| `FMA4762` | left internal jugular vein | `GreatVessel_SVC_BrachiocephalicVeins` | 720 | 36,084 | `c1a9c3825ed0b84d8e927b6d464355cd2967b95c0b10f46c0767fbc5bb1dd5c7` |
+| `FMA4755` | right subclavian vein | `GreatVessel_SVC_BrachiocephalicVeins` | 946 | 47,384 | `d2210a4d159b9d3e333cb1ebebb81e21dfddbb31bde9d6a797452e54552cedb3` |
+| `FMA4763` | left subclavian vein | `GreatVessel_SVC_BrachiocephalicVeins` | 1,112 | 55,684 | `5d71a01ee55bc89adc3eedc4adce77c6098c0ae5910a1a77a72649b6d4f7697a` |
+| `FMA10951` | inferior vena cava | `GreatVessel_IVC`, `synthesis` | 7,686 | 384,384 | `627622da12b0716e3b564c2f4812c6a5b0fbec0d49e0cbdc018c70247b66b609` |
+| `FMA4685` | stem of left coronary artery | `Coronary_LM`, `synthesis` | 252 | 12,684 | `1f255ab043b03785f60b080af66ec385c660797ff8796491880d4eed4ca54aad` |
 | `FMA3862nsn` | anterior interventricular branch of left coronary artery, nsn | `Coronary_LAD` | 9,220 | 461,084 | `831c5417e07392b91a6eba2f9584ae96912cfb21b75db192dd543500a8cfbc6a` |
 | `FMA71670` | set of interventricular septal branches of left coronary artery | `Coronary_LAD_Septal` | 1,214 | 60,784 | `6122beeab521d053887797e909caa3d3b062b3fd6b5cb36992df6f15877e9544` |
 | `FMA3895` | circumflex branch of left coronary artery | `Coronary_LCX` | 3,542 | 177,184 | `bdccf8e75e76ef53555f2a667e135b7670f9f97d87dd10972b651b793a536763` |
-| `FMA3802` | trunk of right coronary artery | `Coronary_RCA` | 5,154 | 257,784 | `a0327d37afecd97067bd8b95396622175e028a863debd418c6ab47e42dd89d03` |
+| `FMA3802` | trunk of right coronary artery | `Coronary_RCA`, `synthesis` | 5,154 | 257,784 | `a0327d37afecd97067bd8b95396622175e028a863debd418c6ab47e42dd89d03` |
 | `FMA3818` | marginal branch of right coronary artery | `Coronary_RCA_Marginal` | 4,908 | 245,484 | `8051eabb657122c11672c033e97e27a42c9e05213654dcdba5fada5c36fe9591` |
 | `FMA3840nsn` | posterior interventricular branch of right coronary artery, nsn | `Coronary_RCA_PDA` | 3,086 | 154,384 | `4ed012404d7796f4245991dbeafcef7704c051b969e8cee8c6f32d352063eb0b` |
 | `FMA76994` | right posterolateral branch of right coronary artery | `Coronary_RCA_PL` | 2,246 | 112,384 | `aaa23cf3637eda7d08bd5102cf1324050806c658a7c1862de299294f533403d4` |
 | `FMA71669` | set of interventricular septal branches of right coronary artery | `Coronary_RCA_Septal` | 754 | 37,784 | `19e35b9fb9a3ead9f7cd895a17bb09a21a558f921c0cd60361971aad12eae617` |
+| `FMA3736` | ascending aorta | `synthesis` | 2,156 | 107,884 | `c99fcd415e7d7df717446f32601324b53656a96c41ff9190c766e39381e108e3` |
+| `FMA4706` | coronary sinus | `synthesis` | 1,922 | 96,184 | `03542a2590c4fa570efccc5e81c9b7936b0968cbad5b4c6d435e1e788481acf3` |
+| `FMA4707` | great cardiac vein | `synthesis` | 7,476 | 373,884 | `52b0738f4c0f57ea75314c2b548af1853dc7cd818e7c5e8972a0d8516202ea2b` |
+| `FMA4713` | middle cardiac vein | `synthesis` | 4,326 | 216,384 | `fdbc7add270558e42f20604c651e5f8aa17d3c9024bebb8d85aabce5e4cd3509` |
+| `FMA76751` | set of posterior veins of left ventricle | `synthesis` | 4,318 | 215,984 | `1c29635b820858b0a792f3c74d140b0a900fadd0dc47470c2c074ee974a71a1e` |
+| `FMA71567` | set of anterior cardiac veins | `synthesis` | 5,712 | 285,684 | `514806aee1f1ccb70037913eae0d54d3d00b17b97bda5fbc88690f6bb0942e6c` |
+
+## Derived and synthesised parts
+
+`anatomy/scripts/synthesize.py` (build stage `synth`) writes these parts to `anatomy/build/synth/` from the
+BodyParts3D inputs above; they are deterministic functions of those inputs. See
+[`docs/anatomy/SYNTHESIS.md`](../docs/anatomy/SYNTHESIS.md) for the method and the literature values used.
+
+| ID | What it is | Built from | Used in node |
+| --- | --- | --- | --- |
+| `SYN_CardiacVeins` | Cardiac-vein tree re-swept along the BodyParts3D vein centrelines with in-vivo calibres, joined into one lumen and seated outside the epicardium; coronary sinus on the atrial side of the mitral hinge | `FMA4706`, `FMA4707`, `FMA4713`, `FMA76751`, `FMA71567`, `FMA7274`, `FMA7235`, `FMA10951` | `CardiacVeins` |
+| `SYN_AortaAscending` | Ascending aorta rounded to an in-vivo calibre (>= 25.6 mm) about its own centreline | `FMA3736` | `GreatVessel_Aorta` |
+| `SYN_AorticRoot` | Aortic root: annulus 23 mm, three sinuses of Valsalva placed at the coronary ostia, STJ 26 mm | `FMA3736`, `FMA4685`, `FMA3802` | `GreatVessel_Aorta` |
+| `SYN_AorticValve` | Three closed semilunar cusps hinged in the synthesised sinuses | `FMA3736`, `FMA4685`, `FMA3802` | `Valve_Aortic` |
