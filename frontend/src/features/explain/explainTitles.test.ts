@@ -12,7 +12,10 @@ const withCad = (p: number): PredictResponse => ({
 
 describe('Explain drawer takeaway titles (§5.10)', () => {
   it('states what the edits did, in points, never as a probability', () => {
-    expect(whatIfTitle('CAD', 2, withCad(0.98), withCad(0.91))).toBe('2 changes lowered CAD by 7 points');
+    expect(whatIfTitle('CAD', 2, withCad(0.8), withCad(0.73))).toBe('2 changes lowered CAD by 7 points');
+    // A capped end (≥95 %): the same lower bound as the Risk card's "▼ ≥4 pts", never the raw difference.
+    expect(whatIfTitle('CAD', 2, withCad(0.98), withCad(0.91))).toBe('2 changes lowered CAD by ≥4 points');
+    expect(whatIfTitle('CAD', 1, withCad(0.97), withCad(0.99))).toBe('1 change left CAD at the top of the shown range');
     expect(whatIfTitle('CAD', 1, withCad(0.5), withCad(0.51))).toBe('1 change raised CAD by 1 point');
     expect(whatIfTitle('CAD', 1, withCad(0.5), withCad(0.502))).toBe('1 change left CAD unchanged');
     expect(whatIfTitle('CAD', 0, null, withCad(0.5))).toMatch(/^No changes yet/);
