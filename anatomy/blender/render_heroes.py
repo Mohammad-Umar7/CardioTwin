@@ -593,8 +593,10 @@ def style_heart(an: Anatomy, *, close_up: bool = True, glow: dict | None = None)
                         Subsurface_Radius=(1, 0.7, 0.5), Subsurface_Scale=0.006, Coat_Weight=0.4)
     for n in ("Valve_Mitral", "Valve_Tricuspid", "Valve_Pulmonary"):
         assign(an.objects[n], valve)
-    assign(an.objects["GreatVessel_Aorta"], mat_vessel("R_Aorta", (0.30, 0.11, 0.085), rough=0.42))
-    assign(an.objects["GreatVessel_PulmonaryArtery"], mat_vessel("R_PA", (0.17, 0.09, 0.13), rough=0.42))
+    # Great vessels stay deep and semi-matt so the risk-coloured coronaries own the frame: oxygenated
+    # arterial red for the aorta, desaturated venous blue for the pulmonary trunk.
+    assign(an.objects["GreatVessel_Aorta"], mat_vessel("R_Aorta", (0.20, 0.035, 0.03), rough=0.48, sss=0.2))
+    assign(an.objects["GreatVessel_PulmonaryArtery"], mat_vessel("R_PA", (0.045, 0.06, 0.13), rough=0.48, sss=0.2))
     assign(an.objects["GreatVessel_PulmonaryVeins"], mat_vessel("R_PV", (0.24, 0.06, 0.06), rough=0.32))
     for n in ("GreatVessel_SVC", "GreatVessel_IVC"):
         assign(an.objects[n], mat_vessel("R_Cava", (0.08, 0.05, 0.09), rough=0.3))
@@ -618,16 +620,18 @@ def style_heart(an: Anatomy, *, close_up: bool = True, glow: dict | None = None)
         assign(pa, an.objects["GreatVessel_PulmonaryArtery"].data.materials[0])
 
 
-HERO_TARGET = (0.14, -0.05, 0.02)
-HERO_CAMERA = (3.95, -4.75, -0.55)
+HERO_TARGET = (0.1, -0.05, 0.24)
+#: Left-anterior-oblique, slightly cranial: LAD centre-frame, RCA on the right border, whole arch in frame.
+HERO_VIEW = (30.0, 7.0, 6.4)  # azimuth, elevation (deg), distance
 
 
 def hero_rig(scene) -> None:
     target = Vector(HERO_TARGET)
-    camera("CamHero", HERO_CAMERA, target, lens=70, fstop=4.0, focus=(0.35, -0.45, -0.1))
+    az, el, dist = HERO_VIEW
+    camera("CamHero", orbit(target, az, el, dist), target, lens=70, fstop=5.6, focus=(0.3, -0.45, 0.0))
     area_light("Key", (-1.5, -4.6, 3.6), target, power=560, size=2.4, color=(1.0, 0.93, 0.86))
     area_light("Rim", (2.8, 3.2, 2.6), target, power=1200, size=1.4, color=(0.55, 0.75, 1.0))
-    area_light("Kicker", (-3.4, 1.8, -0.8), target, power=380, size=1.6, color=(1.0, 0.55, 0.45))
+    area_light("Kicker", (-3.4, 1.8, -0.8), target, power=220, size=2.2, color=(1.0, 0.55, 0.45))
     area_light("Under", (2.0, -1.5, -3.6), target, power=120, size=3.0, color=(0.6, 0.75, 1.0))
     area_light("Fill", (4.6, -1.2, 0.8), target, power=110, size=3.5, color=(0.7, 0.8, 1.0))
 
@@ -647,7 +651,9 @@ def orbit(target: Vector, azimuth_deg: float, elevation_deg: float, distance: fl
     return target + distance * Vector((math.sin(az) * math.cos(el), -math.cos(az) * math.cos(el), math.sin(el)))
 
 
-EXPLODE_VIEW = (10.0, 9.0, 15.5, 45.0)  # azimuth, elevation (deg), distance, lens (mm)
+EXPLODE_VIEW = (0.0, 8.0, 9.6)  # azimuth, elevation (deg), distance
+EXPLODE_TARGET = (-0.1, 0.32, 0.3)  # glTF frame
+EXPLODE_LENS = 50.0  # replaced by the manifest's vertical field of view
 
 
 def shot_exploded(scene, an: Anatomy, out: Path) -> None:
@@ -666,10 +672,18 @@ def shot_exploded(scene, an: Anatomy, out: Path) -> None:
     assign(an.objects["Trachea_Bronchi"], _principled("R_Airway", Base_Color=(0.42, 0.34, 0.30, 1), Roughness=0.45,
                                                        Subsurface_Weight=0.3, Subsurface_Scale=0.01, Coat_Weight=0.3))
     an.explode(1.0)
+    # The skin is an enclosing shell: any translation sweeps it through the organs, so the viewer fades
+    # it out when it peels — the render leaves it out too.
+    an.objects["Skin_Torso"].hide_render = True
     setup_world(scene, top=(0.02, 0.024, 0.034), bottom=(0.002, 0.002, 0.003))
-    az, el, dist, lens = EXPLODE_VIEW
-    target = Vector((0.1, -0.6, -0.25))
-    camera("CamExplode", orbit(target, az, el, dist), target, lens=lens, fstop=11, focus=(0.0, -0.3, 0.0))
+    # The head-on view the radial layout is designed for (like the viewer's `camera.exploded` preset),
+    # cropped to the thorax — the diaphragm and costal margin run off the bottom edge — so the opened
+    # heart stays prominent.
+    az, el, dist = EXPLODE_VIEW
+    target = gltf_to_blender(EXPLODE_TARGET)
+    cam = camera("CamExplode", orbit(target, az, el, dist), target, lens=EXPLODE_LENS)
+    cam.data.sensor_fit = "VERTICAL"
+    cam.data.angle_y = math.radians(an.manifest["camera"]["exploded"]["fov"])
     area_light("Key", orbit(target, -35.0, 50.0, 14.0), target, power=4200, size=7, color=(1.0, 0.95, 0.9))
     area_light("Rim", orbit(target, 160.0, 25.0, 12.0), target, power=8000, size=5, color=(0.6, 0.78, 1.0))
     area_light("Fill", orbit(target, 80.0, 5.0, 12.0), target, power=1400, size=8, color=(0.8, 0.85, 1.0))
@@ -699,7 +713,7 @@ def shot_territories(scene, an: Anatomy, out: Path, samples: int) -> None:
         clear_rig()
         camera(f"Cam_{view}", cam_loc, target, lens=72)
         area_light("Key", key_loc, target, power=430, size=2.8, color=(1.0, 0.95, 0.9))
-        area_light("Rim", rim_loc, target, power=900, size=1.8, color=(0.65, 0.8, 1.0))
+        area_light("Rim", rim_loc, target, power=620, size=2.2, color=(0.65, 0.8, 1.0))
         area_light("Fill", cam_loc * 1.2 + Vector((0, 0, 1.5)), target, power=110, size=4.0)
         compositor_glow(scene, strength=0.4, threshold=0.8, size=0.55, vignette=0.3)
         render_to(scene, out / f"_territories_{view}.jpg")
@@ -739,7 +753,7 @@ def shot_xray(scene, an: Anatomy, out: Path, vessels: dict) -> None:
     looks = {
         "Layer_Skin": mat_hologram("H_Skin", cyan, rim=0.9, power=3.0),
         "Layer_Muscle": mat_hologram("H_Muscle", (0.25, 0.5, 1.0), rim=0.22, power=2.5),
-        "Layer_Skeleton": mat_hologram("H_Bone", (0.7, 0.85, 1.0), rim=0.34, core=0.01, power=2.4),
+        "Layer_Skeleton": mat_hologram("H_Bone", (0.7, 0.85, 1.0), rim=0.26, core=0.008, power=2.4),
         "Layer_Lungs": mat_hologram("H_Lung", (0.2, 0.5, 1.0), rim=0.28, power=2.2),
         "Layer_Diaphragm": mat_hologram("H_Diaphragm", (0.2, 0.45, 0.9), rim=0.18, power=2.2),
         "Layer_Heart": mat_hologram("H_Heart", (1.0, 0.32, 0.28), rim=0.75, core=0.012, power=2.0),
