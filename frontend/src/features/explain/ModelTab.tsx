@@ -267,7 +267,7 @@ export function ModelTab({ target }: { target: TargetId }) {
             )}
             .{' '}
             {typeof facts.data?.dataset.prevalence.CAD === 'number' &&
-              `The cohort is ${formatPercent(facts.data.dataset.prevalence.CAD)} CAD, so probabilities do not transfer to screening populations.`}
+              `The whole cohort (all splits) is ${formatPercent(facts.data.dataset.prevalence.CAD)} CAD, so probabilities do not transfer to screening populations.`}
           </p>
         </Section>
       )}

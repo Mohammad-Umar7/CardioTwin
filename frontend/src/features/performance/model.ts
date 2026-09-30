@@ -384,7 +384,9 @@ export function prFinding(target: string, m: TargetMetrics, prevalence: number |
   const dep = pointMetrics({ ...m.confusion_matrix, threshold: m.threshold, deployed: true });
   const who = target === 'CAD' ? 'have CAD' : `have ${target} stenosis`;
   if (dep.ppv === null) return `Precision across recall levels`;
-  const base = prevalence !== null ? `, against a ${formatPercent(prevalence)} base rate` : '';
+  // The base rate of the population the precision was measured on (the held-out test split), named so
+  // it never reads as a contradiction of the whole cohort's rate quoted elsewhere.
+  const base = prevalence !== null ? `, against a ${formatPercent(prevalence)} base rate in the test split` : '';
   return `${formatPercent(dep.ppv)} of flagged patients truly ${who}${base}`;
 }
 
