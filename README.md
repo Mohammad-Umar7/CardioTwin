@@ -45,10 +45,11 @@ model runs on a FastAPI server and, bit for bit, inside the browser, so the demo
   </tr>
 </table>
 
-Cycles renders of the published asset. A 7-second turntable is at
-[`docs/media/renders/heart_turntable.mp4`](docs/media/renders/heart_turntable.mp4).
+Cycles renders of the published asset. More: the [opened heart](docs/media/renders/open_heart.jpg) (chambers, valves,
+chordae), a [coronary close-up](docs/media/renders/coronary_detail.jpg), the
+[posterior surface](docs/media/renders/heart_posterior.jpg) with the coronary sinus, and a
+[7-second turntable](docs/media/renders/heart_turntable.mp4).
 
-<!-- RENDERS: anatomy/blender/render_heroes.py also writes open_heart.jpg, coronary_detail.jpg and heart_posterior.jpg; add them to the gallery above once they are committed -->
 <!-- SCREENSHOT: landing → docs/media/screenshots/landing.png (1440×900, landing hero with the KPI strip) -->
 <!-- SCREENSHOT: workstation → docs/media/screenshots/workstation.png (1440×900, test patient, risk summary card, vessels coloured) -->
 <!-- SCREENSHOT: workstation-lad → docs/media/screenshots/workstation-lad.png (LAD selected: camera at its best view, vessel inspector open) -->
