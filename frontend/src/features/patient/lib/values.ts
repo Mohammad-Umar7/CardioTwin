@@ -140,8 +140,8 @@ const CARD_LABELS: Readonly<Record<string, string>> = {
   CRF: 'Chronic renal failure',
   BUN: 'Urea nitrogen',
   VHD: 'Valve disease',
-  // Numeric rows with a unit leave ~16 characters for the label in the 256 px card at 1280.
-  FBS: 'Fasting glucose',
+  // Numeric rows with a unit leave ~16 characters for the label in the 256 px card at 1280. FBS keeps the
+  // schema label ("Fasting blood sugar"): one name for it on every surface.
   WBC: 'White cell count',
 };
 
