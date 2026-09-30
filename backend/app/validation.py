@@ -34,7 +34,8 @@ class Issue:
     ctx: dict[str, Any] | None = None
 
     def as_dict(self) -> dict[str, Any]:
-        item: dict[str, Any] = {"type": self.type, "loc": list(self.loc), "msg": self.msg, "input": self.input}
+        item: dict[str, Any] = {"type": self.type, "loc": list(self.loc), "msg": self.msg,
+                                "input": _json_safe(self.input)}
         if self.ctx:
             item["ctx"] = self.ctx
         return item
@@ -202,6 +203,17 @@ class FeatureValidator:
         if spec.min is not None or spec.max is not None:
             ctx |= {"min": spec.min, "max": spec.max, "unit": spec.unit}
         return Issue("type_error", loc, f"'{spec.key}' must be {expected}, got {type(value).__name__}", value, ctx)
+
+
+def _json_safe(value: Any) -> Any:
+    """Echo inputs back safely: NaN/Infinity are not valid JSON, so render them as strings."""
+    if isinstance(value, float) and not math.isfinite(value):
+        return str(value)
+    if isinstance(value, list):
+        return [_json_safe(v) for v in value]
+    if isinstance(value, dict):
+        return {k: _json_safe(v) for k, v in value.items()}
+    return value
 
 
 def _fmt(number: float | int) -> str:
