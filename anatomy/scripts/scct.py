@@ -66,6 +66,8 @@ UNNUMBERED = {
     "D3": "Third diagonal",
     "br": "Small unnamed branch",
     "AtrB": "Atrial branch of the LCX",
+    "CB": "Conus branch (first branch of the RCA, over the right-ventricular outflow tract)",
+    "SAN": "Sinoatrial-nodal artery (from the proximal RCA, to the sinoatrial node at the SVC-RA junction)",
 }
 
 
@@ -207,7 +209,7 @@ def label_lad(lad, septal, apex: np.ndarray) -> tuple[list[list[Label]], dict]:
 
 
 def label_lcx(lcx, apex: np.ndarray, hinge_dist) -> tuple[list[list[Label]], dict]:
-    """Trunk (segment 0) = pCx in the AV groove up to the first obtuse marginal (segment 1 after the split)."""
+    """Trunk (segment 0) in the AV groove: pCx (11) up to the origin of the first obtuse marginal, LCx (13) beyond it."""
     labels: list[list[Label] | None] = [None] * len(lcx)
     trunk = lcx[0].points
     labels[0] = [Label(11, "pCx", 0, len(trunk))]
@@ -226,11 +228,15 @@ def label_lcx(lcx, apex: np.ndarray, hinge_dist) -> tuple[list[list[Label]], dic
     for n, (_s, j) in enumerate(oms):
         code = "OM1" if n == 0 else "OM2" if n == 1 else f"OM{n + 1}"
         labels[j] = [Label(12 if n == 0 else 14 if n == 1 else 0, code, 0, len(lcx[j].points))]
+    if oms and oms[0][0] < arclen(trunk)[-1] - 0.005:
+        k1 = int(np.searchsorted(arclen(trunk), oms[0][0]))
+        labels[0] = [Label(11, "pCx", 0, k1 + 1), Label(13, "LCx", k1 + 1, len(trunk))]
     labels = inherit(lcx, labels)
-    return labels, {"obtuse_marginals": len(oms), "trunk_mm": round(float(arclen(trunk)[-1]) * 100, 1)}
+    return labels, {"obtuse_marginals": len(oms), "trunk_mm": round(float(arclen(trunk)[-1]) * 100, 1),
+                    "pCx_end_mm": round(float(oms[0][0]) * 100, 1) if oms else None}
 
 
-def label_rca(rca, pda, marginal) -> tuple[list[list[Label]], dict]:
+def label_rca(rca, pda, marginal, codes: list[str] | None = None) -> tuple[list[list[Label]], dict]:
     trunk = rca[0].points
     s = arclen(trunk)
     k_c, s_c = nearest_s(trunk, pda[0].points[0])
@@ -252,4 +258,7 @@ def label_rca(rca, pda, marginal) -> tuple[list[list[Label]], dict]:
     labels = [[Label(1, "pRCA", 0, k1 + 1), Label(2, "mRCA", k1 + 1, k2 + 1), Label(3, "dRCA", k2 + 1, k_c + 1),
                Label(16, "R-PLB", k_c + 1, len(trunk))]]
     labels[0] = [L for L in labels[0] if L.end > L.start]
+    for j, sg in enumerate(rca[1:], start=1):  # conus branch, sinoatrial-nodal artery, other named branches
+        code = codes[j] if codes and j < len(codes) else "br"
+        labels.append([Label(0, code, 0, len(sg.points))])
     return labels, {"acute_margin_mm": round(s_am * 100, 1), "crux_mm": round(s_c * 100, 1), "trunk_mm": round(float(s[-1]) * 100, 1)}

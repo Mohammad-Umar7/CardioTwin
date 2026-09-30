@@ -52,13 +52,20 @@ ATTRIBUTES = {
     "_SEGMENT": {"nodes": "Coronary_*", "type": "SCALAR float (integer values)",
                  "meaning": "SCCT 2014 segment number of the nearest labelled centreline point (1-18; 0 = named but unnumbered branch). See segments[]. Anatomical label only - never a lesion location."},
     "_VEIN": {"nodes": ["CardiacVeins"], "type": "SCALAR float (integer values)",
-              "meaning": "cardiac-vein code of the nearest labelled vein centreline point, see veins[] (1 CS, 2 GCV, 3 AIV, 4 MCV, 5 PVLV, 6 ACV)"},
+              "meaning": "cardiac-vein code of the nearest labelled vein centreline point, see veins[] (1 CS, 2 GCV, 3 AIV, 4 MCV, 5 PVLV, 6 ACV, 7 LMV, 8 SCV; 7-8 added in v1.1)"},
+    "_TERRITORY": {"nodes": ["Heart_Wall_Anterior", "Heart_Wall_Posterior"], "type": "VEC3 unorm8 (normalized)",
+                   "meaning": "copy of the COLOR_0 perfusion-territory weights (r = LAD, g = LCX, b = RCA) under a custom name. Read this one: glTF viewers multiply COLOR_0 into the base colour, so a later contract version will set COLOR_0 to white."},
     "_DIST_HEART": {"nodes": ["GreatVessel_PulmonaryArtery", "GreatVessel_PulmonaryVeins"], "type": "SCALAR float, scene units",
                     "meaning": "geodesic distance along the vessel wall from its cardiac end (pulmonary valve / left-atrial ostium)"},
     "_DIST_HILUM": {"nodes": ["GreatVessel_PulmonaryArtery", "GreatVessel_PulmonaryVeins"], "type": "SCALAR float, scene units",
                     "meaning": "signed geodesic distance from where the vessel enters a lung: < 0 outside the lungs (towards the heart), > 0 intrapulmonary. Keep dist_hilum < ~0.02 to show only the proximal (extrapulmonary) vessels."},
 }
 VESSELS = "vessels.json"
+#: Texture upload order for the viewer (same list as anatomy/scripts/optimize_glb.mjs extras.ct_texture_priority).
+TEXTURE_PRIORITY = ["Heart_Wall_Anterior", "Heart_Wall_Posterior", "EpicardialFat_Anterior", "EpicardialFat_Posterior",
+                    "GreatVessel_Aorta", "GreatVessel_PulmonaryArtery", "CardiacVeins", "Valve_Aortic", "Valve_Mitral",
+                    "Valve_Tricuspid", "Valve_Pulmonary", "Papillary_Muscles", "GreatVessel_PulmonaryVeins", "GreatVessel_SVC",
+                    "GreatVessel_IVC", "GreatVessel_Aorta_ArchBranches", "GreatVessel_SVC_BrachiocephalicVeins"]
 FOV_DEG = 35.0
 #: Aspect ratio the exploded camera preset is framed for (the viewer canvas is landscape).
 EXPLODED_ASPECT = 16.0 / 9.0
@@ -125,34 +132,61 @@ def definition_fields(node: str, definitions: dict) -> dict:
         return {}
     out = {"fma_id": d.get("fma_id"), "provenance": d.get("provenance", "BodyParts3D"),
            "definition": d["definition"], "clinical_relevance": d["clinical_relevance"]}
+    if d.get("fma_ids"):
+        out["fma_ids"] = d["fma_ids"]
     if d.get("accompanies"):
         out["accompanies"] = d["accompanies"]
     return out
 
 
+def _scct_at(sg: dict, k: int) -> int:
+    for lab in sg.get("labels", []):
+        if lab["from"] <= k < lab["to"]:
+            return lab["scct"]
+    return sg.get("scct", 0)
+
+
 def segment_table(vessels: dict | None) -> list[dict]:
-    """SCCT 2014 18-segment table with the CardioTwin node, presence and measured extent."""
-    present: dict[int, float] = {}
+    """SCCT 2014 18-segment table with the CardioTwin node, presence and measured extent.
+
+    ``length_mm`` is the main-path length of the segment (the trunk range, or the branch itself for a numbered
+    branch such as D1 — not its sub-branches, which inherit its label); ``total_branch_length_mm`` adds every
+    sub-branch that carries the label."""
+    main: dict[int, float] = {}
+    total: dict[int, float] = {}
     if vessels:
         for v in vessels["vessels"]:
-            for sg in v["segments"]:
+            segs = v["segments"]
+            for sg in segs:
                 P = np.array(sg["points"], dtype=float)
                 seglen = np.r_[0.0, np.cumsum(np.linalg.norm(np.diff(P, axis=0), axis=1))]
+                parent = segs[sg["parent"]] if sg.get("parent") is not None else None
                 for lab in sg.get("labels", []):
-                    if lab["scct"]:
-                        a, b = lab["from"], max(lab["from"], min(lab["to"], len(P)) - 1)
-                        present[lab["scct"]] = present.get(lab["scct"], 0.0) + float(seglen[b] - seglen[a])
+                    if not lab["scct"]:
+                        continue
+                    a, b = lab["from"], max(lab["from"], min(lab["to"], len(P)) - 1)
+                    L = float(seglen[b] - seglen[a])
+                    total[lab["scct"]] = total.get(lab["scct"], 0.0) + L
+                    inherited = False
+                    if parent is not None and a == 0:
+                        Pp = np.array(parent["points"], dtype=float)
+                        kp = int(np.argmin(np.linalg.norm(Pp - P[0], axis=1)))
+                        inherited = _scct_at(parent, kp) == lab["scct"]
+                    if not inherited:
+                        main[lab["scct"]] = main.get(lab["scct"], 0.0) + L
+    present = main
     out = []
     for n, (code, name, vessel, target, node, definition) in scct.SEGMENTS.items():
         out.append({
             "scct": n, "code": code, "name": name, "vessel": vessel, "target": target, "node": node or None,
             "definition": definition, "source": scct.SOURCE, "present": n in present,
-            **({"length_mm": round(present[n] * 100, 1)} if n in present else {}),
+            **({"length_mm": round(present[n] * 100, 1), "total_branch_length_mm": round(total[n] * 100, 1)} if n in present else {}),
         })
     return out
 
 
-def build_manifest(cfg: dict, report: dict, vessels: dict | None = None, definitions: dict | None = None) -> dict:
+def build_manifest(cfg: dict, report: dict, vessels: dict | None = None, definitions: dict | None = None,
+                   texture_report: dict | None = None, optimize_report: dict | None = None) -> dict:
     definitions = definitions or {}
     layers_cfg = layer_by_id(cfg)
     nodes = {n["node"]: n for n in report["nodes"]}
@@ -199,7 +233,7 @@ def build_manifest(cfg: dict, report: dict, vessels: dict | None = None, definit
             "territory": spec.get("territory"),
             "category": spec["material"],
             "material": info["material"],
-            "fma": [p for p in spec["parts"] if not p.startswith("SYN_")],
+            "fma": [p for p in spec["parts"] if not p.startswith("SYN_")] + list(spec.get("source_parts", [])),
             **definition_fields(spec["node"], definitions),
             "center": _r(center),
             "bbox": {"min": _r(lo), "max": _r(hi)},
@@ -207,6 +241,9 @@ def build_manifest(cfg: dict, report: dict, vessels: dict | None = None, definit
         }
         if "feeds" in spec:
             entry["feeds"] = spec["feeds"]
+        tex = (texture_report or {}).get("nodes", {}).get(spec["node"])
+        if tex:  # mean baked albedo: the untextured fallback colour, so the viewer does not pop when the maps arrive
+            entry["realistic_color"] = tex["mean_rgb"]
         # DESIGN_SYSTEM §7.8 additive fields: the wall a structure rides on, label anchors, best views.
         if spec.get("rides_on") in half_explode:
             entry["rides"] = f"Heart_Wall_{spec['rides_on'].title()}"
@@ -276,9 +313,15 @@ def build_manifest(cfg: dict, report: dict, vessels: dict | None = None, definit
             "nodes": members,
         })
 
+    extra = {}
+    if optimize_report:
+        extra = {"glb_bytes": optimize_report["glb_bytes"], "glb_sha256": optimize_report["glb_sha256"],
+                 "textures": {"gpu_mib": optimize_report["textures_gpu_mib"], "webp_mb": optimize_report["textures_webp_mb"],
+                              "priority": [n for n, _ in sorted(((n, i) for i, n in enumerate(TEXTURE_PRIORITY)), key=lambda x: x[1])]}}
     return {
         "version": cfg["version"],
         "glb": GLB_NAME,
+        **extra,
         "vessels": VESSELS,
         "credits": cfg["source"]["credits"],
         "license": {
@@ -340,7 +383,11 @@ def main() -> int:
     vessels_path = PUBLIC_DIR / VESSELS
     vessels = read_json(vessels_path) if vessels_path.exists() else None
     definitions = read_json(DEFINITIONS) if DEFINITIONS.exists() else {}
-    manifest = build_manifest(cfg, report, vessels, definitions)
+    tex_path = ANATOMY_DIR / "build" / "bake" / "texture_report.json"
+    opt_path = ANATOMY_DIR / "build" / "optimize_report.json"
+    manifest = build_manifest(cfg, report, vessels, definitions,
+                              read_json(tex_path) if tex_path.exists() else None,
+                              read_json(opt_path) if opt_path.exists() else None)
     write_json(MANIFEST, manifest)
     print(f"[manifest] wrote {MANIFEST} ({len(manifest['structures'])} structures, {len(manifest['layers'])} layers)")
     return 0

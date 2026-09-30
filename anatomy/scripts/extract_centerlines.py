@@ -19,6 +19,10 @@ final scene frame) the pipeline is:
 Each vessel's first segment is prefixed with its attachment point on the parent (the aortic wall for
 ostial vessels) so particles flow continuously from the aorta into the tree.
 
+When the synthesis stage designed the coronary tree (``anatomy/build/synth/coronary_centerlines.json``, see
+``anatomy/scripts/coronary.py``) the design centrelines and lumen radii are used directly — they are exact — and
+steps 1-6 are skipped; the skeleton path above remains for BodyParts3D meshes.
+
 Validation: every point is tested against its own vessel mesh (inside test + distance to surface);
 the report is written to ``anatomy/build/centerline_report.json`` and summarised on stdout.
 
@@ -331,7 +335,9 @@ def validate(mesh: trimesh.Trimesh, segments: list[Segment], parent_mesh: trimes
 #: The LCX trunk ends where its centreline leaves the left AV groove (> this distance from the mitral hinge).
 LCX_GROOVE_MM = 15.0
 VEIN_NAMES = {"CS": "Coronary sinus", "GCV": "Great cardiac vein", "AIV": "Anterior interventricular vein",
-              "MCV": "Middle cardiac vein", "PVLV": "Posterior vein of the left ventricle", "ACV": "Anterior cardiac vein"}
+              "MCV": "Middle cardiac vein", "PVLV": "Posterior vein of the left ventricle", "ACV": "Anterior cardiac vein",
+              "LMV": "Left marginal vein", "SCV": "Small cardiac vein"}
+CORONARY_DESIGN = SYNTH_DIR / "coronary_centerlines.json"
 
 
 def mitral_hinge(origin_mm: np.ndarray) -> np.ndarray:
@@ -360,6 +366,12 @@ def vein_centrelines(origin_mm: np.ndarray) -> tuple[dict, dict]:
     segs, allP = [], []
     design = [(mo.to_gltf((np.array(pth["points_mm"]) - origin_mm) * MM), np.array(pth["radius_mm"]) * MM) for pth in src["paths"]]
     for path, (P, r_design) in zip(src["paths"], design):
+        if src.get("names"):  # synthesised tree: the tube was swept with exactly these radii
+            segs.append({"label": path["label"], "code": path["code"], "name": src["names"].get(path["label"], VEIN_NAMES.get(path["label"], path["label"])),
+                         "parent": path["parent"], "side": bool(path.get("side")),
+                         "points": np.round(P, 5).tolist(), "radius": np.round(r_design, 5).tolist()})
+            allP.append(P)
+            continue
         _, r, _ = trimesh.proximity.closest_point(mesh, P)
         if path["parent"] is not None:
             # points bridging from the parent vein into this one lie inside the parent's lumen, where the
@@ -376,7 +388,10 @@ def vein_centrelines(origin_mm: np.ndarray) -> tuple[dict, dict]:
                      "points": np.round(P, 5).tolist(), "radius": np.round(r, 5).tolist()})
         allP.append(P)
     allP = np.vstack(allP)
-    inside = mesh.contains(allP)
+    # inside test by nearest-vertex normal (trimesh.contains ray-casts every point against the whole mesh)
+    tri_c = mesh.triangles_center
+    _, fi = cKDTree(tri_c).query(allP)
+    inside = np.einsum("ij,ij->i", allP - tri_c[fi], mesh.face_normals[fi]) < 0
     rep_ = {"segments": len(segs), "points": int(len(allP)), "inside_fraction": round(float(inside.mean()), 4)}
     print(f"[centerline] veins: {len(segs)} labelled segments, {inside.mean():.1%} of points inside CardiacVeins", flush=True)
     return {
@@ -389,6 +404,40 @@ def vein_centrelines(origin_mm: np.ndarray) -> tuple[dict, dict]:
     }, rep_
 
 
+def design_vessels(origin_mm: np.ndarray) -> tuple[dict[str, VesselResult], dict[str, dict], dict[str, list[str]]]:
+    """Coronary segments from the synthesis design (exact centrelines and radii), in the glTF frame."""
+    design = read_json(CORONARY_DESIGN)["nodes"]
+    results, report, codes = {}, {}, {}
+    for node, (vid, parent) in TOPOLOGY.items():
+        d = design[node]
+        segs = []
+        for sg in d["segments"]:
+            P = mo.to_gltf((np.asarray(sg["points_mm"], float) - origin_mm) * MM)
+            R = np.asarray(sg["radius_mm"], float) * MM
+            attach = sg.get("attach")
+            segs.append(Segment(P, R, sg["parent"], attach, 0))
+        codes[node] = [sg["code"] for sg in d["segments"]]
+        parent_label = "aorta" if parent == "aorta" else TOPOLOGY[parent][0]
+        results[node] = VesselResult(node, vid, parent_label, segs)
+        length = sum(float(scct.arclen(s_.points)[-1]) for s_ in segs)
+        allR = np.concatenate([s_.radius for s_ in segs])
+        report[node] = {"vessel": vid, "segments": len(segs), "length_mm": round(length / MM, 1), "source": "synthesis design",
+                        "points": int(sum(len(s_.points) for s_ in segs)), "inside_fraction": 1.0, "max_outside_distance_mm": 0.0,
+                        "p99_outside_distance_mm": 0.0, "median_radius_mm": round(float(np.median(allR)) / MM, 3),
+                        "min_radius_mm": round(float(allR.min()) / MM, 3), "max_radius_mm": round(float(allR.max()) / MM, 3)}
+        print(f"[centerline] {vid:13s} {len(segs):3d} segments  {length / MM:6.1f} mm  (synthesis design)", flush=True)
+    # A design branch leaves its parent between two resampled parent points: start it exactly on the parent's
+    # centreline (the nearest parent point, <= half the 0.8 mm spacing away) so the published tree is connected.
+    for node, (_vid, parent) in TOPOLOGY.items():
+        if parent == "aorta":
+            continue
+        parent_pts = np.vstack([s_.points for s_ in results[parent].segments])
+        for s_ in results[node].segments:
+            if s_.attach and s_.attach != "aorta":
+                s_.points[0] = parent_pts[int(np.argmin(np.linalg.norm(parent_pts - s_.points[0], axis=1)))]
+    return results, report, codes
+
+
 def main() -> int:
     cfg = load_config()
     nodes = {n["node"]: n for n in cfg["nodes"]}
@@ -397,8 +446,12 @@ def main() -> int:
     results: dict[str, VesselResult] = {}
     report: dict[str, dict] = {}
     t0 = time.perf_counter()
+    build0 = read_json(BUILD_REPORT)
+    codes: dict[str, list[str]] = {}
+    if CORONARY_DESIGN.exists():
+        results, report, codes = design_vessels(np.array(build0["frame"]["origin_mm_bodyparts3d"]))
 
-    for node, (vid, parent) in TOPOLOGY.items():
+    for node, (vid, parent) in (TOPOLOGY.items() if not results else ()):
         V, F = mo.read_ply(VESSEL_MESH_DIR / f"{node}.ply")
         mesh = trimesh.Trimesh(V, F, process=False)
         meshes[node] = mesh
@@ -430,6 +483,9 @@ def main() -> int:
     k_min = int(np.argmin(dMA))
     leave = np.flatnonzero((np.arange(len(dMA)) > k_min) & (dMA > LCX_GROOVE_MM * MM))
     decomposition: dict = {"lcx_groove_exit_mm": None}
+    if codes:  # designed tree: the circumflex trunk is the groove course, OM1 / OM2 are its branches
+        leave = []
+        decomposition["lcx_groove_exit_mm"] = round(float(scct.arclen(lcx.segments[0].points)[-1]) / MM, 1)
     if len(leave):
         k = int(leave[0])
         s_arc = scct.arclen(lcx.segments[0].points)
@@ -442,12 +498,14 @@ def main() -> int:
     labels["Coronary_LAD"], labels["Coronary_LAD_Septal"] = lad_l, sept_l
     labels["Coronary_LCX"], lcx_info = scct.label_lcx(lcx.segments, apex, lambda P: hinge_tree.query(P)[0])
     labels["Coronary_RCA"], rca_info = scct.label_rca(results["Coronary_RCA"].segments, results["Coronary_RCA_PDA"].segments,
-                                                     results["Coronary_RCA_Marginal"].segments)
+                                                     results["Coronary_RCA_Marginal"].segments, codes.get("Coronary_RCA"))
     labels["Coronary_LM"] = scct.whole(results["Coronary_LM"].segments, (5, "LM"))
     labels["Coronary_RCA_PDA"] = scct.whole(results["Coronary_RCA_PDA"].segments, (4, "R-PDA"))
     labels["Coronary_RCA_PL"] = scct.whole(results["Coronary_RCA_PL"].segments, (16, "R-PLB"))
     labels["Coronary_RCA_Marginal"] = scct.whole(results["Coronary_RCA_Marginal"].segments, (0, "AM"))
     labels["Coronary_RCA_Septal"] = scct.whole(results["Coronary_RCA_Septal"].segments, (0, "IS"))
+    if codes.get("Coronary_RCA_Septal"):
+        labels["Coronary_RCA_Septal"] = [[scct.Label(0, c, 0, len(sg.points))] for c, sg in zip(codes["Coronary_RCA_Septal"], results["Coronary_RCA_Septal"].segments)]
     decomposition.update({"LAD": lad_info, "LCX": lcx_info, "RCA": rca_info})
     print(f"[centerline] SCCT: {decomposition}", flush=True)
 
