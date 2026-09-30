@@ -245,7 +245,12 @@ export function VesselInspector({ className }: VesselInspectorProps) {
               )}
             </motion.div>
 
-            <div className="mt-3 flex flex-wrap items-center gap-1">
+            {/* Docked to the bottom of the right column when it has to scroll (1280 × 720 with a long
+                narrative): the 3D verbs never sit below the fold of a column nobody knows scrolls. */}
+            <div
+              data-region="inspector-verbs"
+              className="sticky bottom-0 z-[1] -mx-[var(--card-pad)] -mb-[var(--card-pad)] mt-1 flex flex-wrap items-center gap-1 bg-panel px-[var(--card-pad)] pb-[var(--card-pad)] pt-2"
+            >
               <ActionButton
                 pressed={isolate}
                 onClick={() => viewer().setIsolate(!isolate)}
