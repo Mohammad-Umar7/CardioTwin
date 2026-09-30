@@ -80,7 +80,7 @@ describe('LandingPage', () => {
     expect(within(protocol).getAllByRole('link').map((a) => a.getAttribute('href'))).toEqual([
       '/methodology#leakage',
       '/methodology#validation',
-      '/methodology#models',
+      '/methodology#engines',
     ]);
   });
 

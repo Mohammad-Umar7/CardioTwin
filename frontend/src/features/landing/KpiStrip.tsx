@@ -84,7 +84,7 @@ function AucTable({ lm }: { lm: LandingMetrics }) {
 const PROTOCOL = [
   { anchor: 'leakage', text: 'Targets never used as inputs', hint: 'LAD, LCX, RCA and the cath result are never model inputs; a unit test enforces it.' },
   { anchor: 'validation', text: 'Test set scored once', hint: 'The held-out split was scored once, after every modelling decision was frozen on the development set.' },
-  { anchor: 'models', text: 'Server/edge parity', hint: 'The in-browser engine reproduces the server to |Δp| < 1e-6 on every fixture case.' },
+  { anchor: 'engines', text: 'Server/edge parity', hint: 'The in-browser engine reproduces the server to |Δp| < 1e-6 on every fixture case.' },
 ] as const;
 
 /** ✓ Targets never used as inputs · ✓ Test set scored once · ✓ Server/edge parity (V2 §6.1). */
