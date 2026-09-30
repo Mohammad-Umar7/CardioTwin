@@ -1,0 +1,1338 @@
+# CardioTwin: machine-checkable anatomical reference criteria.
+#
+# Companion to docs/anatomy/REFERENCE.md (facts, prose, editorial decisions, full source list).
+# Every check is written in the scene frame of docs/CONTRACTS.md §6.1 and cites its source(s) by URL.
+# This file only declares criteria; it does not run them. A checker should read the GLB (or the
+# uncompressed anatomy/build/cardiotwin_anatomy.raw.glb), manifest.json and vessels.json, derive the
+# `landmarks` below, and evaluate each `checks[]` item.
+
+schema_version: 1
+reference: docs/anatomy/REFERENCE.md
+date: "2026-09-30"
+
+frame:
+  units: "1 u = 10 cm; 1 cm = 0.1 u; 1 mm = 0.01 u"
+  origin: "centre of the heart-wall bounding box (NOT the body midline)"
+  axes: {"+X": "patient left", "+Y": "superior", "+Z": "anterior"}
+  contract: "docs/CONTRACTS.md §6.1"
+
+semantics:
+  severity:
+    hard: "Anatomical invariant. A failure is an error unless the variant named in `variant` is declared in manifest.json."
+    soft: "Population statistic. A failure is a warning. For numeric checks, [min, max] is the accepted band and `typical` is the literature centre."
+  expect: "Bounds are inclusive, in the stated unit. Unless the tolerance says otherwise, they already include the tolerance. An entry-level `severity` overrides the check-level severity for that entry only."
+  kinds: [position, orientation, size, relation, course, presence, colour]
+  default_phenotype: "Adult, right-dominant coronary circulation, no ramus intermedius, no myocardial bridge, 2 + 2 pulmonary veins, three-branch aortic arch."
+  meshes: "Use world-space vertex positions (nodes carry translation only). Penetration and clearance are evaluated with a tolerance of 0.005 u for mesh noise."
+
+landmarks:
+  H: "Union of the Heart_Wall_Anterior and Heart_Wall_Posterior vertices."
+  H_epi: "The outer (epicardial) shell of H: faces whose outward ray to infinity hits no other H face. H_endo is the remainder (cavity-facing)."
+  X_mid: "Midline: median X of the Sternum vertices. Precondition: |X_mid - mean X of Spine_Thoracic| <= 0.10 u."
+  sternal_edges: "At height y: X_R_edge(y) = min X and X_L_edge(y) = max X of the Sternum vertices with |Y - y| <= 0.02 u. half_width(y) = (X_L_edge - X_R_edge) / 2."
+  vertebrae: "T1..T12 are the 12 largest connected components of Spine_Thoracic (>= 200 vertices), sorted by descending mean Y. For each, the vertebral BODY is the component's vertices with Z above the component's median Z. top(Tn) and bottom(Tn) are the max and min Y of the body; mid(Tn) is their mean. disc(Tn/Tn+1) = (bottom(Tn) + top(Tn+1)) / 2. One level ~ top(Tn) - top(Tn+1)."
+  ribs: "Rib_L(n) and Rib_R(n) are the connected components of Ribs_L and Ribs_R (>= 100 vertices), sorted by descending max Y (n = 1..12). Evaluated on their anterior half (Z > 0) within a slab |X - x| <= 0.05 u. ICS_L(n)(x) is the open Y interval between the lower edge of Rib_L(n) and the upper edge of Rib_L(n+1) in that slab."
+  costal_cartilages: "CC_L(n) and CC_R(n) are the connected components of CostalCartilage with mean X > X_mid (left) or < X_mid (right), sorted by descending max Y (n = 1..7; the last, large component is the fused CC8-10). sternal_end(CC) is the cartilage's vertices within 0.05 u of Sternum. band(CC) = [min Y, max Y] of its sternal end."
+  Y_JN: "Jugular notch: max Y of Sternum."
+  Y_SA: "Sternal angle: mean Y of the sternal ends of CC_L(2) and CC_R(2)."
+  MCL_L: "Left mid-clavicular line: (min X + max X) / 2 of Clavicle_L."
+  heart_axis: "apex, base_center and cut_plane come from manifest.heart. u_ba = normalize(apex - base_center) = -manifest.heart.long_axis."
+  trunk: "trunk(v) = vessels.json vessel with id v, segments[0].points (proximal -> distal), radius r. Branches are segments[1:], with their parent and attach. Diameter d = 2 r. s is arc length from the ostium."
+  X_LAD: "X_LAD(y) = X of trunk(LAD), linearly interpolated at height y. Defined only within the LAD's Y range. A point is on the RV side of the anterior IV groove if X < X_LAD(Y), and on the LV side otherwise."
+  aorta_centreline: "Skeleton of GreatVessel_Aorta (same method as anatomy/scripts/extract_centerlines.py), oriented from the annulus to the descending aorta. annulus = the proximal ring adjoining the LV outflow. root_axis = unit tangent averaged over the first 0.30 u. STJ = the first local minimum of diameter distal to the sinus bulge. arch_start and arch_end = the first and last centreline points at Y = Y_SA."
+  pa_centreline: "Skeleton of GreatVessel_PulmonaryArtery from Valve_Pulmonary to the first bifurcation (the trunk), then the right and left PA to their first lobar branch."
+  valve_annuli: "For Valve_Mitral (MA), Valve_Tricuspid (TA) and Valve_Pulmonary (PV): annulus ring = the boundary loop attached to the wall. If there is none, use the 25% of the valve's vertices closest to base_center along u_ba. Fit a plane and a circle to get the centre c, normal n and diameter D. The aortic annulus (AoV) comes from aorta_centreline."
+  carina: "Highest Y at which the Trachea_Bronchi cross-section splits into two lumens. Its X, Z are the midpoint of the two lumens."
+  crux: "Origin of trunk(RCA_PDA) (right dominance): the junction of the posterior IV groove and the inferior AV groove."
+  aha17: "AHA segment of a myocardial point p. LV axis a = normalize(apex - c_MA). t = (p - c_MA) . a / |apex - c_MA|. Basal: from t = 0 to the max t of Papillary_Muscles. Mid: down to the min t of Papillary_Muscles. Apical: below that, down to t = 0.95. Segment 17: t > 0.95. The angle theta about a is measured from the anterior IV groove (LAD sample at the same t) toward the septum. Basal/mid: [0,60) = 2/8, [60,120) = 3/9, [120,180) = 4/10, [180,240) = 5/11, [240,300) = 6/12, [300,360) = 1/7. Apical: [15,105) = 14, [105,195) = 15, [195,285) = 16, else 13."
+  veins: "CardiacVeins vertices, or a vein centreline obtained by skeletonising CardiacVeins, when one is available. CS portion = CardiacVeins points with Z < base_center.z within 0.20 u of the MA ring."
+
+checks:
+
+# ---------------------------------------------------------------------------------------------
+# POSITION AND ORIENTATION IN THE THORAX
+# ---------------------------------------------------------------------------------------------
+  - id: POS-01
+    title: About two-thirds of the heart lies left of the midline
+    structures: [Heart_Wall_Anterior, Heart_Wall_Posterior, Sternum, Spine_Thoracic]
+    kind: position
+    severity: hard
+    statement: >-
+      The fraction of heart-wall surface area (area-weighted H vertices) with X > X_mid is 0.60-0.75.
+      Because the origin is the heart's own bounding-box centre, X_mid must be negative (the midline lies to the
+      patient's right of the origin).
+    metric: "area_weighted_fraction(H, X > X_mid); X_mid < 0"
+    expect: {min: 0.60, max: 0.75, typical: 0.67, unit: fraction}
+    tolerance: "About +/-0.08 around the textbook 2/3."
+    source:
+      - "https://www.ncbi.nlm.nih.gov/sites/books/NBK539819/"
+      - "https://med.libretexts.org/Bookshelves/Medicine/Textbook_of_Cardiology/01:_Anatomy/1.02:_Position_of_the_Heart"
+
+  - id: POS-02
+    title: The apex points left, down and forward
+    structures: [Heart_Wall_Anterior, Heart_Wall_Posterior]
+    kind: orientation
+    severity: hard
+    statement: >-
+      u_ba = normalize(apex - base_center) has a positive X component (patient-left), a negative Y component
+      (inferior) and a positive Z component (anterior). Each component must have |c| >= 0.10.
+    metric: "sign(u_ba.x) = +1, sign(u_ba.y) = -1, sign(u_ba.z) = +1"
+    expect: {u_ba_x: {min: 0.10}, u_ba_y: {max: -0.10}, u_ba_z: {min: 0.10}}
+    tolerance: "Each component magnitude >= 0.10."
+    source:
+      - "https://med.libretexts.org/Bookshelves/Medicine/Textbook_of_Cardiology/01:_Anatomy/1.02:_Position_of_the_Heart"
+      - "https://www.kenhub.com/en/library/anatomy/apex-of-the-heart"
+
+  - id: POS-03
+    title: Long-axis angles in the axial and frontal planes
+    structures: [Heart_Wall_Anterior, Heart_Wall_Posterior]
+    kind: orientation
+    severity: soft
+    statement: >-
+      In the axial projection, the base-to-apex axis points about 45 degrees from anterior toward patient-left (the
+      septum lies at about 45 degrees to the median plane). In the frontal projection it points 38.1 +/- 7.8 degrees
+      below the +X (patient-left) horizontal. The CT range in that study was 20.9-56.2 degrees.
+    metric: "axial_deg = degrees(atan2(u_ba.x, u_ba.z)); frontal_deg = degrees(atan2(-u_ba.y, u_ba.x))"
+    expect:
+      axial_deg: {min: 30, max: 60, typical: 45}
+      frontal_deg: {min: 21, max: 56, typical: 38.1, sd: 7.8}
+    tolerance: "Axial +/-15 degrees. Frontal is the published CT range. Young hearts are more vertical, older ones more horizontal."
+    source:
+      - "https://med.libretexts.org/Bookshelves/Medicine/Textbook_of_Cardiology/01:_Anatomy/1.02:_Position_of_the_Heart"
+      - "https://bjcardio.co.uk/2015/04/cardiac-orientation-is-there-a-correlation-between-the-anatomical-and-the-electrical-axis-of-the-heart/"
+      - "https://radiologyassistant.nl/cardiovascular/anatomy/cardiac-anatomy"
+
+  - id: POS-04
+    title: Apex behind the left 5th intercostal space
+    structures: [Heart_Wall_Anterior, Heart_Wall_Posterior, Ribs_L, Clavicle_L]
+    kind: position
+    severity: hard
+    statement: >-
+      apex.y lies in ICS_L(5) evaluated at X = MCL_L, i.e. below the lower edge of Rib_L(5) and above the upper edge
+      of Rib_L(6) on the anterior chest wall.
+    metric: "lower_edge(Rib_L(5), MCL_L) > apex.y > upper_edge(Rib_L(6), MCL_L)"
+    expect: {interval: "ICS_L(5) at MCL_L"}
+    tolerance: "+/-1 intercostal space: accept from ICS_L(4) to ICS_L(6)."
+    source:
+      - "https://www.kenhub.com/en/library/anatomy/surface-projections-of-the-heart"
+      - "https://www.kenhub.com/en/library/anatomy/apex-of-the-heart"
+
+  - id: POS-05
+    title: Apex 8-9 cm left of the midline, near the mid-clavicular line
+    structures: [Heart_Wall_Anterior, Heart_Wall_Posterior, Sternum, Clavicle_L]
+    kind: position
+    severity: soft
+    statement: >-
+      apex.x - X_mid is 0.8-0.9 u (8-9 cm), and the apex lies within 0.2 u of the left mid-clavicular line.
+    metric: "dx = apex.x - X_mid; dm = |apex.x - MCL_L|"
+    expect:
+      dx: {min: 0.65, max: 1.05, typical: 0.85, unit: u}
+      dm: {max: 0.20, unit: u}
+    tolerance: "+/-0.15 u on dx (body habitus, age)."
+    source:
+      - "https://www.kenhub.com/en/library/anatomy/apex-of-the-heart"
+      - "https://med.libretexts.org/Bookshelves/Medicine/Textbook_of_Cardiology/01:_Anatomy/1.02:_Position_of_the_Heart"
+      - "https://www.kenhub.com/en/library/anatomy/surface-projections-of-the-heart"
+
+  - id: POS-06
+    title: Superior border and vertebral span
+    structures: [Heart_Wall_Anterior, Heart_Wall_Posterior, CostalCartilage, Spine_Thoracic]
+    kind: position
+    severity: soft
+    statement: >-
+      The great vessels are separate nodes, so H alone is the heart body. Its highest point on the left (X > X_mid)
+      is at about the lower border of the left CC2. Its highest point on the right (X < X_mid) is at about the upper
+      border of the right CC3, so the left end is higher. The heart body does not rise above the T4/T5 disc and its
+      lowest point is at or above the T9 body (lying-down span T5-T8, +/-1 level).
+    metric: >-
+      top_L = max Y(H | X > X_mid); top_R = max Y(H | X < X_mid);
+      d_L = top_L - min(band(CC_L(2))); d_R = top_R - max(band(CC_R(3)));
+      max Y(H) <= disc(T4/T5) + 0.05; min Y(H) >= mid(T9)
+    expect:
+      d_L: {min: -0.15, max: 0.10, unit: u}
+      d_R: {min: -0.15, max: 0.10, unit: u}
+      left_higher: "top_L > top_R"
+    tolerance: "0.10-0.15 u on the borders; +/-1 vertebral level on the span."
+    source:
+      - "https://www.kenhub.com/en/library/anatomy/surface-projections-of-the-heart"
+      - "https://www.ncbi.nlm.nih.gov/sites/books/NBK539819/"
+
+  - id: POS-07
+    title: Heart size (long axis and transverse diameter)
+    structures: [Heart_Wall_Anterior, Heart_Wall_Posterior]
+    kind: size
+    severity: soft
+    statement: >-
+      The extent of H along u_ba (base to apex) is about 1.2 u (12 cm). The transverse (X) extent is about
+      1.29-1.38 u; radiographic means are 13.8 +/- 1.2 cm in men and 12.9 +/- 1.3 cm in women. The front-to-back
+      depth is deliberately NOT tested: the textbook 6 cm is for an empty, excised heart (see REFERENCE §9).
+    metric: "L = ptp((H - base_center) . u_ba); W = ptp(H.x)"
+    expect:
+      L: {min: 1.0, max: 1.4, typical: 1.2, unit: u}
+      W: {min: 1.0, max: 1.55, typical: 1.34, unit: u}
+    tolerance: "About +/-2 SD. The radiographic W includes some projection magnification."
+    source:
+      - "https://heart.thecommonvein.net/structure/size/"
+      - "https://bio.libretexts.org/Courses/West_Hills_College_-_Lemoore/Human_Anatomy_Laboratory_Manual_(Hartline)/17:_Cardiovascular_System_-_The_Heart/17.02:_Location_Size_and_Shape_of_the_Heart"
+      - "https://pmc.ncbi.nlm.nih.gov/articles/PMC5579422/"
+
+  - id: POS-08
+    title: Cardiothoracic ratio
+    structures: [Heart_Wall_Anterior, Heart_Wall_Posterior, Lung_L, Lung_R, Diaphragm]
+    kind: size
+    severity: soft
+    statement: >-
+      The cardiothoracic ratio is ptp(H.x) divided by the inner thoracic width. Measure the inner width as the widest
+      max X(Lung_L) - min X(Lung_R) over Y slices between the top of the right diaphragm dome and Y_SA. The ratio
+      is 0.466 +/- 0.039 (men) and 0.478 +/- 0.048 (women); normal is below 0.50 on a PA film.
+    metric: "CTR = ptp(H.x) / max_y(max X(Lung_L at y) - min X(Lung_R at y))"
+    expect: {min: 0.38, max: 0.50, typical: 0.47, unit: ratio}
+    tolerance: "Lower bound is about mean - 2 SD; upper bound is the clinical cutoff."
+    source:
+      - "https://pmc.ncbi.nlm.nih.gov/articles/PMC5579422/"
+      - "https://radiopaedia.org/articles/cardiothoracic-ratio"
+
+  - id: POS-09
+    title: Heart and vessels do not intersect the chest wall, spine or lungs
+    structures: [Heart_Wall_Anterior, Heart_Wall_Posterior, GreatVessel_Aorta, GreatVessel_SVC, GreatVessel_IVC, CardiacVeins, Coronary_LAD, Coronary_LCX, Coronary_RCA, Sternum, CostalCartilage, Ribs_L, Ribs_R, Spine_Thoracic, Lung_L, Lung_R]
+    kind: relation
+    severity: hard
+    statement: >-
+      The heart lies behind the sternum and costal cartilages, inside the middle mediastinum. No heart-wall, great-vessel,
+      coronary or cardiac-vein mesh penetrates Sternum, CostalCartilage, Ribs_L/R, Spine_Thoracic, Lung_L or Lung_R.
+      Pulmonary arteries and veins are exempt from the lung test, because they enter the lungs. Just left of the
+      sternum at the 4th-6th CC levels, part of the anterior heart surface faces the chest wall with no Lung_L in
+      front of it (the cardiac notch / bare area, deepest at the 5th ICS).
+    metric: "max_penetration(A, B) for every pair listed above; notch: exists y in band(CC_L(4)..CC_L(6)) with a ray from H_epi toward +Z reaching CostalCartilage/Sternum without hitting Lung_L"
+    expect: {max_penetration: {max: 0.005, unit: u}, cardiac_notch: {severity: soft, value: "present"}}
+    tolerance: "0.005 u mesh noise."
+    source:
+      - "https://teachmeanatomy.info/thorax/organs/heart/borders-sinuses-sulci/"
+      - "https://www.ncbi.nlm.nih.gov/sites/books/NBK539819/"
+      - "https://www.imaios.com/en/e-anatomy/anatomical-structures/cardiac-notch-of-left-lung-1541213932"
+
+  - id: POS-10
+    title: Heart rests on the diaphragm; right dome higher than left
+    structures: [Heart_Wall_Anterior, Heart_Wall_Posterior, Diaphragm]
+    kind: relation
+    severity: hard
+    statement: >-
+      The diaphragmatic surface of H sits on the central tendon: no penetration, and at least 5% of the H vertices in
+      the lowest 15% (by Y) lie within 0.05 u of Diaphragm (pericardium plus fat). In expiration the right dome is at
+      the 5th rib and the left dome at the 5th ICS, so the right dome top is higher than the left.
+    metric: "max_penetration(H, Diaphragm); contact_fraction = frac(H_low15 within 0.05 u of Diaphragm); dome_R = max Y(Diaphragm | X < X_mid - 0.25); dome_L = max Y(Diaphragm | X > X_mid + 0.25)"
+    expect:
+      max_penetration: {max: 0.005, unit: u}
+      contact_fraction: {min: 0.05}
+      dome_order: {severity: soft, value: "dome_R > dome_L"}
+    tolerance: "0.05 u contact gap (fibrous pericardium fused with the central tendon)."
+    source:
+      - "https://teachmeanatomy.info/thorax/organs/heart/pericardium/"
+      - "https://humananatomy.host.dartmouth.edu/BHA/public_html/part_4/chapter_20.html"
+
+  - id: POS-11
+    title: Carina at T4/T5; the heart body lies below it
+    structures: [Trachea_Bronchi, Spine_Thoracic, Heart_Wall_Posterior, Sternum]
+    kind: position
+    severity: hard
+    statement: >-
+      carina.y is at the T4/T5 disc (+/-0.5 vertebral level) and within 0.15 u of Y_SA (the sternal-angle plane).
+      The top of the heart body (the LA roof) lies below the carina.
+    metric: "|carina.y - disc(T4/T5)| <= 0.5 level; |carina.y - Y_SA| <= 0.15; max Y(H) <= carina.y + 0.05"
+    expect: {carina_vs_disc: {max_levels: 0.5}, carina_vs_SA: {max: 0.15, unit: u}, heart_top_minus_carina: {max: 0.05, unit: u}}
+    tolerance: "+/-0.5 level; 0.05 u."
+    source:
+      - "https://www.kenhub.com/en/library/anatomy/carina-of-trachea"
+      - "https://anatomyzone.com/articles/sternal-angle-2/"
+      - "https://med.libretexts.org/Bookshelves/Medicine/Textbook_of_Cardiology/01:_Anatomy/1.02:_Position_of_the_Heart"
+
+# ---------------------------------------------------------------------------------------------
+# CHAMBERS AND SURFACES
+# ---------------------------------------------------------------------------------------------
+  - id: CHM-01
+    title: The anterior (sternocostal) surface is mostly RV
+    structures: [Heart_Wall_Anterior, Coronary_LAD]
+    kind: relation
+    severity: hard
+    statement: >-
+      Of the H_epi vertices in the anterior-most 10% by Z (within the LAD's Y range), most lie on the RV side of the
+      anterior interventricular groove (X < X_LAD(Y)).
+    metric: "frac(v in H_epi, Z >= P90(Z) : v.x < X_LAD(v.y))"
+    expect: {min: 0.5, typical: 0.7, unit: fraction}
+    tolerance: "A majority (> 0.5)."
+    source:
+      - "https://teachmeanatomy.info/thorax/organs/heart/borders-sinuses-sulci/"
+      - "https://med.libretexts.org/Bookshelves/Medicine/Textbook_of_Cardiology/01:_Anatomy/1.02:_Position_of_the_Heart"
+
+  - id: CHM-02
+    title: The right border is the RA, 1-2 cm beyond the sternal edge, between the venae cavae
+    structures: [Heart_Wall_Posterior, Heart_Wall_Anterior, GreatVessel_SVC, GreatVessel_IVC, Sternum, CostalCartilage]
+    kind: position
+    severity: hard
+    statement: >-
+      The rightmost heart point p_R = argmin X(H) belongs to the RA. Its Y lies between the IVC's upper end and the
+      SVC's lower end. It lies 0.05-0.30 u lateral to the right sternal edge at its own height, and its height is
+      between the right CC3 and the right CC6.
+    metric: >-
+      max Y(GreatVessel_IVC) - 0.1 <= p_R.y <= min Y(GreatVessel_SVC) + 0.1;
+      lat = X_R_edge(p_R.y) - p_R.x; min(band(CC_R(6))) - 0.1 <= p_R.y <= max(band(CC_R(3))) + 0.1
+    expect: {lat: {min: 0.05, max: 0.30, typical: 0.15, unit: u}}
+    tolerance: "0.1 u on the Y bounds; lateral offset of 0.5-3 cm."
+    source:
+      - "https://www.kenhub.com/en/library/anatomy/surface-projections-of-the-heart"
+      - "https://gpnotebook.com/en-GB/pages/cardiovascular-medicine/fibrous-pericardium-anatomy/surface-anatomy-on-thorax"
+      - "https://teachmeanatomy.info/thorax/organs/heart/borders-sinuses-sulci/"
+
+# ---------------------------------------------------------------------------------------------
+# VALVES
+# ---------------------------------------------------------------------------------------------
+  - id: VLV-01
+    title: Anatomical surface projection of the four valves
+    structures: [Valve_Pulmonary, Valve_Mitral, Valve_Tricuspid, GreatVessel_Aorta, CostalCartilage, Sternum, Ribs_L]
+    kind: position
+    severity: soft
+    statement: >-
+      Pulmonary valve: at the left CC3 where it meets the sternum. Aortic valve: behind the left half of the sternum
+      at the 3rd ICS. Mitral valve: left of the midline at the left CC4. Tricuspid valve: at or right of the midline
+      at the right CC4. These are anatomical positions, not auscultation points.
+    metric: >-
+      PV.c.y in band(CC_L(3)); AoV.c.y between band(CC_L(3)) and band(CC_L(4)) and X_mid - 0.05 <= AoV.c.x <= X_L_edge + 0.05;
+      MA.c.y in band(CC_L(4)) and MA.c.x > X_mid; TA.c.y in band(CC_R(4)) and TA.c.x <= X_mid + 0.05
+    expect: {band_margin: {max: 0.10, unit: u}}
+    tolerance: "+/-0.10 u on every Y band."
+    source:
+      - "https://www.kenhub.com/en/library/anatomy/surface-projections-of-the-heart"
+
+  - id: VLV-02
+    title: Pulmonary valve anterior, superior and left of the aortic valve
+    structures: [Valve_Pulmonary, GreatVessel_Aorta]
+    kind: position
+    severity: hard
+    statement: "PV.c - AoV.c has dZ > 0.02 u (anterior), dY > 0.02 u (superior) and dX > 0 (patient-left); the two outflow tracts cross."
+    metric: "d = PV.c - AoV.c"
+    expect: {dz: {min: 0.02}, dy: {min: 0.02}, dx: {min: 0.0}}
+    tolerance: "0.02 u."
+    source:
+      - "https://www.kenhub.com/en/library/anatomy/heart-valves"
+      - "https://www.kenhub.com/en/library/anatomy/pulmonary-trunk"
+
+  - id: VLV-03
+    title: Right-to-left order TV < AoV < MV; mitral valve most posterior
+    structures: [Valve_Tricuspid, Valve_Mitral, GreatVessel_Aorta]
+    kind: position
+    severity: hard
+    statement: >-
+      Going from patient-right to patient-left, the annulus centres are ordered tricuspid < aortic < mitral. The mitral
+      annulus centre is posterior to both the tricuspid and the aortic annulus centres.
+    metric: "TA.c.x < AoV.c.x < MA.c.x; MA.c.z < TA.c.z; MA.c.z < AoV.c.z"
+    expect: {order: "TA.x < AoV.x < MA.x", mitral_posterior: "MA.z < min(TA.z, AoV.z)"}
+    tolerance: "Strict inequalities."
+    source:
+      - "https://www.kenhub.com/en/library/anatomy/heart-valves"
+      - "https://www.kenhub.com/en/library/anatomy/surface-projections-of-the-heart"
+
+  - id: VLV-04
+    title: AV-valve levels and tricuspid apical offset
+    structures: [Valve_Mitral, Valve_Tricuspid]
+    kind: position
+    severity: soft
+    statement: >-
+      The mitral annulus lies posterosuperior to the tricuspid: its centre is not lower than the tricuspid centre by
+      more than 0.05 u. The tricuspid septal hinge sits slightly closer to the apex than the mitral anterior hinge,
+      by 0 to 0.15 u (under 8 mm/m2 at a body-surface area of about 1.9 m2). A negative offset is an error; an
+      offset above 0.15 u mimics Ebstein's anomaly.
+    metric: "MA.c.y - TA.c.y >= -0.05; offset = (hinge_TA_septal - hinge_MA_anterior) . u_ba (use (TA.c - MA.c) . u_ba if hinges are not separable)"
+    expect: {dy: {min: -0.05, unit: u}, offset: {min: 0.0, max: 0.15, unit: u}}
+    tolerance: "0.05 u on height; the offset band is from the Ebstein index."
+    source:
+      - "https://www.kenhub.com/en/library/anatomy/heart-valves"
+      - "https://www.ahajournals.org/doi/10.1161/circulationaha.106.619338"
+
+  - id: VLV-05
+    title: Aorto-mitral fibrous continuity
+    structures: [GreatVessel_Aorta, Valve_Mitral]
+    kind: relation
+    severity: hard
+    statement: >-
+      The aortic annulus ring touches the anterior mitral hinge through the fibrous skeleton: the minimum distance
+      between the AoV annulus ring and the Valve_Mitral vertices is at most 0.05 u.
+    metric: "min_dist(AoV.ring, Valve_Mitral)"
+    expect: {max: 0.05, unit: u}
+    tolerance: "0.05 u."
+    source:
+      - "https://www.kenhub.com/en/library/anatomy/cardiac-skeleton"
+      - "https://www.kenhub.com/en/library/anatomy/heart-valves"
+
+  - id: VLV-06
+    title: Valve annulus diameters
+    structures: [Valve_Mitral, Valve_Tricuspid, Valve_Pulmonary, GreatVessel_Aorta]
+    kind: size
+    severity: soft
+    statement: >-
+      Circle-fit annulus diameters, in vivo:
+      mitral 0.24-0.38 u (front-to-back 2.6-3.3 cm);
+      tricuspid 0.24-0.40 u (28.9 +/- 4.5 mm);
+      aortic 0.18-0.29 u; pulmonary 0.17-0.25 u.
+      The tricuspid perimeter is at least the mitral perimeter.
+    metric: "D = 2 * mean radius of the circle fit to the annulus ring"
+    expect:
+      MA_D: {min: 0.24, max: 0.38, typical: 0.30, unit: u}
+      TA_D: {min: 0.24, max: 0.40, typical: 0.30, unit: u}
+      AoV_D: {min: 0.18, max: 0.29, typical: 0.23, unit: u}
+      PV_D: {min: 0.17, max: 0.25, typical: 0.21, unit: u}
+      perimeter_rank: "TA >= MA"
+    tolerance: "The aortic and pulmonary ranges come from a low-grade source; treat them as sanity bounds."
+    source:
+      - "https://jcmr-online.biomedcentral.com/articles/10.1186/s12968-020-00688-y"
+      - "https://www.jacc.org/doi/10.1016/j.jcmg.2017.05.017"
+      - "https://academic.oup.com/europace/article/19/3/452/2952262"
+      - "https://www.kenhub.com/en/library/anatomy/heart-valves"
+      - "https://image-ppubs.uspto.gov/dirsearch-public/print/downloadPdf/10973633"
+
+# ---------------------------------------------------------------------------------------------
+# GREAT VESSELS
+# ---------------------------------------------------------------------------------------------
+  - id: GV-01
+    title: Ascending aorta origin, course and length
+    structures: [GreatVessel_Aorta, Sternum, CostalCartilage]
+    kind: course
+    severity: hard
+    statement: >-
+      The ascending aorta starts behind the left half of the sternum, level with the lower border of the left CC3.
+      It runs mainly upward and slightly to the right, reaching the sternal-angle plane (Y_SA) after about 0.5 u.
+    metric: >-
+      |AoV.c.y - min(band(CC_L(3)))| <= 0.2; X_mid - 0.05 <= AoV.c.x <= X_L_edge + 0.10;
+      angle(arch_start - AoV.c, +Y) <= 40 deg; arch_start.x - AoV.c.x <= 0.02; L = arc length AoV.c -> arch_start
+    expect: {L: {min: 0.4, max: 0.7, typical: 0.5, unit: u}}
+    tolerance: "+/-0.2 u on the origin level; the length band is +/-0.1-0.2 u around 5 cm."
+    source:
+      - "https://www.kenhub.com/en/library/anatomy/aorta"
+      - "https://www.kenhub.com/en/library/anatomy/surface-projections-of-the-heart"
+
+  - id: GV-02
+    title: Aortic root and ascending calibre
+    structures: [GreatVessel_Aorta]
+    kind: size
+    severity: soft
+    statement: >-
+      Outer-wall diameters: sinus of Valsalva 0.29-0.40 u; sinotubular junction 0.22-0.36 u; ascending aorta at the
+      PA-bifurcation level 0.25-0.41 u (33 +/- 4 mm, upper normal 41 mm, n = 4,039). The sinus must be wider than the
+      STJ.
+    metric: "D_sinus = max D over the root; D_stj = D at STJ; D_asc = D at the Y of the PA bifurcation"
+    expect:
+      D_sinus: {min: 0.29, max: 0.40, unit: u}
+      D_stj: {min: 0.22, max: 0.36, unit: u}
+      D_asc: {min: 0.25, max: 0.41, typical: 0.33, unit: u}
+    tolerance: "Mean +/- 2 SD, or the published normal range."
+    source:
+      - "https://www.imaios.com/en/e-anatomy/anatomical-structures/sinuses-of-valsalva-diameter-1574775432"
+      - "https://www.imaios.com/en/e-anatomy/anatomical-structures/sinotubular-junction-diameter-1574775456"
+      - "https://pubmed.ncbi.nlm.nih.gov/19356429/"
+
+  - id: GV-03
+    title: Top of the aortic arch
+    structures: [GreatVessel_Aorta, Sternum]
+    kind: position
+    severity: hard
+    statement: >-
+      The highest point of the aortic CENTRELINE lies between the sternal-angle plane and the jugular notch, about
+      0.25 u (2.5 cm) below Y_JN at the T3/T4 level. Use the centreline, not the mesh: the outer wall plus branch
+      stumps sit higher.
+    metric: "y_top = max Y(aorta_centreline); Y_SA < y_top < Y_JN; gap = Y_JN - y_top"
+    expect: {gap: {min: 0.10, max: 0.45, typical: 0.25, unit: u, severity: soft}}
+    tolerance: "The order is hard; the gap band is soft (the arch unfolds with age)."
+    source:
+      - "https://www.anatomyatlases.org/HumanAnatomy/Topography/Aorta.shtml"
+      - "https://radiopaedia.org/articles/aortic-arch"
+
+  - id: GV-04
+    title: Arch course over the left main bronchus and right PA, to the left of the trachea
+    structures: [GreatVessel_Aorta, Trachea_Bronchi, GreatVessel_PulmonaryArtery, Spine_Thoracic]
+    kind: course
+    severity: hard
+    statement: >-
+      Between arch_start and arch_end the centreline runs backward (net dZ <= -0.15 u) and to the left (net dX >= +0.05 u).
+      It passes in front of and then to the left of the trachea without intersecting Trachea_Bronchi. Its concave
+      underside arches over the left main bronchus and the right PA / PA bifurcation with a clearance of 0-0.2 u.
+      It ends at the T4 level (+/-1), to the left of the vertebral body (X > X_mid).
+    metric: "dZ(arch) <= -0.15; dX(arch) >= 0.05; penetration(Aorta, Trachea_Bronchi) <= 0.005; 0 <= gap(arch underside, left main bronchus) <= 0.2; arch_end.x > X_mid"
+    expect: {dZ: {max: -0.15, unit: u}, dX: {min: 0.05, unit: u}, underside_gap: {min: 0.0, max: 0.2, unit: u}}
+    tolerance: "0.005 u penetration; +/-1 vertebral level for the arch end."
+    source:
+      - "https://radiopaedia.org/articles/aortic-arch"
+      - "https://www.kenhub.com/en/library/anatomy/aorta"
+
+  - id: GV-05
+    title: Descending thoracic aorta left of the spine and behind the heart
+    structures: [GreatVessel_Aorta, Spine_Thoracic, Heart_Wall_Posterior]
+    kind: position
+    severity: hard
+    statement: >-
+      From T5 to T8 the descending-aorta centreline is to the left of the midline (X > X_mid + 0.02). It converges
+      toward the midline lower down: |X - X_mid| at T12 is no larger than at T6. It lies behind the LA and heart: at
+      the T6-T8 levels, the front of the aorta (centreline Z + r) is no more anterior than min Z(H) at that height
+      plus 0.02 u.
+    metric: "x_off(y) = X_desc(y) - X_mid; x_off(T5..T8) > 0.02; |x_off(T12)| <= |x_off(T6)|; Z_desc + r <= min Z(H at y) + 0.02 for y in T6..T8"
+    expect: {x_off_T5_T8: {min: 0.02, unit: u}}
+    tolerance: "0.02 u."
+    source:
+      - "https://www.kenhub.com/en/library/anatomy/aorta"
+      - "https://www.imaios.com/en/e-anatomy/anatomical-structures/thoracic-part-of-esophagus-1541093288"
+
+  - id: GV-06
+    title: Descending aortic calibre, smaller than the ascending
+    structures: [GreatVessel_Aorta]
+    kind: size
+    severity: soft
+    statement: >-
+      The descending-aorta outer diameter at the PA-bifurcation level is 24 +/- 3 mm (upper normal 30 mm), i.e.
+      0.18-0.30 u. The descending : ascending diameter ratio is about 0.73 and always below 1.
+    metric: "D_desc at Y of the PA bifurcation; ratio = D_desc / D_asc"
+    expect: {D_desc: {min: 0.18, max: 0.30, typical: 0.24, unit: u}, ratio: {min: 0.60, max: 0.90, typical: 0.73}}
+    tolerance: "Mean +/- 2 SD."
+    source:
+      - "https://pubmed.ncbi.nlm.nih.gov/19356429/"
+
+  - id: GV-07
+    title: Pulmonary trunk origin and course
+    structures: [GreatVessel_PulmonaryArtery, Valve_Pulmonary, GreatVessel_Aorta]
+    kind: course
+    severity: hard
+    statement: >-
+      The pulmonary trunk starts at the RV outflow tract in front of the aortic root (PV.c.z > AoV.c.z + 0.05). It
+      runs up and back (dY > 0, dZ < 0 from the valve to the bifurcation), staying to the LEFT of the ascending aorta
+      at the same height. The trunk is about 0.5 u long.
+    metric: "PV.c.z - AoV.c.z >= 0.05; bif - PV.c: dy > 0, dz < 0; X_PT(y) > X_Ao(y) along the trunk; L = arc length PV.c -> bifurcation"
+    expect: {dz_origin: {min: 0.05, unit: u}, L: {min: 0.4, max: 0.6, typical: 0.5, unit: u}}
+    tolerance: "0.05 u; +/-0.1 u on length."
+    source:
+      - "https://www.kenhub.com/en/library/anatomy/pulmonary-trunk"
+      - "https://www.imaios.com/en/e-anatomy/anatomical-structures/pulmonary-trunk-1541224300"
+
+  - id: GV-08
+    title: Main pulmonary artery calibre and PA:aorta ratio
+    structures: [GreatVessel_PulmonaryArtery, GreatVessel_Aorta]
+    kind: size
+    severity: soft
+    statement: >-
+      The mid-trunk diameter of the main PA is at most 0.29 u (men) or 0.27 u (women), the Framingham 90th
+      percentiles. The PA : ascending-aorta ratio is at most 0.9, and a ratio above 1.0 is a hard failure
+      (pulmonary hypertension phenotype).
+    metric: "D_mpa; ratio = D_mpa / D_asc"
+    expect:
+      D_mpa: {min: 0.18, max: 0.29, typical: 0.25, unit: u}
+      ratio: {max: 0.9}
+      ratio_hard: {max: 1.0, severity: hard}
+    tolerance: "The lower bound is a sanity bound (derived)."
+    source:
+      - "https://pubmed.ncbi.nlm.nih.gov/22178898/"
+
+  - id: GV-09
+    title: PA bifurcation level; right PA behind the aorta and SVC; left PA over the left bronchus
+    structures: [GreatVessel_PulmonaryArtery, GreatVessel_Aorta, GreatVessel_SVC, Trachea_Bronchi, Spine_Thoracic]
+    kind: relation
+    severity: hard
+    statement: >-
+      The bifurcation lies in the concavity of the arch (below its underside), at T5-T6 (allowed from the T4/T5 disc
+      to T7). It is 0-0.5 u below the carina and in front of it. Where the right PA passes the ascending aorta and the
+      SVC, it is behind both. The left PA crosses ABOVE the left main bronchus. The right PA is longer than the left.
+    metric: >-
+      bif.y < arch underside; bottom(T7) <= bif.y <= disc(T4/T5); 0 <= carina.y - bif.y <= 0.5; bif.z > carina.z;
+      Z_RPA < Z_Ao and Z_RPA < Z_SVC at the crossing; Y_LPA > Y_LMB at the crossing; L_RPA > L_LPA
+    expect: {carina_minus_bif: {min: 0.0, max: 0.5, unit: u}}
+    tolerance: "The vertebral range is from the source."
+    source:
+      - "https://www.researchgate.net/figure/ertebral-level-of-the-pulmonary-trunk-bifurcation-according-to-gender_fig1_277336300"
+      - "https://www.kenhub.com/en/library/anatomy/pulmonary-trunk"
+      - "https://www.kenhub.com/en/library/anatomy/carina-of-trachea"
+
+  - id: GV-10
+    title: SVC position and course
+    structures: [GreatVessel_SVC, GreatVessel_Aorta, Trachea_Bronchi, CostalCartilage]
+    kind: course
+    severity: hard
+    statement: >-
+      The SVC top (the brachiocephalic confluence) is at the level of the right CC1, and its RA junction is at the
+      level of the right CC3. It runs nearly vertically and lies to the right of the ascending aorta and the trachea
+      at every height.
+    metric: "|max Y(SVC) - mid(band(CC_R(1)))| <= 0.15; |min Y(SVC) - mid(band(CC_R(3)))| <= 0.15; X_SVC(y) < X_Ao(y); X_SVC(y) < X_trachea(y); angle(SVC axis, -Y) <= 20 deg"
+    expect: {level_margin: {max: 0.15, unit: u}, axis_angle_deg: {max: 20, severity: soft}}
+    tolerance: "+/-0.15 u on levels; the axis angle is soft (<= 30 degrees accepted with a warning)."
+    source:
+      - "https://teachmeanatomy.info/thorax/vasculature/superior-vena-cava/"
+
+  - id: GV-11
+    title: SVC length and calibre
+    structures: [GreatVessel_SVC]
+    kind: size
+    severity: soft
+    statement: "The SVC is about 7 cm long (0.6-0.8 u) and up to about 2 cm across (0.15-0.25 u; up to 0.30 u tolerated)."
+    metric: "L = ptp(SVC along its axis); D = median cross-section diameter"
+    expect: {L: {min: 0.6, max: 0.8, typical: 0.7, unit: u}, D: {min: 0.15, max: 0.30, typical: 0.2, unit: u}}
+    tolerance: "As stated."
+    source:
+      - "https://teachmeanatomy.info/thorax/vasculature/superior-vena-cava/"
+
+  - id: GV-12
+    title: IVC crosses the diaphragm at T8 and enters the RA almost at once
+    structures: [GreatVessel_IVC, Diaphragm, Spine_Thoracic, Valve_Tricuspid]
+    kind: position
+    severity: hard
+    statement: >-
+      The IVC crosses the Diaphragm (central tendon) at T8 (+/-1 level), to the right of the midline (X < X_mid). Its
+      RA entry lies at most 0.3 u above the crossing (short thoracic course) and behind the tricuspid annulus centre.
+      Its diameter is under 0.21 u.
+    metric: "y_hiatus = Y where the IVC axis meets Diaphragm; |level(y_hiatus) - T8| <= 1; X_IVC < X_mid; 0 <= y_entry - y_hiatus <= 0.3; entry.z < TA.c.z; D < 0.21"
+    expect: {entry_minus_hiatus: {min: 0.0, max: 0.3, unit: u, severity: soft}, D: {max: 0.21, unit: u, severity: soft}}
+    tolerance: "+/-1 vertebral level. The 0.3 u entry distance is a heuristic (see REFERENCE §3.3)."
+    source:
+      - "https://www.ncbi.nlm.nih.gov/sites/books/NBK482353/"
+      - "https://www.kenhub.com/en/library/anatomy/inferior-vena-cava"
+      - "https://www.asecho.org/wp-content/uploads/2016/02/2015_ChamberQuantificationREV.pdf"
+
+  - id: GV-13
+    title: Pulmonary veins enter the posterior-superior LA
+    structures: [GreatVessel_PulmonaryVeins, Heart_Wall_Posterior, GreatVessel_SVC, GreatVessel_Aorta]
+    kind: relation
+    severity: hard
+    statement: >-
+      Pulmonary-vein ostia (their junctions with H) are on the back of the heart: each ostium's Z is below the
+      centroid Z of Heart_Wall_Posterior, and on each side the superior ostium is above the inferior one. There are
+      4 ostia; 3 (left common trunk) and 5 (right middle vein) are allowed variants. The right veins pass BEHIND the
+      SVC/RA and the left veins pass IN FRONT of the descending aorta, without intersection. Ostial diameters are
+      0.09-0.14 u, right >= left.
+    metric: "n_ostia; ostium.z < centroid_z(Heart_Wall_Posterior); Z_RPV < Z_SVC at the crossing; Z_LPV > Z_desc at the same Y"
+    expect:
+      n_ostia: {min: 3, max: 5, typical: 4}
+      D_ostium: {min: 0.09, max: 0.14, unit: u, severity: soft}
+    variant: "Left common trunk (15-27%); right middle vein (19-26%)."
+    tolerance: "0.005 u penetration."
+    source:
+      - "https://www.kenhub.com/en/library/anatomy/pulmonary-veins"
+      - "https://www.kenhub.com/en/library/anatomy/pulmonary-arteries-and-veins"
+      - "https://link.springer.com/article/10.1186/s12872-018-0884-3"
+      - "https://pubs.rsna.org/doi/abs/10.1148/radiol.2351032106"
+
+# ---------------------------------------------------------------------------------------------
+# CORONARY ARTERIES (vessels.json ids: LM, LAD, LAD_SEPTAL, LCX, RCA, RCA_MARGINAL, RCA_PDA, RCA_PL, RCA_SEPTAL)
+# ---------------------------------------------------------------------------------------------
+  - id: COR-01
+    title: Two ostia, in the right and left coronary sinuses
+    structures: [Coronary_RCA, Coronary_LM, GreatVessel_Aorta]
+    kind: presence
+    severity: hard
+    statement: >-
+      trunk(RCA)[0] and trunk(LM)[0] each lie within 0.03 u of the GreatVessel_Aorta surface, in the root between the
+      annulus and the STJ (up to 0.10 u above the STJ is allowed). The RCA ostium is in the anterior (right) sinus and
+      the LM ostium in the left-posterior sinus. So the RCA ostium is anterior (dZ > 0.03 u) and to the right
+      (dX < -0.03 u) of the LM ostium. There is no ostium in the right-posterior (non-coronary) sinus. The number of
+      aortic ostia is 2 (2-4 only with a declared separate conus or LAD/LCX ostium).
+    metric: "dist(ostium, Aorta) <= 0.03; RCA0.z - LM0.z > 0.03; RCA0.x - LM0.x < -0.03; n_ostia == 2"
+    expect: {n_ostia: {value: 2}, dz: {min: 0.03, unit: u}, dx: {max: -0.03, unit: u}}
+    variant: "Separate conus ostium (40-50%); ostium above the STJ (about 22%)."
+    tolerance: "0.03 u."
+    source:
+      - "https://www.imaios.com/en/e-anatomy/anatomical-structures/aortic-sinuses-14356172"
+      - "https://www.pcronline.com/Cases-resources-images/Tools-and-Practice/Anatomy-of-the-aortic-valvar-complex/Coronary-arteries"
+      - "https://www.wjgnet.com/1949-8470/full/v8/i6/537.htm"
+
+  - id: COR-02
+    title: Ostial heights above the annulus; RCA usually a little higher
+    structures: [Coronary_RCA, Coronary_LM, GreatVessel_Aorta]
+    kind: position
+    severity: soft
+    statement: >-
+      Heights measured along root_axis from the aortic annulus plane: LM ostium 14.4 +/- 2.9 mm; RCA ostium
+      17.2 +/- 3.3 mm. The RCA ostium is typically about 3 mm higher than the LM ostium.
+    metric: "h_X = (X0 - AoV.c) . root_axis"
+    expect:
+      h_LM: {min: 0.07, max: 0.23, typical: 0.144, unit: u}
+      h_RCA: {min: 0.10, max: 0.24, typical: 0.172, unit: u}
+      h_RCA_minus_h_LM: {min: -0.05, max: 0.10, typical: 0.028, unit: u}
+    tolerance: "Published MDCT range (7-23 mm LCA) / mean +/- 2 SD."
+    source:
+      - "https://www.sciencedirect.com/science/article/pii/S1936878X08000314"
+      - "https://www.pcronline.com/Cases-resources-images/Tools-and-Practice/Anatomy-of-the-aortic-valvar-complex/Coronary-arteries"
+
+  - id: COR-03
+    title: Left main length and calibre
+    structures: [Coronary_LM]
+    kind: size
+    severity: soft
+    statement: >-
+      LM arc length: 5-15 mm is typical (87% of hearts; mean about 9-10.5 mm), and 2-25 mm is accepted. LM lumen
+      diameter is 3.5-4.5 mm typical, 2.7-5.5 mm accepted.
+    metric: "L = arclength(trunk(LM)); D = 2 * median(r)"
+    expect:
+      L: {min: 0.02, max: 0.25, typical: [0.05, 0.15], unit: u}
+      D: {min: 0.027, max: 0.055, typical: [0.035, 0.045], unit: u}
+    tolerance: "Accepted bands are the published extremes; typical bands are the central values."
+    source:
+      - "https://pmc.ncbi.nlm.nih.gov/articles/PMC10566226/"
+      - "https://eurointervention.pcronline.com/article/a-computational-atlas-of-normal-coronary-artery-anatomy"
+      - "https://pubmed.ncbi.nlm.nih.gov/1535570/"
+      - "https://pubmed.ncbi.nlm.nih.gov/30260080"
+
+  - id: COR-04
+    title: Left main runs leftward behind the pulmonary trunk, without branches
+    structures: [Coronary_LM, GreatVessel_PulmonaryArtery]
+    kind: course
+    severity: hard
+    statement: >-
+      The LM chord (end - start) has +X as its largest component. Every LM sample that has pulmonary-trunk surface in
+      front of it (same X and Y +/-0.02 u) lies behind that surface: the LM passes behind the trunk and then between
+      the trunk and the left auricle. No vessels.json segment attaches to the LM except the LAD and LCX (and a
+      ramus, if declared) at its distal end.
+    metric: "argmax |chord| == x and chord.x > 0; Z_LM < Z_PT at shared (X, Y); attach points on LM only at s >= L - 0.01"
+    expect: {chord_x: {min: 0.0}}
+    tolerance: "0.02 u matching window."
+    source:
+      - "https://radiopaedia.org/articles/left-main-coronary-artery"
+      - "https://www.kenhub.com/en/library/anatomy/left-coronary-artery"
+
+  - id: COR-05
+    title: LM bifurcation angles
+    structures: [Coronary_LM, Coronary_LAD, Coronary_LCX]
+    kind: orientation
+    severity: soft
+    statement: >-
+      The LAD-LCX angle between 10 mm chords from the bifurcation is 75 +/- 23 degrees (89 +/- 21 with a ramus); accept
+      30-130 degrees. The LM-LAD angle (between the centreline directions) is about 37.5 degrees; accept 15-60.
+    metric: "angle(chord10(LAD), chord10(LCX)); angle(tangent_end(LM), chord10(LAD))"
+    expect:
+      lad_lcx_deg: {min: 30, max: 130, typical: 75, sd: 23}
+      lm_lad_deg: {min: 15, max: 60, typical: 37.5}
+    tolerance: "About mean +/- 2 SD."
+    source:
+      - "https://eurointervention.pcronline.com/article/a-computational-atlas-of-normal-coronary-artery-anatomy"
+      - "https://pmc.ncbi.nlm.nih.gov/articles/PMC10566226/"
+      - "https://www.ncbi.nlm.nih.gov/pmc/articles/PMC6136703/"
+
+  - id: COR-06
+    title: LAD descends in the anterior interventricular groove to the apex
+    structures: [Coronary_LAD, Heart_Wall_Anterior]
+    kind: course
+    severity: hard
+    statement: >-
+      From its origin to the trunk point nearest the apex, the LAD moves patient-left (dX > 0), downward (dY < 0) and
+      forward (dZ > 0). The trunk comes within 0.15 u of the apex, or continues past it onto the inferior surface
+      (wrap-around, 73-78%). At least 90% of trunk samples lie in the groove, within r + 0.10 u of H_epi.
+    metric: "p* = argmin |trunk(LAD) - apex|; d = p* - trunk(LAD)[0]; |p* - apex| <= 0.15; frac(dist(trunk, H_epi) <= r + 0.10) >= 0.9"
+    expect: {dx: {min: 0.0}, dy: {max: 0.0}, dz: {min: 0.0}, apex_gap: {max: 0.15, unit: u}}
+    tolerance: "0.15 u to the apex."
+    source:
+      - "https://radiopaedia.org/articles/left-anterior-descending-artery"
+      - "https://www.kenhub.com/en/library/anatomy/left-anterior-descending-artery-lad"
+      - "https://pmc.ncbi.nlm.nih.gov/articles/PMC7270221/"
+
+  - id: COR-07
+    title: LAD length
+    structures: [Coronary_LAD]
+    kind: size
+    severity: soft
+    statement: "The LAD trunk arc length is 109.5 +/- 14.5 mm (range 72-145 mm; textbook 10-13 cm)."
+    metric: "arclength(trunk(LAD))"
+    expect: {min: 0.72, max: 1.45, typical: [1.0, 1.3], unit: u}
+    tolerance: "Published range."
+    source:
+      - "https://pmc.ncbi.nlm.nih.gov/articles/PMC10566226/"
+      - "https://www.wjgnet.com/1949-8470/full/v8/i6/537.htm"
+
+  - id: COR-08
+    title: Diagonals run over the anterolateral LV and never cross onto the RV
+    structures: [Coronary_LAD]
+    kind: course
+    severity: hard
+    statement: >-
+      Diagonals are first-order LAD branches that are not septal. At least 90% of the samples of each diagonal lie on
+      the LV side of the anterior IV groove (X >= X_LAD(Y) - 0.02) and on the epicardium. The number of diagonals with
+      d >= 1.5 mm is 1-4 (2 in 62% of hearts).
+    metric: "per diagonal: frac(X >= X_LAD(Y) - 0.02) >= 0.9; n_diag = count(d0 >= 0.015)"
+    expect: {n_diag: {min: 1, max: 4, typical: 2, severity: soft}}
+    tolerance: "0.02 u groove margin."
+    source:
+      - "https://radiopaedia.org/articles/left-anterior-descending-artery"
+      - "https://www.kenhub.com/en/library/anatomy/left-anterior-descending-artery-lad"
+      - "https://pmc.ncbi.nlm.nih.gov/articles/PMC10566226/"
+
+  - id: COR-09
+    title: Septal perforators are intramyocardial and short from the PDA
+    structures: [Coronary_LAD_Septal, Coronary_RCA_Septal, Heart_Wall_Anterior, Heart_Wall_Posterior]
+    kind: course
+    severity: hard
+    statement: >-
+      At least 70% of the samples of each septal branch lie inside the myocardium: further than r beneath H_epi, and
+      not in a cavity. They leave their parent at 45-90 degrees (accept 30-100), heading into the septum. The main
+      anterior septal (from the LAD) is 1.5-2.0 mm across; anterior septals are 40-80 mm long. Inferior septals (from
+      the PDA) are 15 mm or shorter.
+    metric: "frac_intramyocardial >= 0.7; takeoff_deg; d0(main anterior septal); L(LAD_SEPTAL segments); L(RCA_SEPTAL segments)"
+    expect:
+      takeoff_deg: {min: 30, max: 100, typical: [45, 90]}
+      d_main: {min: 0.010, max: 0.030, typical: [0.015, 0.020], unit: u, severity: soft}
+      L_anterior_max: {min: 0.20, typical: [0.40, 0.80], unit: u, severity: soft}
+      L_inferior_each: {max: 0.20, typical: 0.15, unit: u, severity: soft}
+    tolerance: "+0.05 u on the inferior-septal length for centreline noise."
+    source:
+      - "https://pmc.ncbi.nlm.nih.gov/articles/PMC6773898/"
+      - "https://radiopaedia.org/articles/posterior-descending-artery"
+
+  - id: COR-10
+    title: LCX stays in the left AV groove along the mitral annulus
+    structures: [Coronary_LCX, Valve_Mitral]
+    kind: course
+    severity: hard
+    statement: >-
+      The LCX main trunk (SCCT segments 11 and 13) runs in the left atrioventricular groove:
+      - Every trunk sample is within 0.20 u of the MA ring for the first 0.2 u of arc length, and within 0.15 u after that.
+      - Its spread along the long axis, ptp((p - base_center) . u_ba), is at most 0.25 u, because the groove is
+        roughly perpendicular to the long axis.
+      - After the first 0.2 u it heads posteriorly: Z does not increase by more than 0.02 u.
+      A trunk that turns toward the apex over the lateral wall is an obtuse marginal, not the LCX.
+    metric: "max dist(trunk(LCX), MA.ring); ptp((trunk(LCX) - base_center) . u_ba); max rise of Z after s = 0.2"
+    expect:
+      ring_dist: {max: 0.15, unit: u}
+      axial_spread: {max: 0.25, unit: u}
+      z_rise_after_0p2: {max: 0.02, unit: u}
+    tolerance: "As stated (0.20 u allowed on the first 0.2 u near the LM)."
+    source:
+      - "https://radiopaedia.org/articles/left-circumflex-artery"
+      - "https://www.kenhub.com/en/library/anatomy/blood-supply-of-the-heart"
+      - "https://www.journalofcardiovascularct.com/article/S1934-5925(14)00165-8/abstract"
+
+  - id: COR-11
+    title: LCX length and LAD:LCX length ratio
+    structures: [Coronary_LCX, Coronary_LAD]
+    kind: size
+    severity: soft
+    statement: "LCX trunk arc length is 66.3 +/- 11.6 mm (41-108; textbook 5-8 cm). LAD trunk length / LCX trunk length is about 1.65."
+    metric: "L_LCX = arclength(trunk(LCX)); ratio = L_LAD / L_LCX"
+    expect:
+      L_LCX: {min: 0.41, max: 1.08, typical: [0.5, 0.8], unit: u}
+      ratio: {min: 1.2, max: 2.5, typical: 1.65}
+    tolerance: "Published range; the ratio is derived from the cohort means."
+    source:
+      - "https://pmc.ncbi.nlm.nih.gov/articles/PMC10566226/"
+      - "https://www.wjgnet.com/1949-8470/full/v8/i6/537.htm"
+
+  - id: COR-12
+    title: Obtuse marginals run toward the apex over the lateral LV wall
+    structures: [Coronary_LCX]
+    kind: course
+    severity: hard
+    statement: >-
+      Each first-order LCX branch with d >= 1.5 mm (an OM) ends at least 0.1 u closer to the apex than where it
+      starts. At least 80% of its samples lie on the lateral LV wall (X > base_center.x + 0.1, LV side of the anterior
+      IV groove). There are 1-4 OMs (2 in 51%).
+    metric: "|end - apex| <= |origin - apex| - 0.1; frac(X > base_center.x + 0.1) >= 0.8; n_OM"
+    expect: {n_OM: {min: 1, max: 4, typical: 2, severity: soft}}
+    tolerance: "0.1 u."
+    source:
+      - "https://radiopaedia.org/articles/left-circumflex-artery"
+      - "https://pmc.ncbi.nlm.nih.gov/articles/PMC10566226/"
+
+  - id: COR-13
+    title: RCA course (anterior take-off, right AV groove, acute margin, crux)
+    structures: [Coronary_RCA, Valve_Tricuspid, Heart_Wall_Anterior, Heart_Wall_Posterior]
+    kind: course
+    severity: hard
+    statement: >-
+      The first 0.1 u chord of the RCA points forward and to the right (t.z > 0, t.x < 0), between the right auricle
+      and the pulmonary trunk / RV outflow tract. The mid part (s from 25% to 60% of the length to the crux) lies within
+      0.15 u of the TA ring (right AV groove). The trunk passes within 0.10 u of the acute margin, i.e. the H_epi
+      vertices with X < min X(H) + 0.15 and Y < base_center.y. It then runs posteriorly and to the left in the inferior
+      AV groove to the crux, which lies below and behind the AV-plane centre (crux.y < base_center.y and
+      crux.z < base_center.z + 0.05).
+    metric: "t = chord(0 -> 0.1); dist(mid part, TA.ring) <= 0.15; min dist(trunk, acute margin) <= 0.10; crux.y < base_center.y; crux.z < base_center.z + 0.05"
+    expect: {tz: {min: 0.0}, tx: {max: 0.0}, ta_dist: {max: 0.15, unit: u}, acute_gap: {max: 0.10, unit: u}}
+    tolerance: "As stated."
+    source:
+      - "https://www.kenhub.com/en/library/anatomy/right-coronary-artery"
+      - "https://www.kenhub.com/en/library/anatomy/blood-supply-of-the-heart"
+      - "https://radiopaedia.org/articles/right-coronary-artery"
+
+  - id: COR-14
+    title: RCA length to the crux
+    structures: [Coronary_RCA, Coronary_RCA_PDA, Coronary_LAD]
+    kind: size
+    severity: soft
+    statement: >-
+      The RCA arc length from the ostium to the PDA origin (the crux) is 12-14 cm. Its ratio to the LAD trunk length is
+      about 1.1. Any RCA trunk beyond the crux is R-PLB (SCCT 16), not dRCA.
+    metric: "L = s(PDA attach on trunk(RCA)); ratio = L / L_LAD"
+    expect: {L: {min: 0.9, max: 1.5, typical: [1.2, 1.4], unit: u}, ratio: {min: 0.9, max: 1.5, typical: 1.1}}
+    tolerance: "Derived band around the textbook range."
+    source:
+      - "https://www.wjgnet.com/1949-8470/full/v8/i6/537.htm"
+      - "https://cdn.ymaws.com/scct.org/resource/resmgr/Docs/Fellows&Residents_of_SCCT/Interpretation_guidelines.pdf"
+
+  - id: COR-15
+    title: No shepherd's-crook loop in the proximal RCA (default phenotype)
+    structures: [Coronary_RCA]
+    kind: course
+    severity: soft
+    statement: >-
+      Over the first 0.3 u of arc length the RCA does not rise more than 0.03 u above its ostium. A higher, tortuous
+      loop is the shepherd's-crook variant (about 5%) and must be declared if it is intended.
+    metric: "max Y(trunk(RCA) | s <= 0.3) - trunk(RCA)[0].y"
+    expect: {max: 0.03, unit: u}
+    variant: "Shepherd's crook RCA (about 5%)."
+    tolerance: "0.03 u."
+    source:
+      - "https://radiopaedia.org/articles/shepherds-crook-right-coronary-artery"
+
+  - id: COR-16
+    title: Acute marginal / RV branches stay on the RV free wall
+    structures: [Coronary_RCA_Marginal, Coronary_LAD]
+    kind: course
+    severity: hard
+    statement: >-
+      At least 95% of the anterior samples of Coronary_RCA_Marginal (Z > base_center.z) lie on the RV side of the
+      anterior IV groove (X <= X_LAD(Y) + 0.02). No marginal branch ends within 0.03 u of the LAD trunk or on the LV
+      free wall.
+    metric: "frac(X <= X_LAD(Y) + 0.02 | Z > base_center.z) >= 0.95; min dist(branch end, trunk(LAD)) >= 0.03"
+    expect: {rv_side_fraction: {min: 0.95}}
+    tolerance: "0.02 u groove margin."
+    source:
+      - "https://radiopaedia.org/articles/right-coronary-artery"
+      - "https://teachmeanatomy.info/thorax/organs/heart/heart-vasculature/"
+
+  - id: COR-17
+    title: PDA in the posterior IV groove, from the crux toward the apex
+    structures: [Coronary_RCA_PDA, Coronary_RCA, Heart_Wall_Posterior]
+    kind: course
+    severity: hard
+    statement: >-
+      trunk(RCA_PDA) attaches to the distal RCA (at s >= 60% of the RCA length) and lies on the diaphragmatic surface
+      (every sample has Y <= base_center.y). Its distance to the apex never increases by more than 0.02 u along its
+      course, and it ends within 0.25 u of the apex. At least 70% of its samples lie within r + 0.10 u of H_epi.
+    metric: "attach_s / L_RCA >= 0.6; Y <= base_center.y; monotone |p - apex| (tol 0.02); |end - apex| <= 0.25"
+    expect: {attach_fraction: {min: 0.6}, end_to_apex: {max: 0.25, unit: u}}
+    tolerance: "0.02 u monotonicity tolerance."
+    source:
+      - "https://radiopaedia.org/articles/posterior-descending-artery"
+      - "https://cdn.ymaws.com/scct.org/resource/resmgr/Docs/Fellows&Residents_of_SCCT/Interpretation_guidelines.pdf"
+
+  - id: COR-18
+    title: Posterolateral branches continue past the crux onto the inferolateral LV
+    structures: [Coronary_RCA_PL, Coronary_RCA, Heart_Wall_Posterior]
+    kind: course
+    severity: hard
+    statement: >-
+      Coronary_RCA_PL (SCCT 16) arises from the RCA distal to the PDA origin and continues leftward in the inferior
+      AV groove (X increases over its first 0.1 u). At least 70% of its samples project (nearest H vertex) onto the
+      inferior or inferolateral AHA segments {4, 5, 10, 11, 15, 16}.
+    metric: "attach_s > s(PDA attach); chord(0 -> 0.1).x > 0; frac(aha17(nearest H) in {4,5,10,11,15,16}) >= 0.7"
+    expect: {inferior_fraction: {min: 0.7}}
+    tolerance: "As stated."
+    source:
+      - "https://radiopaedia.org/articles/right-coronary-artery"
+      - "https://cdn.ymaws.com/scct.org/resource/resmgr/Docs/Fellows&Residents_of_SCCT/Interpretation_guidelines.pdf"
+
+  - id: COR-19
+    title: One consistent dominance type (right by default)
+    structures: [Coronary_RCA, Coronary_RCA_PDA, Coronary_LCX]
+    kind: presence
+    severity: hard
+    statement: >-
+      Exactly one dominance type is declared, and it is right-dominant by default (about 85% of people; left 8%,
+      co-dominant 7%). The PDA's parent is the RCA. No LCX geometry is labelled L-PDA (15) or L-PLB (18). The LCX
+      trunk ends at least 0.1 u from the crux, i.e. before it.
+    metric: "vessels.json RCA_PDA.parent == RCA; no _SEGMENT in {15, 18}; |trunk(LCX)[-1] - crux| >= 0.1"
+    expect: {lcx_end_to_crux: {min: 0.1, unit: u}}
+    variant: "Left dominance (8%) or co-dominance (7%) only if it is declared, with an L-PDA / L-PLB and a small RCA."
+    tolerance: "0.1 u."
+    source:
+      - "https://pubmed.ncbi.nlm.nih.gov/38639360/"
+      - "https://radiopaedia.org/articles/coronary-arterial-dominance"
+      - "https://pmc.ncbi.nlm.nih.gov/articles/PMC4505791"
+
+  - id: COR-20
+    title: Lumen diameters by segment, proximal ordering and taper
+    structures: [Coronary_LM, Coronary_LAD, Coronary_LCX, Coronary_RCA]
+    kind: size
+    severity: soft
+    statement: >-
+      Proximal/mid/distal diameters (CT, mean +/- 2 SD): LAD 3.5/2.4/1.6 mm; LCX 3.1/2.2/1.6 mm; RCA 3.4/3.2/2.6 mm.
+      Use SCCT labels, or trunk thirds if there are no labels. In a right-dominant heart the proximal order is
+      LM > pLAD >= pRCA > pLCX.
+      Taper rules:
+      - The diameter never grows by more than 0.003 u within 0.1 u of arc length, except in the first 0.3 u of the RCA
+        and in the 0.05 u before a branch point.
+      - Each child's origin diameter is smaller than its parent's diameter at the attachment.
+      - Distal/proximal ratio: LAD about 0.46, LCX about 0.53, RCA about 0.77.
+      A female model is about 9% smaller.
+    metric: "d = 2 r per segment (median); growth window; child d0 < parent d(attach); ratio = d_distal / d_proximal"
+    expect:
+      d_pLAD: {min: 0.022, max: 0.049, typical: 0.035, unit: u}
+      d_mLAD: {min: 0.011, max: 0.037, typical: 0.024, unit: u}
+      d_dLAD: {min: 0.006, max: 0.027, typical: 0.016, unit: u}
+      d_pLCX: {min: 0.015, max: 0.046, typical: 0.031, unit: u}
+      d_mLCX: {min: 0.007, max: 0.036, typical: 0.022, unit: u}
+      d_dLCX: {min: 0.004, max: 0.028, typical: 0.016, unit: u}
+      d_pRCA: {min: 0.023, max: 0.046, typical: 0.034, unit: u}
+      d_mRCA: {min: 0.018, max: 0.045, typical: 0.032, unit: u}
+      d_dRCA: {min: 0.014, max: 0.038, typical: 0.026, unit: u}
+      order: "d_LM > d_pLAD >= d_pRCA > d_pLCX"
+      ratio_LAD: {min: 0.30, max: 0.70, typical: 0.46}
+      ratio_LCX: {min: 0.30, max: 0.80, typical: 0.53}
+      ratio_RCA: {min: 0.55, max: 1.00, typical: 0.77}
+    tolerance: "Mean +/- 2 SD; the growth window is 0.003 u per 0.1 u."
+    source:
+      - "https://www.ncbi.nlm.nih.gov/pmc/articles/PMC8620029/"
+      - "https://pubmed.ncbi.nlm.nih.gov/1535570/"
+      - "https://ijcdw.org/gender-specific-coronary-artery-diameters-in-ct-coronary-angiogram-a-comparative-study-in-female-and-male-population/"
+      - "https://eurointervention.pcronline.com/article/a-computational-atlas-of-normal-coronary-artery-anatomy"
+
+  - id: COR-21
+    title: Epicardial course inside epicardial fat; no trunk crosses a cavity
+    structures: [Coronary_LM, Coronary_LAD, Coronary_LCX, Coronary_RCA, Coronary_RCA_PDA, Coronary_RCA_PL, Coronary_RCA_Marginal, Heart_Wall_Anterior, Heart_Wall_Posterior]
+    kind: relation
+    severity: hard
+    statement: >-
+      Every sample of the epicardial vessels lies outside the myocardium. Its distance to H_epi is between -0.005 u
+      and r + 0.10 u (EAT in the grooves is about 7 mm thick). No coronary sample lies inside a cardiac cavity.
+      Only the septal perforators, and a mid-LAD myocardial bridge if one is declared (at most 0.5 u long), may be
+      intramyocardial.
+    metric: "sd = signed distance(sample, H_epi), positive outside; frac(-0.005 <= sd <= r + 0.10) >= 0.95"
+    expect: {in_band_fraction: {min: 0.95}}
+    variant: "Myocardial bridge (19% pooled; 82% on the LAD; mean length 19 mm)."
+    tolerance: "0.005 u penetration; 0.10 u fat band."
+    source:
+      - "https://cdt.amegroups.org/article/view/5256/html"
+      - "https://www.frontiersin.org/journals/imaging/articles/10.3389/fimag.2025.1694840/full"
+      - "https://onlinelibrary.wiley.com/doi/10.1111/1556-4029.13665"
+
+  - id: COR-22
+    title: SCCT segment labels match the node mapping and run in order
+    structures: [Coronary_LM, Coronary_LAD, Coronary_LCX, Coronary_RCA, Coronary_RCA_PDA, Coronary_RCA_PL, Coronary_LAD_Septal, Coronary_RCA_Septal, Coronary_RCA_Marginal]
+    kind: presence
+    severity: soft
+    statement: >-
+      Where the _SEGMENT vertex attribute exists (CONTRACTS §7.1), its values per node are within these sets:
+      LM {5}; LAD {6, 7, 8, 9, 10}; LCX {11, 12, 13, 14} (15 and 18 only if left- or co-dominant); RCA {1, 2, 3};
+      RCA_PDA {4}; RCA_PL {16}; septals and marginals {0}.
+      Along each trunk the labels are monotone: 1 -> 2 -> 3, 6 -> 7 -> 8, 11 -> 13.
+      Boundaries follow SCCT 2014:
+      - 1/2 at half the distance from the ostium to the acute margin; 2/3 at the acute margin.
+      - 6/7 at the first large septal or D1 (> 1.5 mm).
+      - 7/8 at HALF THE DISTANCE TO THE APEX (not at D2).
+      - 11/13 at the origin of OM1.
+    metric: "set(_SEGMENT per node); monotone along s; boundary arc-length error"
+    expect: {boundary_error: {max: 0.05, unit: u}}
+    tolerance: "0.05 u on each boundary."
+    source:
+      - "https://cdn.ymaws.com/scct.org/resource/resmgr/Docs/Fellows&Residents_of_SCCT/Interpretation_guidelines.pdf"
+      - "https://www.sciencedirect.com/science/article/pii/S1934592526004806"
+
+  - id: COR-23
+    title: LAD-specific AHA segments are LAD territory
+    structures: [Heart_Wall_Anterior, Heart_Wall_Posterior]
+    kind: relation
+    severity: hard
+    statement: >-
+      In COLOR_0 on the heart walls (R = LAD, G = LCX, B = RCA), R is the largest channel for the majority of
+      myocardial vertices in AHA segments 2, 7, 8 and 13. These segments were 100% specific for the LAD in CMR
+      infarct mapping.
+    metric: "for seg in {2, 7, 8, 13}: frac(argmax(COLOR_0) == R | aha17 == seg) > 0.5"
+    expect: {majority: {min: 0.5}}
+    tolerance: "Majority vote per segment."
+    source:
+      - "https://www.jacc.org/doi/10.1016/j.jcmg.2008.01.014"
+      - "https://www.ahajournals.org/doi/10.1161/hc0402.102975"
+
+  - id: COR-24
+    title: Remaining territory map and share of LV myocardium
+    structures: [Heart_Wall_Anterior, Heart_Wall_Posterior]
+    kind: relation
+    severity: soft
+    statement: >-
+      Majority channel by segment, per the standard AHA assignment:
+      - LAD: segments 1 and 14.
+      - LCX: segment 6 (98% specific) and segment 5 (95%).
+      - RCA (right-dominant model): segment 4 (93%), and usually 3, 9 and 10.
+      - Segments 12, 15, 16 and 17 may be mixed.
+      Share of LV myocardium by weighted channel: LAD 0.40-0.50, LCX 0.20-0.35, RCA 0.20-0.30 (reference 42.5/28.8/26.4%).
+    metric: "argmax majority per segment; share_k = sum(COLOR_0_k * vertex_area) / sum(vertex_area) over LV vertices"
+    expect:
+      share_LAD: {min: 0.40, max: 0.50, typical: 0.425}
+      share_LCX: {min: 0.20, max: 0.35, typical: 0.288}
+      share_RCA: {min: 0.20, max: 0.30, typical: 0.264}
+    tolerance: "Territory variability: 23% of segments do not match the standard map."
+    source:
+      - "https://www.ahajournals.org/doi/10.1161/hc0402.102975"
+      - "https://www.jacc.org/doi/10.1016/j.jcmg.2008.01.014"
+      - "https://www.ahajournals.org/doi/10.1161/JAHA.124.039013"
+
+# ---------------------------------------------------------------------------------------------
+# CARDIAC VEINS (CardiacVeins is a single mesh today; checks use its vertices or its skeleton)
+# ---------------------------------------------------------------------------------------------
+  - id: VEN-01
+    title: Coronary sinus and its main tributaries are present
+    structures: [CardiacVeins]
+    kind: presence
+    severity: hard
+    statement: >-
+      Skeletonising CardiacVeins gives a tree containing:
+      - a coronary sinus: the largest-calibre part (local diameter >= 0.06 u), in the posterior left AV groove;
+      - a GCV/AIV branch along the LAD;
+      - a middle cardiac vein along the PDA.
+      Each of these is seen in about 100% of hearts on CT. A posterior LV vein (77.5%) and a left marginal vein
+      (66.7%) are expected, and their absence is flagged as a warning. The small cardiac vein is optional.
+    metric: "skeleton branches classified by the companion artery (see VEN-02, VEN-03) and by location"
+    expect: {CS: {value: present}, AIV: {value: present}, MCV: {value: present}, PVLV: {value: present, severity: soft}, LMV: {value: present, severity: soft}}
+    tolerance: "None."
+    source:
+      - "https://pmc.ncbi.nlm.nih.gov/articles/PMC4121327/"
+      - "https://academic.oup.com/europace/article/11/suppl_5/v15/466150"
+      - "https://www.ncbi.nlm.nih.gov/books/NBK549786/"
+
+  - id: VEN-02
+    title: Anterior interventricular vein runs with the LAD, mostly on its LV side
+    structures: [CardiacVeins, Coronary_LAD]
+    kind: relation
+    severity: hard
+    statement: >-
+      Of the samples on the proximal two-thirds of trunk(LAD), at least 80% have a CardiacVeins point within 0.10 u
+      (they share the anterior IV groove; 74% of GCV sites are within 5 mm of an artery). The nearest vein points lie
+      mostly on the LV side (X >= X_LAD(Y)); crossings are allowed (29.4%). The AIV calibre is similar to the LAD at
+      the same level (ratio 0.6-1.6).
+    metric: "frac(min dist(LAD sample, CardiacVeins) <= 0.10) over s <= 2/3 L_LAD; frac(vein nearest on LV side); d_AIV / d_LAD"
+    expect:
+      paired_fraction: {min: 0.80}
+      lv_side_fraction: {min: 0.5, severity: soft}
+      calibre_ratio: {min: 0.6, max: 1.6, severity: soft}
+    tolerance: "0.10 u pairing radius (derived)."
+    source:
+      - "https://www.kenhub.com/en/library/anatomy/great-cardiac-vein"
+      - "https://www.kenhub.com/en/library/anatomy/left-anterior-descending-artery-lad"
+      - "https://pmc.ncbi.nlm.nih.gov/articles/PMC4121327/"
+      - "https://journal.houstonmethodist.org/articles/10.14797/HUZR1007"
+
+  - id: VEN-03
+    title: Middle cardiac vein runs with the PDA
+    structures: [CardiacVeins, Coronary_RCA_PDA]
+    kind: relation
+    severity: hard
+    statement: "At least 70% of trunk(RCA_PDA) samples have a CardiacVeins point within 0.10 u (shared posterior IV groove)."
+    metric: "frac(min dist(PDA sample, CardiacVeins) <= 0.10)"
+    expect: {paired_fraction: {min: 0.70}}
+    tolerance: "0.10 u pairing radius (derived)."
+    source:
+      - "https://www.ncbi.nlm.nih.gov/books/NBK549786/"
+      - "https://academic.oup.com/europace/article/11/suppl_5/v15/466150"
+
+  - id: VEN-04
+    title: Coronary sinus in the posterior left AV groove, on the atrial side of the mitral annulus
+    structures: [CardiacVeins, Valve_Mitral]
+    kind: position
+    severity: hard
+    statement: >-
+      The CS portion exists (Z < base_center.z, within 0.20 u of the MA ring). At least 75% of it lies on the atrial
+      side of the MA plane (93% typical). It runs roughly parallel to the annulus: over at least 80% of its length the
+      local tangent is within 30 degrees of the nearest MA-ring tangent. Its minimum distance to the MA ring is
+      0.04-0.18 u (5.1 +/- 2.9 mm and 14.2 +/- 3.6 mm by two methods).
+    metric: "frac((p - MA.c) . n_atrial > 0); tangent-angle fraction; min dist(CS, MA.ring)"
+    expect:
+      atrial_side_fraction: {min: 0.75, typical: 0.93}
+      parallel_fraction: {min: 0.80}
+      min_ma_dist: {min: 0.04, max: 0.18, unit: u}
+    tolerance: "Published range across methods."
+    source:
+      - "https://www.ncbi.nlm.nih.gov/books/NBK557566/"
+      - "https://pmc.ncbi.nlm.nih.gov/articles/PMC4121327/"
+      - "https://academic.oup.com/ejcts/article/33/4/583/443249"
+      - "https://www.frontiersin.org/journals/cardiovascular-medicine/articles/10.3389/fcvm.2022.868562/full"
+
+  - id: VEN-05
+    title: Coronary sinus ostium in the posteroinferior RA, near the tricuspid annulus
+    structures: [CardiacVeins, Valve_Tricuspid, GreatVessel_IVC]
+    kind: position
+    severity: hard
+    statement: >-
+      The CS ostium is the right-hand (min-X) end of the CS portion. It lies within 0.25 u of the TA ring (Koch's
+      triangle: base 18.5 +/- 4.0 mm, height 16.0 +/- 3.7 mm). It is medial to (X greater than), in front of
+      (Z greater than) and above the IVC orifice centre.
+    metric: "o = CS end nearest TA; dist(o, TA.ring) <= 0.25; o.x > IVC_top.x; o.z > IVC_top.z; o.y > IVC_top.y"
+    expect: {ta_dist: {max: 0.25, unit: u}}
+    tolerance: "0.25 u (derived from Koch's triangle)."
+    source:
+      - "https://www.ncbi.nlm.nih.gov/books/NBK557566/"
+      - "https://pmc.ncbi.nlm.nih.gov/articles/PMC4195839/"
+      - "https://academic.oup.com/europace/article/19/3/452/2952262"
+
+  - id: VEN-06
+    title: The LCX lies between the CS/GCV and the mitral annulus
+    structures: [Coronary_LCX, CardiacVeins, Valve_Mitral]
+    kind: relation
+    severity: soft
+    statement: >-
+      Along the stretch where the LCX and the CS/GCV share the AV groove, the LCX is closer to the MA ring than the
+      vein for at least 50% of paired samples (68-80% of people), and the centreline gap between them is 0.01-0.10 u
+      (3.3 +/- 1 mm where parallel).
+    metric: "pair LCX samples with the nearest CS/GCV points; frac(dist(LCX, MA) < dist(vein, MA)); gap = |LCX - vein|"
+    expect: {lcx_inner_fraction: {min: 0.5}, gap: {min: 0.01, max: 0.10, unit: u}}
+    tolerance: "Derived band."
+    source:
+      - "https://www.ahajournals.org/doi/10.1161/circulationaha.106.677880"
+      - "https://pmc.ncbi.nlm.nih.gov/articles/PMC2745724/"
+      - "https://pubmed.ncbi.nlm.nih.gov/17112981/"
+      - "https://academic.oup.com/ejcts/article/33/4/583/443249"
+
+  - id: VEN-07
+    title: Triangle of Brocq and Mouchet at the LM bifurcation
+    structures: [CardiacVeins, Coronary_LAD, Coronary_LCX, Coronary_LM]
+    kind: relation
+    severity: soft
+    statement: >-
+      The GCV turns from the anterior IV groove into the left AV groove close to the LM bifurcation. It comes within
+      0.10 u of both the proximal LAD and the proximal LCX, closing a triangle with them (present in 87-98%). Where it
+      crosses them, the vein is usually superficial (61%): further from H_epi than the artery.
+    metric: "min dist(GCV turn, pLAD) <= 0.10 and min dist(GCV turn, pLCX) <= 0.10; depth(vein) > depth(artery) at crossings"
+    expect: {closure: {value: true}}
+    tolerance: "0.10 u."
+    source:
+      - "https://pmc.ncbi.nlm.nih.gov/articles/PMC8948444/"
+      - "https://www.sciencedirect.com/topics/medicine-and-dentistry/great-cardiac-vein"
+
+  - id: VEN-08
+    title: Venous calibres grow toward the ostium; the CS is the largest vein
+    structures: [CardiacVeins]
+    kind: size
+    severity: soft
+    statement: >-
+      Diameters (in vivo CT):
+      - CS 0.06-0.12 u (over 0.12 u suggests a persistent-left-SVC phenotype).
+      - CS ostium 0.06-0.15 u, with superior-inferior >= front-back.
+      - GCV 0.03-0.085 u.
+      - AIV 0.015-0.065 u proximally, 0.012-0.036 u at 5 cm.
+      - MCV ostium 0.028-0.068 u; PVLV 0.015-0.065 u; LMV 0.013-0.055 u.
+      Calibre grows toward the ostium (distal AIV < proximal AIV < GCV < CS <= ostium). The CS/GCV ratio is about
+      1.3-2.2. BodyParts3D is cadaver-derived, so thin, collapsed veins are a known bias.
+    metric: "local diameter from the CardiacVeins skeleton (2 x distance to surface)"
+    expect:
+      D_CS: {min: 0.06, max: 0.12, typical: 0.09, unit: u}
+      D_CS_ostium: {min: 0.06, max: 0.15, unit: u}
+      D_GCV: {min: 0.03, max: 0.085, typical: 0.056, unit: u}
+      D_AIV_prox: {min: 0.015, max: 0.065, typical: 0.039, unit: u}
+      D_MCV_ostium: {min: 0.028, max: 0.068, typical: 0.048, unit: u}
+      cs_gcv_ratio: {min: 1.3, max: 2.2}
+    tolerance: "Mean +/- 2 SD or the published range."
+    source:
+      - "https://academic.oup.com/europace/article/11/suppl_5/v15/466150"
+      - "https://pmc.ncbi.nlm.nih.gov/articles/PMC4195839/"
+      - "https://pmc.ncbi.nlm.nih.gov/articles/PMC8948444/"
+      - "https://pmc.ncbi.nlm.nih.gov/articles/PMC7793918/"
+      - "https://pmc.ncbi.nlm.nih.gov/articles/PMC4121327/"
+
+  - id: VEN-09
+    title: CS and GCV lengths, tributary order and take-off angles
+    structures: [CardiacVeins]
+    kind: course
+    severity: soft
+    statement: >-
+      Lengths: CS (Vieussens to ostium) 0.20-0.55 u; CS+GCV path from the ostium to the AIV turn 0.75-1.45 u;
+      MCV 0.35-1.15 u.
+      Tributary entry points by arc length from the CS ostium: MCV 0.01-0.21 u (closest); PVLV 0.14-1.00 u
+      (typically 0.28-0.32); LMV 0.41-1.13 u (typically 0.57); AIV turn 0.67-1.64 u (farthest).
+      So the order is MCV < PVLV < LMV < AIV, and X increases steadily from the ostium to the GCV.
+      Take-off angles to the trunk: MCV about 71 degrees, PVLV 103-109, LMV 110-116; all within 40-170 degrees.
+    metric: "arc length along the CS/GCV skeleton; entry s of each tributary; angle between the tributary and trunk tangents"
+    expect:
+      L_CS: {min: 0.20, max: 0.55, unit: u}
+      L_CS_GCV: {min: 0.75, max: 1.45, typical: 1.10, unit: u}
+      s_MCV: {min: 0.01, max: 0.21, typical: 0.106, unit: u}
+      s_LMV: {min: 0.41, max: 1.13, typical: 0.573, unit: u}
+      s_AIV: {min: 0.67, max: 1.64, unit: u}
+      takeoff_deg: {min: 40, max: 170}
+    tolerance: "Published ranges; the angle band is derived."
+    source:
+      - "https://pmc.ncbi.nlm.nih.gov/articles/PMC4121327/"
+      - "https://pmc.ncbi.nlm.nih.gov/articles/PMC7793918/"
+      - "https://pmc.ncbi.nlm.nih.gov/articles/PMC4695857/"
+      - "https://www.frontiersin.org/journals/cardiovascular-medicine/articles/10.3389/fcvm.2022.868562/full"
+
+  - id: VEN-10
+    title: Venous topology and epicardial layer
+    structures: [CardiacVeins, Heart_Wall_Anterior, Heart_Wall_Posterior, GreatVessel_PulmonaryVeins]
+    kind: relation
+    severity: hard
+    statement: >-
+      The venous network is one tree rooted at the CS ostium in the RA. The anterior cardiac veins, the right
+      marginal vein and an optional small cardiac vein may drain separately into the RA. No cardiac vein connects to
+      the LA, the LV cavity or a pulmonary vein. No vein sample lies inside the ventricular myocardium, and each vein
+      centreline is within r + 0.07 u of H_epi (subvenous fat 1.3-4.3 mm).
+    metric: "connected components of the skeleton; penetration into H; dist(vein, H_epi) <= r + 0.07"
+    expect: {epicardial_fraction: {min: 0.95}, max_penetration: {max: 0.005, unit: u}}
+    variant: "Unroofed coronary sinus (rare); persistent left SVC (0.3-0.5%)."
+    tolerance: "0.005 u penetration."
+    source:
+      - "https://www.ncbi.nlm.nih.gov/books/NBK549786/"
+      - "https://radiopaedia.org/articles/coronary-veins"
+      - "https://radiopaedia.org/articles/coronary-sinus"
+      - "https://pmc.ncbi.nlm.nih.gov/articles/PMC7793918/"
+
+  - id: VEN-11
+    title: GCV passes below the left auricle; small and anterior cardiac veins follow the right side
+    structures: [CardiacVeins, Coronary_RCA, Coronary_LAD]
+    kind: course
+    severity: soft
+    statement: >-
+      The lateral GCV runs on the patient-left side (X > base_center.x) and passes below (Y less than) the left auricle
+      on its way to the posterior AV groove. If a small cardiac vein is modelled, it lies in the right AV groove
+      within 0.10 u of trunk(RCA). Anterior cardiac veins, if modelled, lie on the anterior RV (X < X_LAD(Y),
+      Z > base_center.z), cross the RCA (usually deep to it) and end in the anterior RA wall rather than in the CS.
+    metric: "GCV lateral samples: X > base_center.x and Y < min Y(left auricle region); SCV-RCA distance; ACV endpoints"
+    expect: {scv_rca_dist: {max: 0.10, unit: u}}
+    tolerance: "0.10 u."
+    source:
+      - "https://www.kenhub.com/en/library/anatomy/great-cardiac-vein"
+      - "https://www.kenhub.com/en/library/anatomy/small-cardiac-vein"
+      - "https://www.kenhub.com/en/library/anatomy/anterior-cardiac-veins"
+
+# ---------------------------------------------------------------------------------------------
+# COLOUR CONVENTIONS (glTF baseColorFactor, or the mean of baseColorTexture, converted to HSV)
+# ---------------------------------------------------------------------------------------------
+  - id: COL-01
+    title: Systemic arteries are red
+    structures: [GreatVessel_Aorta, Coronary_LM, Coronary_LAD, Coronary_LAD_Septal, Coronary_LCX, Coronary_RCA, Coronary_RCA_Marginal, Coronary_RCA_PDA, Coronary_RCA_PL, Coronary_RCA_Septal]
+    kind: colour
+    severity: hard
+    statement: >-
+      In the anatomical (Realistic) mode, the base colour has hue in [345, 360] or [0, 15] degrees and saturation >= 0.5.
+      The Coronary_* targets may be recoloured only by the risk overlay.
+    metric: "hsv(baseColor)"
+    expect: {hue_deg: {ranges: [[345, 360], [0, 15]]}, saturation: {min: 0.5}}
+    tolerance: "15 degrees."
+    source:
+      - "https://bio.libretexts.org/Courses/West_Hills_College_-_Lemoore/Human_Anatomy_Laboratory_Manual_(Hartline)/17:_Cardiovascular_System_-_The_Heart/17.01:_Introduction"
+
+  - id: COL-02
+    title: Systemic veins are blue in every mode
+    structures: [GreatVessel_SVC, GreatVessel_IVC, CardiacVeins]
+    kind: colour
+    severity: hard
+    statement: >-
+      The base colour hue is 200-250 degrees in every mode. The risk colour ramp never recolours a vein, so a vein can
+      never be read as a risk overlay (CardioTwin rule; Clinical/clay mode is achromatic by design).
+    metric: "hsv(baseColor)"
+    expect: {hue_deg: {min: 200, max: 250}, saturation: {min: 0.35}}
+    tolerance: "25 degrees around 225."
+    source:
+      - "https://bio.libretexts.org/Courses/West_Hills_College_-_Lemoore/Human_Anatomy_Laboratory_Manual_(Hartline)/17:_Cardiovascular_System_-_The_Heart/17.01:_Introduction"
+
+  - id: COL-03
+    title: Pulmonary circulation colours are reversed (artery blue, veins red)
+    structures: [GreatVessel_PulmonaryArtery, GreatVessel_PulmonaryVeins]
+    kind: colour
+    severity: hard
+    statement: >-
+      GreatVessel_PulmonaryArtery has a blue hue (200-250 degrees) because it carries deoxygenated blood.
+      GreatVessel_PulmonaryVeins has a red hue ([345, 360] or [0, 15] degrees) because they carry oxygenated blood.
+    metric: "hsv(baseColor)"
+    expect:
+      pulmonary_artery_hue_deg: {min: 200, max: 250}
+      pulmonary_veins_hue_deg: {ranges: [[345, 360], [0, 15]]}
+    tolerance: "As in COL-01 and COL-02."
+    source:
+      - "https://bio.libretexts.org/Courses/West_Hills_College_-_Lemoore/Human_Anatomy_Laboratory_Manual_(Hartline)/17:_Cardiovascular_System_-_The_Heart/17.01:_Introduction"
+      - "https://www.kenhub.com/en/library/anatomy/pulmonary-arteries-and-veins"
