@@ -562,7 +562,12 @@ export function inputRow(
     label: spec.label,
     type: spec.type,
     valueText: featureText(spec, value),
-    refText: spec.type === 'numeric' ? formatNormalRange(spec.normal, spec.step).replace(/^ref /, '') : '',
+    refText:
+      spec.type !== 'numeric'
+        ? ''
+        : spec.normal?.low === 0 && spec.normal.high === 0
+          ? 'none'
+          : formatNormalRange(spec.normal, spec.step).replace(/^ref /, ''),
     status,
     flagText: flagged ? (status === 'above' ? 'above normal' : 'below normal') : null,
     finding: spec.type === 'binary' ? isOn(value) : spec.type === 'categorical' ? categoricalFinding(spec, value) : false,

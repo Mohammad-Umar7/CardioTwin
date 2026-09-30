@@ -218,7 +218,18 @@ export function formatFeatureValue(spec: FeatureSpec, value: FeatureValue | bool
   const n = typeof value === 'number' ? value : Number(value);
   if (!Number.isFinite(n)) return String(value);
   const unit = formatUnit(spec.unit);
-  return unit ? `${formatNumber(n, spec.step)}${THIN_SPACE}${unit}` : formatNumber(n, spec.step);
+  const text = groupThousands(formatNumber(n, spec.step));
+  return unit ? `${text}${THIN_SPACE}${unit}` : text;
+}
+
+/** "5800" → "5,800" for display (as the other pages print counts); never used for editable field values. */
+function groupThousands(text: string): string {
+  const [int = '', frac] = text.split('.');
+  const sign = int.startsWith(MINUS) ? MINUS : '';
+  const digits = sign ? int.slice(1) : int;
+  if (digits.length < 4) return text;
+  const grouped = digits.replace(/\B(?=(\d{3})+(?!\d))/g, ',');
+  return `${sign}${grouped}${frac !== undefined ? `.${frac}` : ''}`;
 }
 
 // ---------------------------------------------------------------------------- normal ranges
@@ -237,6 +248,8 @@ export function rangeStatus(value: FeatureValue | null | undefined, normal: Norm
 export function formatNormalRange(normal: NormalRange | null | undefined, step?: number | null): string {
   if (!normal) return '';
   const { low, high } = normal;
+  // A single allowed value (wall-motion regions: 0) reads "ref 0", never "0–0".
+  if (low !== null && low === high) return `ref ${formatNumber(low, step)}`;
   if (low !== null && high !== null) return `ref ${formatNumber(low, step)}${EN_DASH}${formatNumber(high, step)}`;
   if (low !== null) return `ref ≥${THIN_SPACE}${formatNumber(low, step)}`;
   if (high !== null) return `ref ≤${THIN_SPACE}${formatNumber(high, step)}`;

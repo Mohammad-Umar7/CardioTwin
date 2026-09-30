@@ -153,3 +153,12 @@ describe('formatShownDeltaPts', () => {
     expect(formatShownDeltaPts(0.03, 0.3).text).toBe(`≥25${THIN_SPACE}pts`);
   });
 });
+
+describe('display grouping and single-value ranges', () => {
+  it('groups thousands in displayed values and reads a single allowed value as one number', () => {
+    const wbc = { key: 'WBC', label: 'White cell count', group: 'labs', type: 'numeric' as const, unit: null, step: 100 };
+    expect(formatFeatureValue(wbc as never, 5800)).toBe('5,800');
+    expect(formatFeatureValue(wbc as never, 950)).toBe('950');
+    expect(formatNormalRange({ low: 0, high: 0 })).toBe('ref 0');
+  });
+});
