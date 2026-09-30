@@ -82,7 +82,11 @@ curl -s localhost:8000/api/predict -H 'content-type: application/json' \
 * Binary features take `0`/`1` (`true`/`false`, `"Y"`/`"N"` also accepted); categorical values match the
   schema options case-insensitively (the dataset's `"Fmale"` spelling maps to `"Female"`).
 * `LAD`, `LCX`, `RCA` and `Cath` are outcomes and are rejected as inputs (target leakage).
-* Identical requests are answered from an LRU cache (`X-Cache: HIT`).
+* Numeric values must lie inside the schema `min`/`max`, the range the model was trained and validated on
+  (422 with the allowed range otherwise). With `CARDIOTWIN_OUT_OF_RANGE=warn` they are predicted instead
+  (trees extrapolate flat, the logistic component linearly) and reported in an added `warnings` array.
+* Identical requests are answered from an LRU cache (`X-Cache: HIT`); demo-cohort patients are
+  precomputed at startup, so selecting one in the UI never waits for the model.
 
 ### Errors
 
@@ -103,7 +107,7 @@ Every error uses one envelope; 422s keep FastAPI's item format and report **all*
 ```
 
 Error types: `unknown_feature`, `leakage_feature`, `type_error`, `finite_number`, `out_of_range`,
-`binary_value`, `invalid_option`, `too_long`/`too_short` (batch size), plus pydantic's own types for
+`binary_value`, `invalid_option`, `model_rejected_input`, `too_long`/`too_short` (batch size), plus pydantic's own types for
 malformed bodies. Other codes: `not_found` (404), `model_not_ready` (503), `model_contract_error` and
 `internal_error` (500).
 
@@ -120,6 +124,8 @@ All settings are optional environment variables (relative paths resolve against 
 | `CARDIOTWIN_FRONTEND_DIST` | `frontend/dist` | Built SPA location |
 | `CARDIOTWIN_MODEL_CARD` | `docs/MODEL_CARD.md` | Markdown served by `/api/model-card` |
 | `CARDIOTWIN_CACHE_SIZE` | `2048` | LRU capacity for identical predictions (`0` disables) |
+| `CARDIOTWIN_WARM_CACHE` | `1` | Precompute every demo-cohort prediction in the background after startup |
+| `CARDIOTWIN_OUT_OF_RANGE` | `reject` | Numeric values outside the schema `min`/`max` (the training-cohort range): `reject` → 422 with the range; `warn` → predict and list them in `warnings` |
 | `CARDIOTWIN_BATCH_MAX_ROWS` | `256` | Batch limit (1–256) |
 | `CARDIOTWIN_LOG_LEVEL` | `INFO` | Python log level |
 | `CARDIOTWIN_LOG_FORMAT` | `json` | `json` (one object per line, with `request_id`) or `text` |
