@@ -137,8 +137,12 @@ const SECTION_OFF = 3;
  * centre sits between the pulmonary valve and the venous inflow (manifest frame: origin = heart centre).
  */
 export const PULMONARY_CLIP = { centre: [0, 0.28, -0.15] as const, radius: 0.58, feather: 0.2 } as const;
-/** Systemic great vessels: the arch stays, the descending aorta and the IVC fade into the dark stage. */
-export const GREAT_VESSEL_CLIP = { radius: 1.35, feather: 0.45 } as const;
+/**
+ * Systemic great vessels (V2 §5.15 "clean silhouette"): a sphere a little above the heart centre keeps the
+ * aortic root, the arch and the SVC; the head-and-neck branches, the brachiocephalic veins, the descending
+ * aorta and the IVC fade out with real alpha inside the frame instead of running off the stage edges.
+ */
+export const GREAT_VESSEL_CLIP = { centre: [0, 0.22, -0.05] as const, radius: 1.08, feather: 0.36 } as const;
 /** Outer ghosts in the workstation stay faint (V2 §5.15: α ≤ 0.12). */
 const WORKSTATION_GHOST = 0.4;
 
@@ -155,6 +159,7 @@ function defaultFlyIn(kind: TissueKind, restOffset: Vector3): Vector3 {
     case 'valve':
     case 'papillary':
     case 'cardiacVein':
+    case 'fat':
       return new Vector3(0.05, -0.25, -1.1);
     default: {
       const d = restOffset.lengthSq() > 1e-6 ? restOffset.clone().normalize() : new Vector3(0, 0, 1);
@@ -201,7 +206,7 @@ export class AnatomyRig {
     this.shared.clip.uClipCentre.value.set(...PULMONARY_CLIP.centre);
     this.shared.clip.uClipRadius.value = PULMONARY_CLIP.radius;
     this.shared.clip.uClipFeather.value = PULMONARY_CLIP.feather;
-    this.shared.clipGreat.uClipCentre.value.set(0, 0.05, -0.05);
+    this.shared.clipGreat.uClipCentre.value.set(...GREAT_VESSEL_CLIP.centre);
     this.shared.clipGreat.uClipRadius.value = GREAT_VESSEL_CLIP.radius;
     this.shared.clipGreat.uClipFeather.value = GREAT_VESSEL_CLIP.feather;
     this.assembly = new AssemblyClock(!options.assemble);
@@ -518,9 +523,10 @@ export class AnatomyRig {
       const inner = (entry.kind === 'valve' || entry.kind === 'papillary') && heartOpen < 0.02 && !inp.section;
       if (!layerVisible || inner || (inp.isolate && sel && !isolateMember) || (entry.kind === 'cardiacVein' && !inp.showVeins)) {
         solidT = 0;
-      } else if (entry.kind === 'cardiacVein') {
-        // Shown on request only, as a translucent atlas-blue overlay: visibly "not modelled", never a
-        // solid tube that could be mistaken for a low-risk (blue) artery (LUMEN §7.3: 20 % opacity).
+      } else if (entry.kind === 'cardiacVein' && inp.look === 'clinical') {
+        // Clinical: a translucent overlay, visibly "not modelled", never a solid tube that could be mistaken
+        // for a low-risk artery (LUMEN §7.3: 20 % opacity). Realistic shows them solid in a greyed venous
+        // plum from the baked maps (tissue.ts), out of bloom and risk colour.
         solidT = 0;
         ghostT = 1;
       } else if (entry.kind === 'skin') {

@@ -51,7 +51,7 @@ const EMPTY_INPUTS: RigInputs = {
   selected: null,
   isolate: false,
   ghostOthers: false,
-  showVeins: false,
+  showVeins: true,
   section: false,
   sectionDepth: 0,
   reduced: false,
@@ -156,7 +156,8 @@ export function GlbAnatomy({ url }: { url: string }) {
   const picker = useMemo(() => {
     if (!rig) return null;
     const lines = (vessels?.vessels ?? null) as CentrelineLike[] | null;
-    return new Picker(rig.entries, (manifest as { segments?: unknown } | undefined)?.segments, lines);
+    const extra = manifest as { segments?: unknown; veins?: unknown } | undefined;
+    return new Picker(rig.entries, extra?.segments, lines, extra?.veins);
   }, [rig, vessels, manifest]);
   useEffect(() => {
     if (!picker) return;
