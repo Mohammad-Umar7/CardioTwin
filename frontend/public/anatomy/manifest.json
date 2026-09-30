@@ -21,29 +21,29 @@
       1237.01
     ]
   },
-  "explode_semantics": "displayed position = rest position + t * (layer.explode + structure.explode), t in [0, 1], in the parent layer's space (scene units). Heart halves separate along the cut-plane normal; coronary branches and cardiac veins follow their heart half and peel radially outward.",
+  "explode_semantics": "displayed position = rest position + t * (layer.explode + structure.explode), t in [0, 1], in the parent layer's space (scene units). The anterior heart half swings open along the cut-plane normal while the posterior half, valves and great vessels stay; coronary branches and cardiac veins ride on the heart half they lie on. The skin is an enclosing shell: fade it out as it peels. camera.exploded frames the fully exploded layout (t = 1).",
   "heart": {
     "cut_plane": {
       "point": [
-        0.18852,
-        -0.27438,
-        0.18255
+        0.18953,
+        -0.27303,
+        0.18293
       ],
       "normal": [
-        -0.44509,
-        0.23202,
-        0.8649
+        -0.44673,
+        0.22986,
+        0.86464
       ]
     },
     "long_axis": [
-      -0.76695,
-      0.3998,
-      -0.50194
+      -0.76884,
+      0.39559,
+      -0.50239
     ],
     "apex": [
-      0.46536,
-      -0.41869,
-      0.36373
+      0.46737,
+      -0.41599,
+      0.36448
     ],
     "base_center": [
       -0.08832,
@@ -265,8 +265,8 @@
       "layer": "muscle",
       "target": null,
       "explode": [
-        1.65,
-        0.35,
+        1.55,
+        0.45,
         0.0
       ],
       "description": "Clavicular and sternocostal parts of the left pectoralis major, the large fan-shaped muscle overlying the anterior chest wall.",
@@ -278,20 +278,20 @@
         "FMA34691"
       ],
       "center": [
-        0.7015,
-        0.1933,
-        0.2961
+        0.7035,
+        0.1924,
+        0.2948
       ],
       "bbox": {
         "min": [
-          -0.1902,
-          -0.7577,
-          -0.3942
+          -0.1874,
+          -0.759,
+          -0.3959
         ],
         "max": [
-          1.5933,
-          1.1443,
-          0.9864
+          1.5943,
+          1.1438,
+          0.9856
         ]
       },
       "triangles": 7000
@@ -303,8 +303,8 @@
       "layer": "muscle",
       "target": null,
       "explode": [
-        -1.65,
-        0.35,
+        -1.55,
+        0.45,
         0.0
       ],
       "description": "Clavicular and sternocostal parts of the right pectoralis major.",
@@ -316,23 +316,23 @@
         "FMA34690"
       ],
       "center": [
-        -1.1373,
-        0.1935,
+        -1.1383,
+        0.1916,
         0.2966
       ],
       "bbox": {
         "min": [
-          -2.0227,
-          -0.7605,
-          -0.3935
+          -2.0252,
+          -0.7611,
+          -0.3918
         ],
         "max": [
-          -0.252,
-          1.1475,
-          0.9867
+          -0.2514,
+          1.1443,
+          0.985
         ]
       },
-      "triangles": 6999
+      "triangles": 7000
     },
     {
       "id": "ribs_l",
@@ -341,9 +341,9 @@
       "layer": "skeleton",
       "target": null,
       "explode": [
-        1.35,
-        0.0,
-        0.15
+        1.95,
+        -0.1,
+        0.1
       ],
       "description": "Left ribs 1–12: true ribs 1–7 articulate with the sternum through their costal cartilages, false ribs 8–10 join the costal margin and floating ribs 11–12 end free.",
       "territory": null,
@@ -389,9 +389,9 @@
       "layer": "skeleton",
       "target": null,
       "explode": [
-        -1.35,
-        0.0,
-        0.15
+        -1.95,
+        -0.1,
+        0.1
       ],
       "description": "Right ribs 1–12 forming the right half of the bony thoracic cage.",
       "territory": null,
@@ -438,8 +438,8 @@
       "target": null,
       "explode": [
         0.0,
-        -1.15,
-        0.9
+        -1.2,
+        1.2
       ],
       "description": "Hyaline costal cartilages: the individual cartilages of ribs 1–7 forming the sternocostal joints, and the fused cartilages of ribs 8–10 that form the costal margin.",
       "territory": null,
@@ -490,8 +490,8 @@
       "target": null,
       "explode": [
         0.0,
-        1.35,
-        1.0
+        1.15,
+        1.2
       ],
       "description": "Manubrium, body and xiphoid process of the sternum; the heart lies directly behind its lower half.",
       "territory": null,
@@ -528,8 +528,8 @@
       "layer": "skeleton",
       "target": null,
       "explode": [
-        0.95,
-        0.95,
+        1.1,
+        0.7,
         0.3
       ],
       "description": "Left collarbone, strut between the sternum and the shoulder.",
@@ -565,8 +565,8 @@
       "layer": "skeleton",
       "target": null,
       "explode": [
-        -0.95,
-        0.95,
+        -1.1,
+        0.7,
         0.3
       ],
       "description": "Right collarbone, strut between the sternum and the shoulder.",
@@ -604,7 +604,7 @@
       "explode": [
         0.0,
         0.0,
-        -1.3
+        -1.8
       ],
       "description": "Twelve thoracic vertebrae forming the posterior wall of the thorax; the descending aorta runs along their left anterior surface.",
       "territory": null,
@@ -650,9 +650,9 @@
       "layer": "lungs",
       "target": null,
       "explode": [
-        1.95,
+        0.8,
         0.0,
-        -0.25
+        -0.5
       ],
       "description": "Left lung (upper and lower lobes). Its cardiac notch accommodates the heart, which is why most of the heart lies left of the midline.",
       "territory": null,
@@ -688,9 +688,9 @@
       "layer": "lungs",
       "target": null,
       "explode": [
-        -1.95,
+        -0.8,
         0.0,
-        -0.25
+        -0.5
       ],
       "description": "Right lung (upper, middle and lower lobes).",
       "territory": null,
@@ -728,8 +728,8 @@
       "target": null,
       "explode": [
         0.0,
-        1.05,
-        -0.25
+        0.5,
+        -0.5
       ],
       "description": "Trachea and bronchial tree; the tracheal bifurcation (carina) lies just above and behind the left atrium.",
       "territory": null,
@@ -802,9 +802,9 @@
       "layer": "heart",
       "target": "CAD",
       "explode": [
-        -0.4673,
-        0.2436,
-        0.9081
+        -0.8074,
+        0.1839,
+        0.6917
       ],
       "description": "Anterior half of the heart wall (epicardial and endocardial surfaces), opened along the long axis. Vertex colours carry approximate LAD / LCX / RCA perfusion-territory weights (AHA 17-segment convention) — not a lesion map.",
       "territory": null,
@@ -814,23 +814,23 @@
         "FMA7274"
       ],
       "center": [
-        -0.0211,
-        0.0107,
-        0.1323
+        -0.0213,
+        0.0114,
+        0.1322
       ],
       "bbox": {
         "min": [
-          -0.5776,
+          -0.5773,
           -0.5053,
           -0.2831
         ],
         "max": [
-          0.5353,
-          0.5268,
-          0.5478
+          0.5348,
+          0.5282,
+          0.5475
         ]
       },
-      "triangles": 54087,
+      "triangles": 54837,
       "territory_weights": {
         "attribute": "COLOR_0",
         "channels": {
@@ -848,9 +848,9 @@
       "layer": "heart",
       "target": "CAD",
       "explode": [
-        0.4673,
-        -0.2436,
-        -0.9081
+        0.0,
+        0.0,
+        0.0
       ],
       "description": "Posterior half of the heart wall including the inferior (diaphragmatic) surface and the atria. Vertex colours carry approximate perfusion-territory weights — not a lesion map.",
       "territory": null,
@@ -860,23 +860,23 @@
         "FMA7274"
       ],
       "center": [
-        0.0217,
-        -0.0366,
+        0.0219,
+        -0.0362,
         -0.0909
       ],
       "bbox": {
         "min": [
-          -0.5343,
+          -0.5338,
           -0.5267,
-          -0.548
+          -0.5484
         ],
         "max": [
-          0.5776,
-          0.4535,
-          0.3662
+          0.5775,
+          0.4544,
+          0.3666
         ]
       },
-      "triangles": 57010,
+      "triangles": 55804,
       "territory_weights": {
         "attribute": "COLOR_0",
         "channels": {
@@ -968,9 +968,9 @@
       "layer": "heart",
       "target": null,
       "explode": [
-        0.0,
-        0.0,
-        0.0
+        -0.8074,
+        0.1839,
+        0.6917
       ],
       "description": "Semilunar valve at the right-ventricular outflow into the pulmonary trunk.",
       "territory": null,
@@ -1047,7 +1047,7 @@
       "target": null,
       "explode": [
         0.0,
-        0.35,
+        0.0,
         0.0
       ],
       "description": "Ascending aorta, aortic arch and thoracic descending aorta. Both coronary arteries arise from the aortic sinuses just above the aortic valve.",
@@ -1086,10 +1086,10 @@
       "target": null,
       "explode": [
         0.0,
-        0.35,
-        0.15
+        0.0,
+        0.0
       ],
-      "description": "Pulmonary trunk and its right and left branches carrying deoxygenated blood from the right ventricle to the lungs.",
+      "description": "Pulmonary trunk, its right and left branches and the intrapulmonary arterial tree, carrying deoxygenated blood from the right ventricle to the lungs.",
       "territory": null,
       "category": "PulmonaryArtery",
       "material": "GreatVessel_PulmonaryArtery_Mat",
@@ -1124,9 +1124,9 @@
       "explode": [
         0.0,
         0.0,
-        -0.35
+        0.0
       ],
-      "description": "Pulmonary veins returning oxygenated blood from the lungs to the left atrium.",
+      "description": "Pulmonary veins and their intrapulmonary tributaries, returning oxygenated blood from the lungs to the left atrium.",
       "territory": null,
       "category": "PulmonaryVein",
       "material": "GreatVessel_PulmonaryVeins_Mat",
@@ -1159,8 +1159,8 @@
       "layer": "heart",
       "target": null,
       "explode": [
-        -0.2,
-        0.35,
+        0.0,
+        0.0,
         0.0
       ],
       "description": "Superior vena cava draining the upper body into the right atrium.",
@@ -1196,8 +1196,8 @@
       "layer": "heart",
       "target": null,
       "explode": [
-        -0.2,
-        -0.35,
+        0.0,
+        0.0,
         0.0
       ],
       "description": "Terminal thoracic segment of the inferior vena cava entering the right atrium through the diaphragm.",
@@ -1233,9 +1233,9 @@
       "layer": "heart",
       "target": null,
       "explode": [
-        0.5604,
-        -0.4194,
-        -0.8142
+        0.0,
+        0.0,
+        0.0
       ],
       "description": "Coronary sinus with the great, middle, anterior and posterior LV cardiac veins, which run alongside the coronary arteries and drain the myocardium into the right atrium.",
       "territory": null,
@@ -1274,9 +1274,9 @@
       "layer": "coronary",
       "target": null,
       "explode": [
-        -0.3765,
-        0.6122,
-        0.8901
+        -0.8074,
+        0.1839,
+        0.6917
       ],
       "description": "Short left main stem arising from the left aortic sinus and bifurcating into the LAD and LCX. The dataset has no separate left-main label, so this segment is not colour-coded by the model.",
       "territory": "Entire LAD and LCX territories (via its two branches)",
@@ -1315,9 +1315,9 @@
       "layer": "coronary",
       "target": "LAD",
       "explode": [
-        -0.169,
-        0.1663,
-        1.1304
+        -0.8074,
+        0.1839,
+        0.6917
       ],
       "description": "Runs in the anterior interventricular groove to the apex, giving diagonal branches to the anterolateral wall and septal perforators to the septum.",
       "territory": "Anterior wall, anterior two-thirds of the interventricular septum and the apex (AHA segments 1, 2, 7, 8, 13, 14, 17)",
@@ -1352,9 +1352,9 @@
       "layer": "coronary",
       "target": "LAD",
       "explode": [
-        -0.2141,
-        0.2186,
-        1.1903
+        -0.8074,
+        0.1839,
+        0.6917
       ],
       "description": "Septal perforating branches of the LAD penetrating the interventricular septum.",
       "territory": "Anterior two-thirds of the interventricular septum",
@@ -1389,9 +1389,9 @@
       "layer": "coronary",
       "target": "LCX",
       "explode": [
-        0.8362,
-        -0.2968,
-        -0.9823
+        0.0,
+        0.0,
+        0.0
       ],
       "description": "Runs in the left atrioventricular groove around the left border of the heart, giving obtuse marginal branches to the lateral wall.",
       "territory": "Lateral (anterolateral and inferolateral) wall of the left ventricle (AHA segments 5, 6, 11, 12, 16)",
@@ -1426,9 +1426,9 @@
       "layer": "coronary",
       "target": "RCA",
       "explode": [
-        -0.8314,
-        0.202,
-        1.0087
+        -0.8074,
+        0.1839,
+        0.6917
       ],
       "description": "Arises from the right aortic sinus and runs in the right atrioventricular groove to the crux of the heart; supplies the right ventricle, the SA and AV nodes (in most people) and, in right-dominant hearts, the inferior wall.",
       "territory": "Right ventricle, inferior wall and inferior septum (AHA segments 3, 4, 9, 10, 15)",
@@ -1463,9 +1463,9 @@
       "layer": "coronary",
       "target": "RCA",
       "explode": [
-        -0.5029,
-        0.1653,
-        1.2783
+        -0.8074,
+        0.1839,
+        0.6917
       ],
       "description": "Right (acute) marginal branch of the RCA running along the acute margin of the right ventricle.",
       "territory": "Right-ventricular free wall",
@@ -1500,9 +1500,9 @@
       "layer": "coronary",
       "target": "RCA",
       "explode": [
-        0.5594,
-        -0.5928,
-        -0.7898
+        0.0,
+        0.0,
+        0.0
       ],
       "description": "Posterior interventricular branch; arises from the RCA in this right-dominant anatomy and runs in the posterior interventricular groove.",
       "territory": "Inferior wall and inferior third of the septum (AHA segments 3, 4, 9, 10, 15)",
@@ -1537,9 +1537,9 @@
       "layer": "coronary",
       "target": "RCA",
       "explode": [
-        0.6603,
-        -0.5652,
-        -0.9696
+        0.0,
+        0.0,
+        0.0
       ],
       "description": "Right posterolateral branch continuing beyond the crux onto the inferolateral left ventricle.",
       "territory": "Inferior / inferolateral base of the left ventricle",
@@ -1574,9 +1574,9 @@
       "layer": "coronary",
       "target": "RCA",
       "explode": [
-        0.4494,
-        -0.6217,
-        -0.874
+        0.0,
+        0.0,
+        0.0
       ],
       "description": "Inferior septal branches arising from the PDA / RCA.",
       "territory": "Inferior third of the interventricular septum",
@@ -1633,6 +1633,20 @@
       ],
       "fov": 35.0
     },
+    "exploded": {
+      "position": [
+        -0.2154,
+        0.755,
+        12.3547
+      ],
+      "target": [
+        -0.2154,
+        -0.7251,
+        0.0204
+      ],
+      "fov": 35.0,
+      "aspect": 1.7778
+    },
     "focus": {
       "skin_torso": {
         "position": [
@@ -1649,26 +1663,26 @@
       },
       "pectoralis_l": {
         "position": [
-          5.3301,
-          1.8144,
-          3.0847
+          5.3368,
+          1.8133,
+          3.0744
         ],
         "target": [
-          0.7015,
-          0.1933,
-          0.2961
+          0.7035,
+          0.1924,
+          0.2948
         ],
         "fov": 35.0
       },
       "pectoralis_r": {
         "position": [
-          -5.7668,
-          1.8124,
-          3.069
+          -5.767,
+          1.8098,
+          3.0657
         ],
         "target": [
-          -1.1373,
-          0.1935,
+          -1.1383,
+          0.1916,
           0.2966
         ],
         "fov": 35.0
@@ -1818,26 +1832,26 @@
       },
       "heart_wall_anterior": {
         "position": [
-          -1.3495,
-          1.5985,
-          2.7136
+          -1.3553,
+          1.5937,
+          2.7142
         ],
         "target": [
-          -0.0211,
-          0.0107,
-          0.1323
+          -0.0213,
+          0.0114,
+          0.1322
         ],
         "fov": 35.0
       },
       "heart_wall_posterior": {
         "position": [
-          1.5417,
-          0.1956,
-          -3.0447
+          1.547,
+          0.2033,
+          -3.0427
         ],
         "target": [
-          0.0217,
-          -0.0366,
+          0.0219,
+          -0.0362,
           -0.0909
         ],
         "fov": 35.0
