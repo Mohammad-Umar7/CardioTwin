@@ -28,6 +28,7 @@ import { getRiskLUT } from '../riskLut';
 import type { SceneLook } from '../stage/sceneControls';
 import { sceneRuntime } from '../stage/sceneRuntime';
 import { AssemblyClock, stageById, stagePose, type AssemblyStage } from './assembly';
+import { ANTERIOR_SUFFIX, SPLIT_AT_CUT } from './cutSplit';
 import { BEAT_UNIFORMS, beatMatrix, setBeatFrame } from './beatDeform';
 import { cavityAttribute, type CentrelinePoint } from './cavity';
 import { axial, correctWeights, meanAngle, rvShare } from './territory';
@@ -238,17 +239,18 @@ export function smoothNormals(g: BufferGeometry): void {
 /** Upload order of the baked maps (kinds not listed follow). */
 const TEXTURE_ORDER: readonly TissueKind[] = ['myocardium', 'fat', 'cardiacVein', 'aorta', 'pulmonaryArtery', 'pulmonaryVeins', 'systemicVein'];
 
-/** Nodes split at the heart's cut plane at load (the anterior part rides the opening wall). */
-const SPLIT_VEINS = 'CardiacVeins';
-export const ANTERIOR_SUFFIX = '_Anterior';
+/** The wall the posterior part of a split node stays on. */
+const POSTERIOR_WALL = 'Heart_Wall_Posterior';
 
 /**
- * Split `node` (one mesh, riding the posterior wall) at the heart's cut plane: triangles whose centroid lies
- * on the opening side (+cut normal) move to a sibling mesh `<node>_Anterior` that shares the vertex buffers
- * (and so the `_VEIN` codes and baked maps) and rides the anterior wall with its explode vector. Idempotent
- * (a rebuilt rig on the same scene finds the sibling already there).
+ * Split `node` (one mesh) at the heart's cut plane: triangles whose centroid lies on the opening side (+cut
+ * normal) move to a sibling mesh `<node>_Anterior` that shares the vertex buffers (and so the `_VEIN` /
+ * `_SEGMENT` codes, `_ARCLEN` and the baked maps) and rides the anterior wall with its explode vector; the
+ * rest rides the posterior wall, whatever the manifest's `rides` says for the whole node (anatomy 1.1.0 puts
+ * the LAD on the posterior half and the RCA on the anterior one). Idempotent (a rebuilt rig on the same scene
+ * finds the sibling already there).
  */
-function splitAtCutPlane(root: Object3D, rootInverse: Matrix4, node: string, frame: HeartFrame, specs: Map<string, ExplodeSpec>, wall: string): void {
+function splitAtCutPlane(root: Object3D, rootInverse: Matrix4, node: string, frame: HeartFrame, specs: Map<string, ExplodeSpec>): void {
   const name = `${node}${ANTERIOR_SUFFIX}`;
   let found: Mesh | null = null;
   let done = false;
@@ -257,11 +259,15 @@ function splitAtCutPlane(root: Object3D, rootInverse: Matrix4, node: string, fra
     if (!found && o instanceof Mesh && !o.userData.ctGhost && (o.name === node || (!o.name && o.parent?.name === node))) found = o;
   });
   const source = found as Mesh | null;
-  const base = specs.get(node);
-  const wallSpec = specs.get(wall);
-  if (source && base && wallSpec && !specs.has(name)) {
-    specs.set(name, { ...base, node: name, vector: wallSpec.vector.clone(), rides: wall, hinge: null });
-  }
+  const setSpecs = () => {
+    const base = specs.get(node);
+    const frontWall = specs.get(OPENING_WALL);
+    const backWall = specs.get(POSTERIOR_WALL);
+    if (!base || !frontWall || !backWall || specs.has(name)) return;
+    specs.set(name, { ...base, node: name, vector: frontWall.vector.clone(), rides: OPENING_WALL, hinge: null });
+    specs.set(node, { ...base, vector: backWall.vector.clone(), rides: POSTERIOR_WALL, hinge: null });
+  };
+  if (done) setSpecs();
   if (done || !source) return;
   const g = source.geometry as BufferGeometry;
   const pos = g.getAttribute('position');
@@ -305,6 +311,7 @@ function splitAtCutPlane(root: Object3D, rootInverse: Matrix4, node: string, fra
   anterior.frustumCulled = source.frustumCulled;
   source.parent?.add(anterior);
   anterior.updateMatrixWorld(true);
+  setSpecs();
 }
 
 const texturesOf = (e: RigEntry): Texture[] =>
@@ -366,10 +373,11 @@ export class AnatomyRig {
 
     root.updateWorldMatrix(true, true);
     const rootInverse = root.matrixWorld.clone().invert();
-    // The cardiac veins are one GLB node on the posterior wall: split them at the heart's cut plane so the
-    // anterior veins (the AIV beside the LAD, the anterior cardiac veins) open with the anterior half instead
-    // of floating across the opened chambers.
-    splitAtCutPlane(root, rootInverse, SPLIT_VEINS, this.frame, specs, OPENING_WALL);
+    // The cardiac veins, the LAD and the RCA each straddle the heart's cut plane: split them there, like a
+    // specimen cut in two, so the anterior veins (the AIV), the LAD in the anterior interventricular groove and
+    // the RCA in the right AV groove open WITH the anterior half instead of hanging over the opened chambers,
+    // while the LAD's proximal stretch at the left main and the RCA's crux end stay on the posterior half.
+    for (const node of SPLIT_AT_CUT) splitAtCutPlane(root, rootInverse, node, this.frame, specs);
     const meshes: Mesh[] = [];
     root.traverse((o) => {
       if (o instanceof Mesh && !o.userData.ctGhost) meshes.push(o);
@@ -385,6 +393,8 @@ export class AnatomyRig {
       const layerId = s?.layer ?? layerIdOfNode.get(node) ?? layerIdOfNode.get(layerNode) ?? layerNode.replace(/^Layer_/, '').toLowerCase();
       let target: TargetId | null = null;
       for (let p: Object3D | null = mesh; p && !target; p = p.parent) target = options.nodeTargets.get(p.name) ?? null;
+      // A split part answers to the vessel it was cut from (risk colour, selection, picking).
+      target ??= options.nodeTargets.get(mesh.userData.ctSplitFrom as string) ?? null;
       const restWorld = rootInverse.clone().multiply(mesh.matrixWorld);
       const restOffset = new Vector3().setFromMatrixPosition(restWorld);
       const restMatrix = mesh.matrix.clone();
@@ -888,4 +898,4 @@ export class AnatomyRig {
 
 /** Kinds whose solid material carries risk colour (vessel targets). */
 export const isVesselKind = (kind: TissueKind) => kind === 'coronary' || kind === 'leftMain';
-export { CLIPPED_TREE_KINDS };
+export { CLIPPED_TREE_KINDS, ANTERIOR_SUFFIX };

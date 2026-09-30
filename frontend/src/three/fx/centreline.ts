@@ -276,9 +276,15 @@ export function resamplePolyline(
 
 /**
  * All flow paths of the coronary tree, resampled at `step`. `nodeIndex` maps a vessel node name to the
- * index used for its transform in the shader.
+ * index used for its transform in the shader; `nodeFor` names the scene node that carries a given point of a
+ * vessel (a vessel split at the heart's cut plane rides two nodes, anatomy/cutSplit.ts).
  */
-export function buildFlowPaths(file: CentrelineFile, nodeIndex: ReadonlyMap<string, number>, step = DEFAULT_STEP): FlowPath[] {
+export function buildFlowPaths(
+  file: CentrelineFile,
+  nodeIndex: ReadonlyMap<string, number>,
+  step = DEFAULT_STEP,
+  nodeFor: (node: string, point: Vec3) => string = (node) => node,
+): FlowPath[] {
   const arc = computeArcLengths(file);
   // Which segment tips hand their flow over to a child?
   const handover = new Set<string>();
@@ -301,11 +307,10 @@ export function buildFlowPaths(file: CentrelineFile, nodeIndex: ReadonlyMap<stri
       for (const piece of pieces) {
         const v = file.vessels[piece.vessel]!;
         const seg = v.segments[piece.segment]!;
-        const node = nodeIndex.get(v.node) ?? 0;
         for (let i = piece.from; i <= piece.to; i += 1) {
           points.push(seg.points[i]!);
           radii.push(seg.radius?.[i] ?? DEFAULT_RADIUS);
-          nodes.push(node);
+          nodes.push(nodeIndex.get(nodeFor(v.node, seg.points[i]!)) ?? nodeIndex.get(v.node) ?? 0);
         }
       }
       const { positions, attributes, source, count } = resamplePolyline(points, step, [radii]);

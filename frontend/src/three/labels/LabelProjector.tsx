@@ -7,6 +7,8 @@ import { useViewerStore } from '@/state/viewerStore';
 import { anchorsVersion, getAnchors } from '../anatomy/anchors';
 import { BEAT_UNIFORMS } from '../anatomy/beatDeform';
 import { BEATS_WITH_HEART, type TissueKind } from '../anatomy/classify';
+import { ANTERIOR_SUFFIX, cutSide, isSplitNode } from '../anatomy/cutSplit';
+import { heartFrameFrom } from '../anatomy/explode';
 import { useCameraState } from '../camera/cameraState';
 import { collectOccluders, isOccluded } from '../camera/occlusion';
 import { freeArea, heartBox } from '../camera/framing';
@@ -56,6 +58,7 @@ const eye = new Vector3();
 const tmpPos = new Vector3();
 const tmpNormal = new Vector3();
 const displayed = new Matrix4();
+const displayedFront = new Matrix4();
 
 /** Writes a style / attribute only when it changed (the projector runs every frame). */
 const cache = new WeakMap<Element, Record<string, string>>();
@@ -132,6 +135,7 @@ export function LabelProjector() {
     chambers: null as ChamberAnchor[] | null,
   });
   const axis = useMemo(() => heartAxisFrame(manifest), [manifest]);
+  const cut = useMemo(() => heartFrameFrom(manifest?.heart), [manifest]);
 
   /** Occluders with a ready BVH, refreshed once a second (hidden layers drop out). */
   const occludersFor = (now: number): Mesh[] => {
@@ -259,21 +263,28 @@ export function LabelProjector() {
       let face = 1;
       if (track && track.centre && mesh) {
         const kind = mesh.userData.ctKind as TissueKind;
-        restToDisplayed(mesh, track.centre, BEATS_WITH_HEART.has(kind) ? BEAT_UNIFORMS.uBeatMatrix.value : null, displayed);
+        const beat = BEATS_WITH_HEART.has(kind) ? BEAT_UNIFORMS.uBeatMatrix.value : null;
+        restToDisplayed(mesh, track.centre, beat, displayed);
+        // A vessel split at the cut plane (cutSplit.ts): its opening-side trunk rides the anterior half.
+        const front = isSplitNode(track.node) ? nodeMesh(`${track.node}${ANTERIOR_SUFFIX}`, now) : null;
+        if (front) restToDisplayed(front, track.centre, beat, displayedFront);
+        const matrixOf = (rest: Vector3) => (front && cutSide(cut, rest.toArray()) > 0 ? displayedFront : displayed);
         const pick = track.chooser.update(now, () => {
           // Facing the camera first; a facing point hidden behind an atrium or a great vessel ranks below
           // every unobstructed one (P0-2: the label points at something the viewer can see).
           const occluders = occludersFor(now);
           return track.candidates.map((c) => {
-            tmpPos.copy(c.rest).applyMatrix4(displayed);
-            tmpNormal.copy(c.normal).transformDirection(displayed);
+            const m = matrixOf(c.rest);
+            tmpPos.copy(c.rest).applyMatrix4(m);
+            tmpNormal.copy(c.normal).transformDirection(m);
             const f = facing(tmpPos, tmpNormal, eye);
             return f > 0 && isOccluded(eye, tmpPos, occluders) ? f - 1.5 : f;
           });
         });
         const c = track.candidates[Math.max(0, pick)]!;
-        anchor = tmpPos.copy(c.rest).applyMatrix4(displayed).clone();
-        face = facing(anchor, tmpNormal.copy(c.normal).transformDirection(displayed), eye);
+        const m = matrixOf(c.rest);
+        anchor = tmpPos.copy(c.rest).applyMatrix4(m).clone();
+        face = facing(anchor, tmpNormal.copy(c.normal).transformDirection(m), eye);
         // Hidden by another structure at the last evaluation counts as "behind".
         if ((track.chooser.scores[pick] ?? 0) < -0.5) face = Math.min(face, -0.01);
       } else {

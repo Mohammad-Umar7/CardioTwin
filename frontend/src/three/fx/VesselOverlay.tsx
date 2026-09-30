@@ -4,6 +4,7 @@ import { type Group, Mesh, type Vector3, type BufferGeometry, type Object3D } fr
 import { useSchemaIndex } from '@/hooks/useData';
 import type { RenderTier } from '@/state/viewerStore';
 import { BEAT_MODE } from '../anatomy/beatDeform';
+import { baseNode } from '../anatomy/cutSplit';
 import { VESSEL_INFLATE } from '../anatomy/materials';
 import { getRiskLUT } from '../riskLut';
 import { sceneRuntime } from '../stage/sceneRuntime';
@@ -115,13 +116,15 @@ export function VesselOverlay({ tier, treeLengthOf, restOffsetOf }: VesselOverla
       let target: string | undefined;
       while (node && node !== scene) {
         if (!nodeName && /^Coronary_/.test(node.name)) nodeName = node.name;
-        target ??= nodeTarget.get(node.name);
+        // A part split at the cut plane (`Coronary_LAD_Anterior`) answers to the vessel it was cut from.
+        target ??= nodeTarget.get(node.name) ?? nodeTarget.get(baseNode(node.name));
         node = node.parent;
       }
-      const rest = restOffsetOf(nodeName);
+      const source = baseNode(nodeName);
+      const rest = restOffsetOf(source);
       const material = createOverlayMaterial(shared, attribute, rest ? BEAT_MODE.atrial : BEAT_MODE.none);
       if (rest) material.uniforms.uRestOffset.value.copy(rest);
-      material.uniforms.uTreeLength.value = treeLengthOf(nodeName) ?? 1;
+      material.uniforms.uTreeLength.value = treeLengthOf(source) ?? 1;
       const overlay = new Mesh(object.geometry, material);
       overlay.name = `FX_Overlay_${nodeName || object.name}`;
       overlay.userData.ctFx = true;

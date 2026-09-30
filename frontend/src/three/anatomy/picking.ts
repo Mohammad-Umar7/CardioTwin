@@ -21,6 +21,7 @@ import {
 import { MeshBVH, acceleratedRaycast, type HitPointInfo } from 'three-mesh-bvh';
 import type { PickInfo } from '../stage/pickStore';
 import { PICKABLE_KINDS } from './classify';
+import { ANTERIOR_SUFFIX, isSplitNode, splitSegments } from './cutSplit';
 import { GREAT_VESSEL_CLIP, PULMONARY_CLIP, type RigEntry } from './rig';
 import { ALONG_FADE } from './tissue';
 import type { HeartFrame } from './explode';
@@ -189,11 +190,20 @@ export class Picker {
         if (faded) for (let i = hits.length - 1; i >= before; i -= 1) if (faded(hits[i]!)) hits.splice(i, 1);
       };
     }
-    // Proxy tubes: children of their vessel node, so they explode, hinge and beat with it.
+    // Proxy tubes: children of their vessel node, so they explode, hinge and beat with it. A vessel split at
+    // the cut plane (cutSplit.ts) gets one proxy per part, each on the half it rides.
+    const parts: { entry: RigEntry; segments: CentrelineLike['segments'] }[] = [];
     for (const v of vessels ?? []) {
       const entry = entries.find((e) => e.node === v.node);
       if (!entry || (entry.kind !== 'coronary' && entry.kind !== 'leftMain')) continue;
-      const geometry = buildProxyGeometry(v.segments, entry.restOffset);
+      const sibling = isSplitNode(v.node) ? entries.find((e) => e.node === `${v.node}${ANTERIOR_SUFFIX}`) : undefined;
+      if (sibling && frame) {
+        const { back, front } = splitSegments(frame, v.segments);
+        parts.push({ entry, segments: back as unknown as CentrelineLike['segments'] }, { entry: sibling, segments: front as unknown as CentrelineLike['segments'] });
+      } else parts.push({ entry, segments: v.segments });
+    }
+    for (const { entry, segments } of parts) {
+      const geometry = buildProxyGeometry(segments, entry.restOffset);
       if (!geometry) continue;
       geometry.boundsTree = new MeshBVH(geometry);
       const proxy = new Mesh(geometry, proxyMaterial);

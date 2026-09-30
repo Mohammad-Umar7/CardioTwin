@@ -126,15 +126,39 @@ describe('anatomy rig: exploded view', () => {
 
   it('carries every rider with its wall so a coronary never detaches', () => {
     const { rig, node } = makeRig();
-    const probe = new Vector3(0.3, -0.1, 0.25); // a rest-frame point shared by the wall and the LAD
+    const probe = new Vector3(0.3, -0.1, 0.25); // a rest-frame point shared by the walls and the LAD
     for (const e of [0.6, 0.8, 1]) {
       rig.update(inputs({ explodeTarget: e }));
-      const wall = node('Heart_Wall_Anterior');
-      const lad = node('Coronary_LAD');
-      const viaWall = worldOf(wall.mesh, probe.clone().sub(wall.restOffset));
-      const viaLad = worldOf(lad.mesh, probe.clone().sub(lad.restOffset));
-      expect(viaLad.distanceTo(viaWall)).toBeLessThan(1e-9);
+      // The LAD is split at the cut plane: each part moves exactly with the half it lies on.
+      for (const [wallNode, part] of [
+        ['Heart_Wall_Anterior', 'Coronary_LAD_Anterior'],
+        ['Heart_Wall_Posterior', 'Coronary_LAD'],
+        ['Heart_Wall_Posterior', 'Coronary_LCX'],
+      ] as const) {
+        const wall = node(wallNode);
+        const lad = node(part);
+        const viaWall = worldOf(wall.mesh, probe.clone().sub(wall.restOffset));
+        const viaLad = worldOf(lad.mesh, probe.clone().sub(lad.restOffset));
+        expect(viaLad.distanceTo(viaWall)).toBeLessThan(1e-9);
+      }
     }
+  });
+
+  it('splits the LAD at the cut plane: the anterior interventricular groove opens with the anterior half', () => {
+    const { rig, node } = makeRig();
+    const front = node('Coronary_LAD_Anterior');
+    const back = node('Coronary_LAD');
+    expect(front.target).toBe('LAD');
+    expect(front.label).toBe('LAD');
+    expect(front.spec?.rides).toBe('Heart_Wall_Anterior');
+    expect(back.spec?.rides).toBe('Heart_Wall_Posterior');
+    const count = (m: Mesh) => (m.geometry.index ? m.geometry.index.count : m.geometry.getAttribute('position').count) / 3;
+    expect(count(front.mesh)).toBeGreaterThan(0);
+    expect(count(back.mesh)).toBeGreaterThan(0);
+    rig.update(inputs({ explodeTarget: 1 }));
+    const moved = worldOf(front.mesh).sub(new Vector3(0.33, -0.08, 0.24));
+    expect(moved.dot(new Vector3(...ANTERIOR).normalize())).toBeGreaterThan(0.7);
+    expect(worldOf(back.mesh).distanceTo(new Vector3(0.33, -0.08, 0.24))).toBeLessThan(1e-9);
   });
 
   it('beats the heart and its coronaries together but never the great vessels’ node', () => {
@@ -217,9 +241,10 @@ describe('anatomy rig: baked textures and picking', () => {
   it('queues baked GLB maps for a lazy upload and rebuilds the realistic material with them', () => {
     const { rig, node } = makeRig(false, 0.6, { baked: true });
     const pending = rig.pendingTextures();
-    expect(pending.map((p) => p.entry.node)).toEqual(['Coronary_LAD']);
+    // Both parts of the LAD split at the cut plane share its maps.
+    expect(pending.map((p) => p.entry.node)).toEqual(['Coronary_LAD', 'Coronary_LAD_Anterior']);
     expect((node('Coronary_LAD').mesh.material as MeshStandardMaterial).map).toBeNull();
-    rig.markMapsReady(pending[0]!.entry);
+    for (const p of pending) rig.markMapsReady(p.entry);
     expect((node('Coronary_LAD').mesh.material as MeshStandardMaterial).map).toBe(pending[0]!.textures[0]);
     expect(rig.pendingTextures()).toHaveLength(0);
   });

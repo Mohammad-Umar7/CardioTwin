@@ -14,7 +14,9 @@ import {
   Vector3,
   type Object3D,
 } from 'three';
-import { useSchemaIndex } from '@/hooks/useData';
+import { useManifest, useSchemaIndex } from '@/hooks/useData';
+import { ANTERIOR_SUFFIX, baseNode, isSplitNode, nodeAt } from '../anatomy/cutSplit';
+import { heartFrameFrom } from '../anatomy/explode';
 import { VESSEL_INFLATE } from '../anatomy/materials';
 import { getRiskLUT } from '../riskLut';
 import { sceneRuntime } from '../stage/sceneRuntime';
@@ -67,12 +69,17 @@ export function FlowParticles({ pristine, centrelines, count }: FlowParticlesPro
   const scene = useThree((s) => s.scene);
   const schema = useSchemaIndex();
   const targets = targetSlots(schema?.vessels.map((t) => t.id)).join('|');
+  const heart = useManifest().data?.heart;
 
   const built = useMemo(() => {
-    const nodeNames = [...new Set(centrelines.vessels.map((v) => v.node))].slice(0, MAX_NODES);
+    // A vessel split at the heart's cut plane (anatomy/cutSplit.ts) rides two scene nodes: its points on the
+    // opening side follow `<node>_Anterior` (the anterior half), so the flow opens with the heart.
+    const cut = heartFrameFrom(heart);
+    const vesselNodes = [...new Set(centrelines.vessels.map((v) => v.node))];
+    const nodeNames = [...vesselNodes, ...vesselNodes.filter(isSplitNode).map((n) => `${n}${ANTERIOR_SUFFIX}`)].slice(0, MAX_NODES);
     const nodeIndex = new Map(nodeNames.map((n, i) => [n, i]));
     const step = DEFAULT_STEP;
-    const paths = buildFlowPaths(centrelines, nodeIndex, step);
+    const paths = buildFlowPaths(centrelines, nodeIndex, step, (node, p) => nodeAt(cut, node, p));
     const arc = computeArcLengths(centrelines);
     const keep = thinningFactors(paths, particleShares(paths, MAX_PARTICLES));
     const packed = packCentrelines(paths, step, undefined, keep);
@@ -116,9 +123,10 @@ export function FlowParticles({ pristine, centrelines, count }: FlowParticlesPro
     mesh.raycast = () => {}; // never intercepts picking
     mesh.userData.ctFx = true;
 
-    const tracker = new NodeTracker(nodeNames, restInverses(pristine, nodeNames), 30, (name) => sceneRuntime.nodes[name]?.solid ?? 1);
+    // A split part has its source node's rest transform (the pristine scene has no split parts).
+    const tracker = new NodeTracker(nodeNames, restInverses(pristine, nodeNames.map(baseNode)), 30, (name) => sceneRuntime.nodes[name]?.solid ?? 1);
     return { mesh, geometry, material, texture, tracker, max: particles.count };
-  }, [centrelines, pristine, targets]);
+  }, [centrelines, pristine, targets, heart]);
 
   useEffect(
     () => () => {
