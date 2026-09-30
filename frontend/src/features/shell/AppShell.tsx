@@ -2,6 +2,7 @@ import { Suspense, lazy } from 'react';
 import { Outlet } from 'react-router-dom';
 import { SceneHost } from '@/three/SceneHost';
 import { AppBootstrap } from './AppBootstrap';
+import CommandPalette from './CommandPalette';
 import { DisclaimerModal } from './DisclaimerModal';
 import { RouteFallback } from './RouteFallback';
 import { StatusLine } from './DisclaimerBanner';
@@ -41,6 +42,7 @@ export function AppShell() {
       <AppBootstrap />
       <DisclaimerModal />
       <Toaster />
+      <CommandPalette />
       <Suspense fallback={null}>
         <TourLayer />
         <ShortcutSheet />

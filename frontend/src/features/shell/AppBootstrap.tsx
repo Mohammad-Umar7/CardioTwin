@@ -1,19 +1,19 @@
 import { useEffect } from 'react';
 import { useCohort, useSchema } from '@/hooks/useData';
-import { useHotkeys } from '@/hooks/useHotkeys';
+import { useCommandHotkeys } from '@/hooks/useCommandHotkeys';
 import { useReducedMotion } from '@/hooks/useMediaQuery';
 import { usePredictionSync } from '@/hooks/usePrediction';
 import { pickDefaultPatient, schemaDefaults } from '@/lib/patients';
 import { usePatientStore } from '@/state/patientStore';
-import { useUiStore } from '@/state/uiStore';
-import { useViewerStore } from '@/state/viewerStore';
+import { useShellCommands } from './useShellCommands';
 
 /**
  * Invisible app-level controller, mounted once by the shell:
  *   - resolves the prediction engine and keeps the prediction in sync with the inputs;
  *   - opens the default held-out TEST patient as soon as the cohort arrives (Custom from schema defaults
  *     if no cohort is available), so the landing hero and the workstation show real numbers at once;
- *   - global shortcuts that are not tied to a page (? shortcut sheet, C calm mode).
+ *   - binds every registered command's shortcut (one dispatcher, WORKSTATION_V2 §4.10) and registers the
+ *     app-level commands (palette, shortcut sheet, calm mode, focus mode, drawers, pages).
  */
 export function AppBootstrap() {
   usePredictionSync();
@@ -32,10 +32,8 @@ export function AppBootstrap() {
     }
   }, [cohort.status, cohort.data, schema.status, schema.data]);
 
-  useHotkeys({
-    '?': () => useUiStore.getState().setShortcutsOpen(true),
-    c: () => useViewerStore.getState().toggle('calm'),
-  });
+  useCommandHotkeys();
+  useShellCommands();
 
   return null;
 }
