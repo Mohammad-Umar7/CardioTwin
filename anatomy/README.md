@@ -5,7 +5,7 @@ CardioTwin's 3D viewer:
 
 | Output | What it is |
 | --- | --- |
-| `frontend/public/anatomy/cardiotwin_anatomy.glb` | 35 named anatomical nodes under 7 `Layer_*` groups (CONTRACTS §6.2), 393k triangles, **3.5 MB** (meshopt) |
+| `frontend/public/anatomy/cardiotwin_anatomy.glb` | 35 named anatomical nodes under 7 `Layer_*` groups (CONTRACTS §6.2), 393k triangles, **3.7 MB** (meshopt) |
 | `frontend/public/anatomy/manifest.json` | Layers, structures, clinical descriptions, model-target mapping, explode vectors, camera presets (§6.3) |
 | `frontend/public/anatomy/vessels.json` | Coronary centrelines, proximal → distal, with lumen radius, for blood-flow particles (§6.4) |
 | `docs/media/renders/*.jpg`, `heart_turntable.mp4` | Cycles portfolio renders |
@@ -103,12 +103,12 @@ origin — the viewer can offset or scale any node safely.
 * **Costal cartilages** — the individual cartilages of ribs 1–7 (FMA) plus the fused ribs 8–10 costal-margin sets
   (`BP24`/`BP28`); the two sets do not overlap (only the rib-7 joint touches).
 
-### Triangle budget (total 393,002 ≤ 400,000)
+### Triangle budget (total 392,547 ≤ 400,000)
 
 | Node | Layer | Source parts | Source tris | Final tris |
 | --- | --- | --- | ---: | ---: |
 | `Skin_Torso` | skin | FMA7163 (outer shell, cropped) | 23,002 | 22,000 |
-| `Pectoralis_L` / `_R` | muscle | sternocostal + clavicular parts | 41,888 / 41,658 | 7,000 / 6,999 |
+| `Pectoralis_L` / `_R` | muscle | sternocostal + clavicular parts | 41,986 / 41,758 | 7,000 / 7,000 |
 | `Ribs_L` / `Ribs_R` | skeleton | 12 ribs each | 381,430 / 374,274 | 22,000 / 22,000 |
 | `CostalCartilage` | skeleton | 14 FMA cartilages + BP24/BP28 | 100,898 | 14,000 |
 | `Sternum` | skeleton | manubrium, body, xiphoid | 35,884 | 5,000 |
@@ -117,7 +117,7 @@ origin — the viewer can offset or scale any node safely.
 | `Lung_L` / `Lung_R` | lungs | 2 / 3 lobes | 84,920 / 119,366 | 18,000 / 20,000 |
 | `Trachea_Bronchi` | lungs | trachea + bronchial tree | 125,240 | 8,000 |
 | `Diaphragm` | diaphragm | FMA13295 | 210,666 | 9,000 |
-| `Heart_Wall_Anterior` / `_Posterior` | heart | FMA7274 (opened) | 306,230 | 54,087 / 57,010 ¹ |
+| `Heart_Wall_Anterior` / `_Posterior` | heart | FMA7274 (opened) | 306,230 | 54,837 / 55,804 ¹ |
 | `Valve_Mitral` / `_Tricuspid` / `_Pulmonary` | heart | FMA7235 / 7234 / 7246 | 19,102 / 47,260 / 18,200 | 5,000 / 5,000 / 3,000 |
 | `Papillary_Muscles` | heart | 5 parts | 16,404 | 6,000 |
 | `GreatVessel_Aorta` | heart | ascending, arch, descending | 25,626 | 12,000 |
