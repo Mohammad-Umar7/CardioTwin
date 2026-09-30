@@ -9,6 +9,7 @@
  */
 import { fetchStaticJson, MissingAssetError, MODEL_DIR, memoize, metricsResource } from '@/services/staticData';
 import { useResource } from '@/hooks/useResource';
+import { EN_DASH, THIN_SPACE, formatMetricValue } from '@/lib/format';
 import { TARGET_ORDER, type MetricsReport, type TargetId } from '@/types/contracts';
 
 // ------------------------------------------------------------------------ metrics_summary.json
@@ -193,6 +194,35 @@ export function fromMetricsReport(m: MetricsReport, labels: Partial<Record<strin
 /** The target's performance entry, or null. */
 export const performanceFor = (lm: LandingMetrics | null | undefined, id: TargetId): TargetPerformance | null =>
   lm?.targets.find((t) => t.id === id) ?? null;
+
+// ------------------------------------------------------------------------------ text
+
+const PM = '±';
+
+/** "0.94 ± 0.03" */
+export const formatCv = (cv: { mean: number; std: number } | null | undefined): string =>
+  cv ? `${formatMetricValue(cv.mean)}${THIN_SPACE}${PM}${THIN_SPACE}${formatMetricValue(cv.std)}` : EN_DASH;
+
+/**
+ * One honest sentence reconciling test and CV (V2 §6.4 rule 2): the held-out value, its CI, the CV
+ * value, and whether the CI contains it.
+ */
+export function reconcileTestAndCv(t: TargetPerformance | null, nTest: number | null): string | null {
+  if (!t?.testAuc || !t.cvAuc) return null;
+  const test = formatMetricValue(t.testAuc.value);
+  const ci = t.testAuc.ci;
+  const cv = formatCv(t.cvAuc);
+  const n = nTest ? `n${THIN_SPACE}=${THIN_SPACE}${nTest}, ` : '';
+  const ciText = ci ? `CI ${formatMetricValue(ci[0])}${EN_DASH}${formatMetricValue(ci[1])}` : 'no CI';
+  const relation = t.testAuc.value < t.cvAuc.mean ? 'below' : t.testAuc.value > t.cvAuc.mean ? 'above' : 'equal to';
+  const contains = ci ? ci[0] <= t.cvAuc.mean && t.cvAuc.mean <= ci[1] : false;
+  return (
+    `Test ROC-AUC ${test} (${n}${ciText}) is ${relation} cross-validation (${cv}). ` +
+    (contains
+      ? 'That is expected with a small held-out set, and the CI includes the CV value.'
+      : 'The CI does not include the CV value, so read the test estimate as the more conservative one.')
+  );
+}
 
 // ------------------------------------------------------------------------------ ROC thumbnail
 

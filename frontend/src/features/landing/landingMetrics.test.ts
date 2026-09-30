@@ -2,10 +2,12 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { metricsResource } from '@/services/staticData';
 import { jsonResponse, sampleMetrics } from '@/test/fixtures';
 import {
+  formatCv,
   fromMetricsReport,
   fromSummary,
   landingMetricsResource,
   performanceFor,
+  reconcileTestAndCv,
   rocThumbnail,
   type MetricsSummaryFile,
 } from './landingMetrics';
@@ -118,5 +120,21 @@ describe('landingMetricsResource', () => {
     const lm = await landingMetricsResource.get();
     expect(lm.source).toBe('metrics');
     expect(performanceFor(lm, 'CAD')?.testAuc?.value).toBe(0.93);
+  });
+});
+
+describe('honest test vs CV text', () => {
+  it('formats CV as mean ± sd and reconciles it with the test CI', () => {
+    const cad = performanceFor(fromSummary(summary), 'CAD')!;
+    expect(formatCv(cad.cvAuc)).toBe('0.94 ± 0.03');
+    const text = reconcileTestAndCv(cad, 61)!;
+    expect(text).toMatch(/^Test ROC-AUC 0\.86 \(n = 61, CI 0\.74–0\.95\) is below cross-validation/);
+    expect(text).toMatch(/the CI includes the CV value/);
+  });
+
+  it('says so when the CI excludes the CV value', () => {
+    const t = { ...performanceFor(fromSummary(summary), 'CAD')!, testAuc: { value: 0.7, ci: [0.6, 0.8] as [number, number] } };
+    expect(reconcileTestAndCv(t, 61)).toMatch(/does not include the CV value/);
+    expect(reconcileTestAndCv(null, 61)).toBeNull();
   });
 });
