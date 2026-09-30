@@ -29,8 +29,8 @@ export interface StageLayoutProps {
 
 /** Stage inset fallback when the CSS variable cannot be read (jsdom). */
 const INSET_FALLBACK = 12;
-/** Answer pill height + card gap: the right column starts below the pill in focus mode. */
-const FOCUS_RIGHT_TOP = 'calc(var(--stage-inset) + 40px + var(--card-gap))';
+/** Answer pill height + card gap: the right column moves below the pill in focus mode. */
+const FOCUS_RIGHT_DROP = 'calc(40px + var(--card-gap))';
 
 function cssPx(el: Element, name: string, fallback: number): number {
   const raw = getComputedStyle(el).getPropertyValue(name).trim();
@@ -259,10 +259,13 @@ export function StageLayout({
         visible={show.right && drawer !== 'explain'}
         hideTo="right"
         delay={show.right ? enterAfter : 30}
+        glide="translate"
         slotRef={(el) => (rightRef.current = el)}
         style={{
-          top: chrome === 'focus' ? FOCUS_RIGHT_TOP : 'var(--stage-inset)',
-          maxHeight: `calc(100% - ${chrome === 'focus' ? FOCUS_RIGHT_TOP : 'var(--stage-inset)'} - var(--stage-inset))`,
+          // Moved with `translate` (not `top`), so the drop below the answer pill is never a layout shift.
+          top: 'var(--stage-inset)',
+          translate: chrome === 'focus' ? `0 ${FOCUS_RIGHT_DROP}` : '0 0',
+          maxHeight: `calc(100% - 2 * var(--stage-inset)${chrome === 'focus' ? ` - ${FOCUS_RIGHT_DROP}` : ''})`,
         }}
         className={cn(
           'right-[var(--stage-inset)] flex w-[var(--card-right-w)] flex-col gap-[var(--card-gap)]',
