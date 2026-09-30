@@ -18,6 +18,7 @@ export function useRegisterCommands(
   const latest = useRef(commands);
   latest.current = commands;
   const priority = options?.priority ?? 0;
+  const yieldToGroup = options?.yieldToGroup ?? false;
 
   useEffect(() => {
     const byId = () => new Map(latest.current.map((c) => [c.id, c]));
@@ -27,11 +28,11 @@ export function useRegisterCommands(
       when: c.when ? () => (byId().get(c.id) ?? c).when?.() ?? true : undefined,
       preview: c.preview ? () => (byId().get(c.id) ?? c).preview?.() ?? '' : undefined,
     });
-    useCommandStore.getState().register(source, latest.current.map(proxy), { priority });
+    useCommandStore.getState().register(source, latest.current.map(proxy), { priority, yieldToGroup });
     return () => useCommandStore.getState().unregister(source);
     // `deps` is the caller's dependency list (like useMemo); `latest` carries the closures.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [source, priority, ...deps]);
+  }, [source, priority, yieldToGroup, ...deps]);
 }
 
 /** Every registered command (duplicates resolved), re-rendering when registrations change. */

@@ -15,11 +15,18 @@ export const CMD = {
   pageWorkstation: 'page.workstation',
   pagePerformance: 'page.performance',
   pageMethodology: 'page.methodology',
+  patientCard: 'chrome.patient-card', // collapse / expand the patient card
+  details: 'help.details', // intended use, dataset, licences
+  copyLink: 'app.copy-link', // shareable URL state (V2 §7)
+  fullscreen: 'view.fullscreen', // interim until D's ⋯ menu registers it
   // Tour (agent E) — interim
   tourStart: 'tour.start',
   // Vessels (agent C) — interim: select (1 2 3)
   selectVessel: (target: string) => `vessel.select.${target}`,
   explainVessel: (target: string) => `vessel.explain.${target}`,
+  // Explain drawer tabs (agent C) — interim
+  explainTab: (tab: string) => `explain.tab.${tab}`,
+  reveal: 'risk.reveal', // Reveal cath result (agent C; TEST patients only)
   // Views and layers (agent D) — interim
   home: 'view.home', // 0, H
   projectionPrev: 'view.projection.prev', // [
@@ -31,10 +38,16 @@ export const CMD = {
   isolate: 'view.isolate', // O
   ghost: 'view.ghost', // G
   peel: 'view.peel', // P
+  projection: (preset: string) => `view.projection.${preset}`, // AP, LAO45, RAO30, … — interim
+  look: (look: string) => `view.look.${look}`, // clay | anat — interim
   // Patients and inputs (agent B)
   resetEdits: 'inputs.reset',
   blankPatient: 'patient.blank',
   randomTestPatient: 'patient.random-test',
+  lowRiskPatient: 'patient.low-risk', // palette suggestion "Open a low-risk patient"
+  // Group-level interim lists (registered with `yieldToGroup`, so B's own ids replace them wholesale)
+  openPatient: (id: string) => `patient.open.${id}`,
+  editInput: (key: string) => `input.edit.${key}`,
   inputsSearch: 'inputs.search', // / while the Inputs drawer is open (register at priority ≥ 1)
 } as const;
 

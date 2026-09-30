@@ -54,6 +54,11 @@ export interface Command {
   when?: () => boolean;
   /** Right-hand preview of the effect ("CAD 98 % → 91 %"), fetched for the active palette row. */
   preview?: () => string | Promise<string>;
+  /**
+   * Static right-hand text for rows without a shortcut, e.g. an input's current value ("Yes", "50 %").
+   * Additive to the §9.2 interface; the palette prints it in `label` text/tertiary.
+   */
+  hint?: string;
   run: () => void;
   /** Secondary actions, opened with Tab on the palette row (Raycast's action panel). */
   actions?: Command[];
@@ -62,12 +67,19 @@ export interface Command {
 export interface RegisterOptions {
   /** Higher wins on duplicate ids and on shortcut conflicts. Default 0; interim fallbacks use −1. */
   priority?: number;
+  /**
+   * Group-level fallback: each command of this source is dropped as soon as another source (one without
+   * this flag) registers any command in the same group. For interim lists whose final ids the owner
+   * chooses (every patient, every input), so the palette never lists both the interim and the owner's.
+   */
+  yieldToGroup?: boolean;
 }
 
 interface SourceEntry {
   commands: Command[];
   priority: number;
   seq: number;
+  yieldToGroup: boolean;
 }
 
 export interface CommandState {
@@ -99,7 +111,12 @@ export const useCommandStore = create<CommandState>()((set) => ({
   recent: loadRecent(),
   register: (source, commands, options = {}) => {
     seq += 1;
-    const entry: SourceEntry = { commands, priority: options.priority ?? 0, seq };
+    const entry: SourceEntry = {
+      commands,
+      priority: options.priority ?? 0,
+      seq,
+      yieldToGroup: options.yieldToGroup ?? false,
+    };
     set((s) => ({ sources: { ...s.sources, [source]: entry } }));
   },
   unregister: (source) =>
@@ -128,8 +145,12 @@ export function resolveCommands(sources: Record<string, SourceEntry>): Command[]
   const byId = new Map<string, Ranked>();
   const order: string[] = [];
   const entries = Object.values(sources).sort((a, b) => a.seq - b.seq);
+  // Groups some owner already fills: group-level fallbacks yield there.
+  const owned = new Set<CommandGroup>();
+  for (const entry of entries) if (!entry.yieldToGroup) for (const c of entry.commands) owned.add(c.group);
   for (const entry of entries) {
     for (const command of entry.commands) {
+      if (entry.yieldToGroup && owned.has(command.group)) continue;
       const current = byId.get(command.id);
       if (!current) order.push(command.id);
       if (!current || entry.priority >= current.priority) {

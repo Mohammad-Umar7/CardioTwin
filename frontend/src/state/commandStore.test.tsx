@@ -116,3 +116,25 @@ describe('useRegisterCommands + useCommandHotkeys', () => {
     expect(second).toHaveBeenCalledTimes(1);
   });
 });
+
+describe('group-level fallbacks (yieldToGroup)', () => {
+  it('drops an interim list once an owner registers any command in the same group', () => {
+    const s = useCommandStore.getState();
+    s.register('interim.data', [cmd('patient.open.P-001', { group: 'patients' }), cmd('input.edit.EF', { group: 'inputs' })], {
+      priority: -1,
+      yieldToGroup: true,
+    });
+    expect(getCommands().map((c) => c.id)).toEqual(['patient.open.P-001', 'input.edit.EF']);
+    s.register('patient', [cmd('patient.P-001', { group: 'patients', title: 'P-001' })]);
+    expect(getCommands().map((c) => c.id)).toEqual(['patient.P-001', 'input.edit.EF']);
+    s.unregister('patient');
+    expect(getCommands().map((c) => c.id)).toEqual(['patient.open.P-001', 'input.edit.EF']);
+  });
+
+  it('never yields to another fallback source', () => {
+    const s = useCommandStore.getState();
+    s.register('a', [cmd('a.1', { group: 'inputs' })], { yieldToGroup: true });
+    s.register('b', [cmd('b.1', { group: 'inputs' })], { yieldToGroup: true });
+    expect(getCommands().map((c) => c.id)).toEqual(['a.1', 'b.1']);
+  });
+});
