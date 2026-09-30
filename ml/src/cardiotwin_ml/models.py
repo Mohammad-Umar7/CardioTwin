@@ -121,7 +121,8 @@ def decision_margin(pipeline: Pipeline, X: np.ndarray) -> np.ndarray:
     """Log-odds margin of a fitted logistic or XGBoost pipeline (the ensemble's native space)."""
     model = pipeline.named_steps[STEP]
     if isinstance(model, XGBClassifier):
-        return np.asarray(model.predict(X, output_margin=True), dtype=np.float64)
+        Xt = pipeline[:-1].transform(X) if len(pipeline.steps) > 1 else X
+        return np.asarray(model.predict(Xt, output_margin=True), dtype=np.float64)
     return np.asarray(pipeline.decision_function(X), dtype=np.float64)
 
 

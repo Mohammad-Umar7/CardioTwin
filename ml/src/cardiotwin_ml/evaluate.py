@@ -26,7 +26,7 @@ from sklearn.model_selection import RandomizedSearchCV, RepeatedStratifiedKFold,
 from sklearn.pipeline import Pipeline
 
 from .metrics import binary_metrics, summarise_folds
-from .models import STEP, ModelSpec, decision_margin, positive_proba
+from .models import ModelSpec, decision_margin, positive_proba
 
 log = logging.getLogger(__name__)
 
@@ -74,10 +74,17 @@ class CVResult:
         return summarise_folds(self.fold_metrics)
 
 
+def anova_f(X: np.ndarray, y: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
+    """ANOVA F-test that scores constant-within-fold columns as 0 instead of warning (NaN)."""
+    with np.errstate(divide="ignore", invalid="ignore"):
+        f, p = f_classif(X, y)
+    return np.nan_to_num(f, nan=0.0, posinf=0.0), np.nan_to_num(p, nan=1.0)
+
+
 def with_selector(pipeline: Pipeline, k: int) -> Pipeline:
     """Insert in-fold univariate feature selection (ANOVA F) right before the estimator."""
     steps = list(pipeline.steps)
-    steps.insert(len(steps) - 1, ("select", SelectKBest(f_classif, k=k)))
+    steps.insert(len(steps) - 1, ("select", SelectKBest(anova_f, k=k)))
     return Pipeline(steps)
 
 
@@ -258,6 +265,3 @@ def pooled_auc_by_repeat(proba: np.ndarray, y: np.ndarray) -> np.ndarray:
 def fold_auc(result: CVResult) -> np.ndarray:
     return np.array([m["roc_auc"] for m in result.fold_metrics])
 
-
-def step_name() -> str:
-    return STEP
