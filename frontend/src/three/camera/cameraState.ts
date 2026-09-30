@@ -42,6 +42,18 @@ export function presetLabel(id: string | null | undefined): string | null {
   return PROJECTIONS.find((p) => p.id === id)?.label ?? null;
 }
 
+/**
+ * The View button's fixed-width text (V2 §5.11: the toolbar never re-centres): the leading C-arm angle only
+ * ("RAO 30 CRA 25" → "RAO 30", "LAO 45 / CRA 20" → "LAO 45"), "Post." for the posterior view; the full
+ * angles stay in the tooltip and the selection chip.
+ */
+export function shortViewLabel(label: string): string {
+  const carm = /^(LAO|RAO) \d+/.exec(label);
+  if (carm) return carm[0];
+  if (label === 'Posterior') return 'Post.';
+  return label;
+}
+
 /** View-menu text for a C-arm direction that is not a named preset ("RAO 30 CRA 25"). */
 export function angleLabel(azimuth: number, elevation: number): string {
   return formatCarm(azimuth, elevation).replace(/°/g, '').replace(' · ', ' ');

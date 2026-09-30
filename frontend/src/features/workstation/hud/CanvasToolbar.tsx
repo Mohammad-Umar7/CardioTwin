@@ -1,4 +1,4 @@
-import { Heart, Home, Maximize2, Minimize2, Play, RotateCcw, Square, Waves } from 'lucide-react';
+import { FoldHorizontal, Heart, Home, Maximize2, Minimize2, Square, UnfoldHorizontal, Waves } from 'lucide-react';
 import { IconButton, StageCard, withShortcut } from '@/design';
 import { useIsReducedMotion } from '@/hooks/useMediaQuery';
 import { cn } from '@/lib/cn';
@@ -19,7 +19,10 @@ import { ViewMenu } from './ViewMenu';
  * CanvasToolbar — WORKSTATION_V2 §5.11. Answers "How do I look at it?". Rendered in StageLayout's `bottom`
  * slot (bottom 12, centred on the free area; StageLayout counts its height in `stageInsets.bottom`).
  *
- *   View ▾ ⌂ │ Peel ○━━◆━━ ▶ │ Layers ▾ │ ♥ ≋ │ ⤢ ⋯
+ *   View ▾ ⌂ │ Peel ○━━◆━━ ⟷ │ Layers ▾ │ ♥ ≋ │ ⤢ ⋯
+ *
+ * Its width is fixed (≈ 545 px at 1440, ≈ 510 at 1280): the View button has a fixed-width short label, so
+ * selecting a vessel (whose view is "RAO 30 CRA 25") never re-centres the bar or moves the peel slider.
  *
  * Material: h 40 (36), r-lg, bg/panel, 1 px border/default, e-2, padding 4; groups split by 1 × 20
  * hairlines; icon buttons 32 (28) with 16 px lucide at stroke 1.5; pressed = surface/2 + accent icon;
@@ -31,16 +34,23 @@ export interface CanvasToolbarProps {
   className?: string;
 }
 
+/**
+ * Explode / Assemble (P): the icon says what it does — two halves pulled apart (explode: peel the thorax and
+ * open the heart) or pushed together (assemble back to the rest state), never a media "play" triangle.
+ */
 function DissectButton() {
   const reduced = useIsReducedMotion();
   const playing = usePeelPlayer((s) => s.playing);
   const open = useViewerStore((s) => s.explode >= OPEN_AT);
-  const name = playing ? 'Stop' : open ? 'Assemble' : 'Dissect';
+  const name = playing ? 'Stop' : open ? 'Assemble' : 'Explode';
   return (
     <IconButton
       label={name}
-      tooltip={withShortcut(playing ? 'Stop the peel' : open ? 'Assemble' : 'Dissect: peel to the open heart', SHORTCUT.peel)}
-      icon={playing ? <Square className="!size-3.5 fill-current" /> : open ? <RotateCcw /> : <Play className="fill-current" />}
+      tooltip={withShortcut(
+        playing ? 'Stop the peel' : open ? 'Assemble · close the heart' : 'Explode · peel the chest and open the heart',
+        SHORTCUT.peel,
+      )}
+      icon={playing ? <Square className="!size-3.5 fill-current" /> : open ? <FoldHorizontal /> : <UnfoldHorizontal />}
       size="md"
       active={!!playing}
       className={TOOLBAR_ICON}

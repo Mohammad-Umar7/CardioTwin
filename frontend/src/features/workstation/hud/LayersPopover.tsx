@@ -49,7 +49,7 @@ export function LayersPopover({ iconOnly = false }: { iconOnly?: boolean }) {
       trigger={({ ref, ...props }) => (
         <ToolbarTextButton
           ref={ref}
-          icon={<Layers />}
+          icon={iconOnly ? <Layers /> : undefined}
           open={props['aria-expanded']}
           tooltip={iconOnly ? 'Layers' : 'Look, territories, labels and anatomy layers'}
           aria-label="Layers"

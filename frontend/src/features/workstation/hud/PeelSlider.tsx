@@ -4,10 +4,19 @@ import { cn } from '@/lib/cn';
 import { PEEL_REST, useViewerStore } from '@/state/viewerStore';
 import { DETENTS, nearestDetent, peelValueText, snapToDetent, stepDetent, usePeelPlayer } from './peel';
 
+/** `:focus-visible` (keyboard focus), false where the selector is unsupported. */
+function focusVisible(el: Element): boolean {
+  try {
+    return el.matches(':focus-visible');
+  } catch {
+    return false;
+  }
+}
+
 /**
  * Peel slider (WORKSTATION_V2 §5.11): 144 px (128 at 1280), five detents — Closed · Skin off · Ribs open ·
- * Lungs aside ◆ · Open heart — magnetic within ±0.02, the detent name in a tooltip above the thumb while
- * dragging, ←/→ step between detents (Home / End to the ends). While ▶ Dissect plays the thumb is locked
+ * Lungs aside ◆ · Open heart — magnetic within ±0.02, the stop name in a tooltip above the thumb while
+ * hovered, focused or dragged, ←/→ step between detents (Home / End to the ends). While ▶ Dissect plays the thumb is locked
  * and a press cancels the animation. Wired to `viewerStore.setExplode`; the scene's spring does the easing.
  */
 export function PeelSlider({ className }: { className?: string }) {
@@ -15,6 +24,8 @@ export function PeelSlider({ className }: { className?: string }) {
   const playing = usePeelPlayer((s) => s.playing);
   const track = useRef<HTMLDivElement>(null);
   const [dragging, setDragging] = useState(false);
+  // The stop name also shows on hover and keyboard focus, so the five stops are discoverable at rest.
+  const [peek, setPeek] = useState(false);
 
   const fromPointer = (clientX: number) => {
     const rect = track.current?.getBoundingClientRect();
@@ -71,8 +82,8 @@ export function PeelSlider({ className }: { className?: string }) {
 
   const pct = Math.round(value * 1000) / 10;
   const detent = nearestDetent(value);
-  // The toolbar card clips its content, so the drag tooltip floats in a portal above the thumb.
-  const rect = dragging ? track.current?.getBoundingClientRect() : null;
+  // The toolbar card clips its content, so the stop tooltip floats in a portal above the thumb.
+  const rect = dragging || peek ? track.current?.getBoundingClientRect() : null;
   const tip =
     rect &&
     createPortal(
@@ -98,6 +109,10 @@ export function PeelSlider({ className }: { className?: string }) {
       aria-disabled={playing ? true : undefined}
       data-region="peel"
       onPointerDown={onPointerDown}
+      onPointerEnter={() => setPeek(true)}
+      onPointerLeave={() => setPeek(false)}
+      onFocus={(e) => setPeek(focusVisible(e.currentTarget))}
+      onBlur={() => setPeek(false)}
       onPointerMove={onPointerMove}
       onPointerUp={end}
       onPointerCancel={end}

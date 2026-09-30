@@ -5,7 +5,7 @@ import { cn } from '@/lib/cn';
 
 /** 1 × 20 hairline between toolbar groups (V2 §5.11). */
 export function ToolbarSeparator() {
-  return <span aria-hidden className="mx-1 h-5 w-px shrink-0 bg-hairline" />;
+  return <span aria-hidden className="mx-0.5 h-5 w-px shrink-0 bg-hairline" />;
 }
 
 /** Icon-button size inside the toolbar: 32 px at ≥ 1440, 28 px below (V2 §5.11). */
@@ -36,7 +36,7 @@ export const ToolbarTextButton = forwardRef<HTMLButtonElement, ToolbarTextButton
       className={cn(
         'inline-flex h-8 shrink-0 items-center gap-1.5 rounded-sm text-body-s font-medium text-secondary outline-none max-[1439.98px]:h-7',
         'transition-colors duration-instant ease-instant hover:bg-surface-1 hover:text-primary focus-visible:shadow-focus',
-        iconOnly ? 'w-8 justify-center max-[1439.98px]:w-7' : 'pl-2 pr-1.5',
+        iconOnly ? 'w-8 justify-center max-[1439.98px]:w-7' : icon ? 'pl-2 pr-1.5' : 'pl-2.5 pr-1.5',
         open && 'bg-surface-2 text-primary hover:bg-surface-2',
         '[&>svg]:size-4 [&>svg]:shrink-0 [&>svg]:stroke-[1.5]',
         className,

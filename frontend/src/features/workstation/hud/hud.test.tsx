@@ -96,7 +96,7 @@ describe('CanvasToolbar (V2 §5.11)', () => {
     expect(bar.dataset.region).toBe('toolbar');
     expect(screen.getByRole('button', { name: 'View: Home' })).toBeTruthy();
     expect(screen.getByRole('slider', { name: 'Peel' }).getAttribute('aria-valuetext')).toBe('Lungs aside');
-    expect(screen.getByRole('button', { name: 'Dissect' })).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Explode' })).toBeTruthy();
     expect(screen.getByRole('button', { name: 'Heartbeat' }).getAttribute('aria-pressed')).toBe('true');
     // No always-visible projection buttons, layer chips or disabled controls at rest (V2 §1.7, §5.20).
     expect(screen.queryByRole('radio')).toBeNull();

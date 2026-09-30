@@ -2,14 +2,14 @@ import { Crosshair, Home, Video } from 'lucide-react';
 import { Menu, MenuItem, MenuLabel, MenuSeparator, Shortcut } from '@/design';
 import { SHORTCUT } from '@/state/commandIds';
 import { useViewerStore } from '@/state/viewerStore';
-import { useCameraState } from '@/three/camera/cameraState';
+import { shortViewLabel, useCameraState } from '@/three/camera/cameraState';
 import { PROJECTIONS } from '@/three/camera/presets';
 import { ToolbarTextButton } from './controls';
 
 /**
- * View ▾ (WORKSTATION_V2 §5.11): a text button with the current view's name ("AP", "RAO 30 CRA 25",
- * "Custom" after a free orbit) opening the C-arm projections (`[` `]` cycle them), Home view (H) and
- * Frame selection (double-click a vessel).
+ * View ▾ (WORKSTATION_V2 §5.11): a fixed-width text button with the current view's short name ("AP",
+ * "RAO 30", "Custom" after a free orbit; the full "RAO 30 CRA 25" in its tooltip) opening the C-arm
+ * projections (`[` `]` cycle them), Home view (H) and Frame selection (double-click a vessel).
  */
 export function ViewMenu({ iconOnly = false }: { iconOnly?: boolean }) {
   const label = useCameraState((s) => s.viewLabel);
@@ -26,15 +26,15 @@ export function ViewMenu({ iconOnly = false }: { iconOnly?: boolean }) {
       trigger={({ ref, ...props }) => (
         <ToolbarTextButton
           ref={ref}
-          icon={<Video />}
+          icon={iconOnly ? <Video /> : undefined}
           open={props['aria-expanded']}
-          tooltip={iconOnly ? `View: ${label}` : 'View · C-arm projections'}
+          tooltip={`View: ${label} · C-arm projections`}
           aria-label={`View: ${label}`}
           iconOnly={iconOnly}
-          className="max-w-[176px] max-[1439.98px]:max-w-[160px]"
           {...props}
         >
-          <span className="num">{label}</span>
+          {/* Fixed width: the toolbar keeps its size and position whatever the view is called. */}
+          <span className="num inline-block w-12 text-left max-[1439.98px]:w-11">{shortViewLabel(label)}</span>
         </ToolbarTextButton>
       )}
     >
