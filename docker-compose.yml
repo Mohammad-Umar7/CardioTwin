@@ -15,7 +15,12 @@ services:
       # Only needed when the SPA is served from another origin (e.g. `npm run dev` on :5173).
       CARDIOTWIN_CORS_ORIGINS: ${CARDIOTWIN_CORS_ORIGINS:-http://localhost:5173,http://127.0.0.1:5173}
     restart: unless-stopped
+    # Hardening: nothing is written at runtime (no bytecode, logs go to stdout), so the root filesystem is
+    # read-only and /tmp (matplotlib config, Python temp files) is an in-memory tmpfs.
+    read_only: true
     security_opt:
       - no-new-privileges:true
+    cap_drop:
+      - ALL
     tmpfs:
       - /tmp
