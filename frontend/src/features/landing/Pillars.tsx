@@ -196,7 +196,7 @@ export function Pillars({ onNavigate, className }: { onNavigate(destination: Lan
       <Pillar
         n="01"
         verb="Predict"
-        sentence="A calibrated probability for CAD and for each artery."
+        sentence="Calibrated probability for CAD and each artery."
         visual={<PredictVisual />}
         destination={{ to: ROUTES.workstation }}
         linkLabel="Opens the workstation."
@@ -205,7 +205,7 @@ export function Pillars({ onNavigate, className }: { onNavigate(destination: Lan
       <Pillar
         n="02"
         verb="Explain"
-        sentence="Exact SHAP: what pushes each estimate up or down."
+        sentence="Exact SHAP: what pushes it up or down."
         visual={<ExplainVisual />}
         destination={{
           to: `${ROUTES.workstation}?panel=explain&tab=why`,
@@ -217,7 +217,7 @@ export function Pillars({ onNavigate, className }: { onNavigate(destination: Lan
       <Pillar
         n="03"
         verb="Map"
-        sentence="Each artery takes its own colour on real anatomy."
+        sentence="Each artery coloured on real anatomy."
         visual={<MapVisual vessels={vessels} />}
         destination={{
           to: `${ROUTES.workstation}?t=${focus}`,
@@ -229,7 +229,7 @@ export function Pillars({ onNavigate, className }: { onNavigate(destination: Lan
       <Pillar
         n="04"
         verb="Validate"
-        sentence="Scored once on unseen patients, with confidence intervals."
+        sentence="Scored once on unseen patients."
         visual={<ValidateVisual />}
         destination={{ to: ROUTES.performance }}
         linkLabel="Opens model performance."

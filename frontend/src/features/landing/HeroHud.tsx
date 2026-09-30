@@ -158,7 +158,7 @@ export function HeroHud({ attract, vessels, leaving }: HeroHudProps) {
           </span>
         )}
         <div
-          className="absolute left-1/2 flex -translate-x-1/2 justify-center min-[1100px]:left-[66%]"
+          className="absolute left-1/2 flex -translate-x-1/2 justify-center whitespace-nowrap min-[1100px]:left-[66%]"
           style={{ bottom: 'calc(var(--landing-bands-h, 0px) + 16px)' }}
         >
           <PatientCaption />

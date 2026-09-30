@@ -3,6 +3,7 @@ import type { CSSProperties } from 'react';
 import { Button } from '@/design';
 import { useSchema } from '@/hooks/useData';
 import { cn } from '@/lib/cn';
+import { LiveLever } from './LiveLever';
 
 export interface HeroCopyProps {
   /** Plays the §6.2 exit (240 ms, y −8, fade) before the route changes. */
@@ -73,6 +74,9 @@ export function HeroCopy({ leaving, onOpenWorkstation, onGuidedDemo, className }
       <p className="text-label font-normal text-tertiary animate-rise-in" style={rise(4)}>
         Opens on a patient the model never saw. No login.
       </p>
+      <div className="-mt-1 self-start animate-rise-in" style={rise(5)}>
+        <LiveLever />
+      </div>
     </div>
   );
 }
