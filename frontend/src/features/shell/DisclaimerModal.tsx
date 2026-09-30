@@ -48,7 +48,8 @@ export function DisclaimerModal() {
           </p>
           <p>
             Risk is estimated per vessel (LAD, LCX, RCA). The model never localises a lesion inside a vessel, and clinical
-            features are not anatomical coordinates. Region RWMA is an echocardiographic finding, not a lesion map.
+            features are not anatomical coordinates. A regional wall-motion abnormality (RWMA) is an echocardiographic
+            finding, not a lesion map.
           </p>
         </Section>
         <Section title="Data">

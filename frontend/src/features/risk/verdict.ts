@@ -190,7 +190,7 @@ export interface CathComparison {
   /** 1 = stenotic / CAD at catheterisation. */
   truth: 0 | 1;
   agrees: boolean;
-  /** "Stenotic at cath" / "Not stenotic at cath" (CAD: "CAD at cath" / "No CAD at cath"). */
+  /** "Stenotic at cath" / "Not stenotic at cath" (CAD: "CAD at cath: present" / "CAD at cath: absent"). */
   truthText: string;
   /** "agrees ✓" / "disagrees ✕". */
   agreementText: string;
@@ -200,6 +200,6 @@ export function cathComparison(target: TargetId, truth: 0 | 1 | undefined | null
   if ((truth !== 0 && truth !== 1) || !p) return null;
   const agrees = truth === (isFlagged(p) ? 1 : 0);
   const truthText =
-    target === 'CAD' ? (truth === 1 ? 'CAD at cath' : 'No CAD at cath') : truth === 1 ? 'Stenotic at cath' : 'Not stenotic at cath';
+    target === 'CAD' ? (truth === 1 ? 'CAD at cath: present' : 'CAD at cath: absent') : truth === 1 ? 'Stenotic at cath' : 'Not stenotic at cath';
   return { truth, agrees, truthText, agreementText: agrees ? 'agrees ✓' : 'disagrees ✕' };
 }

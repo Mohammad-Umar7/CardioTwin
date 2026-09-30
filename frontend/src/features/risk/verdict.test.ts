@@ -105,7 +105,8 @@ describe('vocabulary (§3.2)', () => {
   it('compares with the cath result in the §3.2 words', () => {
     expect(cathComparison('LAD', 1, tp(0.9, 0.55))).toMatchObject({ truthText: 'Stenotic at cath', agreementText: 'agrees ✓' });
     expect(cathComparison('RCA', 0, tp(0.9, 0.32))).toMatchObject({ truthText: 'Not stenotic at cath', agrees: false });
-    expect(cathComparison('CAD', 1, tp(0.9, 0.75))?.truthText).toBe('CAD at cath');
+    expect(cathComparison('CAD', 1, tp(0.9, 0.75))?.truthText).toBe('CAD at cath: present');
+    expect(cathComparison('CAD', 0, tp(0.9, 0.75))?.truthText).toBe('CAD at cath: absent');
     expect(cathComparison('CAD', undefined, tp(0.9, 0.75))).toBeNull();
   });
 });

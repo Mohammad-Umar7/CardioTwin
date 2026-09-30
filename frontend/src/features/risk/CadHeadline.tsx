@@ -240,10 +240,10 @@ export function CadHeadline({ titleId, covered = false, showTrack = true }: CadH
           <Collapse show={truth !== null}>
             {truth && (
               <p className="mt-1 flex items-center gap-1.5 text-label font-normal text-secondary" data-cath="CAD">
-                {truth.truthText}
                 <span aria-hidden className="text-primary">
                   {truth.truth === 1 ? '●' : '○'}
                 </span>
+                {truth.truthText}
                 <span aria-hidden>·</span>
                 <span className={truth.agrees ? 'text-success' : 'text-primary'}>{truth.agreementText}</span>
                 {view.edits > 0 && <span className="text-tertiary">(recorded inputs)</span>}

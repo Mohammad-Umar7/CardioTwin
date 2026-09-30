@@ -229,10 +229,10 @@ export function VesselInspector({ className }: VesselInspectorProps) {
 
               {truth && (
                 <p className="mt-1 flex items-center gap-1.5 text-label font-normal text-secondary">
-                  {truth.truthText}
                   <span aria-hidden className="text-primary">
                     {truth.truth === 1 ? '●' : '○'}
                   </span>
+                  {truth.truthText}
                   <span aria-hidden>·</span>
                   <span className={truth.agrees ? 'text-success' : 'text-primary'}>{truth.agreementText}</span>
                 </p>
