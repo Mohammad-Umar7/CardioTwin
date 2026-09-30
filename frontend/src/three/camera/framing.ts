@@ -174,6 +174,8 @@ export interface FramingInput {
    */
   keep?: readonly Vector3[] | null;
   keepMargin?: number;
+  /** Margin above the keep points instead of `keepMargin` (room for a chip at the top of the free area). */
+  keepMarginTop?: number;
   /** Orbit target (the heart centre). */
   target: Vector3;
   /** Unit vector from the target toward the camera. */
@@ -259,6 +261,7 @@ export function framingDistance(input: FramingInput, min = 1.2, max = 14): numbe
   const margin = input.keepMargin ?? 12;
   const halfW = Math.max(1, input.freeWidth / 2 - margin);
   const halfH = Math.max(1, input.freeHeight / 2 - margin);
+  const halfUp = Math.max(1, input.freeHeight / 2 - (input.keepMarginTop ?? margin));
   const keep = input.keep && input.keep.length > 0 ? input.keep : null;
   // Projected size shrinks monotonically with distance: find the smallest distance that satisfies all.
   const fits = (d: number) => {
@@ -266,7 +269,7 @@ export function framingDistance(input: FramingInput, min = 1.2, max = 14): numbe
     if (s.height > wantH || s.width > wantW) return false;
     if (!keep) return true;
     const e = projectedExtent(input, keep, d);
-    return e.left <= halfW && e.right <= halfW && e.up <= halfH && e.down <= halfH;
+    return e.left <= halfW && e.right <= halfW && e.up <= halfUp && e.down <= halfH;
   };
   if (fits(min)) return min;
   if (!fits(max)) return max;

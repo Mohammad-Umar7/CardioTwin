@@ -95,3 +95,68 @@ export function visibleBestView(conventional: BestView, candidates: readonly Anc
   }
   return best?.view ?? conventional;
 }
+// ------------------------------------------------------------------------------ surface best view
+
+export interface SurfaceViewScore {
+  view: BestView;
+  /** Share of the proximal trunk samples that face the camera (> 0.2) and are not hidden. */
+  coverage: number;
+  /** Projected length of the visible trunk / its 3D length (1 = the trunk lies flat in the image plane). */
+  spread: number;
+  score: number;
+}
+
+/** Facing below this counts as grazing (the vessel runs along the silhouette). */
+const SURFACE_FACING = 0.2;
+/** C-arm elevations searched (degrees): caudal to cranial. */
+const SURFACE_ELEVATIONS = [-30, -15, 0, 15, 30, 40] as const;
+/** A grazing or hidden trunk never wins: views below this coverage lose to any view above it. */
+export const SURFACE_MIN_COVERAGE = 0.6;
+
+/** How much of the proximal trunk a view shows, and how spread out on the screen. */
+export function surfaceViewScore(
+  candidates: readonly AnchorCandidate[],
+  view: BestView,
+  target = new Vector3(),
+  visible: OcclusionTest = clear,
+): Omit<SurfaceViewScore, 'score' | 'view'> {
+  if (candidates.length === 0) return { coverage: 1, spread: 1 };
+  const eye = eyeFor(view, target);
+  const d = eye.clone().sub(target).normalize();
+  const shown = candidates.map((c) => facing(c.rest, c.normal, eye) > SURFACE_FACING && visible(eye, c.rest));
+  let total = 0;
+  let projected = 0;
+  const s = new Vector3();
+  for (let i = 1; i < candidates.length; i += 1) {
+    s.copy(candidates[i]!.rest).sub(candidates[i - 1]!.rest);
+    const len = s.length();
+    total += len;
+    if (shown[i] && shown[i - 1]) projected += s.addScaledVector(d, -s.dot(d)).length();
+  }
+  return { coverage: shown.filter(Boolean).length / shown.length, spread: total > 0 ? projected / total : 0 };
+}
+
+/**
+ * The C-arm angle from which a SURFACE rendering shows the vessel best (P0-2, V2 §10): a projection
+ * angiogram sees through the heart, a surface render does not, so the conventional angiographic view is only
+ * a tie-breaker. Every angle of a 15° grid (elevation −30…40°) is scored by how much of the proximal 5–80 %
+ * trunk faces the camera unobstructed (coverage, occlusion-tested when `visible` is given) and how much of
+ * its length lies flat in the image (spread: the groove seen face-on, not end-on); views that show less than
+ * 60 % of the trunk lose to any that show more.
+ */
+export function surfaceBestView(conventional: BestView, candidates: readonly AnchorCandidate[], options: SearchOptions = {}): SurfaceViewScore {
+  const { target = new Vector3(), visible = clear, step = 15 } = options;
+  const conv = surfaceViewScore(candidates, conventional, target, visible);
+  let best: SurfaceViewScore = { view: conventional, ...conv, score: -Infinity };
+  if (candidates.length === 0) return { ...best, score: 0 };
+  for (let az = -180 + step; az <= 180; az += step) {
+    for (const el of SURFACE_ELEVATIONS) {
+      const view = { azimuth: az, elevation: el, distance: conventional.distance };
+      const s = surfaceViewScore(candidates, view, target, visible);
+      const clearView = s.coverage >= SURFACE_MIN_COVERAGE;
+      const score = (clearView ? 1 : 0) + s.coverage + 0.9 * s.spread - (0.35 * angleBetween(view, conventional)) / 180 - 0.002 * Math.abs(el);
+      if (score > best.score) best = { view, ...s, score };
+    }
+  }
+  return best;
+}

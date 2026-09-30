@@ -7,9 +7,9 @@ import { useManifest, useVessels } from '@/hooks/useData';
 import { useIsReducedMotion } from '@/hooks/useMediaQuery';
 import { useUiStore } from '@/state/uiStore';
 import { useViewerStore, type Stage } from '@/state/viewerStore';
-import type { BestView, CameraPose, TargetId } from '@/types/contracts';
+import type { CameraPose, TargetId } from '@/types/contracts';
 import { buildTracks } from '../labels/anchorTracks';
-import { visibleBestView } from './bestView';
+import { surfaceBestView, type SurfaceViewScore } from './bestView';
 import { collectOccluders, isOccluded } from './occlusion';
 import { angleLabel, useCameraState, type ViewKind } from './cameraState';
 import { sceneRuntime } from '../stage/sceneRuntime';
@@ -21,6 +21,7 @@ import {
   framingDistance,
   freeArea,
   glide,
+  PEEL_OPEN_AT,
   heartBox,
   opaqueThoraxBox,
   peelModeFor,
@@ -64,8 +65,11 @@ const VIEW_WINDOW: readonly [number, number] = [0.05, 0.8];
 const KEEP_MARGIN = 12;
 /** A vessel's best view keeps the home distance for its angle: the target leaning onto the vessel is the "going to it". */
 const FOCUS_ZOOM = 1;
-/** How far the orbit target may lean from the heart centre to the selected vessel (tried in order, 0–1). */
-const VESSEL_FOCUS_LEANS = [0.85, 0.75, 0.65, 0.55, 0.45, 0.35, 0.2, 0];
+/**
+ * Room kept free at the top of the free area while a vessel is selected: the selection chip (12 + 32 px)
+ * and a margin, so no great vessel runs under it.
+ */
+const SELECTION_CHIP_ROOM = 56;
 
 /**
  * Orbit limits (V2 §5.15): in the default mode the polar angle is clamped to 35°–145° and the distance
@@ -133,7 +137,7 @@ export function CameraRig() {
   /** A vessel flown to before its centrelines loaded (re-checked when they arrive). */
   const pendingVessel = useRef<{ target: TargetId; at: number } | null>(null);
   /** Visible best view per vessel (the search raycasts, so it runs once per anatomy). */
-  const bestViews = useRef(new Map<string, BestView>());
+  const bestViews = useRef(new Map<string, SurfaceViewScore>());
   const offset = useRef<{ from: Offset; to: Offset; current: Offset; t0: number; applied: string }>({
     from: ZERO_OFFSET,
     to: ZERO_OFFSET,
@@ -179,6 +183,19 @@ export function CameraRig() {
     }
     return out;
   }, [manifest]);
+
+  // Every centreline point of each vessel's own node (the LAD with its diagonals, the LCX with its marginals,
+  // the RCA), to centre the selected vessel — not its trunk's first centimetres — in the free area.
+  const vesselSamples = useMemo(() => {
+    const out = new Map<string, Vector3[]>();
+    for (const v of (vessels?.vessels ?? []) as unknown as { id?: string; segments: { points: number[][] }[] }[]) {
+      if (!v.id || !['LAD', 'LCX', 'RCA'].includes(v.id)) continue;
+      const pts: Vector3[] = [];
+      for (const seg of v.segments) for (let i = 0; i < seg.points.length; i += 2) pts.push(new Vector3(seg.points[i]![0], seg.points[i]![1], seg.points[i]![2]));
+      out.set(v.id, pts);
+    }
+    return out;
+  }, [vessels]);
 
   // Trunk samples per vessel, to make sure a best view really shows its vessel (P0-2). The view search
   // looks at the proximal 80 % of the trunk (the labels anchor on the proximal–mid 60 %).
@@ -357,57 +374,127 @@ export function CameraRig() {
     [geo, invalidate],
   );
 
-  /** Fly to a vessel's (visible) best view, framed like home and a touch closer. */
-  const flyToVessel = (target: TargetId, animate: boolean) => {
+  /**
+   * The best SURFACE view of a vessel (bestView.ts `surfaceBestView`: the proximal trunk facing the camera,
+   * unobstructed and spread across the image), cached per anatomy once occlusion can be tested.
+   */
+  const viewFor = (target: TargetId, closed: boolean) => {
     const structure = manifest?.structures.find((s) => s.target === target && s.bestView);
     const conventional = bestViewFor(target, structure?.bestView);
     const candidates = tracks.find((t) => t.target === target)?.candidates ?? [];
-    // Centrelines not loaded yet (a deep link on a cold load): fly now, correct once they arrive.
-    pendingVessel.current = candidates.length === 0 ? { target, at: performance.now() } : null;
-    // Occlusion-aware once the BVHs exist and the heart is closed (the candidates are rest positions).
-    const closed = useViewerStore.getState().explode < 0.7;
     const occluders = closed ? collectOccluders(scene) : [];
     const key = `${target}:${occluders.length > 0}`;
-    let view = bestViews.current.get(key);
-    if (!view) {
-      view = visibleBestView(conventional, candidates, {
+    let found = bestViews.current.get(key);
+    if (!found) {
+      found = surfaceBestView(conventional, candidates, {
         target: geo.target,
         visible: occluders.length > 0 ? (eye, p) => !isOccluded(eye, p, occluders) : undefined,
-        step: occluders.length > 0 ? 15 : 5,
+        step: 15,
       });
-      if (closed && candidates.length > 0) bestViews.current.set(key, view);
+      if (closed && candidates.length > 0) bestViews.current.set(key, found);
     }
+    return { view: found.view, candidates };
+  };
+
+  /** Move `focus` so the projected box of `points` is centred on it (screen px → world units at its depth). */
+  const recentre = (points: readonly Vector3[], direction: Vector3, focus: Vector3, distance: number): Vector3 => {
+    const { width, height } = sizeRef.current;
+    if (!(width > 0) || !(height > 0)) return focus;
+    const e = projectedExtent({ target: focus, direction, fov: CAMERA_FOV, width, height }, points, distance);
+    const perPx = (2 * distance * Math.tan((CAMERA_FOV * Math.PI) / 360)) / height;
+    const forward = direction.clone().negate();
+    const right = new Vector3().crossVectors(forward, new Vector3(0, 1, 0)).normalize();
+    const up = new Vector3().crossVectors(right, forward).normalize();
+    return focus
+      .clone()
+      .addScaledVector(right, ((e.right - e.left) / 2) * perPx)
+      .addScaledVector(up, ((e.up - e.down) / 2) * perPx);
+  };
+
+  /**
+   * Distance that frames the heart like home from `direction` with the orbit target on `focus` (the selected
+   * trunk): the whole heart and the visible great vessels stay inside the free area, clear of the selection
+   * chip at its top.
+   */
+  const focusDistance = (direction: Vector3, focus: Vector3): number => {
+    const { width, height } = sizeRef.current;
+    if (!(width > 0) || !(height > 0)) return distanceFor(direction);
+    const free = freeArea(width, height, insetsFor('workstation'));
+    const { heart, keep } = sceneRuntime.framing;
+    const d = framingDistance({
+      box: geo.box,
+      points: heart,
+      keep: heart.length > 0 || keep.length > 0 ? [...heart, ...keep] : null,
+      keepMargin: KEEP_MARGIN,
+      keepMarginTop: SELECTION_CHIP_ROOM,
+      target: focus,
+      direction,
+      fov: CAMERA_FOV,
+      width,
+      height,
+      freeWidth: free.width,
+      freeHeight: free.height,
+      share: WORKSTATION_HEART_SHARE * FOCUS_ZOOM,
+    });
+    const l = useCameraState.getState().freeOrbit ? ORBIT_LIMITS.free : ORBIT_LIMITS.clamped;
+    return Math.min(l.maxDistance, Math.max(l.minDistance, d));
+  };
+
+  /**
+   * Fly to a vessel: its best surface view, with the orbit target on the centre of the trunk that view shows,
+   * so the selected artery — not the heart's centre or its silhouette — sits in the middle of the free area.
+   */
+  const flyToVessel = (target: TargetId, animate: boolean) => {
+    const closed = useViewerStore.getState().explode < PEEL_OPEN_AT;
+    const { view, candidates } = viewFor(target, closed);
+    // Centrelines not loaded yet (a deep link on a cold load): fly now, correct once they arrive.
+    pendingVessel.current = candidates.length === 0 ? { target, at: performance.now() } : null;
     const { azimuth, polar } = toControlsAngles(view.azimuth, view.elevation);
     const direction = new Vector3().setFromSphericalCoords(1, polar, azimuth);
-    // Lean the orbit target toward the vessel (its manifest box centre), so the selected artery — not the
-    // heart's centre — sits near the middle of the free area, as far as the whole heart still fits inside it.
-    const distance = distanceFor(direction) * FOCUS_ZOOM;
-    const vesselCentre = closed ? vesselCentres.get(target) : undefined;
     let focus: Vector3 | null = null;
-    if (vesselCentre) {
-      const { width, height } = sizeRef.current;
-      const free = freeArea(width, height, insetsFor('workstation'));
-      const points = sceneRuntime.framing.heart;
-      for (const lean of VESSEL_FOCUS_LEANS) {
-        const candidate = geo.target.clone().lerp(vesselCentre, lean);
-        if (points.length === 0 || !(width > 0)) {
-          focus = candidate;
-          break;
-        }
-        const view = { target: candidate, direction, fov: CAMERA_FOV, width, height };
-        const halfW = free.width / 2 - KEEP_MARGIN;
-        const halfH = free.height / 2 - KEEP_MARGIN;
-        const inside = (e: ReturnType<typeof projectedExtent>) => e.left <= halfW && e.right <= halfW && e.up <= halfH && e.down <= halfH;
-        const keep = sceneRuntime.framing.keep;
-        if (inside(projectedExtent(view, points, distance)) && (keep.length === 0 || inside(projectedExtent(view, keep, distance)))) {
-          focus = lean > 0 ? candidate : null;
-          break;
-        }
+    let distance = distanceFor(direction);
+    const samples = vesselSamples.get(target);
+    if (closed && samples && samples.length > 1) {
+      // The orbit target goes where the vessel's projected box is centred in the free area (two refinements
+      // of its 3D centre; the distance keeps the whole heart and the visible great vessels inside).
+      focus = new Box3().setFromPoints(samples).getCenter(new Vector3());
+      for (let i = 0; i < 2; i += 1) {
+        distance = focusDistance(direction, focus);
+        focus = recentre(samples, direction, focus, distance);
       }
+      distance = focusDistance(direction, focus);
+    } else if (closed) {
+      focus = vesselCentres.get(target)?.clone() ?? null;
+      if (focus) distance = focusDistance(direction, focus);
     }
     flyTo(direction, distance, animate, focus);
     useCameraState.getState().setView('focus', { label: angleLabel(view.azimuth, view.elevation) });
   };
+
+  // Search the vessels' surface views in idle time once every occluder's BVH exists, so a first selection
+  // flies at once instead of raycasting on the click.
+  useEffect(() => {
+    if (tracks.length === 0) return;
+    let cancelled = false;
+    let handle = 0;
+    const next = () => {
+      if (cancelled) return;
+      if (useViewerStore.getState().explode >= PEEL_OPEN_AT || collectOccluders(scene).length === 0) {
+        handle = window.setTimeout(next, 700);
+        return;
+      }
+      const todo = tracks.find((t) => !bestViews.current.has(`${t.target}:true`));
+      if (!todo) return;
+      viewFor(todo.target as TargetId, true);
+      handle = window.setTimeout(next, 120);
+    };
+    handle = window.setTimeout(next, 1500);
+    return () => {
+      cancelled = true;
+      window.clearTimeout(handle);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [tracks, scene]);
 
   // A vessel flown to before its centreline arrived gets its checked view once it does (if untouched).
   useEffect(() => {

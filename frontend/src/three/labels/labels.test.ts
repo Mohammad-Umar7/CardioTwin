@@ -3,7 +3,7 @@ import { resolve } from 'node:path';
 import { Matrix4, Object3D, Vector3 } from 'three';
 import { describe, expect, it } from 'vitest';
 import type { AnatomyManifest, PredictResponse, VesselsFile } from '@/types/contracts';
-import { VISIBLE_FACING, trunkVisibility, visibleBestView } from '../camera/bestView';
+import { SURFACE_MIN_COVERAGE, VISIBLE_FACING, surfaceBestView, surfaceViewScore, trunkVisibility, visibleBestView } from '../camera/bestView';
 import { bestViewFor, toControlsAngles } from '../camera/presets';
 import { buildTracks, heartAxisFrame, restToDisplayed } from './anchorTracks';
 import { anatomicalTitle, clip, hoverContent } from './hoverContent';
@@ -66,6 +66,21 @@ describe('dynamic label anchors (V2 §5.14, P0-2)', () => {
     expect(moved.azimuth).toBeGreaterThan(0); // left anterior / lateral oblique
     console.info('LCX visible best view', moved);
   });
+
+  // V2 §10 selection framing: in a SURFACE render each vessel's view shows ≥ 60 % of its proximal trunk face-on
+  // and spread across the image (the RAO 15 / CRA 30 LAD view left the trunk on the silhouette).
+  for (const target of ['LAD', 'LCX', 'RCA']) {
+    it(`picks a surface view that shows ${target}'s proximal trunk face-on`, () => {
+      const track = buildTracks(manifest, vessels, [target], [0.05, 0.8], 14)[0]!;
+      const conventional = bestViewFor(target, manifest.structures.find((s) => s.target === target && s.bestView)?.bestView);
+      const best = surfaceBestView(conventional, track.candidates);
+      expect(best.coverage).toBeGreaterThanOrEqual(SURFACE_MIN_COVERAGE);
+      expect(best.spread).toBeGreaterThan(0.5);
+      expect(best.coverage + best.spread).toBeGreaterThanOrEqual(
+        surfaceViewScore(track.candidates, conventional).coverage + surfaceViewScore(track.candidates, conventional).spread - 1e-9,
+      );
+    });
+  }
 
   it('keeps a front-facing anchor for LAD and RCA at the anterior home pose', () => {
     const eye = new Vector3(...(manifest.camera.heart!.position as [number, number, number]));
