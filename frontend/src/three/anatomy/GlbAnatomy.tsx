@@ -8,6 +8,7 @@ import { useUiStore } from '@/state/uiStore';
 import { PEEL_REST, useViewerStore } from '@/state/viewerStore';
 import type { AnatomyManifest, TargetId, TargetSpec } from '@/types/contracts';
 import { useCameraState } from '../camera/cameraState';
+import { cameraRigApi } from '../camera/controlsApi';
 import { debugHandles } from '../stage/debug';
 import { pickPointer, usePickStore } from '../stage/pickStore';
 import { readScene, useSceneControls } from '../stage/sceneControls';
@@ -310,6 +311,8 @@ export function GlbAnatomy({ url }: { url: string }) {
     inp.beatV = beat.current.v;
     inp.beatA = beat.current.a;
     const moving = rig.update(inp);
+    // The camera frames the pieces where they are THIS frame (the peel follower, CameraRig).
+    cameraRigApi.followPeel?.();
     // An outer layer turning solid (the peel closing the chest) gets its baked maps now, one mesh a frame.
     const lazy = rig.nextSolidWithoutMaps();
     if (lazy) {

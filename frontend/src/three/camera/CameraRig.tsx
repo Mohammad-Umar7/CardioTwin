@@ -319,6 +319,10 @@ export function CameraRig() {
     const controls = ref.current;
     if (!controls) return;
     cameraRigApi.controls = controls;
+    // Through a ref: the follower closes over this render's manifest-derived geometry.
+    cameraRigApi.followPeel = () => {
+      if (stageRef.current === 'workstation') followPeelRef.current?.();
+    };
     controls.mouseButtons.right = CameraControlsImpl.ACTION.NONE;
     controls.mouseButtons.middle = CameraControlsImpl.ACTION.DOLLY;
     const onKey = (e: KeyboardEvent) => {
@@ -349,7 +353,7 @@ export function CameraRig() {
       history.current.push(pose);
       useCameraState.getState().setHistory(history.current.canBack, history.current.canForward);
       // The View label follows the actual pose: back exactly at home (by any path) reads "Home".
-      if (useCameraState.getState().viewKind !== 'home' && isHomePose(pose)) useCameraState.getState().setView('home');
+      if (useCameraState.getState().viewKind !== 'home' && latest.current?.isHomePose(pose)) useCameraState.getState().setView('home');
     };
     window.addEventListener('keydown', onKey);
     window.addEventListener('keyup', onKey);
@@ -358,13 +362,13 @@ export function CameraRig() {
     controls.addEventListener('sleep', onRest);
     return () => {
       cameraRigApi.controls = null;
+      cameraRigApi.followPeel = null;
       window.removeEventListener('keydown', onKey);
       window.removeEventListener('keyup', onKey);
       controls.removeEventListener('controlstart', onUser);
       controls.removeEventListener('control', onControl);
       controls.removeEventListener('sleep', onRest);
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   // Stage poses: the workstation home frames the heart in the free area; the hero sits on the torso axis.
@@ -650,11 +654,12 @@ export function CameraRig() {
             // was home is never replayed verbatim: home is re-solved for where the peel is NOW, so Esc can
             // never restore a stale far camera while the View menu reads "Home".
             const stale = !view || view.zone !== peel.current.mode || far;
-            if (view?.kind === 'home' || (stale && !freeOrbitRef.current)) {
+            const live = latest.current;
+            if (live && (view?.kind === 'home' || (stale && !freeOrbitRef.current))) {
               if (peel.current.mode !== 'heart') {
-                peel.current.anchor = homeAnchor();
-                framePeel(currentDirection() ?? geo.direction, animate);
-              } else flyHome(animate);
+                peel.current.anchor = live.homeAnchor();
+                live.framePeel(live.currentDirection() ?? live.geo.direction, animate);
+              } else live.flyHome(animate);
               useCameraState.getState().setView('home');
             } else {
               flyToPose(back, animate);
@@ -762,18 +767,13 @@ export function CameraRig() {
     return { target, distance, bias: ZERO_OFFSET };
   };
 
-  /** Open samples, every other one (the follower projects them each frame while the heart opens). */
+  /** The open samples (the follower projects them each frame while the heart opens). */
   const openSamples = () => {
     const c = openCache.current;
     const f = sceneRuntime.framing;
     if (c.version !== f.version) {
       c.version = f.version;
-      c.src = { open: [], openRest: [], openWindow: [] };
-      for (let i = 0; i < f.open.length && i < f.openRest.length; i += 2) {
-        c.src.open.push(f.open[i]!);
-        c.src.openRest.push(f.openRest[i]!);
-        c.src.openWindow.push(f.openWindow[i] ?? [0.7, 1]);
-      }
+      c.src = { open: f.open, openRest: f.openRest, openWindow: f.openWindow };
     }
     return c;
   };
@@ -798,8 +798,9 @@ export function CameraRig() {
       const target = A.target.clone().lerp(centre, s);
       const bias = { x: mix(A.bias.x, fitBias.x, s), y: mix(A.bias.y, fitBias.y, s) };
       const eased = Math.exp(mix(Math.log(A.distance), Math.log(fitD), s));
-      // Containment floor: the margin grows with the opening (at rest the heart framing itself holds).
-      const floor = containDistance({ ...view, target, bias, margin: mix(-40, margin, s) }, points);
+      // Containment floor: the margin grows with the opening (at rest the heart framing itself holds), plus a
+      // few px for the vertices between the samples and the hinge's arc (the samples move on its chord).
+      const floor = containDistance({ ...view, target, bias, margin: mix(-40, margin + 10, s) }, points);
       return { target, distance: Math.max(eased, floor), bias };
     }
     const T = thoraxPose(direction);
@@ -872,6 +873,18 @@ export function CameraRig() {
     setThoraxView(false);
   };
 
+  const followPeelRef = useRef<(() => void) | null>(null);
+  followPeelRef.current = followPeel;
+  /** This render's helpers, for listeners registered once at mount (they must not use a stale manifest). */
+  const latest = useRef<{
+    geo: typeof geo;
+    flyHome: typeof flyHome;
+    framePeel: typeof framePeel;
+    homeAnchor: typeof homeAnchor;
+    currentDirection: typeof currentDirection;
+    isHomePose: (pose: Pose) => boolean;
+  } | null>(null);
+
   /** True when `pose` is the workstation home pose (the View label follows the actual pose). */
   const isHomePose = (pose: Pose): boolean => {
     if (peel.current.mode !== 'heart') return false;
@@ -886,6 +899,7 @@ export function CameraRig() {
     const direction = from?.clone() ?? currentDirection() ?? geo.direction;
     framePeel(direction, animate);
   };
+  latest.current = { geo, flyHome, framePeel, homeAnchor, currentDirection, isHomePose: (pose: Pose) => isHomePose(pose) };
   // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(() => () => resetPeel(), []);
 
@@ -922,7 +936,9 @@ export function CameraRig() {
       else if (mode !== 'heart') peel.current.dirty = true;
     }
 
-    if (stage === 'workstation') followPeel();
+    // The GLB anatomy calls the follower right after it moved the pieces (cameraRigApi.followPeel); without
+    // it (the procedural heart) the camera follows here.
+    if (stage === 'workstation' && !sceneRuntime.anatomyReady) followPeel();
 
     // View offset: the orbit target sits at the centre of the free area; glides over `flyout`.
     const { width, height } = size;
