@@ -89,6 +89,11 @@ origin — the viewer can offset or scale any node safely.
 * **Thorax limits** — aorta, IVC and trachea are cut (and capped) to z ∈ [986, 1390] mm so nothing leaves the torso.
 * **Seamless aorta** — BodyParts3D splits the aorta into ascending / arch / descending pieces whose end caps show
   as seam rings; they are fused by a 0.6 mm voxel remesh and relaxed with a corrective smooth.
+* **Terrace removal** — BodyParts3D surfaces carry ~1 mm segmentation terraces that read as wood grain under
+  specular light. The heart wall gets a Taubin λ|μ low-pass (10 iterations on the welded source, 5 more after
+  decimation; mean surface shift 0.3 mm, coronary centrelines stay within 0.1 mm of the epicardium) and the
+  pectorals 10 iterations before decimation (`"taubin": {"pre", "post"}` per node in the config). The build
+  fails if a heart half cannot be capped (a sign of over-smoothed thin wall touching itself on the cut plane).
 * **Decimation** — quadric collapse to the per-node budget, then smooth shading with corner-angle-weighted normals;
   edges folding more than 75° (thin-wall rims at vessel and valve openings, cap edges) are split sharp so two
   opposite surfaces are never averaged into a dark seam. (Face-area weighting was dropped: on the decimated wall it

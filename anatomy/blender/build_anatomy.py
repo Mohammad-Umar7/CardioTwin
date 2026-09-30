@@ -387,6 +387,14 @@ def decimate_to(ob: bpy.types.Object, budget: int) -> None:
     apply_modifiers(ob)
 
 
+def taubin_object(ob: bpy.types.Object, iterations: int) -> None:
+    """Taubin-smooth an object's mesh in place (see :func:`meshops.taubin_smooth`)."""
+    V, F = mesh_arrays(ob.data)
+    V = mo.taubin_smooth(V, F, iterations=iterations)
+    ob.data.vertices.foreach_set("co", V.astype(np.float32).ravel())
+    ob.data.update()
+
+
 def reorient_after_decimation(ob: bpy.types.Object) -> None:
     """Edge collapses on thin sheets can leave a few faces wound against their neighbours; restore
     consistent, outward winding (see :func:`orient_outward`)."""
@@ -443,6 +451,10 @@ def orient_open_shell_outward(ob: bpy.types.Object) -> None:
 # ============================================================================================
 # Stage 2d — heart split & perfusion territories
 # ============================================================================================
+#: Open edges tolerated on a capped heart half (a few from non-manifold source vertices on the plane).
+MAX_OPEN_CAP_EDGES = 8
+
+
 def split_heart(ob: bpy.types.Object, plane_co, plane_no) -> dict[str, tuple[bpy.types.Object, set[int]]]:
     """Cut the heart wall into anterior / posterior halves, capping each opening.
 
@@ -456,6 +468,14 @@ def split_heart(ob: bpy.types.Object, plane_co, plane_no) -> dict[str, tuple[bpy
         # clear_outer removes the side the normal points to (anterior); clear_inner the opposite side.
         caps = bm_bisect(bm, plane_co, plane_no, clear_outer=clear_outer, clear_inner=not clear_outer, cap=True)
         bmesh.ops.triangulate(bm, faces=bm.faces[:])
+        # Scan-fill leaves zero-area slivers where cut points are collinear.
+        bmesh.ops.dissolve_degenerate(bm, dist=1e-7, edges=bm.edges[:])
+        bmesh.ops.triangulate(bm, faces=bm.faces[:])
+        open_edges = sum(1 for e in bm.edges if e.is_boundary)
+        if open_edges > MAX_OPEN_CAP_EDGES:
+            # A cut loop that could not be capped means the wall touches itself on the cutting plane
+            # (e.g. over-smoothed thin atrial wall): fail loudly instead of publishing a hole.
+            raise RuntimeError(f"heart {side}: {open_edges} open edges after capping the cut")
         me = bpy.data.meshes.new(f"Heart_Wall_{side.title()}")
         bm.to_mesh(me)
         bm.free()
@@ -680,6 +700,7 @@ def build(args: argparse.Namespace) -> None:
         if spec.raw.get("split"):
             continue
         parts = [cache.get(pid) for pid in spec.parts]
+        smoothing = spec.raw.get("taubin", {})
         crop = spec.raw.get("crop")
         if crop:
             # Crop each closed part on its own: a single cut loop per part caps cleanly, whereas the
@@ -694,9 +715,13 @@ def build(args: argparse.Namespace) -> None:
         before = tri_count(ob)
         if spec.raw.get("remesh_mm"):
             remesh_seamless(ob, spec.raw["remesh_mm"] * scale)
+        if smoothing.get("pre"):  # on the welded source, so no vertex pair can collapse into a hole
+            taubin_object(ob, int(smoothing["pre"]))
         decimate_to(ob, spec.budget)
         if closed:
             reorient_after_decimation(ob)
+        if smoothing.get("post"):
+            taubin_object(ob, int(smoothing["post"]))
         objects[spec.node] = ob
         node_stats[spec.node] = {"triangles_source": before}
         log(f"{spec.node:28s} {before:8d} -> {tri_count(ob):7d} tris")
@@ -707,7 +732,16 @@ def build(args: argparse.Namespace) -> None:
     wall = new_object("Heart_Wall", new_mesh("Heart_Wall", to_scene(V), F))
     finish_topology(wall, merge_dist=merge_dist, recalc_normals=True)
     wall_src = tri_count(wall)
+    # BodyParts3D's wall carries segmentation terraces (~1 mm) that read as wood grain under specular
+    # light: a Taubin pass on the welded source, and a short one after decimation to relax collapse
+    # facets (mean surface shift ~0.3 mm; the coronaries stay seated on the epicardium).
+    wall_smooth = heart_specs[0].raw.get("taubin", {})
+    if wall_smooth.get("pre"):
+        taubin_object(wall, int(wall_smooth["pre"]))
     decimate_to(wall, wall_budget)
+    reorient_after_decimation(wall)
+    if wall_smooth.get("post"):
+        taubin_object(wall, int(wall_smooth["post"]))
     wall_V = world_vertices(wall)
     wall_thick = wall_thickness(wall)
     finite = wall_thick[np.isfinite(wall_thick)] / scale

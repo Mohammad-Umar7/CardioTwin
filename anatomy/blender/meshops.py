@@ -130,6 +130,37 @@ def inverted_component_faces(V: np.ndarray, F: np.ndarray) -> np.ndarray:
     return vol[inv] < 0.0
 
 
+def taubin_smooth(
+    V: np.ndarray,
+    F: np.ndarray,
+    *,
+    iterations: int = 10,
+    lam: float = 0.5,
+    mu: float = -0.53,
+    pinned: np.ndarray | None = None,
+) -> np.ndarray:
+    """Taubin lambda|mu smoothing (umbrella Laplacian): a low-pass filter that removes
+    high-frequency noise — BodyParts3D's segmentation stair-steps — without the shrinkage of plain
+    Laplacian smoothing. ``pinned`` vertices (bool mask) do not move.
+    """
+    V = np.asarray(V, dtype=np.float64).copy()
+    e = unique_edges(F)
+    n = len(V)
+    deg = np.bincount(e.ravel(), minlength=n).astype(np.float64)
+    deg[deg == 0] = 1.0
+    free = np.ones(n, dtype=bool) if pinned is None else ~np.asarray(pinned, dtype=bool)
+    for _ in range(iterations):
+        for factor in (lam, mu):
+            acc = np.empty_like(V)
+            for k in range(3):
+                acc[:, k] = np.bincount(e[:, 0], weights=V[e[:, 1], k], minlength=n) + np.bincount(
+                    e[:, 1], weights=V[e[:, 0], k], minlength=n
+                )
+            lap = acc / deg[:, None] - V
+            V[free] += factor * lap[free]
+    return V
+
+
 def largest_component(V: np.ndarray, F: np.ndarray) -> Mesh:
     labels = face_components(F, len(V))
     uniq, counts = np.unique(labels, return_counts=True)

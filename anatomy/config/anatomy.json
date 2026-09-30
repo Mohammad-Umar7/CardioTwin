@@ -175,6 +175,9 @@
       "description": "Clavicular and sternocostal parts of the left pectoralis major, the large fan-shaped muscle overlying the anterior chest wall.",
       "crop": {
         "type": "arm_plane"
+      },
+      "taubin": {
+        "pre": 10
       }
     },
     {
@@ -197,6 +200,9 @@
       "description": "Clavicular and sternocostal parts of the right pectoralis major.",
       "crop": {
         "type": "arm_plane"
+      },
+      "taubin": {
+        "pre": 10
       }
     },
     {
@@ -474,7 +480,11 @@
         1.05
       ],
       "target": "CAD",
-      "description": "Anterior half of the heart wall (epicardial and endocardial surfaces), opened along the long axis. Vertex colours carry approximate LAD / LCX / RCA perfusion-territory weights (AHA 17-segment convention) — not a lesion map."
+      "description": "Anterior half of the heart wall (epicardial and endocardial surfaces), opened along the long axis. Vertex colours carry approximate LAD / LCX / RCA perfusion-territory weights (AHA 17-segment convention) — not a lesion map.",
+      "taubin": {
+        "pre": 10,
+        "post": 5
+      }
     },
     {
       "node": "Heart_Wall_Posterior",
@@ -496,7 +506,11 @@
         -1.05
       ],
       "target": "CAD",
-      "description": "Posterior half of the heart wall including the inferior (diaphragmatic) surface and the atria. Vertex colours carry approximate perfusion-territory weights — not a lesion map."
+      "description": "Posterior half of the heart wall including the inferior (diaphragmatic) surface and the atria. Vertex colours carry approximate perfusion-territory weights — not a lesion map.",
+      "taubin": {
+        "pre": 10,
+        "post": 5
+      }
     },
     {
       "node": "Valve_Mitral",

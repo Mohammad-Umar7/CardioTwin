@@ -139,3 +139,37 @@ def test_inverted_component_faces_flags_only_the_inside_out_piece():
     assert not mask[: len(F1)].any()
     assert mask[len(F1):].all()
 
+
+def sphere(n: int = 24) -> mo.Mesh:
+    """UV sphere of radius 1 (closed, outward)."""
+    rings = [(0.0, 0.0, 1.0)]
+    for i in range(1, n):
+        th = np.pi * i / n
+        rings += [(np.sin(th) * np.cos(ph), np.sin(th) * np.sin(ph), np.cos(th)) for ph in np.linspace(0, 2 * np.pi, 2 * n, endpoint=False)]
+    rings.append((0.0, 0.0, -1.0))
+    V = np.array(rings)
+    m = 2 * n
+    F = [(0, 1 + j, 1 + (j + 1) % m) for j in range(m)]
+    for i in range(n - 2):
+        a, b = 1 + i * m, 1 + (i + 1) * m
+        for j in range(m):
+            k = (j + 1) % m
+            F += [(a + j, b + j, b + k), (a + j, b + k, a + k)]
+    last = len(V) - 1
+    F += [(1 + (n - 2) * m + j, last, 1 + (n - 2) * m + (j + 1) % m) for j in range(m)]
+    return V, np.array(F)
+
+
+def test_taubin_smooth_removes_noise_without_shrinking():
+    V, F = sphere()
+    assert mo.signed_volume(V, F) > 0
+    rng = np.random.default_rng(0)
+    noisy = V * (1.0 + rng.normal(0.0, 0.02, size=(len(V), 1)))
+    smooth = mo.taubin_smooth(noisy, F, iterations=10)
+    radial_err = lambda P: np.abs(np.linalg.norm(P, axis=1) - 1.0).mean()  # noqa: E731
+    assert radial_err(smooth) < 0.5 * radial_err(noisy)
+    assert abs(mo.signed_volume(smooth, F) / mo.signed_volume(V, F) - 1.0) < 0.03  # no Laplacian shrinkage
+    pinned = np.zeros(len(V), dtype=bool)
+    pinned[:5] = True
+    held = mo.taubin_smooth(noisy, F, iterations=10, pinned=pinned)
+    assert np.array_equal(held[:5], noisy[:5])
