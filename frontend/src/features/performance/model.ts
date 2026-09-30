@@ -629,21 +629,52 @@ export function modalityFinding(a: ModalityAblation): string {
   return 'What each data modality adds';
 }
 
+/** "> 65 y" → "over-65s", "< 50 y" → "under-50s", "Female" → "female". */
+function subgroupName(label: string): string {
+  const over = /^>\s*(\d+)\s*y$/.exec(label.trim());
+  if (over) return `over-${over[1]}s`;
+  const under = /^<\s*(\d+)\s*y$/.exec(label.trim());
+  if (under) return `under-${under[1]}s`;
+  return label.toLowerCase();
+}
+
+/**
+ * The subgroup chart's headline, derived from what the chart shows. It never claims "no clear difference"
+ * while a subgroup's ROC-AUC interval sits wholly below the overall value, crosses chance (0.5), or its
+ * specificity is 0; when the divergent subgroups are small it says so instead of hiding them.
+ */
 export function subgroupFinding(s: Subgroups, source: SubgroupSource): string {
+  const overall = s.overall[source]?.rocAuc?.value ?? null;
   const flagged: string[] = [];
+  const weak: { name: string; auc: number; smallN: boolean; spec0: boolean }[] = [];
   for (const f of s.factors) {
     for (const l of f.levels) {
       const b = l[source];
-      const d = b?.deltaVsReference;
-      if (d?.ci && (d.ci[1] < 0 || d.ci[0] > 0) && !b?.smallN)
+      if (!b) continue;
+      const d = b.deltaVsReference;
+      if (d?.ci && (d.ci[1] < 0 || d.ci[0] > 0) && !b.smallN)
         flagged.push(`${l.label.toLowerCase()} (${d.value > 0 ? '+' : '−'}${f2(Math.abs(d.value))})`);
+      const auc = b.rocAuc;
+      if (!auc) continue;
+      const below = !!auc.ci && overall !== null && auc.ci[1] < overall;
+      const chance = !!auc.ci && auc.ci[0] <= 0.5;
+      const spec0 = b.specificity?.value === 0;
+      if (below || chance || spec0) weak.push({ name: subgroupName(l.label), auc: auc.value, smallN: b.smallN, spec0 });
     }
   }
   const names = s.factors.map((f) => f.label.toLowerCase());
   const list =
     names.length > 1 ? `${names.slice(0, -1).join(', ')} and ${names.at(-1)}` : (names[0] ?? 'subgroups');
-  if (flagged.length === 0) return `No clear difference in discrimination across ${list}`;
-  return `Discrimination differs for ${flagged.join(', ')}`;
+  if (flagged.length > 0) return `Discrimination differs for ${flagged.join(', ')}`;
+  if (weak.length === 0) return `No clear difference in discrimination across ${list}`;
+  const worst = [...weak].sort((a, b) => a.auc - b.auc).slice(0, 2);
+  const named = worst.map((w) => `${w.name} (${f2(w.auc)}${w.spec0 ? ', specificity 0.00' : ''})`);
+  const lead = weak.every((w) => w.smallN)
+    ? source === 'test'
+      ? 'Subgroups are too small on the test split to compare'
+      : 'Subgroups are small'
+    : 'Discrimination is uncertain in some subgroups';
+  return `${lead}; weakest for ${named.join(' and ')}`;
 }
 
 // ---------------------------------------------------------------------------------------- protocol

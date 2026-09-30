@@ -290,4 +290,35 @@ describe('analysis findings', () => {
     const s = readSubgroups(sampleReport, 'CAD')!;
     expect(subgroupFinding(s, 'test')).toBe('No clear difference in discrimination across sex');
   });
+
+  it('never claims "no clear difference" while a small subgroup sits below the overall value or crosses chance', () => {
+    const block = (value: number, ci: [number, number], smallN: boolean, spec = 0.8) => ({
+      n: 20,
+      nPos: 10,
+      prevalence: 0.5,
+      rocAuc: { value, ci },
+      sensitivity: { value: 0.8, ci: null },
+      specificity: { value: spec, ci: null },
+      smallN,
+      deltaVsReference: null,
+    });
+    const s = {
+      overall: { test: block(0.86, [0.74, 0.95], false), oof: null },
+      factors: [
+        {
+          id: 'age_band',
+          label: 'Age band',
+          reference: null,
+          levels: [
+            { id: 'lt50', label: '< 50 y', test: block(0.63, [0.27, 1], true), oof: null },
+            { id: 'mid', label: '50–65 y', test: block(0.99, [0.95, 1], true), oof: null },
+            { id: 'gt65', label: '> 65 y', test: block(0.59, [0.35, 0.84], true, 0), oof: null },
+          ],
+        },
+      ],
+    };
+    expect(subgroupFinding(s, 'test')).toBe(
+      'Subgroups are too small on the test split to compare; weakest for over-65s (0.59, specificity 0.00) and under-50s (0.63)',
+    );
+  });
 });
