@@ -1,32 +1,50 @@
 import {
   BookOpen,
   Home,
+  Info,
   Keyboard,
   LayoutDashboard,
+  Link2,
   LineChart,
   Maximize2,
   MessageSquareText,
+  PanelLeftClose,
+  PanelLeftOpen,
   PencilLine,
-  PlayCircle,
   Search,
   Wind,
 } from 'lucide-react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { useRegisterCommands } from '@/hooks/useRegisterCommands';
-import { ROUTES, loadWorkstation } from '@/routes';
+import { ROUTES } from '@/routes';
 import { CMD, SHORTCUT } from '@/state/commandIds';
 import type { Command } from '@/state/commandStore';
 import { useUiStore } from '@/state/uiStore';
 import { useViewerStore } from '@/state/viewerStore';
+import { useInterimCommands } from './useInterimCommands';
+
+/** Copies the current URL (the shareable view state, V2 §7) and confirms with a toast. */
+async function copyCurrentLink(): Promise<void> {
+  const ui = useUiStore.getState();
+  try {
+    await navigator.clipboard.writeText(window.location.href);
+    ui.pushToast({ tone: 'success', message: 'Link to this view copied' });
+  } catch {
+    ui.pushToast({ tone: 'info', message: 'Copy the address bar to share this view' });
+  }
+}
 
 /**
- * App-level commands (agent A): palette, shortcut sheet, calm mode, focus mode, the two drawers and the
- * pages. The guided demo is registered here as an interim command (priority −1) until the tour owns it.
+ * App-level commands (agent A): palette, shortcut sheet, calm and focus modes, the two drawers, the
+ * patient card, Details, "Copy link to this view" and the pages. Also mounts the interim lists other
+ * owners replace (`useInterimCommands`).
  */
 export function useShellCommands(): void {
   const navigate = useNavigate();
   const { pathname } = useLocation();
   const onWorkstation = pathname.startsWith(ROUTES.workstation);
+  const cardOpen = useUiStore((s) => s.patientCardOpen);
+  useInterimCommands();
 
   const ui = () => useUiStore.getState();
   const go = (to: string) => () => navigate(to);
@@ -84,6 +102,35 @@ export function useShellCommands(): void {
       run: () => useViewerStore.getState().toggle('calm'),
     },
     {
+      id: CMD.patientCard,
+      group: 'views',
+      title: cardOpen ? 'Collapse the patient card' : 'Show the patient card',
+      subtitle: cardOpen ? 'To a 40 px rail' : 'Top inputs for the current target',
+      keywords: ['record', 'rail', 'left', 'sidebar'],
+      icon: cardOpen ? PanelLeftClose : PanelLeftOpen,
+      when: () => onWorkstation && ui().chrome === 'workstation',
+      run: () => ui().setPatientCardOpen(!ui().patientCardOpen),
+    },
+    {
+      id: CMD.copyLink,
+      group: 'actions',
+      title: 'Copy link to this view',
+      subtitle: 'Patient, vessel, view and panel',
+      keywords: ['share', 'url', 'permalink'],
+      icon: Link2,
+      when: () => onWorkstation,
+      run: () => void copyCurrentLink(),
+    },
+    {
+      id: CMD.details,
+      group: 'actions',
+      title: 'Intended use & details',
+      subtitle: 'Decision support only · dataset · licences',
+      keywords: ['disclaimer', 'about', 'license', 'credits', 'safety'],
+      icon: Info,
+      run: () => ui().openDetails(),
+    },
+    {
       id: CMD.shortcuts,
       group: 'actions',
       title: 'Keyboard shortcuts',
@@ -112,23 +159,5 @@ export function useShellCommands(): void {
     { id: CMD.pageHome, group: 'pages', title: 'Home', subtitle: 'Landing page', icon: Home, run: go(ROUTES.landing) },
   ];
 
-  const interim: Command[] = [
-    {
-      id: CMD.tourStart,
-      group: 'actions',
-      title: 'Start guided demo',
-      keywords: ['tour', 'demo', 'walkthrough'],
-      icon: PlayCircle,
-      run: () => {
-        if (!onWorkstation) {
-          void loadWorkstation();
-          navigate(ROUTES.workstation);
-        }
-        ui().openTour(0);
-      },
-    },
-  ];
-
-  useRegisterCommands('shell', shell, [onWorkstation]);
-  useRegisterCommands('shell.interim', interim, [onWorkstation], { priority: -1 });
+  useRegisterCommands('shell', shell, [onWorkstation, cardOpen]);
 }

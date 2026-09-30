@@ -2,22 +2,24 @@ import { AnimatePresence, motion } from 'framer-motion';
 import { CornerDownLeft, Keyboard, Search, SlidersHorizontal } from 'lucide-react';
 import { useEffect, useId, useMemo, useRef, useState, type KeyboardEvent as ReactKeyboardEvent } from 'react';
 import { createPortal } from 'react-dom';
-import { ESCAPE_PRIORITY, Kbd, Shortcut, useEscapeLayer } from '@/design';
-import { useSchema } from '@/hooks/useData';
+import { ESCAPE_PRIORITY, Kbd, Shortcut, Skeleton, useEscapeLayer } from '@/design';
+import { useCohort, useSchema } from '@/hooks/useData';
 import { useIsReducedMotion } from '@/hooks/useMediaQuery';
 import { useCommands } from '@/hooks/useRegisterCommands';
 import { cn } from '@/lib/cn';
 import { CMD, SHORTCUT } from '@/state/commandIds';
 import { isCommandEnabled, useCommandStore, type Command } from '@/state/commandStore';
 import { useUiStore } from '@/state/uiStore';
+import { useViewerStore } from '@/state/viewerStore';
 import { EASE, MOTION } from '@/theme/tokens';
-import { commandScore, searchCommands, type PaletteSection } from './commandSearch';
+import { commandScore, paletteSuggestions, searchCommands, type PaletteSection } from './commandSearch';
 
 /**
  * Command palette (WORKSTATION_V2 §4.9): Ctrl K / ⌘K or "/". surface/3, e-3, r-lg on a 40 % scrim with
- * no blur; 640 px wide (600 at 1280), 96 px below the top bar. Groups in a fixed order; ↑↓ move, ↵ runs,
- * Tab opens the row's actions, Backspace on an empty query goes back a level, Esc closes (top of the Esc
- * chain). Focus stays in the input (`aria-activedescendant`).
+ * no blur; 640 px wide (600 at 1280, 100 % − 16 below 1100), 96 px below the top bar (72 at 1280).
+ * Groups in a fixed order, capped per group so opening stays O(visible rows); ↑↓ move, ↵ runs, Tab opens
+ * the row's actions, Backspace on an empty query goes back a level, Esc closes (top of the Esc chain).
+ * Focus stays in the input (`aria-activedescendant`).
  */
 export default function CommandPalette() {
   const open = useUiStore((s) => s.paletteOpen);
@@ -29,19 +31,16 @@ export default function CommandPalette() {
   );
 }
 
-interface Row {
-  key: string;
-  command: Command;
-}
 
 function PalettePanel({ reduced }: { reduced: boolean }) {
   const listId = useId();
   const input = useRef<HTMLInputElement>(null);
-  const list = useRef<HTMLDivElement>(null);
   const opener = useRef<Element | null>(null);
   const commands = useCommands();
   const recent = useCommandStore((s) => s.recent);
+  const selected = useViewerStore((s) => s.selectedStructure);
   const schema = useSchema();
+  const cohortLoading = useCohort().status === 'loading';
   const [query, setQuery] = useState('');
   const [level, setLevel] = useState<Command | null>(null);
   const [active, setActive] = useState(0);
@@ -69,8 +68,12 @@ function PalettePanel({ reduced }: { reduced: boolean }) {
       const matched = q ? items.filter((c) => commandScore(c, q) !== null) : items;
       return matched.length ? [{ group: level.group, label: level.title, items: matched }] : [];
     }
-    return searchCommands(commands, query, { recent, exclude: [CMD.paletteOpen] });
-  }, [commands, query, recent, level]);
+    return searchCommands(commands, query, {
+      recent,
+      exclude: [CMD.paletteOpen],
+      suggestedIds: paletteSuggestions(selected),
+    });
+  }, [commands, query, recent, level, selected]);
 
   const inputCount = schema.data?.features.length;
   const fallbacks: Command[] = useMemo(
@@ -95,26 +98,25 @@ function PalettePanel({ reduced }: { reduced: boolean }) {
   );
 
   const noResults = sections.length === 0;
-  const rows: Row[] = useMemo(
-    () =>
-      noResults
-        ? fallbacks.map((command) => ({ key: `fallback:${command.id}`, command }))
-        : sections.flatMap((s) => s.items.map((command) => ({ key: `${s.group}:${command.id}`, command }))),
-    [sections, fallbacks, noResults],
+  const shownSections: PaletteSection[] = useMemo(
+    () => (noResults ? [{ group: 'actions', label: 'Try instead', items: fallbacks }] : sections),
+    [noResults, fallbacks, sections],
   );
-  const current = rows[Math.min(active, rows.length - 1)];
+  const rows = useMemo(() => shownSections.flatMap((s) => s.items.map((command) => ({ command }))), [shownSections]);
+  const activeIndex = Math.min(active, rows.length - 1);
+  const current = rows[activeIndex];
   const optionId = (i: number) => `${listId}-opt-${i}`;
 
   useEffect(() => setActive(0), [query, level]);
 
   useEffect(() => {
     if (!current) return;
-    document.getElementById(optionId(Math.min(active, rows.length - 1)))?.scrollIntoView({ block: 'nearest' });
+    document.getElementById(optionId(activeIndex))?.scrollIntoView({ block: 'nearest' });
     // optionId is derived from listId (stable)
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [active, rows.length]);
+  }, [activeIndex, rows.length]);
 
-  // Preview of the active row's effect (P2 hook: "CAD 98 % → 91 %").
+  // Preview of the active row's effect ("CAD 98 % → 91 %"), fetched for that row only.
   useEffect(() => {
     const command = current?.command;
     if (!command?.preview) return;
@@ -147,11 +149,19 @@ function PalettePanel({ reduced }: { reduced: boolean }) {
     switch (e.key) {
       case 'ArrowDown':
         e.preventDefault();
-        if (n) setActive((i) => (i + 1) % n);
+        if (n) setActive((i) => (Math.min(i, n - 1) + 1) % n);
         break;
       case 'ArrowUp':
         e.preventDefault();
-        if (n) setActive((i) => (i - 1 + n) % n);
+        if (n) setActive((i) => (Math.min(i, n - 1) - 1 + n) % n);
+        break;
+      case 'PageDown':
+        e.preventDefault();
+        if (n) setActive((i) => Math.min(n - 1, i + 8));
+        break;
+      case 'PageUp':
+        e.preventDefault();
+        if (n) setActive((i) => Math.max(0, i - 8));
         break;
       case 'Home':
         if (!query) {
@@ -188,6 +198,7 @@ function PalettePanel({ reduced }: { reduced: boolean }) {
 
   let index = -1;
   const transition = { duration: MOTION.fast / 1000, ease: EASE.out };
+  const showSkeleton = !query.trim() && !level && cohortLoading;
 
   return (
     <div className="fixed inset-0 z-scrim">
@@ -210,9 +221,9 @@ function PalettePanel({ reduced }: { reduced: boolean }) {
         exit={{ opacity: 0, transition: { duration: 0.11, ease: EASE.exit } }}
         transition={transition}
         className={cn(
-          'absolute left-1/2 top-[calc(var(--topbar-h)+var(--palette-top))] flex w-[min(var(--palette-w),calc(100vw-16px))] flex-col',
+          'absolute left-1/2 top-[calc(var(--topbar-h)+var(--palette-top))] flex w-[min(var(--palette-w),calc(100vw-16px))] origin-top flex-col',
           'max-h-[min(440px,calc(100vh-var(--topbar-h)-var(--palette-top)-var(--status-h)-16px))] overflow-clip rounded-lg bg-surface-3 text-primary shadow-e3',
-          'min-[1100px]:max-[1439.98px]:max-h-[min(400px,calc(100vh-var(--topbar-h)-var(--palette-top)-var(--status-h)-16px))]',
+          'max-[1439.98px]:max-h-[min(400px,calc(100vh-var(--topbar-h)-var(--palette-top)-var(--status-h)-16px))]',
         )}
         style={{ x: '-50%' }}
       >
@@ -227,7 +238,7 @@ function PalettePanel({ reduced }: { reduced: boolean }) {
             aria-expanded="true"
             aria-controls={listId}
             aria-autocomplete="list"
-            aria-activedescendant={current ? optionId(Math.min(active, rows.length - 1)) : undefined}
+            aria-activedescendant={current ? optionId(activeIndex) : undefined}
             aria-label="Search commands, inputs, patients and views"
             placeholder={level ? `Actions for ${level.title}…` : 'Search or jump to…'}
             value={query}
@@ -235,44 +246,47 @@ function PalettePanel({ reduced }: { reduced: boolean }) {
             onKeyDown={onKeyDown}
             spellCheck={false}
             autoComplete="off"
-            className="h-full min-w-0 flex-1 bg-transparent text-[0.875rem] leading-5 text-primary outline-none placeholder:text-tertiary [&:focus-visible]:shadow-none"
+            className="h-full min-w-0 flex-1 bg-transparent text-body text-primary outline-none placeholder:text-tertiary [&:focus-visible]:shadow-none"
           />
           <Kbd>Esc</Kbd>
         </div>
 
-        <div ref={list} id={listId} role="listbox" aria-label="Results" className="panel-scroll min-h-0 flex-1 py-1">
+        <div id={listId} role="listbox" aria-label="Results" className="panel-scroll min-h-0 flex-1 py-1">
           {noResults && (
             <p className="px-4 pb-1 pt-3 text-body-s text-secondary" role="status">
               No match for ‘{query.trim()}’
             </p>
           )}
-          {(noResults ? [{ group: 'actions' as const, label: 'Try instead', items: fallbacks }] : sections).map((section) => {
+          {shownSections.map((section) => {
             const headerId = `${listId}-${section.group}`;
             return (
               <div key={section.group} role="group" aria-labelledby={headerId}>
-                <div id={headerId} className="eyebrow px-4 pb-1 pt-2 text-tertiary">
+                <div id={headerId} className="eyebrow flex h-7 items-end px-4 pb-1 text-tertiary">
                   {section.label}
                 </div>
                 {section.items.map((command) => {
                   index += 1;
                   const i = index;
-                  const selected = i === Math.min(active, rows.length - 1);
+                  const isActive = i === activeIndex;
                   const Icon = command.icon;
-                  const previewText = preview?.id === command.id && selected ? preview.text : null;
+                  const previewText = preview?.id === command.id && isActive ? preview.text : null;
                   return (
                     <div
                       key={`${section.group}:${command.id}`}
                       id={optionId(i)}
                       role="option"
-                      aria-selected={selected}
-                      onMouseMove={() => !selected && setActive(i)}
+                      aria-selected={isActive}
+                      onMouseMove={() => !isActive && setActive(i)}
                       onClick={() => run(command)}
                       className={cn(
-                        'mx-1 flex h-9 cursor-pointer items-center gap-3 rounded-sm px-3',
-                        selected ? 'bg-surface-2' : 'hover:bg-surface-2/60',
+                        'mx-1 flex h-9 cursor-pointer items-center gap-3 rounded-sm px-3 transition-colors duration-instant',
+                        isActive ? 'bg-surface-2' : 'hover:bg-surface-2/60',
                       )}
                     >
-                      <span aria-hidden className="inline-flex size-4 shrink-0 items-center justify-center text-secondary">
+                      <span
+                        aria-hidden
+                        className={cn('inline-flex size-4 shrink-0 items-center justify-center', isActive ? 'text-primary' : 'text-tertiary')}
+                      >
                         {Icon && <Icon className="size-4 stroke-[1.5]" />}
                       </span>
                       <span className="flex min-w-0 flex-1 items-baseline gap-2">
@@ -283,12 +297,32 @@ function PalettePanel({ reduced }: { reduced: boolean }) {
                         <span className="num shrink-0 text-label text-secondary">{previewText}</span>
                       ) : command.shortcut ? (
                         <Shortcut shortcut={command.shortcut} />
-                      ) : command.actions?.length && selected ? (
-                        <span className="shrink-0 text-label font-normal text-tertiary">Tab for actions</span>
+                      ) : command.actions?.length && isActive ? (
+                        <span className="inline-flex shrink-0 items-center gap-1.5 text-label font-normal text-tertiary">
+                          Actions <Kbd>Tab</Kbd>
+                        </span>
+                      ) : command.hint ? (
+                        <span className="num max-w-[40%] shrink-0 truncate text-label font-normal text-tertiary">{command.hint}</span>
                       ) : null}
                     </div>
                   );
                 })}
+                {section.more ? (
+                  <div aria-hidden className="mx-1 flex h-7 items-center px-3 pl-10 text-label font-normal text-tertiary">
+                    + {section.more} more · type to narrow
+                  </div>
+                ) : null}
+                {showSkeleton && section.group === 'suggested' && (
+                  <div aria-hidden>
+                    <div className="eyebrow flex h-7 items-end px-4 pb-1 text-tertiary">Patients</div>
+                    {[0, 1, 2].map((k) => (
+                      <div key={k} className="mx-1 flex h-9 items-center gap-3 px-3">
+                        <Skeleton className="size-4 shrink-0" />
+                        <Skeleton className="h-3 w-40" />
+                      </div>
+                    ))}
+                  </div>
+                )}
               </div>
             );
           })}

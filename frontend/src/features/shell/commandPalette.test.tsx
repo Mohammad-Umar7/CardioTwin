@@ -5,6 +5,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { useCommandStore, type Command } from '@/state/commandStore';
 import { useUiStore } from '@/state/uiStore';
 import CommandPalette from './CommandPalette';
+import { initialism, inputAliases, patientKeywords } from './commandAliases';
 import { fuzzyScore, searchCommands } from './commandSearch';
 
 const cmd = (id: string, group: Command['group'], title: string, extra: Partial<Command> = {}): Command => ({
@@ -60,6 +61,55 @@ describe('fuzzy search', () => {
     const all = sections.flatMap((s) => s.items.map((c) => c.id));
     expect(all).not.toContain('hidden');
     expect(all.filter((id) => id === 'page.performance')).toHaveLength(1);
+  });
+});
+
+describe('caps and promoted suggestions', () => {
+  const many = Array.from({ length: 300 }, (_, i) => cmd(`patient.open.P-${i}`, 'patients', `P-${String(i).padStart(3, '0')}`));
+
+  it('caps each group on an empty query and while typing, and reports how many were left out', () => {
+    const empty = searchCommands(many, '');
+    expect(empty).toHaveLength(1);
+    expect(empty[0]!.items).toHaveLength(5);
+    expect(empty[0]!.more).toBe(295);
+    const typed = searchCommands(many, 'p-0');
+    expect(typed[0]!.items.length).toBeLessThanOrEqual(8);
+    expect(typed[0]!.more).toBeGreaterThan(0);
+  });
+
+  it('promotes suggested ids in order when registered and enabled, without repeating them in their group', () => {
+    const sections = searchCommands(COMMANDS, '', {
+      recent: ['page.performance'],
+      suggestedIds: ['tour.start', 'not.registered', 'hidden', 'vessel.select.LAD'],
+    });
+    expect(sections[0]!.items.map((c) => c.id)).toEqual(['page.performance', 'tour.start', 'vessel.select.LAD', 'flip.typical']);
+    const rest = sections.slice(1).flatMap((s) => s.items.map((c) => c.id));
+    expect(rest).not.toContain('tour.start');
+    expect(rest).not.toContain('vessel.select.LAD');
+  });
+});
+
+describe('search aliases', () => {
+  it('derives initialisms and raw-key aliases, never repeating the label', () => {
+    expect(initialism('Ejection fraction')).toBe('EF');
+    expect(initialism('Regional wall-motion abnormality')).toBe('RWMA');
+    expect(initialism('Obesity (BMI > 25)')).toBeNull();
+    expect(inputAliases({ key: 'EF-TTE', label: 'Ejection fraction' })).toEqual(['EF-TTE', 'EF TTE', 'EF']);
+    expect(inputAliases({ key: 'Region RWMA', label: 'Regional wall-motion abnormality' })).toEqual(['Region RWMA', 'RWMA']);
+    expect(inputAliases({ key: 'Age', label: 'Age' })).toEqual([]);
+  });
+
+  it('finds an input by its abbreviation and a patient by number, split or summary', () => {
+    const ef = cmd('input.edit.EF-TTE', 'inputs', 'Ejection fraction', { keywords: inputAliases({ key: 'EF-TTE', label: 'Ejection fraction' }) });
+    const rwma = cmd('input.edit.Region RWMA', 'inputs', 'Regional wall-motion abnormality', {
+      keywords: inputAliases({ key: 'Region RWMA', label: 'Regional wall-motion abnormality' }),
+    });
+    expect(searchCommands([ef, rwma], 'rwma')[0]!.items[0]!.id).toBe('input.edit.Region RWMA');
+    expect(searchCommands([ef, rwma], 'EF')[0]!.items[0]!.id).toBe('input.edit.EF-TTE');
+    const p = cmd('patient.open.P-011', 'patients', 'P-011', {
+      keywords: patientKeywords({ id: 'P-011', split: 'test', summary: '58 y · Male · typical angina' }),
+    });
+    for (const q of ['11', 'test', 'typical', 'male 58']) expect(searchCommands([p], q)).toHaveLength(1);
   });
 });
 

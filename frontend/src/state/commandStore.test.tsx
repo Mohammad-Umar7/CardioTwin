@@ -131,10 +131,11 @@ describe('group-level fallbacks (yieldToGroup)', () => {
     expect(getCommands().map((c) => c.id)).toEqual(['patient.open.P-001', 'input.edit.EF']);
   });
 
-  it('never yields to another fallback source', () => {
+  it('never yields to another fallback source or to interim (priority < 0) commands', () => {
     const s = useCommandStore.getState();
     s.register('a', [cmd('a.1', { group: 'inputs' })], { yieldToGroup: true });
     s.register('b', [cmd('b.1', { group: 'inputs' })], { yieldToGroup: true });
-    expect(getCommands().map((c) => c.id)).toEqual(['a.1', 'b.1']);
+    s.register('interim', [cmd('inputs.reset', { group: 'inputs' })], { priority: -1 });
+    expect(getCommands().map((c) => c.id)).toEqual(['a.1', 'b.1', 'inputs.reset']);
   });
 });

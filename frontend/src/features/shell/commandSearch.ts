@@ -2,6 +2,7 @@
  * Palette search (WORKSTATION_V2 §4.9): fuzzy subsequence scoring over the title, subtitle and aliases,
  * grouped in a fixed order that never changes between keystrokes.
  */
+import { CMD } from '@/state/commandIds';
 import {
   COMMAND_GROUPS,
   COMMAND_GROUP_LABELS,
@@ -9,6 +10,23 @@ import {
   type Command,
   type CommandGroup,
 } from '@/state/commandStore';
+import type { TargetId } from '@/types/contracts';
+
+/**
+ * Suggestions on an empty query (V2 §4.9), resolved against the registry: only registered, enabled ids
+ * show. Context first: with a vessel selected, its Explain / Isolate / territory commands lead.
+ */
+export function paletteSuggestions(selected: TargetId | null): string[] {
+  const context = selected ? [CMD.explainVessel(selected), CMD.isolate, CMD.ghost, CMD.territories] : [];
+  return [
+    ...context,
+    ...(selected ? [] : [CMD.selectVessel('LAD')]),
+    CMD.peel,
+    CMD.reveal,
+    CMD.lowRiskPatient,
+    CMD.tourStart,
+  ];
+}
 
 const WORD_START = /[\s\-_/·(.,:]/;
 
@@ -81,6 +99,8 @@ export interface PaletteSection {
   group: CommandGroup;
   label: string;
   items: Command[];
+  /** Matches left out by the per-group cap (the palette prints "+ n more"). */
+  more?: number;
 }
 
 export interface SearchOptions {
@@ -90,12 +110,29 @@ export interface SearchOptions {
   exclude?: string[];
   /** Max recents shown in Suggested (default 3). */
   recentCount?: number;
+  /**
+   * Ids promoted into Suggested on an empty query, in order, when registered and enabled (context first:
+   * with a vessel selected, "Explain LAD", "Isolate LAD" …). They are not repeated in their own group.
+   */
+  suggestedIds?: string[];
+  /** Per-group cap on an empty query (default 5; Suggested is never capped). */
+  emptyLimit?: number;
+  /** Per-group cap while typing (default 8). */
+  queryLimit?: number;
+}
+
+function capped(group: CommandGroup, items: Command[], limit: number): PaletteSection {
+  const section: PaletteSection = { group, label: COMMAND_GROUP_LABELS[group], items: items.slice(0, limit) };
+  if (items.length > limit) section.more = items.length - limit;
+  return section;
 }
 
 /**
- * Palette sections for a query. Empty query: Suggested (recents + `suggested` commands), then every other
- * enabled command by group. Typed query: matches ranked by score inside each group; groups keep their
- * fixed order. Disabled commands (`when() === false`) are never listed.
+ * Palette sections for a query. Empty query: Suggested (recents, promoted ids, then `suggested`
+ * commands), then every other enabled command by group, capped per group. Typed query: matches ranked
+ * by score inside each group, capped per group; groups keep their fixed order. Disabled commands
+ * (`when() === false`) are never listed. The caps keep opening and typing O(visible rows), whatever the
+ * registry size (303 patients + 53 inputs).
  */
 export function searchCommands(commands: Command[], query: string, options: SearchOptions = {}): PaletteSection[] {
   const exclude = new Set(options.exclude ?? []);
@@ -109,11 +146,17 @@ export function searchCommands(commands: Command[], query: string, options: Sear
       .map((id) => byId.get(id))
       .filter((c): c is Command => !!c)
       .slice(0, options.recentCount ?? 3);
-    const suggested = [...recents, ...enabled.filter((c) => c.group === 'suggested' && !recents.includes(c))];
+    const promoted = (options.suggestedIds ?? []).map((id) => byId.get(id)).filter((c): c is Command => !!c);
+    const suggested = [...new Set([...recents, ...promoted, ...enabled.filter((c) => c.group === 'suggested')])];
     const shown = new Set(suggested);
+    const limit = options.emptyLimit ?? 5;
     for (const group of COMMAND_GROUPS) {
-      const items = group === 'suggested' ? suggested : enabled.filter((c) => c.group === group && !shown.has(c));
-      if (items.length) sections.push({ group, label: COMMAND_GROUP_LABELS[group], items });
+      if (group === 'suggested') {
+        if (suggested.length) sections.push({ group, label: COMMAND_GROUP_LABELS[group], items: suggested });
+        continue;
+      }
+      const items = enabled.filter((c) => c.group === group && !shown.has(c));
+      if (items.length) sections.push(capped(group, items, limit));
     }
     return sections;
   }
@@ -121,12 +164,13 @@ export function searchCommands(commands: Command[], query: string, options: Sear
   const scored = enabled
     .map((command, i) => ({ command, i, score: commandScore(command, q) }))
     .filter((x): x is { command: Command; i: number; score: number } => x.score !== null);
+  const limit = options.queryLimit ?? 8;
   for (const group of COMMAND_GROUPS) {
     const items = scored
       .filter((x) => x.command.group === group)
       .sort((a, b) => b.score - a.score || a.i - b.i)
       .map((x) => x.command);
-    if (items.length) sections.push({ group, label: COMMAND_GROUP_LABELS[group], items });
+    if (items.length) sections.push(capped(group, items, limit));
   }
   return sections;
 }

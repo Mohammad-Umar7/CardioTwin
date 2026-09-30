@@ -68,8 +68,8 @@ export interface RegisterOptions {
   /** Higher wins on duplicate ids and on shortcut conflicts. Default 0; interim fallbacks use −1. */
   priority?: number;
   /**
-   * Group-level fallback: each command of this source is dropped as soon as another source (one without
-   * this flag) registers any command in the same group. For interim lists whose final ids the owner
+   * Group-level fallback: each command of this source is dropped as soon as an owner (a source without
+   * this flag, at priority ≥ 0) registers any command in the same group. For interim lists whose final ids the owner
    * chooses (every patient, every input), so the palette never lists both the interim and the owner's.
    */
   yieldToGroup?: boolean;
@@ -145,9 +145,11 @@ export function resolveCommands(sources: Record<string, SourceEntry>): Command[]
   const byId = new Map<string, Ranked>();
   const order: string[] = [];
   const entries = Object.values(sources).sort((a, b) => a.seq - b.seq);
-  // Groups some owner already fills: group-level fallbacks yield there.
+  // Groups an owner (priority ≥ 0, not itself a fallback) already fills: group-level fallbacks yield there.
   const owned = new Set<CommandGroup>();
-  for (const entry of entries) if (!entry.yieldToGroup) for (const c of entry.commands) owned.add(c.group);
+  for (const entry of entries) {
+    if (!entry.yieldToGroup && entry.priority >= 0) for (const c of entry.commands) owned.add(c.group);
+  }
   for (const entry of entries) {
     for (const command of entry.commands) {
       if (entry.yieldToGroup && owned.has(command.group)) continue;
