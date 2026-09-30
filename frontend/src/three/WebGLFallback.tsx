@@ -5,6 +5,8 @@ import { usePatientStore } from '@/state/patientStore';
 import { useViewerStore } from '@/state/viewerStore';
 import { RISK_PENDING, riskHex } from '@/theme/risk';
 import { ANATOMY } from '@/theme/tokens';
+import { REAL } from './anatomy/palette';
+import { lookOf } from './stage/sceneControls';
 
 /** Anterior schematic paths (viewBox 400×400, radiological: patient-left on viewer-right). */
 const PATHS: Record<string, { d: string; label: [number, number]; anchor: 'start' | 'end' }> = {
@@ -23,6 +25,10 @@ export function WebGLFallback() {
   const predictions = usePatientStore((s) => s.prediction?.predictions);
   const selected = useViewerStore((s) => s.selectedStructure);
   const hovered = useViewerStore((s) => s.hoveredStructure);
+  // Same look as the 3D stage (§7.9): a shaded, glossy muscle in Realistic, LUMEN clay in Clinical.
+  const realistic = lookOf(useViewerStore((s) => s.look)) === 'realistic';
+  const wall = realistic ? { lit: '#7A3A33', base: REAL.myocardium, deep: REAL.myocardiumDeep } : { lit: ANATOMY.clay, base: ANATOMY.clay, deep: ANATOMY.clay };
+  const great = realistic ? REAL.adventitia : ANATOMY.greatVessel;
   const vessels = (schema?.vessels.map((t) => t.id) ?? Object.keys(PATHS)).filter((t) => t in PATHS);
 
   return (
@@ -33,13 +39,26 @@ export function WebGLFallback() {
             <stop offset="0%" stopColor={ANATOMY.sceneBgCentre} />
             <stop offset="100%" stopColor={ANATOMY.sceneBgEdge} />
           </radialGradient>
+          <radialGradient id="ct-fallback-wall" cx="38%" cy="34%" r="75%">
+            <stop offset="0%" stopColor={wall.lit} />
+            <stop offset="55%" stopColor={wall.base} />
+            <stop offset="100%" stopColor={wall.deep} />
+          </radialGradient>
+          <radialGradient id="ct-fallback-gloss" cx="36%" cy="30%" r="30%">
+            <stop offset="0%" stopColor="#FFFFFF" stopOpacity={realistic ? 0.22 : 0} />
+            <stop offset="100%" stopColor="#FFFFFF" stopOpacity="0" />
+          </radialGradient>
         </defs>
         <rect width="400" height="400" fill="url(#ct-fallback-bg)" />
-        {/* heart silhouette + great vessels (achromatic clay) */}
-        <path d="M200 70 C 190 40, 230 30, 236 64 L 236 110 L 196 112 Z" fill={ANATOMY.greatVessel} opacity="0.9" />
+        {/* heart silhouette + great vessels (never risk-coloured) */}
+        <path d="M200 70 C 190 40, 230 30, 236 64 L 236 110 L 196 112 Z" fill={great} opacity="0.9" />
         <path
           d="M170 120 C 120 120, 96 180, 110 240 C 124 300, 200 350, 262 342 C 300 336, 330 290, 322 230 C 314 170, 280 120, 230 112 C 210 110, 190 112, 170 120 Z"
-          fill={ANATOMY.clay}
+          fill="url(#ct-fallback-wall)"
+        />
+        <path
+          d="M170 120 C 120 120, 96 180, 110 240 C 124 300, 200 350, 262 342 C 300 336, 330 290, 322 230 C 314 170, 280 120, 230 112 C 210 110, 190 112, 170 120 Z"
+          fill="url(#ct-fallback-gloss)"
         />
         <path d="M196 112 C 204 114, 210 116, 214 118" stroke={ANATOMY.leftMain} strokeWidth="7" fill="none" strokeLinecap="round" />
         {vessels.map((t) => {
