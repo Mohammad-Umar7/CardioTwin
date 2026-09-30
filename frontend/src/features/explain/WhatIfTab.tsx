@@ -149,6 +149,7 @@ export function WhatIfTab({ target }: { target: TargetId }) {
         </div>
         <p id="whatif-levers-note" className="mt-2 text-label font-normal text-tertiary">
           Model counterfactuals, not treatment advice: how this model’s estimate responds when one input differs.
+          Directions are learned from this cohort and can run against clinical intuition.
           {levers.levers.some((l) => isAssociationOnly(l.feature)) && ` ${ASSOCIATION_LEGEND}: changing it moves the estimate, not the arteries.`}
         </p>
         {levers.status === 'unavailable' ? (
