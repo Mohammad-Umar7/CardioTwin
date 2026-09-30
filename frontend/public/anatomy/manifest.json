@@ -490,7 +490,7 @@
       "target": null,
       "explode": [
         0.0,
-        1.15,
+        1.5,
         1.2
       ],
       "description": "Manubrium, body and xiphoid process of the sternum; the heart lies directly behind its lower half.",
@@ -1636,12 +1636,12 @@
     "exploded": {
       "position": [
         -0.2154,
-        0.755,
-        12.3547
+        0.9995,
+        12.9334
       ],
       "target": [
         -0.2154,
-        -0.7251,
+        -0.5501,
         0.0204
       ],
       "fov": 35.0,

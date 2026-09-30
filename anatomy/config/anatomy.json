@@ -310,7 +310,7 @@
       "material": "Bone",
       "explode": [
         0.0,
-        1.15,
+        1.5,
         1.2
       ],
       "target": null,

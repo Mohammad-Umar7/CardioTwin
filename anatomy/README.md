@@ -201,7 +201,7 @@ canvas) and a `focus` preset per structure (35° vertical FOV).
 Displayed position = rest + t · (layer.explode + structure.explode), t ∈ [0, 1]. The layout is radial in the
 picture plane of the home camera, so layers separate on screen instead of stacking along the view axis:
 
-* chest wall — pectorals up and out (±1.55, +0.45), rib halves out (±1.95) beyond the lungs, sternum up and
+* chest wall — pectorals up and out (±1.55, +0.45), rib halves out (±1.95) beyond the lungs, sternum up (clear of the great vessels) and
   forward, costal cartilages down and forward, clavicles up and out, spine straight back;
 * lungs slide out (±0.8) and back to frame the heart; the airway rises;
 * heart — the anterior half swings open along the cut normal (0.8) plus a sideways offset (−0.45 X), so the
