@@ -18,9 +18,14 @@ def _strip(obj: dict) -> dict:
 
 
 def test_dev_cv_is_deterministic(tmp_path: Path) -> None:
-    """Two fast development-set runs (ablations + nested CV + ensemble fitting) give identical output."""
-    a = train.run(fast=True, artifacts_dir=tmp_path / "a", figures_dir=None, reports_dir=None, frontend_dir=None, dev_only=True)
-    b = train.run(fast=True, artifacts_dir=tmp_path / "b", figures_dir=None, reports_dir=None, frontend_dir=None, dev_only=True)
+    """Two fast development-set runs (ablations + nested CV + ensemble fitting) give identical output.
+
+    The runs use different, bounded worker counts: results must not depend on ``--jobs``, and an unbounded pool
+    (one XGBoost worker per core) is prone to worker crashes on busy machines.
+    """
+    kw = {"fast": True, "figures_dir": None, "reports_dir": None, "frontend_dir": None, "dev_only": True}
+    a = train.run(artifacts_dir=tmp_path / "a", n_jobs=8, **kw)
+    b = train.run(artifacts_dir=tmp_path / "b", n_jobs=5, **kw)
     ja = (tmp_path / "a" / "dev_summary.json").read_text(encoding="utf-8")
     jb = (tmp_path / "b" / "dev_summary.json").read_text(encoding="utf-8")
     assert ja == jb
