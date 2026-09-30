@@ -1,4 +1,4 @@
-import { AnimatePresence, motion } from 'framer-motion';
+import { motion } from 'framer-motion';
 import { X } from 'lucide-react';
 import { useId, type ReactNode } from 'react';
 import { Drawer, IconButton, Probability, SegmentedControl, Tabs } from '@/design';
@@ -141,20 +141,18 @@ export function ExplainDrawer({ className }: ExplainDrawerProps) {
         tabIndex={-1}
         className="panel-scroll min-h-0 flex-1 px-4 pb-6 pt-4 outline-none"
       >
-        <AnimatePresence initial={false} mode="wait">
-          <motion.div
-            key={tab}
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            transition={{ duration: reduced ? 0 : MOTION.fast / 1000 / 2, ease: EASE.out }}
-          >
-            {tab === 'why' && <WhyTab target={target} />}
-            {tab === 'whatif' && <WhatIfTab target={target} />}
-            {tab === 'physiology' && <PhysiologyTable target={target} />}
-            {tab === 'model' && <ModelTab target={target} />}
-          </motion.div>
-        </AnimatePresence>
+        {/* Fade the new tab in; never an empty frame between tabs (no exit wait). */}
+        <motion.div
+          key={tab}
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          transition={{ duration: reduced ? 0 : MOTION.fast / 1000, ease: EASE.out }}
+        >
+          {tab === 'why' && <WhyTab target={target} />}
+          {tab === 'whatif' && <WhatIfTab target={target} />}
+          {tab === 'physiology' && <PhysiologyTable target={target} />}
+          {tab === 'model' && <ModelTab target={target} />}
+        </motion.div>
       </div>
     </Drawer>
   );

@@ -161,6 +161,8 @@ export function WhatIfTab({ target }: { target: TargetId }) {
             {levers.levers.map((l) => {
               const d = formatDeltaPts(l.delta);
               const spec = specOf(l.feature);
+              // Pulling an edited input back to its recorded value is an undo, and lands on the recorded estimate.
+              const undo = edited.includes(l.feature) && l.to === recordedInputs[l.feature];
               return (
                 <li key={l.feature} className="grid h-11 grid-cols-[minmax(0,1fr)_auto_auto] items-center gap-3 border-b border-hairline pl-1 last:border-b-0">
                   <span className="flex min-w-0 flex-col">
@@ -174,7 +176,9 @@ export function WhatIfTab({ target }: { target: TargetId }) {
                       <span className="num whitespace-nowrap text-body-s font-semibold text-primary">
                         {d.direction === 'none' ? '±0 pts' : `${d.glyph} ${d.text}`}
                       </span>
-                      <span className="num text-label font-normal text-tertiary">→ {formatProbability(l.then).text}</span>
+                      <span className="num text-label font-normal text-tertiary">
+                        {undo ? 'back to recorded' : `→ ${formatProbability(l.then).text}`}
+                      </span>
                     </span>
                   </Tooltip>
                   <Button
@@ -184,7 +188,7 @@ export function WhatIfTab({ target }: { target: TargetId }) {
                     aria-label={`Apply: set ${spec?.label ?? l.feature} to ${valueText(l.feature, l.to, specOf)}`}
                     onClick={() => usePatientStore.getState().setFeature(l.feature, l.to)}
                   >
-                    Apply
+                    {undo ? 'Undo' : 'Apply'}
                   </Button>
                 </li>
               );

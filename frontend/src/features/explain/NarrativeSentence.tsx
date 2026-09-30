@@ -16,24 +16,33 @@ export function PhraseLink({ part, className }: { part: NarrativePart; className
   const highlight = useUiStore((s) => s.highlightFeature);
   const lit = useUiStore((s) => part.feature !== undefined && s.highlightedFeature === part.feature);
   const open = () => part.feature && useUiStore.getState().openDrawer('inputs', { field: part.feature });
+  // A span with role="button" (not a <button>): buttons render inline-block, so a multi-word phrase could not
+  // wrap across lines and the sentence would break awkwardly around it.
   return (
-    <button
-      type="button"
+    <span
+      role="button"
+      tabIndex={0}
       onClick={open}
+      onKeyDown={(e) => {
+        if (e.key === 'Enter' || e.key === ' ') {
+          e.preventDefault();
+          open();
+        }
+      }}
       onMouseEnter={() => highlight(part.feature ?? null)}
       onMouseLeave={() => highlight(null)}
       onFocus={() => highlight(part.feature ?? null)}
       onBlur={() => highlight(null)}
       aria-label={`${part.text}: edit this input`}
       className={cn(
-        'inline rounded-xs text-left underline decoration-dotted decoration-1 underline-offset-[3px] outline-none transition-colors duration-instant',
+        'cursor-pointer rounded-xs underline decoration-dotted decoration-1 underline-offset-[3px] outline-none transition-colors duration-instant',
         'focus-visible:shadow-focus',
         lit ? 'text-primary decoration-accent' : 'decoration-line-strong hover:text-primary hover:decoration-secondary',
         className,
       )}
     >
       {part.text}
-    </button>
+    </span>
   );
 }
 

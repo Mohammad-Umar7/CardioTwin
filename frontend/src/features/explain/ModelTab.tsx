@@ -7,7 +7,7 @@ import { flaggedCount } from '@/features/risk/verdict';
 import { usePortableModel, useSchemaIndex } from '@/hooks/useData';
 import { useResource } from '@/hooks/useResource';
 import { cn } from '@/lib/cn';
-import { formatCi, formatMetricValue, formatPercent, formatSigned } from '@/lib/format';
+import { formatCi, formatMetricValue, formatPercent, formatShap } from '@/lib/format';
 import { deployedModelName } from '@/lib/modelNames';
 import { usePatientStore } from '@/state/patientStore';
 import type { TargetId } from '@/types/contracts';
@@ -55,6 +55,16 @@ const ordinal = (n: number) => {
   return `${r}${s}`;
 };
 
+const STEP_LABEL: Record<string, string> = {
+  demographics: 'Demographics',
+  risk_factors: 'Risk factors',
+  symptoms: 'Symptoms',
+  exam: 'Examination',
+  ecg: 'ECG',
+  labs: 'Laboratory',
+  echo: 'Echo',
+};
+
 /** Cumulative modality steps as bars on a 0.5–1.0 AUC scale (chance = 0.5). */
 function ModalitySteps({ facts }: { facts: TargetFacts }) {
   const steps = facts.modality?.steps ?? [];
@@ -70,7 +80,7 @@ function ModalitySteps({ facts }: { facts: TargetFacts }) {
             <li key={s.group} className="grid h-7 grid-cols-[112px_minmax(0,1fr)_36px_48px] items-center gap-2">
               <span className="truncate text-body-s text-secondary">
                 {i === 0 ? '' : '+ '}
-                {s.label.replace(/ & history$/, '')}
+                {STEP_LABEL[s.group] ?? s.label}
               </span>
               <span aria-hidden className="relative h-2 rounded-full bg-surface-2">
                 <span className="absolute inset-y-0 left-0 rounded-full bg-line-strong" style={{ width: x(s.auc.value) }} />
@@ -85,14 +95,14 @@ function ModalitySteps({ facts }: { facts: TargetFacts }) {
               <Tooltip
                 content={
                   s.delta
-                    ? `Change from the previous step: ${formatSigned(s.delta.value)} ${formatCi(s.delta.ci)}${
+                    ? `Change from the previous step: ${formatShap(s.delta.value)} ${formatCi(s.delta.ci)}${
                         typeof s.delta.pHolm === 'number' ? ` · Holm-adjusted p = ${s.delta.pHolm < 0.001 ? '<0.001' : s.delta.pHolm.toFixed(3)}` : ''
                       }`
                     : 'Demographics alone'
                 }
               >
                 <span tabIndex={0} className={cn('num rounded-xs text-right text-label font-normal outline-none focus-visible:shadow-focus', sig ? 'text-primary' : 'text-tertiary')}>
-                  {s.delta ? `${s.delta.value >= 0 ? '+' : ''}${formatSigned(s.delta.value)}` : 'base'}
+                  {s.delta ? formatShap(s.delta.value) : 'base'}
                 </span>
               </Tooltip>
             </li>
@@ -107,7 +117,7 @@ function ModalitySteps({ facts }: { facts: TargetFacts }) {
             {' '}
             ECG, laboratory and echo together add{' '}
             <span className="num text-secondary">
-              {formatSigned(instrumental.value)} {formatCi(instrumental.ci)}
+              {formatShap(instrumental.value)} {formatCi(instrumental.ci)}
             </span>{' '}
             to bedside data alone.
           </>
@@ -230,7 +240,7 @@ export function ModelTab({ target }: { target: TargetId }) {
         <Section id="model-calibration" title="Calibration">
           <p className="text-body-s text-secondary">
             On the held-out patients, the average estimate differs from the observed rate by{' '}
-            <span className="num text-primary">{formatPercent(Math.abs(f.calibration.inTheLarge ?? 0), 1)}</span>
+            <span className="num text-primary">{(Math.abs(f.calibration.inTheLarge ?? 0) * 100).toFixed(1)} percentage points</span>
             {f.calibration.slope !== null && (
               <>
                 {' '}
@@ -250,8 +260,9 @@ export function ModelTab({ target }: { target: TargetId }) {
         <Section id="model-vessels" title="Flagged vessels vs expected vessels">
           <p className="text-body-s text-secondary">
             The three vessel probabilities add up to about{' '}
-            <span className="num text-primary">{expected.toFixed(1)}</span> vessels. {count.k}{' '}
-            {count.k === 1 ? 'is' : 'are'} flagged because each vessel is judged against its own threshold (
+            <span className="num text-primary">{expected.toFixed(1)}</span> vessels.{' '}
+            {count.k === 0 ? 'None is' : count.k === 1 ? 'One is' : `${count.k} are`} flagged, because each vessel is judged
+            against its own threshold (
             {vessels
               .map((v) => `${v.id} ${formatPercent(view.prediction?.predictions[v.id]?.threshold)}`)
               .join(', ')}

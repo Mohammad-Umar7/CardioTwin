@@ -1,6 +1,5 @@
 import { AnimatePresence, motion } from 'framer-motion';
-import { EyeOff, Focus, MessageSquareText, X } from 'lucide-react';
-import type { ReactNode } from 'react';
+import { X } from 'lucide-react';
 import { Button, IconButton, Kbd, RiskPip, StageCard, Tooltip } from '@/design';
 import { NarrativeSentence } from '@/features/explain/NarrativeSentence';
 import { useSchemaIndex } from '@/hooks/useData';
@@ -25,7 +24,6 @@ const COMPACT_QUERY = '(max-width: 1439.98px), (max-height: 756px)';
 function ActionButton({
   pressed,
   onClick,
-  icon,
   label,
   shortLabel,
   shortcut,
@@ -33,7 +31,6 @@ function ActionButton({
 }: {
   pressed?: boolean;
   onClick(): void;
-  icon: ReactNode;
   label: string;
   shortLabel: string;
   shortcut: string;
@@ -47,8 +44,7 @@ function ActionButton({
         aria-pressed={pressed}
         aria-keyshortcuts={shortcut}
         onClick={onClick}
-        iconLeft={icon}
-        className={cn('px-2', pressed && 'bg-surface-2 text-accent hover:text-accent')}
+        className={cn('gap-1.5 px-2', pressed && 'bg-surface-2 text-accent hover:text-accent')}
       >
         {short ? shortLabel : label}
         {!short && <Kbd className="ml-0.5">{shortcut}</Kbd>}
@@ -253,7 +249,6 @@ export function VesselInspector({ className }: VesselInspectorProps) {
               <ActionButton
                 pressed={isolate}
                 onClick={() => viewer().setIsolate(!isolate)}
-                icon={<Focus className="stroke-[1.5]" />}
                 label="Isolate"
                 shortLabel="Isolate"
                 shortcut={SHORTCUT.isolate}
@@ -262,7 +257,6 @@ export function VesselInspector({ className }: VesselInspectorProps) {
               <ActionButton
                 pressed={ghost}
                 onClick={() => viewer().setGhostOthers(!ghost)}
-                icon={<EyeOff className="stroke-[1.5]" />}
                 label="Ghost others"
                 shortLabel="Ghost"
                 shortcut={SHORTCUT.ghost}
@@ -270,7 +264,6 @@ export function VesselInspector({ className }: VesselInspectorProps) {
               />
               <ActionButton
                 onClick={() => useUiStore.getState().openDrawer('explain', { tab: 'why' })}
-                icon={<MessageSquareText className="stroke-[1.5]" />}
                 label="Why"
                 shortLabel="Why"
                 shortcut={SHORTCUT.explain}

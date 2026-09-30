@@ -100,7 +100,10 @@ export function useLevers(target: TargetId, max = 6): { status: LeverStatus; lev
     if (failed) return { status: 'unavailable', levers: [] };
     if (!plan || !scored) return { status: 'loading', levers: [] };
     const wanted = new Set((plan.perTarget.get(target) ?? []).map((c) => c.feature));
-    const levers = rankLevers(target, scored.candidates, scored.probabilities, wanted).slice(0, max);
+    // Levers that move the estimate by less than half a point are noise at the display precision.
+    const levers = rankLevers(target, scored.candidates, scored.probabilities, wanted)
+      .filter((l) => Math.abs(l.delta) >= 0.005)
+      .slice(0, max);
     // A newer input state is being scored: keep the previous answer on screen, marked as updating.
     return { status: scored.key === plan.key ? 'ready' : 'loading', levers };
   }, [failed, plan, scored, target, max]);
