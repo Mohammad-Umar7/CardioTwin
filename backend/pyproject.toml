@@ -1,0 +1,26 @@
+# Tool configuration for the CardioTwin API (runtime dependencies live in requirements.txt).
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["."]
+addopts = "-ra --strict-markers"
+markers = [
+    "integration: needs the trained ML artifacts (ml/artifacts) and the cardiotwin_ml package",
+]
+filterwarnings = [
+    "error::pytest.PytestUnraisableExceptionWarning",
+    "ignore:Using `httpx` with `starlette.testclient` is deprecated",
+]
+
+[tool.ruff]
+line-length = 120
+target-version = "py311"
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "UP", "B", "SIM", "RUF"]
+ignore = ["RUF001", "RUF002", "RUF003"]  # en dashes / middle dots are intentional in user-facing text
+
+[tool.mypy]
+python_version = "3.11"
+strict = true
+ignore_missing_imports = true
