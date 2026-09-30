@@ -14,7 +14,7 @@ final scene frame) the pipeline is:
 5. decompose the tree into **branch paths** (longest path first, side branches start at their
    junction on the parent path), **smooth** each with a cubic smoothing spline and **resample** it at a
    uniform spacing;
-6. sample the lumen **radius** from the Euclidean distance transform of the solid.
+6. measure the lumen **radius** as the distance from each centreline point to the vessel wall.
 
 Each vessel's first segment is prefixed with its attachment point on the parent (the aortic wall for
 ostial vessels) so particles flow continuously from the aorta into the tree.
@@ -189,7 +189,9 @@ def smooth_resample(points: np.ndarray, spacing: float) -> np.ndarray:
     n_out = max(2, int(round(length / spacing)) + 1)
     if len(pts) >= 5:
         u = np.r_[0.0, np.cumsum(seg)] / length
-        tck, _ = interpolate.splprep(pts.T, u=u, k=3, s=len(pts) * (0.6 * PITCH) ** 2)
+        w = np.ones(len(pts))
+        w[[0, -1]] = 1e3  # pin the endpoints (attachment point on the parent, distal tip)
+        tck, _ = interpolate.splprep(pts.T, u=u, w=w, k=3, s=len(pts) * (0.6 * PITCH) ** 2)
         dense = np.array(interpolate.splev(np.linspace(0, 1, n_out * 4), tck)).T
     else:
         dense = pts
@@ -199,9 +201,13 @@ def smooth_resample(points: np.ndarray, spacing: float) -> np.ndarray:
     return np.column_stack([np.interp(targets, d, dense[:, k]) for k in range(3)])
 
 
-def sample_radius(points: np.ndarray, edt: np.ndarray, origin: np.ndarray) -> np.ndarray:
-    ijk = (points - origin) / PITCH
-    r = ndimage.map_coordinates(edt, ijk.T, order=1, mode="nearest") * PITCH
+def sample_radius(points: np.ndarray, mesh: trimesh.Trimesh) -> np.ndarray:
+    """Lumen radius = distance from each (medial) centreline point to the vessel wall.
+
+    Measured on the mesh itself rather than the voxel distance transform, which over-estimates by
+    0.6-1.2 voxels on a surface-dilated solid. Lightly smoothed along the path.
+    """
+    _, r, _ = trimesh.proximity.closest_point(mesh, points)
     if len(r) >= 5:
         r = ndimage.uniform_filter1d(r, size=5, mode="nearest")
     return np.maximum(r, 0.5 * PITCH)
@@ -246,7 +252,7 @@ def extract_vessel(node: str, mesh: trimesh.Trimesh, parent_pts: np.ndarray, par
                     pts = np.vstack([parent_pts[j], pts])
                     attach = parent_label
             smooth = smooth_resample(pts, SPACING)
-            radius = sample_radius(smooth, edt, origin)
+            radius = sample_radius(smooth, mesh)
             bridge = 0
             if attach is not None:
                 # Points bridging from the parent into this lumen lie outside this vessel's voxels
@@ -313,7 +319,8 @@ def validate(mesh: trimesh.Trimesh, segments: list[Segment], parent_mesh: trimes
         "max_outside_distance_mm": round(float(outside_d.max() / MM), 3),
         "p99_outside_distance_mm": round(float(np.percentile(outside_d, 99) / MM), 3),
         "median_radius_mm": round(float(np.median(radius[own]) / MM), 3),
-        "median_abs_radius_error_mm": round(float(np.median(np.abs(dist - radius)[own & inside]) / MM), 3),
+        "min_radius_mm": round(float(np.min(radius[own]) / MM), 3),
+        "max_radius_mm": round(float(np.max(radius[own]) / MM), 3),
     }
 
 
