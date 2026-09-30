@@ -24,6 +24,11 @@ RAW_GLB = BUILD_DIR / "cardiotwin_anatomy.raw.glb"
 BUILD_REPORT = BUILD_DIR / "build_report.json"
 BUILD_BLEND = BUILD_DIR / "cardiotwin_build.blend"
 VESSEL_MESH_DIR = BUILD_DIR / "vessels"
+#: Derived / synthesised parts (anatomy/scripts/synthesize.py) are referenced in the config as ``SYN_<name>``
+#: and read from ``anatomy/build/synth/<id>.ply`` (BodyParts3D millimetre frame).
+SYNTH_DIR = BUILD_DIR / "synth"
+SYNTH_PREFIX = "SYN_"
+BAKE_DIR = BUILD_DIR / "bake"
 CENTERLINE_REPORT = BUILD_DIR / "centerline_report.json"
 
 #: Order in which coronary targets are always presented (CONTRACTS §0).
@@ -88,12 +93,12 @@ def node_specs(cfg: dict[str, Any]) -> list[NodeSpec]:
 
 
 def all_part_ids(cfg: dict[str, Any]) -> list[str]:
-    """Unique BodyParts3D part IDs referenced by the config, in first-use order."""
+    """Unique BodyParts3D part IDs used by the build (node parts and the synthesis inputs), in first-use
+    order. Synthesised ``SYN_*`` parts are not BodyParts3D downloads and are left out."""
     out: list[str] = []
-    for spec in cfg["nodes"]:
-        for pid in spec["parts"]:
-            if pid not in out:
-                out.append(pid)
+    for pid in [p for spec in cfg["nodes"] for p in spec["parts"]] + list(cfg.get("synthesis", {}).get("source_parts", [])):
+        if pid not in out and not pid.startswith("SYN_"):
+            out.append(pid)
     return out
 
 

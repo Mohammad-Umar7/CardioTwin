@@ -87,6 +87,9 @@ def write_sources(cfg: dict, names: dict[str, str]) -> None:
     for spec in node_specs(cfg):
         for pid in spec.parts:
             used_by.setdefault(pid, []).append(spec.node)
+    synth = cfg.get("synthesis", {})
+    for pid in synth.get("source_parts", []):
+        used_by.setdefault(pid, []).append("synthesis")
     lines = [
         "# Anatomical sources",
         "",
@@ -106,9 +109,25 @@ def write_sources(cfg: dict, names: dict[str, str]) -> None:
     for pid in all_part_ids(cfg):
         path = RAW_DIR / f"{pid}.stl"
         lines.append(
-            f"| `{pid}` | {names.get(pid, '?')} | {', '.join(f'`{n}`' for n in used_by[pid])} "
+            f"| `{pid}` | {names.get(pid, '?')} | {', '.join(f'`{n}`' for n in dict.fromkeys(used_by[pid]))} "
             f"| {stl_triangle_count(path):,} | {path.stat().st_size:,} | `{sha256_of(path)}` |"
         )
+    derived = synth.get("derived_parts", {})
+    if derived:
+        lines += [
+            "",
+            "## Derived and synthesised parts",
+            "",
+            "`anatomy/scripts/synthesize.py` (build stage `synth`) writes these parts to `anatomy/build/synth/` from the",
+            "BodyParts3D inputs above; they are deterministic functions of those inputs. See",
+            "[`docs/anatomy/SYNTHESIS.md`](../docs/anatomy/SYNTHESIS.md) for the method and the literature values used.",
+            "",
+            "| ID | What it is | Built from | Used in node |",
+            "| --- | --- | --- | --- |",
+        ]
+        for pid, meta in derived.items():
+            nodes_using = [spec.node for spec in node_specs(cfg) if pid in spec.parts]
+            lines.append(f"| `{pid}` | {meta['what']} | {', '.join(f'`{x}`' for x in meta['from'])} | {', '.join(f'`{n}`' for n in nodes_using)} |")
     SOURCES_MD.write_text("\n".join(lines) + "\n", encoding="utf-8", newline="\n")
 
 

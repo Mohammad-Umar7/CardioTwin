@@ -1,11 +1,13 @@
 """CardioTwin anatomy pipeline — one entry point for every stage.
 
-    ./.venv/Scripts/python anatomy/build.py              # fetch -> blender -> centrelines -> optimise -> verify -> manifest -> explode
+    ./.venv/Scripts/python anatomy/build.py              # fetch -> synth -> blender -> centrelines -> optimise -> verify -> manifest -> explode
     ./.venv/Scripts/python anatomy/build.py --renders    # ... and the Cycles hero renders (GPU recommended)
     ./.venv/Scripts/python anatomy/build.py --only manifest,verify
 
 Stages (see anatomy/README.md):
   fetch        download BodyParts3D STLs into anatomy/raw/ and write anatomy/SOURCES.md
+  synth        derived / synthesised parts (cardiac-vein tree, aortic root + valve, ascending calibre)
+               -> anatomy/build/synth/
   blender      headless Blender build -> anatomy/build/cardiotwin_anatomy.raw.glb (+ vessel PLYs, report)
   centerlines  coronary centrelines from the vessel PLYs -> frontend/public/anatomy/vessels.json
   optimize     glTF-Transform meshopt pass (+ coronary _ARCLEN from the centrelines)
@@ -31,7 +33,7 @@ ANATOMY = Path(__file__).resolve().parent
 REPO = ANATOMY.parent
 PY = sys.executable
 DEFAULT_BLENDER = "C:/Program Files/Blender Foundation/Blender 5.1/blender.exe"
-STAGES = ("fetch", "blender", "centerlines", "optimize", "verify", "manifest", "explode", "renders")
+STAGES = ("fetch", "synth", "blender", "centerlines", "optimize", "verify", "manifest", "explode", "renders")
 
 
 def find_blender(explicit: str | None) -> str:
@@ -79,6 +81,8 @@ def main(argv: list[str] | None = None) -> int:
         print(f"\n=== {stage} ===", flush=True)
         if stage == "fetch":
             run([PY, str(ANATOMY / "scripts" / "fetch_bodyparts3d.py")])
+        elif stage == "synth":
+            run([PY, str(ANATOMY / "scripts" / "synthesize.py")])
         elif stage == "blender":
             run([blender, "--background", "--factory-startup", "--python", str(ANATOMY / "blender" / "build_anatomy.py")])
         elif stage == "optimize":
