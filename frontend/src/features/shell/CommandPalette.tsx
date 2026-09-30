@@ -165,11 +165,16 @@ function PalettePanel({ reduced, prewarm = false }: { reduced: boolean; prewarm?
         : (sections.find((x) => x.group === 'suggested')?.items ?? []).filter((c) => c.preview).slice(0, 3),
     [sections, query, level],
   );
+  // Keyed on the rows' ids, not the array: a re-render (e.g. this effect's own result) never re-fetches.
+  const suggestedKey = suggestedWithPreview.map((c) => c.id).join('|');
+  const suggestedRef = useRef(suggestedWithPreview);
+  suggestedRef.current = suggestedWithPreview;
   useEffect(() => {
-    if (prewarm || suggestedWithPreview.length === 0) return;
+    const rows = suggestedRef.current;
+    if (prewarm || rows.length === 0) return;
     let cancelled = false;
     void Promise.all(
-      suggestedWithPreview.map((c) =>
+      rows.map((c) =>
         Promise.resolve()
           .then(() => c.preview!())
           .then(
@@ -178,12 +183,16 @@ function PalettePanel({ reduced, prewarm = false }: { reduced: boolean; prewarm?
           ),
       ),
     ).then((pairs) => {
-      if (!cancelled) setRestPreviews(new Map(pairs.filter((x): x is readonly [string, string] => x !== null)));
+      if (cancelled) return;
+      const next = new Map(pairs.filter((x): x is readonly [string, string] => x !== null));
+      setRestPreviews((prev) =>
+        prev.size === next.size && [...next].every(([id, text]) => prev.get(id) === text) ? prev : next,
+      );
     });
     return () => {
       cancelled = true;
     };
-  }, [suggestedWithPreview, prewarm]);
+  }, [suggestedKey, prewarm]);
 
   // Preview of the active row's effect ("CAD 98 % → 91 %"), fetched for that row only.
   useEffect(() => {

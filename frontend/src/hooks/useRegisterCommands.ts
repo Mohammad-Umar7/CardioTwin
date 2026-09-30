@@ -1,4 +1,4 @@
-import { useEffect, useRef } from 'react';
+import { useEffect, useMemo, useRef } from 'react';
 import { useCommandStore, resolveCommands, type Command, type RegisterOptions } from '@/state/commandStore';
 
 /**
@@ -35,10 +35,13 @@ export function useRegisterCommands(
   }, [source, priority, yieldToGroup, ...deps]);
 }
 
-/** Every registered command (duplicates resolved), re-rendering when registrations change. */
+/**
+ * Every registered command (duplicates resolved), re-rendering when registrations change. The array keeps
+ * its identity until the registrations change, so effects keyed on it do not re-run on every render.
+ */
 export function useCommands(): Command[] {
   const sources = useCommandStore((s) => s.sources);
-  return resolveCommands(sources);
+  return useMemo(() => resolveCommands(sources), [sources]);
 }
 
 /** The shortcut string of a command id, for "Name · key" tooltips (undefined when unregistered). */
