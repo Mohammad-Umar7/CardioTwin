@@ -32,6 +32,9 @@ import { BEAT_MODE, BEAT_UNIFORMS, BEAT_VERTEX_PARS } from '../anatomy/beatDefor
 import { KEEP_LEVELS, NODE_SLOTS, RADIUS_SCALE } from './centreline';
 import { FLOW_WHITE, MAX_NODES, MAX_TARGET_SLOTS } from './fxState';
 
+/** The instanced quad's corners are stored at ±QUAD_SCALE (see FlowParticles) and scaled back in the shader. */
+export const QUAD_SCALE = 1e-4;
+
 const vertexShader = /* glsl */ `
   precision highp float;
   precision highp int;
@@ -167,8 +170,9 @@ const vertexShader = /* glsl */ `
     vec2 ax = axisLen > 1e-3 ? axis / axisLen : vec2(1.0, 0.0);
     vec2 perp = vec2(-ax.y, ax.x);
     float halfW = 0.5 * uWidthPx;
-    float along = position.x * 0.5 + 0.5;
-    vec2 px = mix(ts, hs, along) + ax * (position.x * halfW) + perp * (position.y * halfW);
+    vec2 corner = position.xy * ${(1 / QUAD_SCALE).toFixed(1)}; // undo QUAD_SCALE
+    float along = corner.x * 0.5 + 0.5;
+    vec2 px = mix(ts, hs, along) + ax * (corner.x * halfW) + perp * (corner.y * halfW);
     gl_Position = vec4(px / half_ * hc.w, hc.z, hc.w);
 
     // Appearance
@@ -190,7 +194,7 @@ const vertexShader = /* glsl */ `
     vAlpha = alpha;
     // the lighter the vessel (high p → light apricot), the more the halo must darken around the streak
     vHalo = 0.22 + 0.5 * smoothstep(0.45, 1.0, uP[slot]) * uTintMix[slot] / 0.6;
-    vQuad = vec2(position.x, position.y);
+    vQuad = corner;
   }
 `;
 
@@ -254,8 +258,8 @@ export type FlowMaterial = ShaderMaterial & { uniforms: FlowUniforms };
 
 /** Streak "shutter": a particle's streak covers the distance it travels in this many seconds. */
 export const STREAK_EXPOSURE_S = 0.045;
-/** Streak width in CSS pixels (× device pixel ratio at runtime), §7.4: 2–3.5 px. */
-export const STREAK_WIDTH_PX = 4;
+/** Quad width in CSS pixels (× device pixel ratio); the soft profile leaves a ≈ 2.5–3.5 px visible core (§7.4). */
+export const STREAK_WIDTH_PX = 5.2;
 
 export function createFlowMaterial(riskLut: Texture, inflate: number): FlowMaterial {
   const uniforms: FlowUniforms = {

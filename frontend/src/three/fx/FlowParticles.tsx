@@ -9,7 +9,9 @@ import {
   Mesh,
   NearestFilter,
   RGBAFormat,
+  Sphere,
   Vector2,
+  Vector3,
   type Object3D,
 } from 'three';
 import { useSchemaIndex } from '@/hooks/useData';
@@ -23,7 +25,7 @@ import {
   packCentrelines,
   type CentrelineFile,
 } from './centreline';
-import { STREAK_WIDTH_PX, createFlowMaterial } from './flowMaterial';
+import { QUAD_SCALE, STREAK_WIDTH_PX, createFlowMaterial } from './flowMaterial';
 import { BASE_FLOW_SPEED, MAX_NODES, MAX_TARGET_SLOTS, fxFrame, slotOf, targetSlots } from './fxState';
 import { allocateParticles, mulberry32, particleShares, thinningFactors } from './particles';
 import { NodeTracker, restInverses } from './sceneNodes';
@@ -91,7 +93,12 @@ export function FlowParticles({ pristine, centrelines, count }: FlowParticlesPro
     texture.needsUpdate = true;
 
     const geometry = new InstancedBufferGeometry();
-    geometry.setAttribute('position', new Float32BufferAttribute([-1, -1, 0, 1, -1, 0, 1, 1, 0, -1, 1, 0], 3));
+    // The corner quad is stored shrunk by QUAD_SCALE: only the flow shader knows to scale it back up, so
+    // a pass that draws the scene with an override material (depth, normals, picking) sees 4096 sub-pixel
+    // specks at the origin instead of 4096 overlapping unit quads.
+    const q = QUAD_SCALE;
+    geometry.setAttribute('position', new Float32BufferAttribute([-q, -q, 0, q, -q, 0, q, q, 0, -q, q, 0], 3));
+    geometry.boundingSphere = new Sphere(new Vector3(), 1e3);
     geometry.setIndex([0, 1, 2, 0, 2, 3]);
     geometry.setAttribute('aPath', new InstancedBufferAttribute(particles.path, 4));
     geometry.setAttribute('aSeed', new InstancedBufferAttribute(particles.seed, 4));
