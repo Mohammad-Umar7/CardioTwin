@@ -170,10 +170,9 @@ function TourView() {
 
   const locationRef = useRef(location);
   locationRef.current = location;
-  const deps = useRef<ExecuteDeps | null>(null);
+  const deps = useRef<Omit<ExecuteDeps, 'peel'> | null>(null);
   deps.current = {
     reduced,
-    peel: getSession()?.peel ?? new PeelAnimator(),
     navigate: (to) => {
       if (routeNow(locationRef.current).startsWith(to)) return false;
       navigate(to);
@@ -223,7 +222,8 @@ function TourView() {
     void (async () => {
       for (const action of actions) {
         if (getSession() !== session || session.epoch !== epoch) return;
-        const moved = deps.current ? executeAction(action, deps.current) : false;
+        // The session's own peel animator, so exiting cancels any dissection still playing.
+        const moved = deps.current ? executeAction(action, { ...deps.current, peel: session.peel }) : false;
         if (moved && action.kind === 'route' && action.to === 'workstation') await waitForStage('workstation', 3000);
       }
     })();
