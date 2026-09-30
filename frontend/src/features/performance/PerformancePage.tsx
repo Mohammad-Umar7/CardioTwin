@@ -6,7 +6,7 @@ import { useMetrics, useSchemaIndex } from '@/hooks/useData';
 import { useMediaQuery } from '@/hooks/useMediaQuery';
 import { cn } from '@/lib/cn';
 import { formatMetricValue } from '@/lib/format';
-import { deployedModelName } from '@/lib/modelNames';
+import { deployedModelPhrase } from '@/lib/modelNames';
 import { TARGET_ORDER, type KnownTargetId, type MetricsReport } from '@/types/contracts';
 import {
   CumulativeModule,
@@ -256,9 +256,9 @@ export default function PerformancePage() {
                 <h1 id="summary-title" className="max-w-[30ch] font-display text-display-2 text-primary text-balance">
                   {pageTakeaway(target, m, split)}
                 </h1>
-                <p className="max-w-[92ch] text-body text-secondary text-pretty">{reconcileSentence(m, split, facts)}</p>
+                <p className="max-w-[92ch] text-body text-secondary text-pretty">{reconcileSentence(m, split, facts, extras.robustness)}</p>
                 <p className="text-label font-normal text-tertiary">
-                  Deployed: {deployedModelName(logisticId)}, Platt-calibrated, decision threshold{' '}
+                  Deployed: {deployedModelPhrase(logisticId)}, Platt-calibrated, with a decision threshold of{' '}
                   <span className="num text-secondary">{formatMetricValue(m.threshold)}</span> chosen on development folds.
                 </p>
               </header>

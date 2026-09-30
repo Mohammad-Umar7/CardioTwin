@@ -1,10 +1,12 @@
 import { describe, expect, it } from 'vitest';
 import {
   DEPLOYED_MODEL_ID,
+  DEPLOYED_SHORT_NAME,
   FEATURE_FALLBACK_NAMES,
   KNOWN_MODEL_IDS,
   MODALITY_ORDER,
   deployedModelName,
+  deployedModelPhrase,
   featureName,
   humanizeModelIds,
   isDeployedModel,
@@ -55,6 +57,12 @@ describe('model names', () => {
     expect(deployedModelName('lr_core')).toContain('bedside');
     expect(deployedModelName(undefined)).toBe(modelName('ensemble'));
     expect(deployedModelName('something_new')).toBe(modelName('ensemble'));
+  });
+
+  it('phrases the deployed ensemble for running prose', () => {
+    expect(deployedModelPhrase('lr_elasticnet')).toBe('an ensemble of elastic-net logistic regression and gradient-boosted trees');
+    expect(deployedModelPhrase(null)).toBe('an ensemble of logistic regression and gradient-boosted trees');
+    expect(DEPLOYED_SHORT_NAME).not.toMatch(/_/);
   });
 
   it('never shows a raw id for unknown models', () => {

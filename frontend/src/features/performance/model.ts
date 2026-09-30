@@ -8,6 +8,7 @@
  */
 import { formatMetricValue, formatPercent } from '@/lib/format';
 import {
+  DEPLOYED_SHORT_NAME,
   deployedModelName,
   featureName,
   isDeployedModel,
@@ -99,7 +100,12 @@ export function pageTakeaway(target: string, m: TargetMetrics, split: Split): st
  * One sentence that reconciles the held-out test and cross-validation ROC-AUC (§6.4 rule 2). It
  * cites the split that is NOT on the tiles, so no number is shown twice.
  */
-export function reconcileSentence(m: TargetMetrics, split: Split, facts: SplitFacts): string | null {
+export function reconcileSentence(
+  m: TargetMetrics,
+  split: Split,
+  facts: SplitFacts,
+  robustness?: RobustnessResult | null,
+): string | null {
   const test = m.test.roc_auc;
   const cv = m.cv.roc_auc;
   if (!test || !cv) return null;
@@ -107,9 +113,24 @@ export function reconcileSentence(m: TargetMetrics, split: Split, facts: SplitFa
   const ci = test.ci ?? null;
   const includes = ci ? ci[0] <= cv.mean && cv.mean <= ci[1] : null;
   const small = 'with a small test set';
+  // The Monte-Carlo re-splits explain the gap directly: where does the locked split fall?
+  const pct = robustness?.fixedPercentile ?? null;
+  const median = robustness?.rocAuc.p50 ?? null;
+  const draw = pct === null ? null : pct < 25 ? 'a hard draw' : pct > 75 ? 'an easy draw' : 'a typical draw';
+  const resplits =
+    robustness && pct !== null && median !== null
+      ? `re-running the whole recipe on ${robustness.nSplits} random splits gives a median of ${f2(median)}, and this split ranks at the ${ordinal(pct)} percentile`
+      : null;
   if (split === 'test') {
     const cvText = `cross-validation (${f2(cv.mean)} ± ${f2(cv.std)})`;
     if (Math.abs(diff) < 0.015) return `Held-out ROC-AUC matches ${cvText}: the model generalised as estimated.`;
+    if (resplits && draw) {
+      const dir = diff < 0 ? 'below' : 'above';
+      const explained = (diff < 0 && pct! < 25) || (diff > 0 && pct! > 75);
+      return explained
+        ? `Held-out ROC-AUC is ${dir} ${cvText} because the locked test split is ${draw}: ${resplits}.`
+        : `Held-out ROC-AUC is ${dir} ${cvText}, within ordinary split-to-split variation: ${resplits}.`;
+    }
     if (diff < 0) {
       if (includes === false)
         return `Held-out ROC-AUC is below ${cvText} and its interval excludes the CV value, so read the CV figure as optimistic.`;
@@ -121,6 +142,8 @@ export function reconcileSentence(m: TargetMetrics, split: Split, facts: SplitFa
   }
   const testText = `the held-out test (${f2(test.value)}, n = ${facts.nTest})`;
   if (Math.abs(diff) < 0.015) return `Cross-validation matches ${testText}: the estimate held on unseen patients.`;
+  if (resplits && draw)
+    return `Cross-validation is ${diff < 0 ? 'above' : 'below'} ${testText}; the locked split is ${draw}: ${resplits}.`;
   if (diff < 0)
     return `Cross-validation is above ${testText}. A small test set scatters widely${includes ? ', and its interval includes the CV value' : ''}.`;
   return `Cross-validation is below ${testText}. A small test set scatters widely${includes ? ', and its interval includes the CV value' : ''}.`;
@@ -393,6 +416,8 @@ export function driversFinding(target: string, m: TargetMetrics, byKey?: Readonl
 export interface LeaderRow {
   id: string;
   name: string;
+  /** Row-sized name (no truncation at 1280); the full name goes in the tooltip and the table. */
+  short: string;
   description: string;
   mean: number;
   sd: number;
@@ -409,6 +434,7 @@ export function leaderboard(m: TargetMetrics, logisticId: string | null): { rows
     return {
       id: r.model,
       name: isDeployedModel(r.model) ? deployedModelName(logisticId) : info.name,
+      short: isDeployedModel(r.model) ? DEPLOYED_SHORT_NAME : info.short,
       description: info.description,
       mean: r.roc_auc_mean,
       sd: r.roc_auc_std,

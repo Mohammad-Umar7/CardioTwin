@@ -80,6 +80,29 @@ describe('test vs CV reconciliation (§6.4 rule 2)', () => {
     expect(s).toContain('0.86, n = 61');
     expect(s).not.toContain('0.94');
   });
+
+  it('explains the gap with the Monte-Carlo re-splits when they are published', () => {
+    const r = readRobustness(sampleReport, 'CAD')!;
+    const s = reconcileSentence(cadMetrics, 'test', facts, r)!;
+    expect(s).toBe(
+      'Held-out ROC-AUC is below cross-validation (0.94 ± 0.03) because the locked test split is a hard draw: re-running the whole recipe on 200 random splits gives a median of 0.91, and this split ranks at the 13th percentile.',
+    );
+    expect(s).not.toContain('0.86');
+  });
+
+  it('calls a mid-distribution split ordinary variation, and never claims an easy split explains a lower score', () => {
+    const r = { ...readRobustness(sampleReport, 'CAD')!, fixedPercentile: 58 };
+    expect(reconcileSentence(cadMetrics, 'test', facts, r)).toContain('within ordinary split-to-split variation');
+    const easy = { ...r, fixedPercentile: 84 };
+    expect(reconcileSentence(cadMetrics, 'test', facts, easy)).not.toContain('because');
+  });
+
+  it('keeps the robustness context on the CV split', () => {
+    const r = readRobustness(sampleReport, 'CAD')!;
+    const s = reconcileSentence(cadMetrics, 'cv', facts, r)!;
+    expect(s).toContain('0.86, n = 61');
+    expect(s).toContain('hard draw');
+  });
 });
 
 describe('KPI tiles', () => {

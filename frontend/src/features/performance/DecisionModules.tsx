@@ -186,9 +186,7 @@ export function ThresholdExplorer({ target, points, deployed, explore, onExplore
               Decision threshold <span className="num text-primary">{f2(p.threshold)}</span>
               <span className="text-tertiary"> · flags {formatPercent(now.n ? now.flagged / now.n : null)} of patients</span>
             </label>
-            <span>
-              {idx + 1} / {points.length}
-            </span>
+            {p.deployed && <span className="text-accent">Deployed</span>}
           </div>
           <Slider
             id={sliderId}

@@ -141,6 +141,18 @@ export function deployedModelName(logisticId?: string | null): string {
   return linear ? `Ensemble: ${linear} + gradient-boosted trees` : modelName(DEPLOYED_MODEL_ID);
 }
 
+/**
+ * The deployed ensemble as a noun phrase for running prose ("Deployed: an ensemble of elastic-net
+ * logistic regression and gradient-boosted trees, …"), so sentences never read "Deployed: Ensemble: …".
+ */
+export function deployedModelPhrase(logisticId?: string | null): string {
+  const linear = (logisticId ? LINEAR_PART[logisticId] : undefined) ?? 'logistic regression';
+  return `an ensemble of ${linear} and gradient-boosted trees`;
+}
+
+/** Row-sized name of the deployed ensemble (leaderboards, legends); the full name goes in tooltips. */
+export const DEPLOYED_SHORT_NAME = 'Deployed ensemble';
+
 /** Every internal id this module knows, longest first (so `lr_elasticnet` wins over `lr_l`). */
 export const KNOWN_MODEL_IDS: readonly string[] = Object.keys(MODELS).sort((a, b) => b.length - a.length);
 

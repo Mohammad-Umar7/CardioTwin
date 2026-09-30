@@ -52,15 +52,18 @@ export function LeaderboardModule({ target, m, logisticId, height, nFolds }: Mod
             <li
               key={r.id}
               className={cn(
-                'relative grid grid-cols-[minmax(0,1fr)_minmax(96px,38%)_84px] items-center gap-3 rounded-sm py-px pl-2.5 pr-1 text-label font-normal',
+                'relative grid grid-cols-[minmax(0,1fr)_minmax(96px,44%)_84px] items-center gap-3 rounded-sm py-px pl-2.5 pr-1 text-label font-normal',
                 r.deployed ? 'bg-surface-2 text-primary' : 'text-secondary',
               )}
             >
               {r.deployed && <span aria-hidden className="absolute inset-y-0 left-0 w-0.5 rounded-full bg-accent" />}
-              <Tooltip content={r.description} placement="top">
-                <span tabIndex={0} className="min-w-0 truncate rounded-xs outline-none focus-visible:shadow-focus">
-                  {r.name}
-                  {r.deployed && <span className="ml-2 text-accent">Deployed</span>}
+              <Tooltip content={`${r.name}. ${r.description}`} placement="top">
+                <span
+                  tabIndex={0}
+                  aria-label={`${r.name}${r.deployed ? ', deployed' : ''}`}
+                  className={cn('min-w-0 truncate rounded-xs outline-none focus-visible:shadow-focus', r.deployed && 'font-semibold')}
+                >
+                  {r.short}
                 </span>
               </Tooltip>
               <svg className="h-3 w-full overflow-visible" aria-hidden>
@@ -74,7 +77,7 @@ export function LeaderboardModule({ target, m, logisticId, height, nFolds }: Mod
             </li>
           ))}
         </ol>
-        <div className="grid grid-cols-[minmax(0,1fr)_minmax(96px,38%)_84px] gap-3 pl-2.5 pr-1 pt-1.5 text-label font-normal text-tertiary" aria-hidden>
+        <div className="grid grid-cols-[minmax(0,1fr)_minmax(96px,44%)_84px] gap-3 pl-2.5 pr-1 pt-1.5 text-label font-normal text-tertiary" aria-hidden>
           <span>ROC-AUC</span>
           <span className="relative h-4">
             {axis.ticks.map((t) => (

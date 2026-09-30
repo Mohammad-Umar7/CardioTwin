@@ -80,7 +80,7 @@ export function MultimodalHeadline({ target, modality, baseline, testAuc, robust
     stats.push({
       value: formatPercent(d.sharePositive),
       label: 'of random re-splits favour the full panel over the baseline',
-      sub: `Median gain ${signed(d.p50)} ROC-AUC across ${robustness!.nSplits} re-splits`,
+      sub: `Median gain ${signed(d.p50)} ROC-AUC; the whole recipe re-run on every split`,
       title: `5th–95th percentile of the gain: ${signed(d.p05)} to ${signed(d.p95)}`,
     });
   }
