@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState, type ReactNode } from 'react';
+import { useMemo, useState, type ReactNode } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { EmptyState, SegmentedControl, Skeleton, Tabs } from '@/design';
 import { tabPanelId } from '@/design/tabIds';
@@ -40,6 +40,7 @@ import {
 } from './model';
 import { ProtocolStrip } from './ProtocolStrip';
 import { SummaryTiles } from './SummaryTiles';
+import { scrollToSection, useActiveSection } from './useActiveSection';
 
 const TARGET_NAMES: Record<KnownTargetId, string> = {
   CAD: 'Coronary artery disease',
@@ -84,28 +85,6 @@ const SECTIONS = [
   ['protocol', 'Protocol'],
 ] as const;
 
-function useActiveSection(ids: readonly string[]): string | null {
-  const [active, setActive] = useState<string | null>(null);
-  useEffect(() => {
-    if (typeof IntersectionObserver === 'undefined') return;
-    const seen = new Map<string, boolean>();
-    const io = new IntersectionObserver(
-      (entries) => {
-        for (const e of entries) seen.set(e.target.id, e.isIntersecting);
-        const first = ids.find((id) => seen.get(id));
-        if (first) setActive(first);
-      },
-      { rootMargin: '-140px 0px -55% 0px' },
-    );
-    for (const id of ids) {
-      const el = document.getElementById(id);
-      if (el) io.observe(el);
-    }
-    return () => io.disconnect();
-  }, [ids]);
-  return active;
-}
-
 function SectionNav({ ids }: { ids: readonly (readonly [string, string])[] }) {
   const active = useActiveSection(useMemo(() => ids.map(([id]) => id), [ids]));
   return (
@@ -115,7 +94,7 @@ function SectionNav({ ids }: { ids: readonly (readonly [string, string])[] }) {
           key={id}
           type="button"
           aria-current={active === id ? 'true' : undefined}
-          onClick={() => document.getElementById(id)?.scrollIntoView({ behavior: 'smooth', block: 'start' })}
+          onClick={() => scrollToSection(id)}
           className={cn(
             'relative h-8 rounded-sm px-2 text-label transition-colors duration-fast',
             active === id ? 'text-primary' : 'text-tertiary hover:text-secondary',
