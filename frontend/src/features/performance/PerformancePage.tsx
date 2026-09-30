@@ -256,6 +256,7 @@ export default function PerformancePage() {
           >
             <section
               id="summary"
+              data-region="performance-summary"
               aria-labelledby="summary-title"
               className="flex scroll-mt-[calc(var(--topbar-h)+72px)] flex-col gap-5"
             >
