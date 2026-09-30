@@ -134,6 +134,22 @@ def main() -> None:
         camera(scene, (5.5, -1.0, 0.4), (0.15, 0, 0), lens=60)
         render(scene, out, "territory_left")
         sh.color_type = "MATERIAL"
+    if want("qa"):
+        # R = landmark rule, G = thickness rule, B = final ventricular mask (see build_anatomy.py).
+        sh.color_type = "VERTEX"
+        walls = [bpy.data.objects[n] for n in ("Heart_Wall_Anterior", "Heart_Wall_Posterior")]
+        for ob in walls:
+            attrs = ob.data.color_attributes
+            if "QA_Ventricular" in attrs:
+                attrs.active_color = attrs["QA_Ventricular"]
+        set_visible(("Layer_Heart",), hide_nodes=tuple(o.name for o in bpy.data.objects if o.parent and o.parent.name == "Layer_Heart" and not o.name.startswith("Heart_Wall")))
+        camera(scene, (0, -12, 0), (0.15, 0, 0), ortho=1.6)
+        render(scene, out, "qa_front")
+        camera(scene, (0, 12, 0), (0.15, 0, 0), ortho=1.6)
+        render(scene, out, "qa_back")
+        camera(scene, (5.5, -1.0, 0.4), (0.15, 0, 0), lens=60)
+        render(scene, out, "qa_left")
+        sh.color_type = "MATERIAL"
     print(f"[preview] wrote {out}")
 
 
