@@ -1201,7 +1201,7 @@
         ]
       },
       "SYN_AorticRoot": {
-        "what": "Aortic root: annulus 23 mm, three sinuses of Valsalva placed at the coronary ostia, STJ 26 mm; translated down the outflow tract until the annulus is 3.5 mm from the anterior mitral hinge (aorto-mitral continuity)",
+        "what": "Aortic root: annulus 23 mm, three sinuses of Valsalva placed at the coronary ostia, STJ 26 mm; moved as a whole by a constrained search (x -6..3.5, y -4..10, z -10..3 mm) to the smallest annulus-to-mitral gap that keeps the valve order and the ascending course (21 -> 9 mm); the aorto-mitral curtain bridges the rest",
         "from": [
           "FMA3736",
           "FMA4685",
