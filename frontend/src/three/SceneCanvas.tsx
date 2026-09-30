@@ -1,4 +1,3 @@
-import { AdaptiveDpr } from '@react-three/drei';
 import { Canvas, useThree } from '@react-three/fiber';
 import { useEffect, useId, useState, type KeyboardEvent } from 'react';
 import { NeutralToneMapping, NoToneMapping, SRGBColorSpace } from 'three';
@@ -14,6 +13,7 @@ import { Background } from './stage/Background';
 import { Lights, SceneEnvironment } from './stage/Lights';
 import { SceneFX } from './fx/SceneFX';
 import { QualityMonitor } from './stage/QualityMonitor';
+import { dprFor, resolvedDpr } from './stage/dpr';
 import { debugHandles } from './stage/debug';
 import { usePickStore } from './stage/pickStore';
 import { ensureRealisticDefault, useSceneControls } from './stage/sceneControls';
@@ -23,12 +23,20 @@ import { probeWebGL } from './webgl';
 // module loads — never during a render.
 ensureRealisticDefault();
 
-const DPR: Record<RenderTier, number | [number, number]> = { A: [1, 1.5], B: [1, 1.25], C: 1, D: 1 };
+
 /**
- * On an integrated GPU the full-bleed Realistic stage keeps tier B at DPR 1.0 (V2 §9.3 D accept: "cap the
- * workstation's DPR at 1.0 and let PerformanceMonitor drop to C") — 35 % fewer pixels than 1.25.
+ * The tier's pixel ratio, lowered while the camera is being dragged (camera-controls `regress` drops R3F's
+ * performance factor) and restored when it settles. Replaces drei's AdaptiveDpr, which multiplied the
+ * factor into the pixel ratio the canvas MOUNTED with and so overrode later tier changes (tier C ran at 1.25).
  */
-const dprFor = (tier: RenderTier, integrated: boolean) => (integrated && tier === 'B' ? 1 : DPR[tier]);
+function TierDpr({ tier, integrated }: { tier: RenderTier; integrated: boolean }) {
+  const setDpr = useThree((s) => s.setDpr);
+  const factor = useThree((s) => s.performance.current);
+  useEffect(() => {
+    setDpr(Math.max(0.75, resolvedDpr(dprFor(tier, integrated)) * factor));
+  }, [tier, integrated, factor, setDpr]);
+  return null;
+}
 
 /** Tier C renders without the composer, so the renderer applies Khronos PBR Neutral itself (§7.1). */
 function ToneMappingByTier({ tier }: { tier: RenderTier }) {
@@ -100,13 +108,25 @@ export default function SceneCanvas({ active }: { active: boolean }) {
         dpr={dprFor(tier, probeWebGL().integrated)}
         flat
         performance={{ min: 0.5 }}
-        gl={{ antialias: false, alpha: false, stencil: false, powerPreference: 'high-performance' }}
+        // MSAA on the canvas: tier C renders without the post chain (no SMAA), so the hardware resolve is its
+        // only anti-aliasing; at A/B the composer's final pass is a single full-screen triangle into it.
+        gl={{ antialias: true, alpha: false, stencil: false, powerPreference: 'high-performance' }}
         camera={{ fov: 30, near: 0.1, far: 50, position: [0, 0.3, 6] }}
-        onCreated={({ gl, scene, camera }) => {
+        onCreated={({ gl, scene, camera, advance }) => {
           gl.outputColorSpace = SRGBColorSpace;
           // The heart section plane is a per-material clipping plane (anatomy/rig.ts).
           gl.localClippingEnabled = true;
-          if (debugHandles()) (window as unknown as { __ct?: unknown }).__ct = { gl, scene, camera, viewer: useViewerStore, controls: useSceneControls, pick: usePickStore };
+          if (debugHandles()) {
+            // `frames(n)` steps the whole frame loop (anatomy, camera, fx, composer) n times ~16 ms apart, so
+            // a page whose rAF is throttled (hidden pane, background tab) can still be inspected.
+            const frames = async (n = 1, ms = 16) => {
+              for (let i = 0; i < n; i += 1) {
+                advance(performance.now());
+                await new Promise((r) => setTimeout(r, ms));
+              }
+            };
+            (window as unknown as { __ct?: unknown }).__ct = { gl, scene, camera, viewer: useViewerStore, controls: useSceneControls, pick: usePickStore, frames };
+          }
           gl.setClearColor('#06080A', 1);
           gl.domElement.addEventListener('webglcontextlost', (event) => {
             event.preventDefault();
@@ -127,8 +147,9 @@ export default function SceneCanvas({ active }: { active: boolean }) {
         <Background />
         <Lights />
         <SceneEnvironment />
-        <QualityMonitor />
-        <AdaptiveDpr />
+        {/* Measure only a frame loop that really runs every frame (never on-demand frames). */}
+        <QualityMonitor enabled={frameloop === 'always'} />
+        <TierDpr tier={tier} integrated={probeWebGL().integrated} />
         <CameraRig />
         <Anatomy />
         <LabelProjector />

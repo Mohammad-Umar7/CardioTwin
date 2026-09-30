@@ -12,6 +12,8 @@ import {
 import { SYSTOLE_SCALE, beatScale, clampHeartRate } from './anatomy/heartbeat';
 import { PROJECTIONS, cycleProjection, formatCarm, fromControlsAngles, toControlsAngles } from './camera/presets';
 import { getRiskLUT } from './riskLut';
+import { dprFor, resolvedDpr } from './stage/dpr';
+import { qualityStep, type QualitySampler } from './stage/qualitySampler';
 
 describe('procedural heart follows the scene conventions (CONTRACTS §6.1)', () => {
   it('is centred on the heart-wall bounding box', () => {
@@ -103,5 +105,45 @@ describe('risk LUT texture', () => {
     expect(lut.image.width).toBe(256);
     expect(lut.image.height).toBe(1);
     expect(lut.colorSpace).toBe('srgb');
+  });
+});
+
+describe('adaptive tier sampling (frames the page really composites)', () => {
+  const fresh = (): QualitySampler => ({ last: 0, t0: 0, frames: 0, windows: [], lastMove: 0, flips: 0 });
+  const run = (s: QualitySampler, frameMs: number, totalMs: number, start = 0) => {
+    const moves: string[] = [];
+    for (let t = start; t <= start + totalMs; t += frameMs) {
+      const out = qualityStep(s, t);
+      if (out.move) moves.push(out.move);
+    }
+    return moves;
+  };
+
+  it('demotes on a real 30 fps loop and promotes on 60 fps', () => {
+    expect(run(fresh(), 1000 / 30, 2200)).toContain('down');
+    expect(run(fresh(), 1000 / 60, 2200)).toContain('up');
+  });
+
+  it('never counts a throttled or hidden page (frame gaps over 100 ms) as slow', () => {
+    const s = fresh();
+    expect(run(s, 250, 20000)).toEqual([]);
+    expect(s.windows).toHaveLength(0);
+    expect(qualityStep(s, 30000, true)).toEqual({ fps: null, move: null });
+  });
+
+  it('locks after three flip-flops', () => {
+    const s = fresh();
+    const moves = [...run(s, 1000 / 30, 2400), ...run(s, 1000 / 60, 2400, 3000), ...run(s, 1000 / 30, 2400, 6000), ...run(s, 1000 / 60, 2400, 9000)];
+    expect(moves).toContain('fallback');
+  });
+});
+
+describe('tier pixel ratio', () => {
+  it('resolves a tier range against the screen and keeps C at 1', () => {
+    expect(resolvedDpr(dprFor('A', false), 2)).toBe(1.5);
+    expect(resolvedDpr(dprFor('B', false), 2)).toBe(1.25);
+    expect(resolvedDpr(dprFor('B', true), 2)).toBe(1);
+    expect(resolvedDpr(dprFor('C', false), 2)).toBe(1);
+    expect(resolvedDpr(dprFor('A', false), 1)).toBe(1);
   });
 });

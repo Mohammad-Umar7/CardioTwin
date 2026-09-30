@@ -1,44 +1,39 @@
-import { PerformanceMonitor } from '@react-three/drei';
-import { useRef } from 'react';
+import { useFrame } from '@react-three/fiber';
+import { useEffect, useRef } from 'react';
 import { useViewerStore } from '@/state/viewerStore';
+import { qualityStep, type QualitySampler } from './qualitySampler';
 
 /**
  * Adaptive render tier (DESIGN_SYSTEM §7.7): start at B; promote to A when the frame rate stays at
  * ≥ 58 fps; demote to C below 45 fps; after 3 flip-flops lock at C. A manually chosen tier is respected.
+ *
+ * It measures only frames the page really composites: mount it only while the frame loop is "always"
+ * (`enabled`), and any gap longer than `QUALITY_MONITOR.gapMs` (a hidden tab, a throttled pane, an on-demand
+ * pause) restarts the window instead of counting as a slow frame — so a background tab never drops the
+ * tier, and it comes back with the tier it left with.
  */
-export function QualityMonitor() {
+export function QualityMonitor({ enabled }: { enabled: boolean }) {
+  const sampler = useRef<QualitySampler>({ last: 0, t0: 0, frames: 0, windows: [], lastMove: 0, flips: 0 });
   const lastFps = useRef(0);
-  const setTier = useViewerStore((s) => s.setTier);
-  const setFps = useViewerStore((s) => s.setFps);
 
-  const locked = () => useViewerStore.getState().tierLocked;
+  useEffect(() => {
+    if (!enabled) sampler.current.last = 0;
+  }, [enabled]);
 
-  return (
-    <PerformanceMonitor
-      ms={250}
-      iterations={8}
-      bounds={() => [45, 58]}
-      flipflops={3}
-      onIncline={() => {
-        if (locked()) return;
-        const tier = useViewerStore.getState().tier;
-        if (tier === 'C') setTier('B');
-        else if (tier === 'B') setTier('A');
-      }}
-      onDecline={() => {
-        if (locked()) return;
-        const tier = useViewerStore.getState().tier;
-        if (tier === 'A') setTier('B');
-        else if (tier === 'B') setTier('C');
-      }}
-      onFallback={() => setTier('C', true)}
-      onChange={({ fps }) => {
-        // Publish at most ~1 Hz-worthy changes to avoid re-rendering the pill every frame.
-        if (Math.abs(fps - lastFps.current) >= 2) {
-          lastFps.current = fps;
-          setFps(fps);
-        }
-      }}
-    />
-  );
+  useFrame(() => {
+    if (!enabled) return;
+    const viewer = useViewerStore.getState();
+    const hidden = typeof document !== 'undefined' && document.visibilityState === 'hidden';
+    const out = qualityStep(sampler.current, performance.now(), hidden);
+    if (out.fps !== null && Math.abs(out.fps - lastFps.current) >= 2) {
+      lastFps.current = out.fps;
+      viewer.setFps(out.fps);
+    }
+    if (!out.move || viewer.tierLocked || viewer.tier === 'D') return;
+    if (out.move === 'fallback') viewer.setTier('C', true);
+    else if (out.move === 'up') viewer.setTier(viewer.tier === 'C' ? 'B' : 'A');
+    else viewer.setTier(viewer.tier === 'A' ? 'B' : 'C');
+  });
+
+  return null;
 }
