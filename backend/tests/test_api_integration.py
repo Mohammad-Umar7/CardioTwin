@@ -37,19 +37,54 @@ SKIP_REASON = _skip_reason()
 pytestmark = [pytest.mark.integration, pytest.mark.skipif(SKIP_REASON is not None, reason=SKIP_REASON or "")]
 
 
-@pytest.fixture(scope="module")
-def real_client(tmp_path_factory: pytest.TempPathFactory) -> Iterator[TestClient]:
-    tmp = tmp_path_factory.mktemp("integration")
-    settings = Settings(
+def _settings(tmp: Path, **overrides: Any) -> Settings:
+    return Settings(
         artifacts_dir=ARTIFACTS,
         predictor="real",
         serve_frontend=False,
         model_card_path=tmp / "absent.md",
         log_level="WARNING",
         log_format="text",
-    )
+    ).with_overrides(**overrides)
+
+
+@pytest.fixture(scope="module")
+def real_client(tmp_path_factory: pytest.TempPathFactory) -> Iterator[TestClient]:
+    with TestClient(create_app(_settings(tmp_path_factory.mktemp("integration")))) as client:
+        yield client
+
+
+@pytest.fixture(scope="module")
+def warn_client(tmp_path_factory: pytest.TempPathFactory) -> Iterator[TestClient]:
+    """Out-of-range values are predicted (with warnings), matching the ML package's own semantics."""
+    settings = _settings(tmp_path_factory.mktemp("integration-warn"), out_of_range="warn")
     with TestClient(create_app(settings)) as client:
         yield client
+
+
+def _fixture_cases() -> list[dict[str, Any]]:
+    path = Path(ARTIFACTS) / "fixtures.json"
+    if not path.is_file():
+        pytest.skip("fixtures.json not produced")
+    raw = json.loads(path.read_text(encoding="utf-8"))
+    cases: list[dict[str, Any]] = raw["cases"] if isinstance(raw, dict) else raw
+    assert cases
+    return cases
+
+
+def _outside_schema(features: dict[str, Any], schema: dict[str, Any]) -> set[str]:
+    specs = {f["key"]: f for f in schema["features"]}
+    outside = set()
+    for key, value in features.items():
+        spec = specs.get(key)
+        if spec is None or spec["type"] != "numeric" or value is None:
+            continue
+        number = float(value)
+        if (spec.get("min") is not None and number < spec["min"]) or (
+            spec.get("max") is not None and number > spec["max"]
+        ):
+            outside.add(key)
+    return outside
 
 
 @pytest.fixture(scope="module")
@@ -129,29 +164,42 @@ def test_batch_matches_single_predictions(real_client: TestClient) -> None:
         assert result["prediction"] == _predict(real_client, row["features"])
 
 
-def test_fixtures_parity(real_client: TestClient) -> None:
-    """The server reproduces the ML package's reference fixtures (contract §1 fixtures.json)."""
-    path = Path(ARTIFACTS) / "fixtures.json"
-    if not path.is_file():
-        pytest.skip("fixtures.json not produced")
-    raw = json.loads(path.read_text(encoding="utf-8"))
-    fixtures = raw["fixtures"] if isinstance(raw, dict) and "fixtures" in raw else raw
-    assert len(fixtures) >= 1
-    for fixture in fixtures:
-        body = _predict(real_client, fixture["features"])
-        expected = fixture["expected"]
+def test_fixtures_parity(warn_client: TestClient) -> None:
+    """The API reproduces every reference case in the ML package's fixtures.json (contract §1)."""
+    for case in _fixture_cases():
+        response = warn_client.post("/api/predict", json={"features": case["features"]})
+        assert response.status_code == 200, (case["id"], response.text)
+        body = response.json()
+        expected = case["expected"]
+        assert sorted(body["imputed"]) == sorted(expected["imputed"]), case["id"]
         for target in TARGETS:
-            want = expected.get("predictions", {}).get(target)
-            if want is None:
-                continue
-            got = body["predictions"][target]
-            assert got["probability"] == pytest.approx(want["probability"], abs=1e-6)
-            assert got["label"] == want["label"]
-            want_expl = expected.get("explanations", {}).get(target)
-            if want_expl:
-                got_shap = {c["feature"]: c["shap"] for c in body["explanations"][target]["contributions"]}
-                for item in want_expl["contributions"]:
-                    assert got_shap[item["feature"]] == pytest.approx(item["shap"], abs=1e-5)
+            want, got = expected["predictions"][target], body["predictions"][target]
+            assert got["probability"] == pytest.approx(want["probability"], abs=1e-6), (case["id"], target)
+            assert got["logit"] == pytest.approx(want["logit"], abs=1e-6), (case["id"], target)
+            assert got["label"] == want["label"], (case["id"], target)
+            assert got["risk_band"] == want["risk_band"], (case["id"], target)
+            want_expl, got_expl = expected["explanations"][target], body["explanations"][target]
+            assert got_expl["base_value"] == pytest.approx(want_expl["base_value"], abs=1e-6)
+            got_shap = {c["feature"]: c["shap"] for c in got_expl["contributions"]}
+            for item in want_expl["contributions"]:
+                assert got_shap[item["feature"]] == pytest.approx(item["shap"], abs=1e-5), (case["id"], target)
+
+
+def test_fixtures_outside_the_training_range_are_rejected_by_default(
+    real_client: TestClient, schema: dict[str, Any]
+) -> None:
+    checked = 0
+    for case in _fixture_cases():
+        outside = _outside_schema(case["features"], schema)
+        if not outside:
+            continue
+        response = real_client.post("/api/predict", json={"features": case["features"]})
+        assert response.status_code == 422, case["id"]
+        flagged = {item["loc"][-1] for item in response.json()["detail"] if item["type"] == "out_of_range"}
+        assert flagged == outside, case["id"]
+        checked += 1
+    if checked == 0:
+        pytest.skip("no fixture exercises out-of-range inputs")
 
 
 def test_out_of_range_input_is_rejected_with_the_schema_range(
