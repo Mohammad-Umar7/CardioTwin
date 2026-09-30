@@ -45,6 +45,40 @@ function installPosterHelper(): void {
 }
 installPosterHelper();
 
+/** Frames the canvas must draw in its new slot before it is shown, and the fallback when rAF is throttled. */
+const VEIL_FRAMES = 2;
+const VEIL_MAX_MS = 220;
+const VEIL_FADE_MS = 160;
+
+/**
+ * Hide `el` now and fade it back in once the canvas inside has been resized to the slot and drawn
+ * VEIL_FRAMES frames there (or after VEIL_MAX_MS, whichever comes first — a hidden tab never stays veiled).
+ */
+function veilUntilDrawn(el: HTMLElement): void {
+  el.style.transition = 'none';
+  el.style.opacity = '0';
+  let frames = 0;
+  let done = false;
+  const reveal = () => {
+    if (done) return;
+    done = true;
+    el.style.transition = `opacity ${VEIL_FADE_MS}ms ease-out`;
+    el.style.opacity = '1';
+  };
+  const tick = () => {
+    if (done) return;
+    // R3F has resized the drawing buffer to the slot when its aspect matches the CSS box again.
+    const canvas = el.querySelector('canvas');
+    const resized =
+      !!canvas && canvas.clientWidth > 0 && canvas.clientHeight > 0 && Math.abs(canvas.width / canvas.clientWidth - canvas.height / canvas.clientHeight) < 0.02;
+    if (resized) frames += 1;
+    if (frames >= VEIL_FRAMES) reveal();
+    else requestAnimationFrame(tick);
+  };
+  if (typeof requestAnimationFrame === 'function') requestAnimationFrame(tick);
+  window.setTimeout(reveal, VEIL_MAX_MS);
+}
+
 class SceneErrorBoundary extends Component<{ children: ReactNode }, { failed: boolean }> {
   override state = { failed: false };
   static getDerivedStateFromError() {
@@ -71,6 +105,7 @@ export function SceneHost() {
   const stage = useSceneSlot((s) => s.stage);
   const tier = useViewerStore((s) => s.tier);
   const [everShown, setEverShown] = useState(false);
+  const shownOnce = useRef(false);
 
   useEffect(() => {
     if (!probeWebGL().webgl2) useViewerStore.getState().setTier('D', true);
@@ -81,8 +116,16 @@ export function SceneHost() {
   useLayoutEffect(() => {
     const target = slot ?? parkRef.current;
     if (!host || !target) return;
-    if (host.parentElement !== target) target.appendChild(host);
-    if (slot) setEverShown(true);
+    if (host.parentElement !== target) {
+      target.appendChild(host);
+      // Moving into another page's slot: veil the canvas until it has drawn at the new slot's size with the
+      // new stage's pose (no frame of the previous page's framing, no stretched frame before R3F resizes).
+      if (slot && shownOnce.current) veilUntilDrawn(host);
+    }
+    if (slot) {
+      shownOnce.current = true;
+      setEverShown(true);
+    }
     useViewerStore.getState().setStage(slot ? stage : 'hidden');
   }, [slot, stage]);
 

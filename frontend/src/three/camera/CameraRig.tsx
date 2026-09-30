@@ -121,6 +121,7 @@ export function CameraRig() {
   const camera = useThree((s) => s.camera) as PerspectiveCamera;
   const size = useThree((s) => s.size);
   const scene = useThree((s) => s.scene);
+  const gl = useThree((s) => s.gl);
   const invalidate = useThree((s) => s.invalidate);
 
   const lastInteraction = useRef(0);
@@ -334,6 +335,34 @@ export function CameraRig() {
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [stage, geo]);
+
+  // The stage switch itself (SceneHost moves the canvas in a layout effect, before the next frame): snap the
+  // new stage's pose, projection and view offset SYNCHRONOUSLY, from the canvas's new CSS size — the first
+  // frame drawn in the new slot is already framed (no frame of the previous page's pose, no glide).
+  useEffect(
+    () =>
+      useViewerStore.subscribe((s, prev) => {
+        if (s.stage === prev.stage || s.stage === 'hidden' || !ref.current) return;
+        const el = gl.domElement;
+        const width = el.clientWidth;
+        const height = el.clientHeight;
+        if (!(width > 0) || !(height > 0)) return;
+        sizeRef.current = { ...sizeRef.current, width, height };
+        stageRef.current = s.stage;
+        userTouched.current = false;
+        resetPeel();
+        flyHome(false);
+        const base = viewOffsetFor(width, height, insetsFor(s.stage));
+        const goal = { x: base.x + silhouetteBias.current.x, y: base.y + silhouetteBias.current.y };
+        offset.current = { from: goal, to: goal, current: goal, t0: performance.now(), applied: '' };
+        camera.aspect = width / height;
+        camera.setViewOffset(width, height, -goal.x, -goal.y, width, height);
+        camera.updateProjectionMatrix();
+        invalidate();
+      }),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [],
+  );
 
   // A resize keeps the stage framing (62 % of the new free area / the hero share) while the camera sits at
   // its untouched stage pose. The canvas also resizes while it moves between page slots: re-solving then
