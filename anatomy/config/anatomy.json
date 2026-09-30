@@ -4,7 +4,10 @@
     "name": "BodyParts3D",
     "base_url": "https://raw.githubusercontent.com/Kevin-Mattheus-Moerman/BodyParts3D/main/assets/BodyParts3D_data",
     "stl_path": "stl/{id}.stl",
-    "metadata_files": ["parts_list_e.txt", "LICENSE_content"],
+    "metadata_files": [
+      "parts_list_e.txt",
+      "LICENSE_content"
+    ],
     "credits": "BodyParts3D, © The Database Center for Life Science, licensed under CC BY-SA 2.1 Japan",
     "license": "CC BY-SA 2.1 JP",
     "license_url": "https://creativecommons.org/licenses/by-sa/2.1/jp/deed.en"
@@ -16,257 +19,891 @@
     "source_axes": "BodyParts3D +X patient-left, +Y posterior, +Z superior (mm)"
   },
   "triangle_budget_total": 400000,
+  "cleanup": {
+    "min_component_fraction": 0.05,
+    "min_component_faces": 24,
+    "drop_inverted_components": true,
+    "merge_distance_mm": 0.001
+  },
+  "crops": {
+    "_comment": "Source-frame (BodyParts3D, mm) constants measured from slices of the outer skin shell; see anatomy/README.md#cropping.",
+    "thorax_z_mm": [
+      980.0,
+      1397.0
+    ],
+    "arm_plane": {
+      "axilla_xz_mm": [
+        159.0,
+        1140.0
+      ],
+      "shoulder_xz_mm": [
+        190.0,
+        1350.0
+      ],
+      "below_axilla_margin_mm": 6.0
+    },
+    "inner_z_mm": [
+      986.0,
+      1390.0
+    ]
+  },
   "layers": [
-    { "id": "skin", "node": "Layer_Skin", "label": "Skin", "order": 0, "explode": [0.0, 0.0, 2.6],
-      "description": "Thoracic skin envelope, cropped from the clavicles to below the costal margin." },
-    { "id": "muscle", "node": "Layer_Muscle", "label": "Chest muscles", "order": 1, "explode": [0.0, 0.0, 1.9],
-      "description": "Pectoralis major (clavicular and sternocostal parts)." },
-    { "id": "skeleton", "node": "Layer_Skeleton", "label": "Rib cage", "order": 2, "explode": [0.0, 0.0, 0.5],
-      "description": "Ribs, costal cartilages, sternum, clavicles and thoracic spine." },
-    { "id": "lungs", "node": "Layer_Lungs", "label": "Lungs & airway", "order": 3, "explode": [0.0, 0.0, 0.0],
-      "description": "Five pulmonary lobes, trachea and main bronchi." },
-    { "id": "diaphragm", "node": "Layer_Diaphragm", "label": "Diaphragm", "order": 4, "explode": [0.0, -1.1, 0.0],
-      "description": "Musculotendinous floor of the thoracic cavity." },
-    { "id": "heart", "node": "Layer_Heart", "label": "Heart", "order": 5, "explode": [0.0, 0.0, 0.0],
-      "description": "Myocardium, valves, papillary muscles, great vessels and cardiac veins." },
-    { "id": "coronary", "node": "Layer_Coronary", "label": "Coronary arteries", "order": 6, "explode": [0.0, 0.0, 0.0],
-      "description": "Epicardial coronary tree (right-dominant) mapped to the LAD / LCX / RCA model outputs." }
+    {
+      "id": "skin",
+      "node": "Layer_Skin",
+      "label": "Skin",
+      "order": 0,
+      "explode": [
+        0.0,
+        0.0,
+        2.6
+      ],
+      "description": "Thoracic skin envelope, cropped from the clavicles to below the costal margin."
+    },
+    {
+      "id": "muscle",
+      "node": "Layer_Muscle",
+      "label": "Chest muscles",
+      "order": 1,
+      "explode": [
+        0.0,
+        0.0,
+        1.9
+      ],
+      "description": "Pectoralis major (clavicular and sternocostal parts)."
+    },
+    {
+      "id": "skeleton",
+      "node": "Layer_Skeleton",
+      "label": "Rib cage",
+      "order": 2,
+      "explode": [
+        0.0,
+        0.0,
+        0.5
+      ],
+      "description": "Ribs, costal cartilages, sternum, clavicles and thoracic spine."
+    },
+    {
+      "id": "lungs",
+      "node": "Layer_Lungs",
+      "label": "Lungs & airway",
+      "order": 3,
+      "explode": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "description": "Five pulmonary lobes, trachea and main bronchi."
+    },
+    {
+      "id": "diaphragm",
+      "node": "Layer_Diaphragm",
+      "label": "Diaphragm",
+      "order": 4,
+      "explode": [
+        0.0,
+        -1.1,
+        0.0
+      ],
+      "description": "Musculotendinous floor of the thoracic cavity."
+    },
+    {
+      "id": "heart",
+      "node": "Layer_Heart",
+      "label": "Heart",
+      "order": 5,
+      "explode": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "description": "Myocardium, valves, papillary muscles, great vessels and cardiac veins."
+    },
+    {
+      "id": "coronary",
+      "node": "Layer_Coronary",
+      "label": "Coronary arteries",
+      "order": 6,
+      "explode": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "description": "Epicardial coronary tree (right-dominant) mapped to the LAD / LCX / RCA model outputs."
+    }
   ],
   "nodes": [
     {
-      "node": "Skin_Torso", "id": "skin_torso", "layer": "skin", "label": "Skin (thorax)",
-      "parts": ["FMA7163"], "budget": 22000, "material": "Skin",
-      "crop": { "type": "thorax_skin" },
-      "explode": [0.0, 0.0, 0.0], "target": null,
+      "node": "Skin_Torso",
+      "id": "skin_torso",
+      "layer": "skin",
+      "label": "Skin (thorax)",
+      "parts": [
+        "FMA7163"
+      ],
+      "budget": 22000,
+      "material": "Skin",
+      "crop": {
+        "type": "skin_outer_shell"
+      },
+      "explode": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "target": null,
       "description": "Skin of the anterior and lateral chest wall, cropped from the clavicles to below the costal margin with the upper limbs removed."
     },
     {
-      "node": "Pectoralis_L", "id": "pectoralis_l", "layer": "muscle", "label": "Left pectoralis major",
-      "parts": ["FMA79980", "FMA34691"], "budget": 7000, "material": "Muscle",
-      "explode": [0.35, 0.0, 0.0], "target": null,
-      "description": "Clavicular and sternocostal parts of the left pectoralis major, the large fan-shaped muscle overlying the anterior chest wall."
+      "node": "Pectoralis_L",
+      "id": "pectoralis_l",
+      "layer": "muscle",
+      "label": "Left pectoralis major",
+      "parts": [
+        "FMA79980",
+        "FMA34691"
+      ],
+      "budget": 7000,
+      "material": "Muscle",
+      "explode": [
+        0.35,
+        0.0,
+        0.0
+      ],
+      "target": null,
+      "description": "Clavicular and sternocostal parts of the left pectoralis major, the large fan-shaped muscle overlying the anterior chest wall.",
+      "crop": {
+        "type": "arm_plane"
+      }
     },
     {
-      "node": "Pectoralis_R", "id": "pectoralis_r", "layer": "muscle", "label": "Right pectoralis major",
-      "parts": ["FMA79979", "FMA34690"], "budget": 7000, "material": "Muscle",
-      "explode": [-0.35, 0.0, 0.0], "target": null,
-      "description": "Clavicular and sternocostal parts of the right pectoralis major."
+      "node": "Pectoralis_R",
+      "id": "pectoralis_r",
+      "layer": "muscle",
+      "label": "Right pectoralis major",
+      "parts": [
+        "FMA79979",
+        "FMA34690"
+      ],
+      "budget": 7000,
+      "material": "Muscle",
+      "explode": [
+        -0.35,
+        0.0,
+        0.0
+      ],
+      "target": null,
+      "description": "Clavicular and sternocostal parts of the right pectoralis major.",
+      "crop": {
+        "type": "arm_plane"
+      }
     },
     {
-      "node": "Ribs_L", "id": "ribs_l", "layer": "skeleton", "label": "Left ribs (1–12)",
-      "parts": ["FMA7987", "FMA8012", "FMA8039", "FMA8148", "FMA8093", "FMA8202", "FMA8256", "FMA8310", "FMA8391", "FMA8472", "FMA8532", "FMA8534"],
-      "budget": 22000, "material": "Bone",
-      "explode": [1.25, 0.0, 0.15], "target": null,
+      "node": "Ribs_L",
+      "id": "ribs_l",
+      "layer": "skeleton",
+      "label": "Left ribs (1–12)",
+      "parts": [
+        "FMA7987",
+        "FMA8012",
+        "FMA8039",
+        "FMA8148",
+        "FMA8093",
+        "FMA8202",
+        "FMA8256",
+        "FMA8310",
+        "FMA8391",
+        "FMA8472",
+        "FMA8532",
+        "FMA8534"
+      ],
+      "budget": 22000,
+      "material": "Bone",
+      "explode": [
+        1.25,
+        0.0,
+        0.15
+      ],
+      "target": null,
       "description": "Left ribs 1–12: true ribs 1–7 articulate with the sternum through their costal cartilages, false ribs 8–10 join the costal margin and floating ribs 11–12 end free."
     },
     {
-      "node": "Ribs_R", "id": "ribs_r", "layer": "skeleton", "label": "Right ribs (1–12)",
-      "parts": ["FMA7857", "FMA7882", "FMA7909", "FMA7957", "FMA8066", "FMA8175", "FMA8229", "FMA8283", "FMA8364", "FMA8445", "FMA8531", "FMA8533"],
-      "budget": 22000, "material": "Bone",
-      "explode": [-1.25, 0.0, 0.15], "target": null,
+      "node": "Ribs_R",
+      "id": "ribs_r",
+      "layer": "skeleton",
+      "label": "Right ribs (1–12)",
+      "parts": [
+        "FMA7857",
+        "FMA7882",
+        "FMA7909",
+        "FMA7957",
+        "FMA8066",
+        "FMA8175",
+        "FMA8229",
+        "FMA8283",
+        "FMA8364",
+        "FMA8445",
+        "FMA8531",
+        "FMA8533"
+      ],
+      "budget": 22000,
+      "material": "Bone",
+      "explode": [
+        -1.25,
+        0.0,
+        0.15
+      ],
+      "target": null,
       "description": "Right ribs 1–12 forming the right half of the bony thoracic cage."
     },
     {
-      "node": "CostalCartilage", "id": "costal_cartilage", "layer": "skeleton", "label": "Costal cartilages",
-      "parts": ["BP24", "BP28"], "budget": 9000, "material": "Cartilage",
-      "explode": [0.0, 0.0, 0.9], "target": null,
+      "node": "CostalCartilage",
+      "id": "costal_cartilage",
+      "layer": "skeleton",
+      "label": "Costal cartilages",
+      "parts": [
+        "BP24",
+        "BP28"
+      ],
+      "budget": 9000,
+      "material": "Cartilage",
+      "explode": [
+        0.0,
+        0.0,
+        0.9
+      ],
+      "target": null,
       "description": "Hyaline cartilage bars that connect the anterior ends of the ribs to the sternum and form the costal margin."
     },
     {
-      "node": "Sternum", "id": "sternum", "layer": "skeleton", "label": "Sternum",
-      "parts": ["FMA7486", "FMA7487", "FMA7488"], "budget": 5000, "material": "Bone",
-      "explode": [0.0, 0.0, 1.1], "target": null,
+      "node": "Sternum",
+      "id": "sternum",
+      "layer": "skeleton",
+      "label": "Sternum",
+      "parts": [
+        "FMA7486",
+        "FMA7487",
+        "FMA7488"
+      ],
+      "budget": 5000,
+      "material": "Bone",
+      "explode": [
+        0.0,
+        0.0,
+        1.1
+      ],
+      "target": null,
       "description": "Manubrium, body and xiphoid process of the sternum; the heart lies directly behind its lower half."
     },
     {
-      "node": "Clavicle_L", "id": "clavicle_l", "layer": "skeleton", "label": "Left clavicle",
-      "parts": ["FMA13323"], "budget": 3000, "material": "Bone",
-      "explode": [0.6, 0.45, 0.4], "target": null,
+      "node": "Clavicle_L",
+      "id": "clavicle_l",
+      "layer": "skeleton",
+      "label": "Left clavicle",
+      "parts": [
+        "FMA13323"
+      ],
+      "budget": 3000,
+      "material": "Bone",
+      "explode": [
+        0.6,
+        0.45,
+        0.4
+      ],
+      "target": null,
       "description": "Left collarbone, strut between the sternum and the shoulder."
     },
     {
-      "node": "Clavicle_R", "id": "clavicle_r", "layer": "skeleton", "label": "Right clavicle",
-      "parts": ["FMA13322"], "budget": 3000, "material": "Bone",
-      "explode": [-0.6, 0.45, 0.4], "target": null,
+      "node": "Clavicle_R",
+      "id": "clavicle_r",
+      "layer": "skeleton",
+      "label": "Right clavicle",
+      "parts": [
+        "FMA13322"
+      ],
+      "budget": 3000,
+      "material": "Bone",
+      "explode": [
+        -0.6,
+        0.45,
+        0.4
+      ],
+      "target": null,
       "description": "Right collarbone, strut between the sternum and the shoulder."
     },
     {
-      "node": "Spine_Thoracic", "id": "spine_thoracic", "layer": "skeleton", "label": "Thoracic spine (T1–T12)",
-      "parts": ["FMA9165", "FMA9187", "FMA9209", "FMA9248", "FMA9922", "FMA9945", "FMA9968", "FMA9991", "FMA10014", "FMA10037", "FMA10059", "FMA10081"],
-      "budget": 26000, "material": "Bone",
-      "explode": [0.0, 0.0, -1.3], "target": null,
+      "node": "Spine_Thoracic",
+      "id": "spine_thoracic",
+      "layer": "skeleton",
+      "label": "Thoracic spine (T1–T12)",
+      "parts": [
+        "FMA9165",
+        "FMA9187",
+        "FMA9209",
+        "FMA9248",
+        "FMA9922",
+        "FMA9945",
+        "FMA9968",
+        "FMA9991",
+        "FMA10014",
+        "FMA10037",
+        "FMA10059",
+        "FMA10081"
+      ],
+      "budget": 26000,
+      "material": "Bone",
+      "explode": [
+        0.0,
+        0.0,
+        -1.3
+      ],
+      "target": null,
       "description": "Twelve thoracic vertebrae forming the posterior wall of the thorax; the descending aorta runs along their left anterior surface."
     },
     {
-      "node": "Lung_L", "id": "lung_l", "layer": "lungs", "label": "Left lung",
-      "parts": ["FMA7370", "FMA7371"], "budget": 18000, "material": "Lung",
-      "explode": [1.6, 0.0, 0.0], "target": null,
+      "node": "Lung_L",
+      "id": "lung_l",
+      "layer": "lungs",
+      "label": "Left lung",
+      "parts": [
+        "FMA7370",
+        "FMA7371"
+      ],
+      "budget": 18000,
+      "material": "Lung",
+      "explode": [
+        1.6,
+        0.0,
+        0.0
+      ],
+      "target": null,
       "description": "Left lung (upper and lower lobes). Its cardiac notch accommodates the heart, which is why most of the heart lies left of the midline."
     },
     {
-      "node": "Lung_R", "id": "lung_r", "layer": "lungs", "label": "Right lung",
-      "parts": ["FMA7333", "FMA7383", "FMA7337"], "budget": 20000, "material": "Lung",
-      "explode": [-1.6, 0.0, 0.0], "target": null,
+      "node": "Lung_R",
+      "id": "lung_r",
+      "layer": "lungs",
+      "label": "Right lung",
+      "parts": [
+        "FMA7333",
+        "FMA7383",
+        "FMA7337"
+      ],
+      "budget": 20000,
+      "material": "Lung",
+      "explode": [
+        -1.6,
+        0.0,
+        0.0
+      ],
+      "target": null,
       "description": "Right lung (upper, middle and lower lobes)."
     },
     {
-      "node": "Trachea_Bronchi", "id": "trachea_bronchi", "layer": "lungs", "label": "Trachea & bronchi",
-      "parts": ["FMA7394", "FMA7409"], "budget": 8000, "material": "Airway",
-      "explode": [0.0, 0.9, -0.2], "target": null,
-      "description": "Trachea and bronchial tree; the tracheal bifurcation (carina) lies just above and behind the left atrium."
+      "node": "Trachea_Bronchi",
+      "id": "trachea_bronchi",
+      "layer": "lungs",
+      "label": "Trachea & bronchi",
+      "parts": [
+        "FMA7394",
+        "FMA7409"
+      ],
+      "budget": 8000,
+      "material": "Airway",
+      "explode": [
+        0.0,
+        0.9,
+        -0.2
+      ],
+      "target": null,
+      "description": "Trachea and bronchial tree; the tracheal bifurcation (carina) lies just above and behind the left atrium.",
+      "crop": {
+        "type": "thorax_limits"
+      }
     },
     {
-      "node": "Diaphragm", "id": "diaphragm", "layer": "diaphragm", "label": "Diaphragm",
-      "parts": ["FMA13295"], "budget": 9000, "material": "Diaphragm",
-      "explode": [0.0, 0.0, 0.0], "target": null,
+      "node": "Diaphragm",
+      "id": "diaphragm",
+      "layer": "diaphragm",
+      "label": "Diaphragm",
+      "parts": [
+        "FMA13295"
+      ],
+      "budget": 9000,
+      "material": "Diaphragm",
+      "explode": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "target": null,
       "description": "Dome-shaped respiratory muscle; the inferior (diaphragmatic) wall of the heart rests on its central tendon."
     },
     {
-      "node": "Heart_Wall_Anterior", "id": "heart_wall_anterior", "layer": "heart", "label": "Myocardium (anterior half)",
-      "parts": ["FMA7274"], "budget": 52000, "material": "Myocardium",
-      "split": { "source": "Heart_Wall", "side": "anterior" },
-      "explode": [0.0, 0.0, 1.05], "target": "CAD",
+      "node": "Heart_Wall_Anterior",
+      "id": "heart_wall_anterior",
+      "layer": "heart",
+      "label": "Myocardium (anterior half)",
+      "parts": [
+        "FMA7274"
+      ],
+      "budget": 52000,
+      "material": "Myocardium",
+      "split": {
+        "source": "Heart_Wall",
+        "side": "anterior"
+      },
+      "explode": [
+        0.0,
+        0.0,
+        1.05
+      ],
+      "target": "CAD",
       "description": "Anterior half of the heart wall (epicardial and endocardial surfaces), opened along the long axis. Vertex colours carry approximate LAD / LCX / RCA perfusion-territory weights (AHA 17-segment convention) — not a lesion map."
     },
     {
-      "node": "Heart_Wall_Posterior", "id": "heart_wall_posterior", "layer": "heart", "label": "Myocardium (posterior half)",
-      "parts": ["FMA7274"], "budget": 52000, "material": "Myocardium",
-      "split": { "source": "Heart_Wall", "side": "posterior" },
-      "explode": [0.0, 0.0, -1.05], "target": "CAD",
+      "node": "Heart_Wall_Posterior",
+      "id": "heart_wall_posterior",
+      "layer": "heart",
+      "label": "Myocardium (posterior half)",
+      "parts": [
+        "FMA7274"
+      ],
+      "budget": 52000,
+      "material": "Myocardium",
+      "split": {
+        "source": "Heart_Wall",
+        "side": "posterior"
+      },
+      "explode": [
+        0.0,
+        0.0,
+        -1.05
+      ],
+      "target": "CAD",
       "description": "Posterior half of the heart wall including the inferior (diaphragmatic) surface and the atria. Vertex colours carry approximate perfusion-territory weights — not a lesion map."
     },
     {
-      "node": "Valve_Mitral", "id": "valve_mitral", "layer": "heart", "label": "Mitral valve",
-      "parts": ["FMA7235"], "budget": 5000, "material": "Valve",
-      "explode": [0.0, 0.0, 0.0], "target": null,
+      "node": "Valve_Mitral",
+      "id": "valve_mitral",
+      "layer": "heart",
+      "label": "Mitral valve",
+      "parts": [
+        "FMA7235"
+      ],
+      "budget": 5000,
+      "material": "Valve",
+      "explode": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "target": null,
       "description": "Bicuspid valve between the left atrium and left ventricle; its leaflets are tethered to the LV papillary muscles by chordae tendineae."
     },
     {
-      "node": "Valve_Tricuspid", "id": "valve_tricuspid", "layer": "heart", "label": "Tricuspid valve",
-      "parts": ["FMA7234"], "budget": 5000, "material": "Valve",
-      "explode": [0.0, 0.0, 0.0], "target": null,
+      "node": "Valve_Tricuspid",
+      "id": "valve_tricuspid",
+      "layer": "heart",
+      "label": "Tricuspid valve",
+      "parts": [
+        "FMA7234"
+      ],
+      "budget": 5000,
+      "material": "Valve",
+      "explode": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "target": null,
       "description": "Three-leaflet valve between the right atrium and right ventricle."
     },
     {
-      "node": "Valve_Pulmonary", "id": "valve_pulmonary", "layer": "heart", "label": "Pulmonary valve",
-      "parts": ["FMA7246"], "budget": 3000, "material": "Valve",
-      "explode": [0.0, 0.0, 0.0], "target": null,
+      "node": "Valve_Pulmonary",
+      "id": "valve_pulmonary",
+      "layer": "heart",
+      "label": "Pulmonary valve",
+      "parts": [
+        "FMA7246"
+      ],
+      "budget": 3000,
+      "material": "Valve",
+      "explode": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "target": null,
       "description": "Semilunar valve at the right-ventricular outflow into the pulmonary trunk."
     },
     {
-      "node": "Papillary_Muscles", "id": "papillary_muscles", "layer": "heart", "label": "Papillary muscles",
-      "parts": ["FMA7260", "FMA7261", "FMA7262", "FMA7266", "FMA9352nsn"], "budget": 6000, "material": "Papillary",
-      "explode": [0.0, 0.0, 0.0], "target": null,
+      "node": "Papillary_Muscles",
+      "id": "papillary_muscles",
+      "layer": "heart",
+      "label": "Papillary muscles",
+      "parts": [
+        "FMA7260",
+        "FMA7261",
+        "FMA7262",
+        "FMA7266",
+        "FMA9352nsn"
+      ],
+      "budget": 6000,
+      "material": "Papillary",
+      "explode": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "target": null,
       "description": "Right- and left-ventricular papillary muscles. The posteromedial LV papillary muscle usually has a single blood supply (RCA/PDA), which makes it vulnerable in inferior infarction."
     },
     {
-      "node": "GreatVessel_Aorta", "id": "aorta", "layer": "heart", "label": "Aorta",
-      "parts": ["FMA3736", "FMA3768", "FMA3784"], "budget": 12000, "material": "Artery",
-      "crop": { "type": "below_diaphragm", "margin_mm": 25 },
-      "explode": [0.0, 0.35, 0.0], "target": null,
+      "node": "GreatVessel_Aorta",
+      "id": "aorta",
+      "layer": "heart",
+      "label": "Aorta",
+      "parts": [
+        "FMA3736",
+        "FMA3768",
+        "FMA3784"
+      ],
+      "budget": 12000,
+      "material": "Artery",
+      "crop": {
+        "type": "thorax_limits"
+      },
+      "explode": [
+        0.0,
+        0.35,
+        0.0
+      ],
+      "target": null,
       "description": "Ascending aorta, aortic arch and thoracic descending aorta. Both coronary arteries arise from the aortic sinuses just above the aortic valve."
     },
     {
-      "node": "GreatVessel_PulmonaryArtery", "id": "pulmonary_artery", "layer": "heart", "label": "Pulmonary artery",
-      "parts": ["FMA66326"], "budget": 8000, "material": "PulmonaryArtery",
-      "explode": [0.0, 0.35, 0.15], "target": null,
+      "node": "GreatVessel_PulmonaryArtery",
+      "id": "pulmonary_artery",
+      "layer": "heart",
+      "label": "Pulmonary artery",
+      "parts": [
+        "FMA66326"
+      ],
+      "budget": 8000,
+      "material": "PulmonaryArtery",
+      "explode": [
+        0.0,
+        0.35,
+        0.15
+      ],
+      "target": null,
       "description": "Pulmonary trunk and its right and left branches carrying deoxygenated blood from the right ventricle to the lungs."
     },
     {
-      "node": "GreatVessel_PulmonaryVeins", "id": "pulmonary_veins", "layer": "heart", "label": "Pulmonary veins",
-      "parts": ["FMA66643"], "budget": 8000, "material": "PulmonaryVein",
-      "explode": [0.0, 0.0, -0.35], "target": null,
+      "node": "GreatVessel_PulmonaryVeins",
+      "id": "pulmonary_veins",
+      "layer": "heart",
+      "label": "Pulmonary veins",
+      "parts": [
+        "FMA66643"
+      ],
+      "budget": 8000,
+      "material": "PulmonaryVein",
+      "explode": [
+        0.0,
+        0.0,
+        -0.35
+      ],
+      "target": null,
       "description": "Pulmonary veins returning oxygenated blood from the lungs to the left atrium."
     },
     {
-      "node": "GreatVessel_SVC", "id": "svc", "layer": "heart", "label": "Superior vena cava",
-      "parts": ["FMA4720"], "budget": 3000, "material": "Vein",
-      "explode": [-0.2, 0.35, 0.0], "target": null,
+      "node": "GreatVessel_SVC",
+      "id": "svc",
+      "layer": "heart",
+      "label": "Superior vena cava",
+      "parts": [
+        "FMA4720"
+      ],
+      "budget": 3000,
+      "material": "Vein",
+      "explode": [
+        -0.2,
+        0.35,
+        0.0
+      ],
+      "target": null,
       "description": "Superior vena cava draining the upper body into the right atrium."
     },
     {
-      "node": "GreatVessel_IVC", "id": "ivc", "layer": "heart", "label": "Inferior vena cava",
-      "parts": ["FMA10951"], "budget": 3000, "material": "Vein",
-      "crop": { "type": "below_diaphragm", "margin_mm": 25 },
-      "explode": [-0.2, -0.35, 0.0], "target": null,
+      "node": "GreatVessel_IVC",
+      "id": "ivc",
+      "layer": "heart",
+      "label": "Inferior vena cava",
+      "parts": [
+        "FMA10951"
+      ],
+      "budget": 3000,
+      "material": "Vein",
+      "crop": {
+        "type": "thorax_limits"
+      },
+      "explode": [
+        -0.2,
+        -0.35,
+        0.0
+      ],
+      "target": null,
       "description": "Terminal thoracic segment of the inferior vena cava entering the right atrium through the diaphragm."
     },
     {
-      "node": "CardiacVeins", "id": "cardiac_veins", "layer": "heart", "label": "Cardiac veins",
-      "parts": ["FMA4706", "FMA4707", "FMA4713", "FMA71567", "FMA76751"], "budget": 14000, "material": "CardiacVein",
-      "explode": [0.0, 0.0, 0.0], "target": null,
+      "node": "CardiacVeins",
+      "id": "cardiac_veins",
+      "layer": "heart",
+      "label": "Cardiac veins",
+      "parts": [
+        "FMA4706",
+        "FMA4707",
+        "FMA4713",
+        "FMA71567",
+        "FMA76751"
+      ],
+      "budget": 14000,
+      "material": "CardiacVein",
+      "explode": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "target": null,
       "description": "Coronary sinus with the great, middle, anterior and posterior LV cardiac veins, which run alongside the coronary arteries and drain the myocardium into the right atrium."
     },
     {
-      "node": "Coronary_LM", "id": "lm", "layer": "coronary", "label": "Left main coronary artery",
-      "parts": ["FMA4685"], "budget": 6000, "material": "Coronary", "coronary_group": null,
-      "explode": [0.0, 0.1, 0.1], "target": null, "feeds": ["LAD", "LCX"],
+      "node": "Coronary_LM",
+      "id": "lm",
+      "layer": "coronary",
+      "label": "Left main coronary artery",
+      "parts": [
+        "FMA4685"
+      ],
+      "budget": 6000,
+      "material": "Coronary",
+      "coronary_group": null,
+      "explode": [
+        0.0,
+        0.1,
+        0.1
+      ],
+      "target": null,
+      "feeds": [
+        "LAD",
+        "LCX"
+      ],
       "description": "Short left main stem arising from the left aortic sinus and bifurcating into the LAD and LCX. The dataset has no separate left-main label, so this segment is not colour-coded by the model.",
       "territory": "Entire LAD and LCX territories (via its two branches)"
     },
     {
-      "node": "Coronary_LAD", "id": "lad", "layer": "coronary", "label": "Left anterior descending (LAD)",
-      "parts": ["FMA3862nsn"], "budget": 16000, "material": "Coronary", "coronary_group": "LAD",
-      "explode": [0.0, 0.0, 0.45], "target": "LAD",
+      "node": "Coronary_LAD",
+      "id": "lad",
+      "layer": "coronary",
+      "label": "Left anterior descending (LAD)",
+      "parts": [
+        "FMA3862nsn"
+      ],
+      "budget": 16000,
+      "material": "Coronary",
+      "coronary_group": "LAD",
+      "explode": [
+        0.0,
+        0.0,
+        0.45
+      ],
+      "target": "LAD",
       "description": "Runs in the anterior interventricular groove to the apex, giving diagonal branches to the anterolateral wall and septal perforators to the septum.",
       "territory": "Anterior wall, anterior two-thirds of the interventricular septum and the apex (AHA segments 1, 2, 7, 8, 13, 14, 17)"
     },
     {
-      "node": "Coronary_LAD_Septal", "id": "lad_septal", "layer": "coronary", "label": "LAD septal perforators",
-      "parts": ["FMA71670"], "budget": 6000, "material": "Coronary", "coronary_group": "LAD",
-      "explode": [0.0, 0.0, 0.3], "target": "LAD",
+      "node": "Coronary_LAD_Septal",
+      "id": "lad_septal",
+      "layer": "coronary",
+      "label": "LAD septal perforators",
+      "parts": [
+        "FMA71670"
+      ],
+      "budget": 6000,
+      "material": "Coronary",
+      "coronary_group": "LAD",
+      "explode": [
+        0.0,
+        0.0,
+        0.3
+      ],
+      "target": "LAD",
       "description": "Septal perforating branches of the LAD penetrating the interventricular septum.",
       "territory": "Anterior two-thirds of the interventricular septum"
     },
     {
-      "node": "Coronary_LCX", "id": "lcx", "layer": "coronary", "label": "Left circumflex (LCX)",
-      "parts": ["FMA3895"], "budget": 12000, "material": "Coronary", "coronary_group": "LCX",
-      "explode": [0.4, 0.0, -0.25], "target": "LCX",
+      "node": "Coronary_LCX",
+      "id": "lcx",
+      "layer": "coronary",
+      "label": "Left circumflex (LCX)",
+      "parts": [
+        "FMA3895"
+      ],
+      "budget": 12000,
+      "material": "Coronary",
+      "coronary_group": "LCX",
+      "explode": [
+        0.4,
+        0.0,
+        -0.25
+      ],
+      "target": "LCX",
       "description": "Runs in the left atrioventricular groove around the left border of the heart, giving obtuse marginal branches to the lateral wall.",
       "territory": "Lateral (anterolateral and inferolateral) wall of the left ventricle (AHA segments 5, 6, 11, 12, 16)"
     },
     {
-      "node": "Coronary_RCA", "id": "rca", "layer": "coronary", "label": "Right coronary artery (RCA)",
-      "parts": ["FMA3802"], "budget": 12000, "material": "Coronary", "coronary_group": "RCA",
-      "explode": [-0.45, 0.0, 0.1], "target": "RCA",
+      "node": "Coronary_RCA",
+      "id": "rca",
+      "layer": "coronary",
+      "label": "Right coronary artery (RCA)",
+      "parts": [
+        "FMA3802"
+      ],
+      "budget": 12000,
+      "material": "Coronary",
+      "coronary_group": "RCA",
+      "explode": [
+        -0.45,
+        0.0,
+        0.1
+      ],
+      "target": "RCA",
       "description": "Arises from the right aortic sinus and runs in the right atrioventricular groove to the crux of the heart; supplies the right ventricle, the SA and AV nodes (in most people) and, in right-dominant hearts, the inferior wall.",
       "territory": "Right ventricle, inferior wall and inferior septum (AHA segments 3, 4, 9, 10, 15)"
     },
     {
-      "node": "Coronary_RCA_Marginal", "id": "rca_marginal", "layer": "coronary", "label": "Acute marginal branch (RCA)",
-      "parts": ["FMA3818"], "budget": 5000, "material": "Coronary", "coronary_group": "RCA",
-      "explode": [-0.4, 0.0, 0.2], "target": "RCA",
+      "node": "Coronary_RCA_Marginal",
+      "id": "rca_marginal",
+      "layer": "coronary",
+      "label": "Acute marginal branch (RCA)",
+      "parts": [
+        "FMA3818"
+      ],
+      "budget": 5000,
+      "material": "Coronary",
+      "coronary_group": "RCA",
+      "explode": [
+        -0.4,
+        0.0,
+        0.2
+      ],
+      "target": "RCA",
       "description": "Right (acute) marginal branch of the RCA running along the acute margin of the right ventricle.",
       "territory": "Right-ventricular free wall"
     },
     {
-      "node": "Coronary_RCA_PDA", "id": "rca_pda", "layer": "coronary", "label": "Posterior descending artery (PDA)",
-      "parts": ["FMA3840nsn"], "budget": 6000, "material": "Coronary", "coronary_group": "RCA",
-      "explode": [-0.2, -0.3, -0.3], "target": "RCA",
+      "node": "Coronary_RCA_PDA",
+      "id": "rca_pda",
+      "layer": "coronary",
+      "label": "Posterior descending artery (PDA)",
+      "parts": [
+        "FMA3840nsn"
+      ],
+      "budget": 6000,
+      "material": "Coronary",
+      "coronary_group": "RCA",
+      "explode": [
+        -0.2,
+        -0.3,
+        -0.3
+      ],
+      "target": "RCA",
       "description": "Posterior interventricular branch; arises from the RCA in this right-dominant anatomy and runs in the posterior interventricular groove.",
       "territory": "Inferior wall and inferior third of the septum (AHA segments 3, 4, 9, 10, 15)"
     },
     {
-      "node": "Coronary_RCA_PL", "id": "rca_pl", "layer": "coronary", "label": "Posterolateral branch (RCA)",
-      "parts": ["FMA76994"], "budget": 5000, "material": "Coronary", "coronary_group": "RCA",
-      "explode": [-0.1, -0.3, -0.4], "target": "RCA",
+      "node": "Coronary_RCA_PL",
+      "id": "rca_pl",
+      "layer": "coronary",
+      "label": "Posterolateral branch (RCA)",
+      "parts": [
+        "FMA76994"
+      ],
+      "budget": 5000,
+      "material": "Coronary",
+      "coronary_group": "RCA",
+      "explode": [
+        -0.1,
+        -0.3,
+        -0.4
+      ],
+      "target": "RCA",
       "description": "Right posterolateral branch continuing beyond the crux onto the inferolateral left ventricle.",
       "territory": "Inferior / inferolateral base of the left ventricle"
     },
     {
-      "node": "Coronary_RCA_Septal", "id": "rca_septal", "layer": "coronary", "label": "RCA septal branches",
-      "parts": ["FMA71669"], "budget": 4000, "material": "Coronary", "coronary_group": "RCA",
-      "explode": [-0.2, -0.2, -0.2], "target": "RCA",
+      "node": "Coronary_RCA_Septal",
+      "id": "rca_septal",
+      "layer": "coronary",
+      "label": "RCA septal branches",
+      "parts": [
+        "FMA71669"
+      ],
+      "budget": 4000,
+      "material": "Coronary",
+      "coronary_group": "RCA",
+      "explode": [
+        -0.2,
+        -0.2,
+        -0.2
+      ],
+      "target": "RCA",
       "description": "Inferior septal branches arising from the PDA / RCA.",
       "territory": "Inferior third of the interventricular septum"
     }
   ],
   "territories": {
     "attribute": "Territory",
-    "groups": ["LAD", "LCX", "RCA"],
-    "sigma_mm": 15.0,
-    "fade_start_mm": 18.0,
-    "fade_tau_mm": 22.0,
-    "atrial_fade_mm": 12.0
+    "groups": [
+      "LAD",
+      "LCX",
+      "RCA"
+    ],
+    "sigma_mm": 7.0,
+    "fade_start_mm": 20.0,
+    "fade_tau_mm": 15.0,
+    "atrial_landmarks": {
+      "_comment": "Ventricular myocardium = thick wall (LV free wall, septum) or thin wall that is closer to the ventricular landmarks than to the inflow/outflow landmarks (RV free wall). Everything else (atria, auricles, great-vessel roots) fades to neutral. The LAD is deliberately not a landmark: its proximal segment runs beneath the left atrial appendage.",
+      "inflow_outflow_parts": [
+        "FMA4720",
+        "FMA10951",
+        "FMA66643",
+        "FMA3736",
+        "FMA66326"
+      ],
+      "ventricular_parts": [
+        "FMA7260",
+        "FMA7261",
+        "FMA7262",
+        "FMA7266",
+        "FMA9352nsn",
+        "FMA71670",
+        "FMA71669",
+        "FMA3840nsn",
+        "FMA3818",
+        "FMA76994"
+      ],
+      "include_apex": true,
+      "bias_mm": 2.0,
+      "width_mm": 5.0
+    },
+    "ventricular_thickness_mm": [
+      4.5,
+      6.5
+    ],
+    "smooth_iterations": 6
   }
 }
