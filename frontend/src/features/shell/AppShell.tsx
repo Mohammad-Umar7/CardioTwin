@@ -1,4 +1,4 @@
-import { Suspense, lazy } from 'react';
+import { Suspense, lazy, useLayoutEffect, useRef } from 'react';
 import { Outlet, useLocation } from 'react-router-dom';
 import { useUiStore } from '@/state/uiStore';
 import { ReportCommands } from '@/features/report/ReportCommands';
@@ -28,8 +28,23 @@ function endTourAfterError() {
  * The single persistent 3D canvas is owned here (SceneHost) and moved into whichever page renders a
  * <CanvasSlot/>, so routes change the camera, never the WebGL context.
  */
+/**
+ * A new page opens at its top, not at the previous page's scroll offset (the judge landed mid-Methodology).
+ * Only pathname changes count: query-parameter updates on the workstation (selection, drawer, tab) and
+ * in-page anchors keep their position.
+ */
+function useScrollTopOnRouteChange(pathname: string) {
+  const previous = useRef(pathname);
+  useLayoutEffect(() => {
+    if (previous.current === pathname) return;
+    previous.current = pathname;
+    window.scrollTo({ top: 0, left: 0, behavior: 'instant' as ScrollBehavior });
+  }, [pathname]);
+}
+
 export function AppShell() {
   const { pathname } = useLocation();
+  useScrollTopOnRouteChange(pathname);
   return (
     <div id="app" className="relative flex min-h-screen flex-col bg-app text-primary">
       <a
