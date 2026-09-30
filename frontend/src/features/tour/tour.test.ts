@@ -191,7 +191,7 @@ describe('geometry', () => {
     const chip = { left: 560, top: 8, width: 120, height: 32 };
     const riskCard = { left: 940, top: 44, width: 336, height: 540 };
     const patientCard = { left: 4, top: 44, width: 272, height: 320 };
-    const overlapsRect = (a: { left: number; top: number; width: number; height: number }) =>
+    const overlapsRect = (a: { left: number; top: number }) =>
       a.left < riskCard.left + riskCard.width && riskCard.left < a.left + card.width && a.top < riskCard.top + riskCard.height && riskCard.top < a.top + card.height;
     // Without keep-outs the card goes right of the chip, over the CAD numeral.
     expect(overlapsRect(placeCard(chip, card, b))).toBe(true);
