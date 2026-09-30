@@ -35,13 +35,20 @@ export const clip = (text: string | null | undefined, max = 220): string | null 
  * available — the segment's, else `structures[].definition`, else its description. Risk stays vessel-level,
  * so a segment is labelled as anatomy, never as a lesion location. Pure; tested.
  */
+/**
+ * Anatomical name of a picked structure: the explode split of the GLB ("Myocardium (anterior half)") is an
+ * engineering detail, not anatomy, so it is dropped from the title.
+ */
+export const anatomicalTitle = (label: string): string => label.replace(/\s*\((anterior|posterior) half\)\s*$/i, '');
+
 export function hoverContent(info: PickInfo, manifest: AnatomyManifest | null | undefined): HoverContent {
   const structure = manifest?.structures.find((s) => s.id === info.structureId || s.node === info.node);
+  const title = anatomicalTitle(structure?.label ?? info.label);
   const definition = typeof structure?.definition === 'string' ? structure.definition : null;
   if (info.segment) {
     const s = info.segment;
     return {
-      title: structure?.label ?? info.label,
+      title,
       segment: `Segment ${s.scct} · ${s.name} (${s.code})`,
       definition: clip(s.definition ?? definition ?? structure?.description),
       note: s.target ? `Anatomical segment · risk is estimated for the whole ${s.target}` : 'Anatomical segment · not predicted by the model',
@@ -57,14 +64,14 @@ export function hoverContent(info: PickInfo, manifest: AnatomyManifest | null | 
   }
   if (info.territory) {
     return {
-      title: structure?.label ?? info.label,
+      title,
       segment: null,
       definition: `Supplied mostly by the ${TERRITORY_NAME[info.territory]} (${info.territory}).`,
       note: 'Approximate supplied territory, not a perfusion scan',
     };
   }
   return {
-    title: structure?.label ?? info.label,
+    title,
     segment: null,
     definition: clip(definition ?? structure?.description),
     note: info.kind === 'leftMain' ? 'Left main · not predicted by the model' : info.kind === 'cardiacVein' ? 'Venous anatomy · not predicted by the model' : null,

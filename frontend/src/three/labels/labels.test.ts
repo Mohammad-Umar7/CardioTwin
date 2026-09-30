@@ -6,7 +6,7 @@ import type { AnatomyManifest, PredictResponse, VesselsFile } from '@/types/cont
 import { VISIBLE_FACING, trunkVisibility, visibleBestView } from '../camera/bestView';
 import { bestViewFor, toControlsAngles } from '../camera/presets';
 import { buildTracks, heartAxisFrame, restToDisplayed } from './anchorTracks';
-import { clip, hoverContent } from './hoverContent';
+import { anatomicalTitle, clip, hoverContent } from './hoverContent';
 import { nearestPeelStage, sceneSummaryText } from './sceneSummaryText';
 import { ANCHOR_PERIOD_MS, AnchorChooser, bestCandidate, buildCandidates, facing, mainTrunk } from './dynamicAnchor';
 import { LABEL_MIN_GAP, coverFade, labelShowsProbability, laneFor, layoutLanes, resolveLane, stackLane, type LaneItem } from './labelRegistry';
@@ -207,6 +207,13 @@ describe('hover tooltip content (V2 §9.3 D, CONTRACTS §7.1)', () => {
     expect(c.segment).toBe('AIV · cardiac vein');
     expect(c.definition).toBe('Beside the LAD in the anterior groove.');
     expect(c.note).toMatch(/not predicted/);
+  });
+
+  it('names the heart wall anatomically, without the exploded-view split', () => {
+    const wall = hoverContent({ ...base, structureId: 'heart_wall_anterior', node: 'Heart_Wall_Anterior', label: 'Myocardium (anterior half)', kind: 'myocardium', target: null, territory: 'LAD' }, manifest);
+    expect(wall.title).toBe('Myocardium');
+    expect(anatomicalTitle('Epicardial fat (posterior half)')).toBe('Epicardial fat');
+    expect(anatomicalTitle('Left anterior descending (LAD)')).toBe('Left anterior descending (LAD)');
   });
 
   it('cuts long definitions at a clause, never mid-phrase', () => {

@@ -15,7 +15,8 @@
 export const REAL = {
   myocardium: '#5A2622',
   myocardiumDeep: '#3F1A1B',
-  interior: '#3A1716',
+  /** Chamber interiors and cut faces: a lighter blood-muscle red, so the opened chambers read. */
+  interior: '#5E2522',
   fat: '#8E7A5C',
   /** Epicardial fat meshes (EpicardialFat_*), close to the mean of their baked albedo. */
   fatMesh: '#C8B08A',
