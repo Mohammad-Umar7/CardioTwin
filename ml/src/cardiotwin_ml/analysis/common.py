@@ -16,6 +16,7 @@ from typing import Any
 import joblib
 import numpy as np
 import pandas as pd
+import yaml
 
 from .. import data
 from ..config import FeatureRegistry, load_feature_registry, load_target_registry, load_training_config
@@ -174,13 +175,25 @@ def sha256_file(path: Path) -> str:
     return h.hexdigest()
 
 
+def config_digest(cfg: dict[str, Any], exclude: tuple[str, ...] = ("analysis",)) -> str:
+    """Digest of the training configuration without the given sections (cache keys of expensive runs)."""
+    payload = json.dumps({k: v for k, v in cfg.items() if k not in exclude}, sort_keys=True, default=str)
+    return hashlib.sha256(payload.encode("utf-8")).hexdigest()
+
+
 def fingerprint(artifacts_dir: Path = ARTIFACTS_DIR, config_dir: Path = CONFIG_DIR) -> dict[str, str]:
     """Digests of everything the analyses depend on (deployed model, dataset, configuration).
 
     ``train.py`` keeps the analysis keys of an existing ``metrics.json`` only when this fingerprint is unchanged,
-    so a retrained model can never be published next to analyses of its predecessor.
+    so a retrained model can never be published next to analyses of its predecessor. The training configuration
+    is digested without its ``analysis`` section (each analysis records its own settings), so tuning one analysis
+    does not invalidate the others.
     """
     out = {"model_json_sha256": sha256_file(artifacts_dir / "model.json"), "dataset_sha256": data.XLSX_SHA256}
     for name in CONFIG_FILES:
-        out[f"{name.replace('.', '_')}_sha256"] = sha256_file(config_dir / name)
+        if name == "training.yaml":
+            with open(config_dir / name, encoding="utf-8") as fh:
+                out["training_config_sha256"] = config_digest(yaml.safe_load(fh))
+        else:
+            out[f"{name.replace('.', '_')}_sha256"] = sha256_file(config_dir / name)
     return out
