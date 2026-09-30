@@ -7,7 +7,7 @@ import { useManifest, useVessels } from '@/hooks/useData';
 import { useIsReducedMotion } from '@/hooks/useMediaQuery';
 import { useUiStore } from '@/state/uiStore';
 import { useViewerStore, type Stage } from '@/state/viewerStore';
-import type { BestView, CameraPose } from '@/types/contracts';
+import type { BestView, CameraPose, TargetId } from '@/types/contracts';
 import { buildTracks } from '../labels/anchorTracks';
 import { visibleBestView } from './bestView';
 import { collectOccluders, isOccluded } from './occlusion';
@@ -99,6 +99,8 @@ export function CameraRig() {
   const history = useRef(new CameraHistory());
   const replaying = useRef(false);
   const readyFrames = useRef(0);
+  /** A vessel flown to before its centrelines loaded (re-checked when they arrive). */
+  const pendingVessel = useRef<{ target: TargetId; at: number } | null>(null);
   /** Visible best view per vessel (the search raycasts, so it runs once per anatomy). */
   const bestViews = useRef(new Map<string, BestView>());
   const offset = useRef<{ from: Offset; to: Offset; current: Offset; t0: number; applied: string }>({
@@ -253,6 +255,41 @@ export function CameraRig() {
     [geo, invalidate],
   );
 
+  /** Fly to a vessel's (visible) best view, framed like home and a touch closer. */
+  const flyToVessel = (target: TargetId, animate: boolean) => {
+    const structure = manifest?.structures.find((s) => s.target === target && s.bestView);
+    const conventional = bestViewFor(target, structure?.bestView);
+    const candidates = tracks.find((t) => t.target === target)?.candidates ?? [];
+    // Centrelines not loaded yet (a deep link on a cold load): fly now, correct once they arrive.
+    pendingVessel.current = candidates.length === 0 ? { target, at: performance.now() } : null;
+    // Occlusion-aware once the BVHs exist and the heart is closed (the candidates are rest positions).
+    const closed = useViewerStore.getState().explode < 0.7;
+    const occluders = closed ? collectOccluders(scene) : [];
+    const key = `${target}:${occluders.length > 0}`;
+    let view = bestViews.current.get(key);
+    if (!view) {
+      view = visibleBestView(conventional, candidates, {
+        target: geo.target,
+        visible: occluders.length > 0 ? (eye, p) => !isOccluded(eye, p, occluders) : undefined,
+        step: occluders.length > 0 ? 15 : 5,
+      });
+      if (closed && candidates.length > 0) bestViews.current.set(key, view);
+    }
+    const { azimuth, polar } = toControlsAngles(view.azimuth, view.elevation);
+    const direction = new Vector3().setFromSphericalCoords(1, polar, azimuth);
+    flyTo(direction, distanceFor(direction) * FOCUS_ZOOM, animate);
+    useCameraState.getState().setView('focus', { label: angleLabel(view.azimuth, view.elevation) });
+  };
+
+  // A vessel flown to before its centreline arrived gets its checked view once it does (if untouched).
+  useEffect(() => {
+    const pending = pendingVessel.current;
+    if (!pending || tracks.length === 0) return;
+    if (useViewerStore.getState().selectedStructure !== pending.target || lastInteraction.current > pending.at + 50) return;
+    flyToVessel(pending.target, !reduced);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [tracks]);
+
   // Camera commands from the UI (home, projections, fly-to-vessel).
   useEffect(() => {
     const controls = ref.current;
@@ -271,26 +308,7 @@ export function CameraRig() {
         state.setView('preset', { presetId: preset.id });
       }
     } else if (command.kind === 'focus' && command.target) {
-      const structure = manifest?.structures.find((s) => s.target === command.target && s.bestView);
-      const conventional = bestViewFor(command.target, structure?.bestView);
-      const candidates = tracks.find((t) => t.target === command.target)?.candidates ?? [];
-      // Occlusion-aware once the BVHs exist and the heart is closed (the candidates are rest positions).
-      const closed = useViewerStore.getState().explode < 0.7;
-      const occluders = closed ? collectOccluders(scene) : [];
-      const key = `${command.target}:${occluders.length > 0}`;
-      let view = bestViews.current.get(key);
-      if (!view) {
-        view = visibleBestView(conventional, candidates, {
-          target: geo.target,
-          visible: occluders.length > 0 ? (eye, p) => !isOccluded(eye, p, occluders) : undefined,
-          step: occluders.length > 0 ? 15 : 5,
-        });
-        if (closed && candidates.length > 0) bestViews.current.set(key, view);
-      }
-      const { azimuth, polar } = toControlsAngles(view.azimuth, view.elevation);
-      const direction = new Vector3().setFromSphericalCoords(1, polar, azimuth);
-      flyTo(direction, distanceFor(direction) * FOCUS_ZOOM, animate);
-      state.setView('focus', { label: angleLabel(view.azimuth, view.elevation) });
+      flyToVessel(command.target, animate);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [command?.nonce]);
