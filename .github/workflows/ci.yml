@@ -23,22 +23,61 @@ env:
 
 jobs:
   ml:
-    name: ML pipeline (tests + lint)
-    runs-on: ubuntu-latest
-    timeout-minutes: 20
+    name: ML pipeline (${{ matrix.platform }})
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          # ml/artifacts were trained on Windows (Python 3.11, CPU): the tests that reproduce them bit for bit
+          # are gated there. Training numerics (XGBoost split ties, BLAS reduction order) differ on Linux, so
+          # there those tests run as a visible, non-blocking report and everything else still gates.
+          - os: windows-2025
+            platform: reference platform, Windows
+            reference: true
+          - os: ubuntu-24.04
+            platform: Linux
+            reference: false
+    env:
+      ML_REFERENCE_TESTS: >-
+        ml/tests/test_analysis.py::test_recipe_harness_reproduces_the_deployed_model_exactly
+        ml/tests/test_analysis.py::test_robustness_is_independent_of_worker_count
+        ml/tests/test_determinism.py::test_dev_cv_is_deterministic
+    defaults:
+      run:
+        shell: bash
     steps:
       - uses: actions/checkout@v7
       - uses: ./.github/actions/setup-python-env
       - name: Lint (ruff)
+        if: ${{ !matrix.reference }}
         working-directory: ml
         run: python -m ruff check .
       - name: Test suite (leakage guard, encoding, calibration, TreeSHAP, portable parity, artifacts)
-        run: python -m pytest ml/tests -q -ra --durations=10
+        run: |
+          deselect=()
+          if [ "${{ matrix.reference }}" != "true" ]; then
+            for test in $ML_REFERENCE_TESTS; do deselect+=(--deselect "$test"); done
+          fi
+          python -m pytest ml/tests -q -ra --durations=10 "${deselect[@]}"
+      - name: Bit-exact reproduction of the published artifacts (report only off the reference platform)
+        if: ${{ !matrix.reference }}
+        continue-on-error: true
+        run: |
+          # shellcheck disable=SC2086
+          python -m pytest $ML_REFERENCE_TESTS -q -ra || {
+            echo "::warning title=ML reproduction on ${RUNNER_OS}::the published artifacts are reproduced bit for bit on the reference platform (Windows) only; see the ML pipeline (reference platform) job"
+            exit 1
+          }
 
   ml-reproducibility:
-    name: ML reproducibility (two fast runs, bit-identical artifacts)
-    runs-on: ubuntu-latest
+    name: ML reproducibility (reference platform, two fast training runs, bit-identical artifacts)
+    runs-on: windows-2025
     timeout-minutes: 45
+    defaults:
+      run:
+        shell: bash
     steps:
       - uses: actions/checkout@v7
       - uses: ./.github/actions/setup-python-env
@@ -49,7 +88,7 @@ jobs:
 
   anatomy:
     name: Anatomy assets (contracts, centrelines, mesh QA)
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 15
     steps:
       - uses: actions/checkout@v7
@@ -66,7 +105,7 @@ jobs:
 
   backend:
     name: API (tests + ruff + mypy)
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 15
     steps:
       - uses: actions/checkout@v7
@@ -76,13 +115,13 @@ jobs:
       - name: Types (mypy --strict)
         run: |
           (cd backend && python -m mypy app)
-          python -m mypy --strict --ignore-missing-imports scripts/e2e_check.py scripts/probe.py
+          python -m mypy --strict --ignore-missing-imports scripts/e2e_check.py scripts/probe.py scripts/runtime_requirements.py
       - name: Unit, contract and real-model integration tests
         run: python -m pytest backend -q -ra
 
   frontend:
     name: Frontend (typecheck, lint, tests, build)
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 20
     defaults:
       run:
@@ -125,7 +164,7 @@ jobs:
   e2e:
     name: End-to-end (API serving the SPA)
     needs: [frontend]
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 20
     steps:
       - uses: actions/checkout@v7
@@ -176,8 +215,8 @@ jobs:
           if-no-files-found: ignore
 
   docker:
-    name: Docker image (build, boot, end-to-end)
-    runs-on: ubuntu-latest
+    name: Docker image + compose (build, boot, end-to-end)
+    runs-on: ubuntu-24.04
     timeout-minutes: 30
     steps:
       - uses: actions/checkout@v7
@@ -187,15 +226,17 @@ jobs:
         with:
           context: .
           file: backend/Dockerfile
-          tags: cardiotwin:ci
+          tags: cardiotwin:latest
           load: true
           push: false
           cache-from: type=gha
           cache-to: type=gha,mode=max
-      - name: Run the container
+      - name: Validate docker-compose.yml
+        run: docker compose config --quiet
+      - name: Start with docker compose and wait for the health check
         run: |
-          docker run -d --name cardiotwin -p 8000:8000 cardiotwin:ci
-          docker image ls cardiotwin:ci --format 'image size: {{.Size}}'
+          docker compose up -d --no-build --wait --wait-timeout 180
+          docker image ls cardiotwin:latest --format 'image size: {{.Size}}'
       - uses: actions/setup-python@v7
         with:
           python-version: "3.11"
@@ -205,7 +246,7 @@ jobs:
         if: always()
         run: |
           docker inspect --format 'health: {{.State.Health.Status}}' cardiotwin || true
-          docker logs cardiotwin 2>&1 | tail -n 200
-      - name: Stop the container
+          docker compose logs --no-color | tail -n 200
+      - name: Stop
         if: always()
-        run: docker rm -f cardiotwin || true
+        run: docker compose down --remove-orphans
