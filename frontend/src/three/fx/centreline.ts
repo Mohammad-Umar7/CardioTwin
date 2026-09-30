@@ -17,7 +17,9 @@
  *    transform when the heart is exploded.
  * 3. RESAMPLING at a uniform arc-length step h, so texel j of a path sits at exactly j·h from the ostium
  *    and the vertex shader can address a particle at distance d with one division.
- * 4. PACKING into an RGBA32F texture: xyz = rest-frame position, w = node index + radius / RADIUS_SCALE.
+ * 4. PACKING into an RGBA32F texture: xyz = rest-frame position and
+ *        w = node + NODE_SLOTS · round(keep · KEEP_LEVELS) + radius / RADIUS_SCALE
+ *    (node index, the particle thinning factor of that texel, lumen radius — see `encodeW`).
  */
 
 export type Vec3 = readonly [number, number, number];
@@ -47,6 +49,22 @@ export interface CentrelineFile {
 
 /** Radius is packed into the fractional part of w: radius = fract(w) · RADIUS_SCALE (max 5 mm). */
 export const RADIUS_SCALE = 0.05;
+/** Node ids occupy floor(w) mod NODE_SLOTS (the shader's node-matrix array size). */
+export const NODE_SLOTS = 16;
+/** Thinning factor quantisation: keep = floor(floor(w) / NODE_SLOTS) / KEEP_LEVELS. */
+export const KEEP_LEVELS = 63;
+
+/** Pack node id, thinning factor ∈ [0,1] and radius into one float (exact in float32: w < 1024). */
+export function encodeW(node: number, keep: number, radius: number): number {
+  const k = Math.round(Math.min(1, Math.max(0, keep)) * KEEP_LEVELS);
+  return node + NODE_SLOTS * k + Math.min(0.999, Math.max(0, radius / RADIUS_SCALE));
+}
+
+/** Inverse of `encodeW` (mirrors the vertex shader). */
+export function decodeW(w: number): { node: number; keep: number; radius: number } {
+  const whole = Math.floor(w);
+  return { node: whole % NODE_SLOTS, keep: Math.floor(whole / NODE_SLOTS) / KEEP_LEVELS, radius: (w - whole) * RADIUS_SCALE };
+}
 /** Default resampling step: 0.8 mm, the spacing the centreline stage already uses. */
 export const DEFAULT_STEP = 0.008;
 /** Texture width (texels); height grows with the total path length. */
@@ -323,8 +341,16 @@ export interface PackedCentrelines {
   count: Uint32Array;
 }
 
-/** Pack resampled paths into one float texture. */
-export function packCentrelines(paths: readonly FlowPath[], step: number, width = TEXTURE_WIDTH): PackedCentrelines {
+/**
+ * Pack resampled paths into one float texture. `keep[i][j]` is the particle thinning factor of texel j of
+ * path i (default 1: no thinning).
+ */
+export function packCentrelines(
+  paths: readonly FlowPath[],
+  step: number,
+  width = TEXTURE_WIDTH,
+  keep?: readonly ArrayLike<number>[],
+): PackedCentrelines {
   const total = paths.reduce((n, p) => n + p.nodes.length, 0);
   const height = Math.max(1, Math.ceil(total / width));
   const data = new Float32Array(width * height * 4);
@@ -338,7 +364,7 @@ export function packCentrelines(paths: readonly FlowPath[], step: number, width 
       data[4 * texel] = path.positions[3 * j]!;
       data[4 * texel + 1] = path.positions[3 * j + 1]!;
       data[4 * texel + 2] = path.positions[3 * j + 2]!;
-      data[4 * texel + 3] = path.nodes[j]! + Math.min(0.999, Math.max(0, path.radii[j]! / RADIUS_SCALE));
+      data[4 * texel + 3] = encodeW(path.nodes[j]!, keep?.[i]?.[j] ?? 1, path.radii[j]!);
     }
   });
   return { data, width, height, step, start, count };
@@ -348,7 +374,11 @@ export function packCentrelines(paths: readonly FlowPath[], step: number, width 
  * CPU reference of the vertex shader's lookup: position (rest frame), radius and node at distance `d`
  * along path `i`. Used by tests to prove the GPU addressing, and handy for debugging.
  */
-export function samplePacked(packed: PackedCentrelines, i: number, d: number): { position: Vec3; radius: number; node: number } {
+export function samplePacked(
+  packed: PackedCentrelines,
+  i: number,
+  d: number,
+): { position: Vec3; radius: number; node: number; keep: number } {
   const n = packed.count[i]!;
   const length = (n - 1) * packed.step;
   const x = Math.min(Math.max(d, 0), length) / packed.step;
@@ -359,9 +389,12 @@ export function samplePacked(packed: PackedCentrelines, i: number, d: number): {
   const t1 = packed.start[i]! + i1;
   const at = (t: number, c: number) => packed.data[4 * t + c]!;
   const lerp = (c: number) => at(t0, c) + (at(t1, c) - at(t0, c)) * f;
-  const w0 = at(t0, 3);
-  const w1 = at(t1, 3);
-  const r0 = (w0 - Math.floor(w0)) * RADIUS_SCALE;
-  const r1 = (w1 - Math.floor(w1)) * RADIUS_SCALE;
-  return { position: [lerp(0), lerp(1), lerp(2)], radius: r0 + (r1 - r0) * f, node: Math.floor(f < 0.5 ? w0 : w1) };
+  const a = decodeW(at(t0, 3));
+  const b = decodeW(at(t1, 3));
+  return {
+    position: [lerp(0), lerp(1), lerp(2)],
+    radius: a.radius + (b.radius - a.radius) * f,
+    node: f < 0.5 ? a.node : b.node,
+    keep: a.keep + (b.keep - a.keep) * f,
+  };
 }

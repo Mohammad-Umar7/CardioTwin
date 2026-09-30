@@ -12,11 +12,24 @@
  *   lift   = both ends moved onto the vessel's camera-facing surface (radius + display inflation) and
  *            spread across the lumen, so the opaque vessel does not hide them but the heart wall does
  *   quad   = screen-space capsule from tail to head, `uWidthPx` wide
- * Fragment stage: a comet profile (bright head, fading tail), soft across — additive, no depth write.
+ * Fragment stage: a comet profile (bright head, fading tail), soft across — additive light with a faint
+ * darkening halo (premultiplied blend), no depth write.
  */
-import { AdditiveBlending, Color, Matrix4, ShaderMaterial, Vector2, Vector3, type Texture } from 'three';
+import {
+  AddEquation,
+  Color,
+  CustomBlending,
+  Matrix4,
+  OneFactor,
+  OneMinusSrcAlphaFactor,
+  ShaderMaterial,
+  Vector2,
+  Vector3,
+  ZeroFactor,
+  type Texture,
+} from 'three';
 import { BEAT_MODE, BEAT_UNIFORMS, BEAT_VERTEX_PARS } from '../anatomy/beatDeform';
-import { RADIUS_SCALE } from './centreline';
+import { KEEP_LEVELS, NODE_SLOTS, RADIUS_SCALE } from './centreline';
 import { FLOW_WHITE, MAX_NODES, MAX_TARGET_SLOTS } from './fxState';
 
 const vertexShader = /* glsl */ `
@@ -56,6 +69,7 @@ const vertexShader = /* glsl */ `
   varying vec2 vQuad;
   varying vec3 vColor;
   varying float vAlpha;
+  varying float vHalo;
 
   // The anatomy's non-affine beat terms (atrial kick) — same chunk and shared uniforms as the vessels.
   ${BEAT_VERTEX_PARS}
@@ -64,8 +78,12 @@ const vertexShader = /* glsl */ `
     return texelFetch(uCentre, ivec2(i % uTexWidth, i / uTexWidth), 0);
   }
 
+  // w = node + NODE_SLOTS · round(keep · KEEP_LEVELS) + radius / RADIUS_SCALE (centreline.ts encodeW)
+  int nodeOf(float w) { return int(mod(floor(w), ${NODE_SLOTS}.0)); }
+  float keepOf(float w) { return floor(floor(w) / ${NODE_SLOTS}.0) / ${KEEP_LEVELS}.0; }
+
   vec3 toWorld(vec4 t, out float alpha) {
-    int n = int(t.w);
+    int n = nodeOf(t.w);
     alpha = uNodeAlpha[n];
     return (uNode[n] * vec4(ctBeat(t.xyz), 1.0)).xyz;
   }
@@ -73,6 +91,7 @@ const vertexShader = /* glsl */ `
   void collapse() {
     gl_Position = vec4(2.0, 2.0, 2.0, 1.0); // outside the clip volume: no fragments
     vAlpha = 0.0;
+    vHalo = 0.0;
     vColor = vec3(0.0);
     vQuad = vec2(0.0);
   }
@@ -147,6 +166,11 @@ const vertexShader = /* glsl */ `
 
     // Appearance
     float fade = smoothstep(0.0, 0.03, d) * smoothstep(0.0, 0.05, L - d);
+    // Trunk thinning (particles.ts thinningFactors): an independent per-particle random against the local
+    // keep factor, so overlapping ostium→tip paths do not pile up into a tuft on the proximal trunks.
+    float thin = mix(keepOf(t0.w), keepOf(t1.w), f);
+    float r2 = fract(sin(dot(aSeed.xw, vec2(12.9898, 78.233))) * 43758.5453);
+    fade *= smoothstep(r2 - 0.1, r2, thin);
     float taper = mix(0.55, 1.0, smoothstep(0.004, 0.012, radius));
     alpha *= fade * taper * min(a0, a1) * (1.0 - seam) * (1.0 - 0.72 * uDim[slot]);
     float pulse = uPulseFront < 0.0 ? 0.0 : uPulseAmp * exp(-pow((arcN - uPulseFront) / 0.07, 2.0));
@@ -157,6 +181,8 @@ const vertexShader = /* glsl */ `
     // core sits well above the bloom threshold (they glint) while the tint keeps the vessel's hue family.
     vColor = tint * (1.05 + 0.55 * surge + 1.2 * pulse + 0.3 * uHover[slot]);
     vAlpha = alpha;
+    // the lighter the vessel (high p → light apricot), the more the halo must darken around the streak
+    vHalo = 0.22 + 0.5 * smoothstep(0.45, 1.0, uP[slot]) * uTintMix[slot] / 0.6;
     vQuad = vec2(position.x, position.y);
   }
 `;
@@ -166,6 +192,7 @@ const fragmentShader = /* glsl */ `
   varying vec2 vQuad;
   varying vec3 vColor;
   varying float vAlpha;
+  varying float vHalo;
   void main() {
     if (vAlpha <= 0.0) discard;
     float across = exp(-2.4 * vQuad.y * vQuad.y);
@@ -173,7 +200,12 @@ const fragmentShader = /* glsl */ `
     float along = mix(0.12, 1.0, smoothstep(-1.0, 0.7, vQuad.x)) * (1.0 - smoothstep(0.78, 1.0, vQuad.x));
     float a = vAlpha * across * along;
     if (a < 0.003) discard;
-    gl_FragColor = vec4(vColor, a);
+    // white-hot head: the core crosses the bloom threshold even over a bright (high-risk) vessel
+    float head = smoothstep(0.2, 0.85, vQuad.x) * exp(-6.0 * vQuad.y * vQuad.y);
+    // Premultiplied output: additive light (rgb) plus a faint dark halo (alpha) that dims the vessel just
+    // around the streak, so flow stays legible on the light apricot of a very-high-risk vessel.
+    float halo = vAlpha * vHalo * exp(-1.1 * vQuad.y * vQuad.y) * smoothstep(-1.0, 0.2, vQuad.x);
+    gl_FragColor = vec4(vColor * (1.0 + 1.3 * head) * a, halo);
     #include <tonemapping_fragment>
     #include <colorspace_fragment>
   }
@@ -255,7 +287,13 @@ export function createFlowMaterial(riskLut: Texture, inflate: number): FlowMater
     transparent: true,
     depthWrite: false,
     depthTest: true,
-    blending: AdditiveBlending,
+    // result = light + destination · (1 − halo): additive light with a soft darkening halo
+    blending: CustomBlending,
+    blendEquation: AddEquation,
+    blendSrc: OneFactor,
+    blendDst: OneMinusSrcAlphaFactor,
+    blendSrcAlpha: ZeroFactor,
+    blendDstAlpha: OneFactor,
   }) as FlowMaterial;
   return material;
 }

@@ -4,11 +4,12 @@
  * React state per frame. The pure helpers below are unit tested in fxState.test.ts.
  */
 import { ANATOMY } from '@/theme/tokens';
+import { NODE_SLOTS } from './centreline';
 
 /** Uniform slots per target; slot 0 = "not predicted" (left main), slots 1… = schema vessel targets. */
 export const MAX_TARGET_SLOTS = 8;
 /** Coronary vessel nodes addressable by the particle shader (the GLB has 9). */
-export const MAX_NODES = 16;
+export const MAX_NODES = NODE_SLOTS;
 
 /** Mean flow speed of the illustration (scene units per second; 1 unit = 10 cm). */
 export const BASE_FLOW_SPEED = 0.3;
@@ -24,7 +25,7 @@ export const FLOW_DISTANCE_WRAP = 4096;
  */
 export const FLOW_RISK_CODING = 1;
 /** At p = 1: keep this share of the particles… */
-export const MIN_DENSITY = 0.42;
+export const MIN_DENSITY = 0.5;
 /** …moving at this share of the speed… */
 export const MIN_SPEED = 0.55;
 /** …tinted this far from the neutral flow colour toward the ramp colour (always ≥ the floor). */

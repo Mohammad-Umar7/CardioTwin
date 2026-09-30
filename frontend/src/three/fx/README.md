@@ -46,7 +46,7 @@ FlowCaption.tsx      "Illustrative flow — not a haemodynamic simulation" chip 
 | Effect | What it shows | Where the numbers come from |
 | --- | --- | --- |
 | Flow particles | Direction of flow (ostium → distal), diastolic surge / systolic near-stall, streak length ∝ instantaneous speed | `cardiacCycle.coronaryFlowSpeed` (mean 1, ≈ 91 % of flow in diastole; RCA phasicity 0.6), `BASE_FLOW_SPEED` 0.3 u/s |
-| Risk coding of the flow | Higher P(stenosis) → sparser (≥ 42 %), slower (≥ 55 %), warmer (tint toward the Ember LUT colour of p) | `riskFlowParams`; off while no estimate is shown (pending/error/LM) |
+| Risk coding of the flow | Higher P(stenosis) → sparser (≥ 50 %), slower (≥ 55 %), warmer (tint toward the Ember LUT colour of p) | `riskFlowParams`; off while no estimate is shown (pending/error/LM) |
 | Pulse wave | A crest + wake running root → tip once per beat, launched with the diastolic surge | `pulseFront(phase)`: 42 % of the cycle, ease-out, arc length 0 → 1.25 |
 | Ignition | Trace-colour sweep ostia → tips, then afterglow settles; flow is gated behind the front | fires when a prediction lands for a NEW case (patient or custom), or after 1.5 s without any estimate; `replayIgnition()` |
 | Atmosphere | Cool backlight behind the heart (+≈ 6 sRGB levels), 200–320 dust motes at 3–12 % | never risk-coloured |

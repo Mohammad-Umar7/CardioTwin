@@ -24,7 +24,7 @@ import {
 } from './centreline';
 import { STREAK_WIDTH_PX, createFlowMaterial } from './flowMaterial';
 import { BASE_FLOW_SPEED, MAX_NODES, MAX_TARGET_SLOTS, fxFrame, slotOf, targetSlots } from './fxState';
-import { allocateParticles, mulberry32 } from './particles';
+import { allocateParticles, mulberry32, particleShares, thinningFactors } from './particles';
 import { NodeTracker, restInverses } from './sceneNodes';
 
 /** Particle budget per tier (instances; each is one streak quad). Tier C draws dashes instead. */
@@ -71,7 +71,8 @@ export function FlowParticles({ pristine, centrelines, count }: FlowParticlesPro
     const step = DEFAULT_STEP;
     const paths = buildFlowPaths(centrelines, nodeIndex, step);
     const arc = computeArcLengths(centrelines);
-    const packed = packCentrelines(paths, step);
+    const keep = thinningFactors(paths, particleShares(paths, MAX_PARTICLES));
+    const packed = packCentrelines(paths, step, undefined, keep);
     const slots = targets.split('|');
     const particles = allocateParticles(
       paths,

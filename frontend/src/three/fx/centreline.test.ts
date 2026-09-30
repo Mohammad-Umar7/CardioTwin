@@ -6,6 +6,8 @@ import {
   RADIUS_SCALE,
   buildFlowPaths,
   computeArcLengths,
+  decodeW,
+  encodeW,
   joinIndex,
   packCentrelines,
   resamplePolyline,
@@ -13,7 +15,16 @@ import {
   type CentrelineFile,
   type Vec3,
 } from './centreline';
-import { SHARED_WEIGHT, allocateParticles, apportion, densityAlong, mulberry32 } from './particles';
+import {
+  SHARED_WEIGHT,
+  TRUNK_BUILDUP,
+  allocateParticles,
+  apportion,
+  densityAlong,
+  mulberry32,
+  particleShares,
+  thinningFactors,
+} from './particles';
 
 const line = (from: Vec3, to: Vec3, n: number): Vec3[] =>
   Array.from({ length: n }, (_, i) => {
@@ -171,6 +182,23 @@ describe('flow paths', () => {
   });
 });
 
+describe('texel packing', () => {
+  it('round-trips node, thinning factor and radius through one float32', () => {
+    for (const [node, keep, radius] of [
+      [0, 1, 0.012],
+      [15, 0, 0.0],
+      [8, 0.37, 0.049],
+      [3, 0.5, 0.02],
+    ] as const) {
+      const w = Math.fround(encodeW(node, keep, radius));
+      const out = decodeW(w);
+      expect(out.node).toBe(node);
+      expect(out.keep).toBeCloseTo(Math.round(keep * 63) / 63, 6);
+      expect(out.radius).toBeCloseTo(radius, 4);
+    }
+  });
+});
+
 describe('particle allocation', () => {
   it('apportions exactly the requested total', () => {
     expect(apportion([1, 1, 1], 10).reduce((a, b) => a + b, 0)).toBe(10);
@@ -268,6 +296,29 @@ describe('published vessels.json', () => {
     const packed = packCentrelines(paths, DEFAULT_STEP);
     for (const p of paths) for (const r of p.radii) expect(r).toBeLessThan(RADIUS_SCALE);
     expect(packed.width * packed.height).toBeLessThan(64 * 1024); // < 1 MB of RGBA32F
+  });
+
+  it('thins the overlapping proximal trunks down to a few times the branch density', () => {
+    const shares = particleShares(paths, 4096);
+    const keep = thinningFactors(paths, shares);
+    const lad = paths.findIndex((p) => file.vessels[p.vessel]!.id === 'LAD' && p.segment === 0);
+    const proximal = keep[lad]![20]!; // ≈ 16 mm from the LM ostium: every left-tree path passes here
+    const distal = keep[lad]![keep[lad]!.length - 10]!;
+    expect(proximal).toBeLessThan(0.35);
+    expect(distal).toBeGreaterThan(proximal * 2);
+    // a short side branch's own tip is barely thinned
+    const branchTips = paths.map((p, i) => (p.ownLength < 0.15 ? keep[i]![keep[i]!.length - 1]! : 1));
+    expect(Math.min(...branchTips)).toBeGreaterThan(0.6);
+    for (const k of keep) {
+      for (const v of k) {
+        expect(v).toBeGreaterThan(0);
+        expect(v).toBeLessThanOrEqual(1);
+      }
+    }
+    // effective density after thinning stays within TRUNK_BUILDUP (+ smoothing slack) of the target
+    const effective = densityAlong(paths, shares, lad, 0.16) * proximal;
+    const own = paths.map((p, i) => shares[i]! / p.length).sort((a, b) => a - b);
+    expect(effective / own[Math.floor(own.length / 2)]!).toBeLessThan(TRUNK_BUILDUP * 1.6);
   });
 
   it('allocation keeps the proximal trunk build-up readable (≤ 8× the distal density)', () => {
