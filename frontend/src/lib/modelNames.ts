@@ -150,6 +150,18 @@ export function deployedModelPhrase(logisticId?: string | null): string {
   return `an ensemble of ${linear} and gradient-boosted trees`;
 }
 
+const LINEAR_PART_SHORT: Record<string, string> = {
+  lr_l2: 'Ridge logistic',
+  lr_l1: 'Lasso logistic',
+  lr_elasticnet: 'Elastic-net logistic',
+  lr_core: 'Bedside logistic',
+};
+
+/** Table-cell name of one target's deployed ensemble: "Elastic-net logistic + boosted trees". */
+export function deployedModelShort(logisticId?: string | null): string {
+  return `${(logisticId ? LINEAR_PART_SHORT[logisticId] : undefined) ?? 'Logistic'} + boosted trees`;
+}
+
 /** Row-sized name of the deployed ensemble (leaderboards, legends); the full name goes in tooltips. */
 export const DEPLOYED_SHORT_NAME = 'Deployed ensemble';
 

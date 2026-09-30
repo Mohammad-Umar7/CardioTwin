@@ -7,6 +7,7 @@ import {
   MODALITY_ORDER,
   deployedModelName,
   deployedModelPhrase,
+  deployedModelShort,
   featureName,
   humanizeModelIds,
   isDeployedModel,
@@ -63,6 +64,9 @@ describe('model names', () => {
     expect(deployedModelPhrase('lr_elasticnet')).toBe('an ensemble of elastic-net logistic regression and gradient-boosted trees');
     expect(deployedModelPhrase(null)).toBe('an ensemble of logistic regression and gradient-boosted trees');
     expect(DEPLOYED_SHORT_NAME).not.toMatch(/_/);
+    expect(deployedModelShort('lr_elasticnet')).toBe('Elastic-net logistic + boosted trees');
+    expect(deployedModelShort('lr_core')).toBe('Bedside logistic + boosted trees');
+    expect(deployedModelShort('unknown_id')).toBe('Logistic + boosted trees');
   });
 
   it('never shows a raw id for unknown models', () => {
