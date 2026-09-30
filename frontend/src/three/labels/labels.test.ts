@@ -7,6 +7,7 @@ import { VISIBLE_FACING, trunkVisibility, visibleBestView } from '../camera/best
 import { bestViewFor, toControlsAngles } from '../camera/presets';
 import { buildTracks, heartAxisFrame, restToDisplayed } from './anchorTracks';
 import { clip, hoverContent } from './hoverContent';
+import { nearestPeelStage, sceneSummaryText } from './sceneSummaryText';
 import { ANCHOR_PERIOD_MS, AnchorChooser, bestCandidate, buildCandidates, facing, mainTrunk } from './dynamicAnchor';
 import { LABEL_MIN_GAP, labelShowsProbability, laneFor, layoutLanes, stackLane, type LaneItem } from './labelRegistry';
 
@@ -202,5 +203,28 @@ describe('hover tooltip content (V2 §9.3 D, CONTRACTS §7.1)', () => {
     expect(wall.note).toMatch(/not a perfusion scan/);
     const lm = hoverContent({ ...base, structureId: 'lm', node: 'Coronary_LM', kind: 'leftMain', target: null }, manifest);
     expect(lm.note).toMatch(/not predicted/);
+  });
+});
+
+describe('scene summary (DESIGN_SYSTEM §10.4, V2 §3.2)', () => {
+  const prediction = {
+    predictions: {
+      LAD: { probability: 0.65, label: 1, threshold: 0.55, risk_band: 'high', logit: 0 },
+      LCX: { probability: 0.2, label: 0, threshold: 0.33, risk_band: 'low', logit: 0 },
+    },
+  } as unknown as import('@/types/contracts').PredictResponse;
+  const base = { vessels: ['LAD', 'LCX', 'RCA'], prediction, status: 'ready' as const, selected: null, peel: null, spoken: (p: number) => `${Math.round(p * 100)} percent`, band: (b: string) => b };
+
+  it('speaks the probability, band and verdict per vessel against its own threshold', () => {
+    expect(sceneSummaryText(base)).toBe(
+      'LAD 65 percent, high probability, flagged; LCX 20 percent, low probability, not flagged; RCA unavailable; left main not predicted.',
+    );
+  });
+
+  it('adds the selection, the dissection stage and the updating state', () => {
+    const t = sceneSummaryText({ ...base, status: 'loading', selected: 'LAD', peel: nearestPeelStage(1) });
+    expect(t).toMatch(/Updating\. Selected: LAD\. Heart opened\.$/);
+    expect(nearestPeelStage(0.6)).toBeNull();
+    expect(sceneSummaryText({ ...base, prediction: null, status: 'error' })).toBe('Vessel estimates are unavailable.');
   });
 });
