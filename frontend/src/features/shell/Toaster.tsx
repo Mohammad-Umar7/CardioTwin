@@ -4,6 +4,7 @@ import { AlertTriangle, CheckCircle2, Info, X, XCircle } from 'lucide-react';
 import { cn } from '@/lib/cn';
 import { EASE, MOTION } from '@/theme/tokens';
 import { useUiStore, type Toast } from '@/state/uiStore';
+import { toastDuration } from './toastDuration';
 
 const ICON = { info: Info, success: CheckCircle2, warn: AlertTriangle, danger: XCircle } as const;
 const TONE = { info: 'text-secondary', success: 'text-success', warn: 'text-warn', danger: 'text-danger' } as const;
@@ -14,9 +15,10 @@ function ToastItem({ toast }: { toast: Toast }) {
   const Icon = ICON[toast.tone];
 
   const arm = () => {
-    if (toast.tone === 'danger') return; // danger toasts persist
+    const ms = toastDuration(toast);
+    if (ms === null) return; // danger toasts persist
     clearTimeout(timer.current);
-    timer.current = setTimeout(() => dismiss(toast.id), 4000);
+    timer.current = setTimeout(() => dismiss(toast.id), ms);
   };
   useEffect(() => {
     arm();
@@ -34,6 +36,8 @@ function ToastItem({ toast }: { toast: Toast }) {
       role={toast.tone === 'danger' ? 'alert' : 'status'}
       onMouseEnter={() => clearTimeout(timer.current)}
       onMouseLeave={arm}
+      onFocusCapture={() => clearTimeout(timer.current)}
+      onBlurCapture={arm}
       className="pointer-events-auto flex w-[360px] max-w-[calc(100vw-24px)] items-center gap-2 rounded-md bg-surface-3 px-3 py-2.5 text-body-s text-primary shadow-e2"
     >
       <Icon aria-hidden className={cn('size-4 shrink-0 stroke-[1.5]', TONE[toast.tone])} />
@@ -57,7 +61,7 @@ function ToastItem({ toast }: { toast: Toast }) {
   );
 }
 
-/** Toasts: bottom-right above the status line; info/success/warn auto-hide after 4 s (paused on hover). */
+/** Toasts: bottom-right above the status line; they auto-hide (see `toastDuration`), paused on hover or focus. */
 export function Toaster() {
   const toasts = useUiStore((s) => s.toasts);
   return (
