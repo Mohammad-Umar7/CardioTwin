@@ -124,7 +124,7 @@ function looFinding(rows: ModalityRow[]): string {
   return `${list!.charAt(0).toUpperCase()}${list!.slice(1)} ${needed.length > 1 ? 'carry' : 'carries'} signal the others cannot replace (without ${inSentence(worst.group)}: ${signed(worst.delta!.mean)})`;
 }
 
-export function CumulativeModule({ target, a, height }: { target: string; a: ModalityAblation; height: number }) {
+export function CumulativeModule({ target, a, height, provenance }: { target: string; a: ModalityAblation; height: number; provenance: string }) {
   const rows = a.cumulative;
   const lo = Math.min(...rows.map((r) => r.auc.ci?.[0] ?? r.auc.mean));
   const hi = Math.max(...rows.map((r) => r.auc.ci?.[1] ?? r.auc.mean));
@@ -135,6 +135,9 @@ export function CumulativeModule({ target, a, height }: { target: string; a: Mod
     <ChartModule
       id="chart-modality-cumulative"
       title={modalityFinding(a)}
+      exportName={`cardiotwin-${target.toLowerCase()}-modality-cumulative`}
+      exportImage={false}
+      provenance={provenance}
       howTo="How to read: each row adds one modality to the ones above it, in the order a clinician acquires them. Dot = cross-validated ROC-AUC, whisker = corrected confidence interval; the right column is the gain of that step (● = interval excludes zero)."
       height={height}
       table={{
@@ -196,7 +199,7 @@ export function CumulativeModule({ target, a, height }: { target: string; a: Mod
   );
 }
 
-export function LeaveOneOutModule({ target, a, height }: { target: string; a: ModalityAblation; height: number }) {
+export function LeaveOneOutModule({ target, a, height, provenance }: { target: string; a: ModalityAblation; height: number; provenance: string }) {
   const rows = a.leaveOneOut.filter((r) => r.delta);
   const vals = rows.flatMap((r) => [r.delta!.mean, ...(r.delta!.ci ?? [])]);
   const axis = niceAxis(Math.min(0, ...vals), Math.max(0, ...vals));
@@ -206,6 +209,9 @@ export function LeaveOneOutModule({ target, a, height }: { target: string; a: Mo
     <ChartModule
       id="chart-modality-loo"
       title={looFinding(rows)}
+      exportName={`cardiotwin-${target.toLowerCase()}-modality-leave-one-out`}
+      exportImage={false}
+      provenance={provenance}
       howTo="How to read: change in cross-validated ROC-AUC when one modality is removed from the full panel. Bars left of zero mean the model needs that modality; whiskers are corrected confidence intervals."
       height={height}
       table={{
@@ -268,7 +274,8 @@ export function RobustnessModule({ target, r, height, provenance }: { target: st
   const counts = Array.from({ length: nBins }, () => 0);
   for (const v of values) counts[Math.min(nBins - 1, Math.max(0, Math.floor((v - axis.domain[0]) / binW)))]! += 1;
   const maxCount = Math.max(1, ...counts);
-  const y = (c: number) => TOP + plotH - (c / maxCount) * plotH;
+  // Bars use the lower 78 % of the plot so the reference labels above them never sit on a bar.
+  const y = (c: number) => TOP + plotH - (c / maxCount) * plotH * 0.78;
   const bars = values.length > 0;
   const pct = r.fixedPercentile;
 
@@ -428,7 +435,7 @@ export function RobustnessStatsModule({ target, r, height }: { target: string; r
 
 const SUB_GRID = 'grid-cols-[minmax(0,22%)_72px_minmax(0,1fr)_112px_64px_64px]';
 
-export function SubgroupsModule({ target, s, source, height }: { target: string; s: Subgroups; source: SubgroupSource; height: number }) {
+export function SubgroupsModule({ target, s, source, height, provenance }: { target: string; s: Subgroups; source: SubgroupSource; height: number; provenance: string }) {
   const overall = s.overall[source];
   const all = s.factors.flatMap((f) => f.levels.map((l) => l[source])).filter(Boolean);
   const lo = Math.min(...all.map((b) => b!.rocAuc?.ci?.[0] ?? b!.rocAuc?.value ?? 1), overall?.rocAuc?.value ?? 1);
@@ -439,6 +446,9 @@ export function SubgroupsModule({ target, s, source, height }: { target: string;
     <ChartModule
       id="chart-subgroups"
       title={subgroupFinding(s, source)}
+      exportName={`cardiotwin-${target.toLowerCase()}-subgroups`}
+      exportImage={false}
+      provenance={provenance}
       howTo={`How to read: ROC-AUC within each subgroup for ${sourceText}, with bootstrap confidence intervals; the dashed line is the overall value. Hollow dots mark small subgroups (descriptive only). No subgroup-specific thresholds or recalibration are used.`}
       height={height}
       table={{

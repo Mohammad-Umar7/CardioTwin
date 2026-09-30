@@ -180,6 +180,7 @@ export default function PerformancePage() {
 
   const modelVersion = (report as { model_version?: string } | undefined)?.model_version ?? report?.version ?? '';
   const provenance = `CardioTwin model ${modelVersion} · ${target} · held-out test (n = ${facts.nTest})`;
+  const provenanceCv = `CardioTwin model ${modelVersion} · ${target} · development cross-validation (n = ${facts.nDev})`;
   const prevalence = testPrevalence(report, target, m);
   const logisticId = extras.components?.logisticId ?? null;
 
@@ -261,10 +262,10 @@ export default function PerformancePage() {
                 {extras.modality && (
                   <div className="grid grid-cols-1 gap-6 lg:grid-cols-12">
                     <div className="lg:col-span-7">
-                      <CumulativeModule target={target} a={extras.modality} height={H + 24} />
+                      <CumulativeModule target={target} a={extras.modality} height={H + 24} provenance={provenanceCv} />
                     </div>
                     <div className="lg:col-span-5">
-                      <LeaveOneOutModule target={target} a={extras.modality} height={H + 24} />
+                      <LeaveOneOutModule target={target} a={extras.modality} height={H + 24} provenance={provenanceCv} />
                     </div>
                   </div>
                 )}
@@ -288,10 +289,10 @@ export default function PerformancePage() {
             <Section id="decisions" title="Decisions" lede="What happens at the threshold, and what would change if it moved. Exploring never changes the deployed model.">
               <div className="grid grid-cols-1 gap-6 lg:grid-cols-12">
                 <div className="lg:col-span-5">
-                  <ConfusionModule target={target} m={m} points={points} deployed={deployed} explore={explore} height={H} nTest={facts.nTest} />
+                  <ConfusionModule target={target} m={m} points={points} deployed={deployed} explore={explore} height={H} nTest={facts.nTest} provenance={provenance} />
                 </div>
                 <div className="lg:col-span-7">
-                  <ThresholdExplorer target={target} points={points} deployed={deployed} explore={explore} onExplore={onExplore} height={H} nTest={facts.nTest} />
+                  <ThresholdExplorer target={target} points={points} deployed={deployed} explore={explore} onExplore={onExplore} height={H} nTest={facts.nTest} provenance={provenance} />
                 </div>
               </div>
             </Section>
@@ -314,18 +315,18 @@ export default function PerformancePage() {
             )}
 
             {extras.subgroups && (
-              <Section id="subgroups" title="Subgroups" lede="Does it work equally well for women and men, across ages, and with or without diabetes? Follows the split selector above.">
-                <SubgroupsModule target={target} s={extras.subgroups} source={split === 'test' ? 'test' : 'oof'} height={H + 40} />
+              <Section id="subgroups" title="Subgroups" lede={`Does it work equally well for women and men, across ages, and with or without diabetes? Follows the split selector above: on the ${facts.nTest}-patient test split most subgroups are small, so the cross-validation view is the steadier read.`}>
+                <SubgroupsModule target={target} s={extras.subgroups} source={split === 'test' ? 'test' : 'oof'} height={H + 40} provenance={split === 'test' ? provenance : provenanceCv} />
               </Section>
             )}
 
             <Section id="models" title="Model comparison" lede="Every candidate was cross-validated on identical folds; the deployed ensemble is highlighted.">
               <div className="grid grid-cols-1 gap-6 lg:grid-cols-12">
                 <div className="lg:col-span-7">
-                  <LeaderboardModule target={target} m={m} logisticId={logisticId} byKey={schema?.byKey} height={H + 24} nFolds={facts.nFolds} />
+                  <LeaderboardModule target={target} m={m} logisticId={logisticId} byKey={schema?.byKey} height={H + 24} nFolds={facts.nFolds} provenance={provenanceCv} />
                 </div>
                 <div className="lg:col-span-5">
-                  <DriversModule target={target} m={m} logisticId={logisticId} byKey={schema?.byKey} height={H + 24} nFolds={facts.nFolds} />
+                  <DriversModule target={target} m={m} logisticId={logisticId} byKey={schema?.byKey} height={H + 24} nFolds={facts.nFolds} provenance={provenanceCv} />
                 </div>
               </div>
             </Section>

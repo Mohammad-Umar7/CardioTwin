@@ -2,7 +2,7 @@ import { Download, Table2 } from 'lucide-react';
 import { useId, useRef, useState, type ReactNode } from 'react';
 import { IconButton, Popover, Skeleton } from '@/design';
 import { cn } from '@/lib/cn';
-import { exportChart } from './exportChart';
+import { exportChart, exportCsv } from './exportChart';
 import { SeriesKey, type SeriesKind } from './XYChart';
 
 export interface ChartTableData {
@@ -30,9 +30,11 @@ export interface ChartModuleProps {
   height: number;
   status?: 'ready' | 'loading' | 'empty';
   emptyText?: string;
-  /** File name stem and provenance line for exports. Omit to hide export (non-SVG modules). */
+  /** File name stem and provenance line for exports. Omit to hide export. */
   exportName?: string;
   provenance?: string;
+  /** PNG / SVG export of the drawn chart (SVG charts only); CSV of the table is offered whenever a table exists. */
+  exportImage?: boolean;
   /** Right-aligned header extras (e.g. a reset chip). */
   aside?: ReactNode;
   footer?: ReactNode;
@@ -56,6 +58,7 @@ export function ChartModule({
   emptyText = 'Not published in this model release.',
   exportName,
   provenance = 'CardioTwin',
+  exportImage = true,
   aside,
   footer,
   className,
@@ -65,14 +68,28 @@ export function ChartModule({
   const bodyRef = useRef<HTMLDivElement>(null);
   const titleId = useId();
 
-  const doExport = (format: 'svg' | 'png', close: () => void) => {
-    const svg = bodyRef.current?.querySelector<SVGSVGElement>('svg[data-chart-root]');
+  const doExport = (format: 'svg' | 'png' | 'csv', close: () => void) => {
     close();
-    if (!svg || !exportName) return;
+    if (!exportName) return;
+    if (format === 'csv') {
+      if (table) exportCsv(table, { title, provenance, filename: exportName });
+      return;
+    }
+    const svg = bodyRef.current?.querySelector<SVGSVGElement>('svg[data-chart-root]');
+    if (!svg) return;
     void exportChart(svg, { title, provenance, filename: exportName, format }).catch((e: unknown) =>
       console.warn('Chart export failed', e),
     );
   };
+  const formats: { id: 'png' | 'svg' | 'csv'; label: string }[] = [
+    ...(exportImage && !asTable
+      ? [
+          { id: 'png' as const, label: 'PNG image' },
+          { id: 'svg' as const, label: 'SVG vector' },
+        ]
+      : []),
+    ...(table ? [{ id: 'csv' as const, label: 'CSV data' }] : []),
+  ];
 
   return (
     <section
@@ -99,7 +116,7 @@ export function ChartModule({
               onClick={() => setAsTable((v) => !v)}
             />
           )}
-          {exportName && status === 'ready' && !asTable && (
+          {exportName && status === 'ready' && formats.length > 0 && (
             <Popover
               label="Export chart"
               width={184}
@@ -111,15 +128,15 @@ export function ChartModule({
             >
               {(close) => (
                 <div role="menu" aria-label="Export format" className="flex flex-col">
-                  {(['png', 'svg'] as const).map((f) => (
+                  {formats.map((f) => (
                     <button
-                      key={f}
+                      key={f.id}
                       type="button"
                       role="menuitem"
-                      onClick={() => doExport(f, close)}
+                      onClick={() => doExport(f.id, close)}
                       className="flex h-8 items-center justify-between rounded-sm px-2 text-left text-label text-secondary hover:bg-surface-2 hover:text-primary focus-visible:bg-surface-2"
                     >
-                      {f === 'png' ? 'PNG image' : 'SVG vector'}
+                      {f.label}
                       <span className="text-tertiary">watermarked</span>
                     </button>
                   ))}

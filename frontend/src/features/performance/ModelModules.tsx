@@ -17,10 +17,11 @@ export interface ModelModulesProps {
   byKey?: ReadonlyMap<string, FeatureSpec>;
   height: number;
   nFolds: number | null;
+  provenance: string;
 }
 
 /** Cross-validated leaderboard as a dot-and-whisker list; the deployed row (id `ensemble`) is highlighted. */
-export function LeaderboardModule({ target, m, logisticId, height, nFolds }: ModelModulesProps) {
+export function LeaderboardModule({ target, m, logisticId, height, nFolds, provenance }: ModelModulesProps) {
   const { rows, reference } = leaderboard(m, logisticId);
   const note = challengerNote(rows, logisticId);
   const lo = Math.min(...rows.map((r) => r.mean - r.sd));
@@ -31,6 +32,9 @@ export function LeaderboardModule({ target, m, logisticId, height, nFolds }: Mod
     <ChartModule
       id="chart-leaderboard"
       title={leaderboardFinding(rows)}
+      exportName={`cardiotwin-${target.toLowerCase()}-leaderboard`}
+      exportImage={false}
+      provenance={provenance}
       howTo={`How to read: cross-validated ROC-AUC, mean ± sd over ${nFolds ?? 'the'} identical folds for every model (paired comparison on the development set).${reference ? ` A no-skill reference scores ${f2(reference.mean)}.` : ''}`}
       height={height}
       table={{
@@ -94,13 +98,16 @@ export function LeaderboardModule({ target, m, logisticId, height, nFolds }: Mod
 }
 
 /** Mean |SHAP| per input, human names only; values on hover (and in the table), never on the bars. */
-export function DriversModule({ target, m, byKey, height }: ModelModulesProps) {
+export function DriversModule({ target, m, byKey, height, provenance }: ModelModulesProps) {
   const rows = m.global_importance.slice(0, 9);
   const max = Math.max(...rows.map((g) => g.mean_abs_shap), 1e-9);
   return (
     <ChartModule
       id="chart-drivers"
       title={driversFinding(target, m, byKey)}
+      exportName={`cardiotwin-${target.toLowerCase()}-global-drivers`}
+      exportImage={false}
+      provenance={provenance}
       howTo="How to read: average absolute SHAP contribution across patients (log-odds); longer bars move estimates more, in either direction. Hover a bar for its value."
       height={height}
       table={{

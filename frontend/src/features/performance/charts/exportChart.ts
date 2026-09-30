@@ -50,6 +50,37 @@ export function buildExportSvg(chart: SVGSVGElement, opts: Omit<ExportOptions, '
   ].join('');
 }
 
+export interface CsvTable {
+  columns: string[];
+  rows: unknown[][];
+}
+
+/** A cell as CSV text: numbers and strings verbatim, anything else (React nodes) empty; quoted when needed. */
+function csvCell(v: unknown): string {
+  const s = typeof v === 'string' || typeof v === 'number' ? String(v) : '';
+  return /[",\r\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
+}
+
+/**
+ * The "view as table" data as CSV, headed by the same watermark as the image exports (comment lines,
+ * so spreadsheet tools still parse the table underneath).
+ */
+export function buildCsv(table: CsvTable, opts: Omit<ExportOptions, 'format' | 'filename'>): string {
+  const stamp = (opts.now ?? new Date()).toISOString().slice(0, 16).replace('T', ' ');
+  const lines = [
+    `# ${opts.title}`,
+    `# ${opts.provenance} · exported ${stamp} UTC`,
+    '# NOT FOR DIAGNOSTIC USE',
+    table.columns.map(csvCell).join(','),
+    ...table.rows.map((r) => r.map(csvCell).join(',')),
+  ];
+  return `${lines.join('\r\n')}\r\n`;
+}
+
+export function exportCsv(table: CsvTable, opts: Omit<ExportOptions, 'format'>): void {
+  download(new Blob([buildCsv(table, opts)], { type: 'text/csv;charset=utf-8' }), `${opts.filename}.csv`);
+}
+
 function download(blob: Blob, filename: string) {
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');

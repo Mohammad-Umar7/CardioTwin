@@ -18,10 +18,11 @@ export interface DecisionProps {
   onExplore(index: number | null): void;
   height: number;
   nTest: number;
+  provenance: string;
 }
 
 /** 2 × 2 confusion matrix at the current threshold: correct cells tinted, errors hatched, never red. */
-export function ConfusionModule({ target, m, points, deployed, explore, height, nTest }: Omit<DecisionProps, 'onExplore'>) {
+export function ConfusionModule({ target, m, points, deployed, explore, height, nTest, provenance }: Omit<DecisionProps, 'onExplore'>) {
   const p = points[explore ?? deployed] ?? points[deployed];
   const noun = target === 'CAD' ? 'CAD' : `${target} stenosis`;
   if (!p) return null;
@@ -41,6 +42,9 @@ export function ConfusionModule({ target, m, points, deployed, explore, height, 
   return (
     <ChartModule
       id="chart-confusion"
+      exportName={`cardiotwin-${target.toLowerCase()}-confusion-matrix`}
+      exportImage={false}
+      provenance={provenance}
       title={exploring ? `At threshold ${f2(p.threshold)}: ${p.tp} of ${p.tp + p.fn} flagged, ${p.fp} false alarms` : confusionFinding(target, m)}
       howTo={`How to read: rows are the angiography result, columns the model's call ${exploring ? `at the explored threshold ${f2(p.threshold)}` : `at the deployed threshold ${f2(p.threshold)}`}. Correct cells are tinted, errors hatched. Held-out test, ${nTest} patients.`}
       height={height}
@@ -122,7 +126,7 @@ function Metric({ label, now, base, hint, exploring }: { label: string; now: num
  * points. Moving it updates the confusion matrix and the ROC, PR and decision-curve markers; the
  * deployed threshold never changes, and "Back to deployed" snaps back.
  */
-export function ThresholdExplorer({ target, points, deployed, explore, onExplore, height, nTest }: Omit<DecisionProps, 'm'>) {
+export function ThresholdExplorer({ target, points, deployed, explore, onExplore, height, nTest, provenance }: Omit<DecisionProps, 'm'>) {
   const sliderId = useId();
   const idx = explore ?? deployed;
   const p = points[idx];
@@ -147,6 +151,9 @@ export function ThresholdExplorer({ target, points, deployed, explore, onExplore
   return (
     <ChartModule
       id="chart-threshold"
+      exportName={`cardiotwin-${target.toLowerCase()}-operating-points`}
+      exportImage={false}
+      provenance={provenance}
       title={title}
       howTo={`How to read: drag to any operating point recorded on the ${nTest} held-out patients; the confusion matrix and every chart marker follow. The deployed model is unchanged.`}
       height={height}
