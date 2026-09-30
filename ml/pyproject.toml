@@ -37,3 +37,14 @@ addopts = "-ra"
 filterwarnings = [
     "ignore::DeprecationWarning:xgboost.*",
 ]
+
+[tool.ruff]
+line-length = 130
+target-version = "py311"
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "B", "I", "UP"]
+ignore = ["B905", "E501"]
+
+[tool.ruff.lint.isort]
+known-first-party = ["cardiotwin_ml"]

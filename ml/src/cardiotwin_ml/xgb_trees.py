@@ -66,29 +66,8 @@ def parse_dump(booster: xgb.Booster, column_names: list[str]) -> tuple[list[Flat
     flats: list[FlatTree] = []
     nested: list[dict[str, Any]] = []
     for text in booster.get_dump(dump_format="json", with_stats=True):
-        root = json.loads(text)
         nodes: dict[int, dict[str, Any]] = {}
-
-        def walk(n: dict[str, Any]) -> dict[str, Any]:
-            nid = int(n["nodeid"])
-            nodes[nid] = n
-            if "leaf" in n:
-                return {"nodeid": nid, "leaf": f32(n["leaf"]), "cover": f32(n["cover"])}
-            split = str(n["split"])
-            idx = int(split[1:]) if split.startswith("f") and split[1:].isdigit() else column_names.index(split)
-            return {
-                "nodeid": nid,
-                "split": column_names[idx],
-                "split_index": idx,
-                "split_condition": f32(n["split_condition"]),
-                "yes": int(n["yes"]),
-                "no": int(n["no"]),
-                "missing": int(n["missing"]),
-                "cover": f32(n["cover"]),
-                "children": [walk(c) for c in n["children"]],
-            }
-
-        nested.append(walk(root))
+        nested.append(_portable_node(json.loads(text), nodes, column_names))
         size = max(nodes) + 1
         left = np.full(size, -1, dtype=np.int64)
         right = np.full(size, -1, dtype=np.int64)
@@ -102,12 +81,35 @@ def parse_dump(booster: xgb.Booster, column_names: list[str]) -> tuple[list[Flat
             if "leaf" in n:
                 value[nid] = f32(n["leaf"])
                 continue
-            split = str(n["split"])
-            feature[nid] = int(split[1:]) if split.startswith("f") and split[1:].isdigit() else column_names.index(split)
+            feature[nid] = _split_index(str(n["split"]), column_names)
             threshold[nid] = f32(n["split_condition"])
             left[nid], right[nid], missing[nid] = int(n["yes"]), int(n["no"]), int(n["missing"])
         flats.append(FlatTree(left, right, missing, feature, threshold, value, cover))
     return flats, nested
+
+
+def _split_index(split: str, column_names: list[str]) -> int:
+    return int(split[1:]) if split.startswith("f") and split[1:].isdigit() else column_names.index(split)
+
+
+def _portable_node(n: dict[str, Any], nodes: dict[int, dict[str, Any]], column_names: list[str]) -> dict[str, Any]:
+    """Copy one dump node (recursively) into portable form; records raw nodes by id in ``nodes``."""
+    nid = int(n["nodeid"])
+    nodes[nid] = n
+    if "leaf" in n:
+        return {"nodeid": nid, "leaf": f32(n["leaf"]), "cover": f32(n["cover"])}
+    idx = _split_index(str(n["split"]), column_names)
+    return {
+        "nodeid": nid,
+        "split": column_names[idx],
+        "split_index": idx,
+        "split_condition": f32(n["split_condition"]),
+        "yes": int(n["yes"]),
+        "no": int(n["no"]),
+        "missing": int(n["missing"]),
+        "cover": f32(n["cover"]),
+        "children": [_portable_node(c, nodes, column_names) for c in n["children"]],
+    }
 
 
 def base_score(booster: xgb.Booster) -> float:

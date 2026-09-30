@@ -40,7 +40,6 @@ from .ensemble import (
 from .evaluate import CVJob, fit_estimator, make_folds, run_cv_jobs
 from .inference import CardioTwinPredictor
 from .metrics import (
-    METRIC_NAMES,
     binary_metrics,
     bootstrap_metrics,
     calibration_points,
@@ -432,7 +431,7 @@ def run(
     metrics = {
         "version": "1.0.0",
         "model_version": MODEL_VERSION,
-        "generated_at": dt.datetime.now(dt.timezone.utc).replace(microsecond=0).isoformat(),
+        "generated_at": dt.datetime.now(dt.UTC).replace(microsecond=0).isoformat(),
         "fast_mode": fast,
         "dataset": {
             "name": "Extension of Z-Alizadeh Sani",

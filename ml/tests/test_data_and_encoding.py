@@ -16,7 +16,7 @@ from cardiotwin_ml.preprocess import (
     normalise_binary,
     normalise_value,
 )
-from cardiotwin_ml.splits import holdout_split, merge_rare_patterns, joint_patterns
+from cardiotwin_ml.splits import holdout_split, joint_patterns, merge_rare_patterns
 
 
 def test_dataset_digest_and_shape(raw) -> None:  # noqa: ANN001
