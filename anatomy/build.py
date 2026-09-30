@@ -1,6 +1,6 @@
 """CardioTwin anatomy pipeline — one entry point for every stage.
 
-    ./.venv/Scripts/python anatomy/build.py              # fetch -> synth -> blender -> centrelines -> optimise -> verify -> manifest -> explode
+    ./.venv/Scripts/python anatomy/build.py              # fetch -> synth -> blender -> centrelines -> bake -> optimise -> verify -> manifest -> explode
     ./.venv/Scripts/python anatomy/build.py --renders    # ... and the Cycles hero renders (GPU recommended)
     ./.venv/Scripts/python anatomy/build.py --only manifest,verify
 
@@ -10,6 +10,7 @@ Stages (see anatomy/README.md):
                -> anatomy/build/synth/
   blender      headless Blender build -> anatomy/build/cardiotwin_anatomy.raw.glb (+ vessel PLYs, report)
   centerlines  coronary centrelines from the vessel PLYs -> frontend/public/anatomy/vessels.json
+  bake         Cycles bake of the photoreal looks (anatomy/blender/looks.py) -> anatomy/build/bake/*.png
   optimize     glTF-Transform meshopt pass (+ coronary _ARCLEN from the centrelines)
                -> frontend/public/anatomy/cardiotwin_anatomy.glb
   verify       contract check of the web GLB (nodes, layers, COLOR_0, budgets)
@@ -33,7 +34,7 @@ ANATOMY = Path(__file__).resolve().parent
 REPO = ANATOMY.parent
 PY = sys.executable
 DEFAULT_BLENDER = "C:/Program Files/Blender Foundation/Blender 5.1/blender.exe"
-STAGES = ("fetch", "synth", "blender", "centerlines", "optimize", "verify", "manifest", "explode", "renders")
+STAGES = ("fetch", "synth", "blender", "centerlines", "bake", "optimize", "verify", "manifest", "explode", "renders")
 
 
 def find_blender(explicit: str | None) -> str:
@@ -76,7 +77,7 @@ def main(argv: list[str] | None = None) -> int:
         raise SystemExit(f"unknown stage(s): {sorted(unknown)}")
 
     t0 = time.perf_counter()
-    blender = find_blender(args.blender) if {"blender", "explode", "renders"} & set(stages) else None
+    blender = find_blender(args.blender) if {"blender", "bake", "explode", "renders"} & set(stages) else None
     for stage in stages:
         print(f"\n=== {stage} ===", flush=True)
         if stage == "fetch":
@@ -85,6 +86,8 @@ def main(argv: list[str] | None = None) -> int:
             run([PY, str(ANATOMY / "scripts" / "synthesize.py")])
         elif stage == "blender":
             run([blender, "--background", "--factory-startup", "--python", str(ANATOMY / "blender" / "build_anatomy.py")])
+        elif stage == "bake":
+            run([blender, "--background", "--factory-startup", "--python", str(ANATOMY / "blender" / "bake_textures.py")])
         elif stage == "optimize":
             ensure_node_tools()
             run(["node", str(ANATOMY / "scripts" / "optimize_glb.mjs")])
