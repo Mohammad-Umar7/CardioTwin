@@ -1,54 +1,76 @@
-import { Accordion, AccordionItem, EmptyState, Skeleton } from '@/design';
+import { useEffect, useRef } from 'react';
+import { ChevronRight } from 'lucide-react';
+import { EmptyState, Skeleton } from '@/design';
 import { useSchema, useSchemaIndex } from '@/hooks/useData';
 import { cn } from '@/lib/cn';
-import { shareSegments } from '@/lib/explain';
-import { formatShap } from '@/lib/format';
 import { useUiStore } from '@/state/uiStore';
-import { FeatureField } from './fields';
+import { FieldRow } from './FieldRow';
+import { FindingChips } from './FindingChips';
+import { useRowExpansion } from './hooks';
 import { useGroupInfo, type GroupHeaderInfo } from './useGroupInfo';
 
-/** 4-segment |SHAP|-share mini bar (text/secondary, never risk colour). */
-function ShareBar({ segments }: { segments: 0 | 1 | 2 | 3 | 4 }) {
+function GroupSection({
+  id,
+  label,
+  info,
+  open,
+  onToggle,
+  children,
+}: {
+  id: string;
+  label: string;
+  info: GroupHeaderInfo | undefined;
+  open: boolean;
+  onToggle(): void;
+  children: React.ReactNode;
+}) {
+  const region = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (region.current) region.current.inert = !open;
+  }, [open]);
   return (
-    <span aria-hidden className="inline-flex gap-[2px]">
-      {[1, 2, 3, 4].map((i) => (
-        <span key={i} className={cn('h-2 w-1.5 rounded-xs', i <= segments ? 'bg-secondary' : 'bg-line')} />
-      ))}
-    </span>
-  );
-}
-
-export function GroupHeader({ label, info }: { label: string; info: GroupHeaderInfo | undefined }) {
-  return (
-    <>
-      <span className="eyebrow truncate text-secondary">{label}</span>
-      {info && info.edited > 0 && (
-        <span className="inline-flex items-center gap-1 text-[0.6875rem] font-semibold text-accent">
-          <span aria-hidden className="size-1.5 rounded-full bg-accent" />
-          {info.edited}
-          <span className="sr-only"> edited</span>
-        </span>
-      )}
-      {info && info.imputed > 0 && <span className="text-[0.6875rem] text-tertiary">{info.imputed} imputed</span>}
-    </>
-  );
-}
-
-export function GroupAside({ info }: { info: GroupHeaderInfo | undefined }) {
-  if (!info || info.sum === null) return null;
-  return (
-    <>
-      <ShareBar segments={shareSegments(info.share)} />
-      <span className="num w-11 text-right text-numeral-m text-secondary">{formatShap(info.sum)}</span>
-    </>
+    <div className="border-b border-hairline" data-open={open || undefined}>
+      <h3 className="m-0">
+        <button
+          id={`${id}-button`}
+          type="button"
+          aria-expanded={open}
+          aria-controls={`${id}-region`}
+          onClick={onToggle}
+          className="flex h-8 w-full items-center gap-2 px-4 text-left transition-colors duration-instant hover:bg-surface-1"
+        >
+          <ChevronRight aria-hidden className={cn('size-4 shrink-0 stroke-[1.5] text-tertiary transition-transform duration-fast ease-out', open && 'rotate-90')} />
+          <span className="min-w-0 truncate text-body-s font-medium text-primary">{label}</span>
+          {info && info.edited > 0 && (
+            <span className="inline-flex items-center">
+              <span aria-hidden className="size-1.5 rounded-full bg-accent" />
+              <span className="sr-only">, {info.edited} edited</span>
+            </span>
+          )}
+          {info && info.imputed > 0 && <span className="ml-auto text-label font-normal text-tertiary">{info.imputed} imputed</span>}
+        </button>
+      </h3>
+      <div
+        ref={region}
+        id={`${id}-region`}
+        role="region"
+        aria-labelledby={`${id}-button`}
+        className={cn('grid transition-[grid-template-rows] duration-base ease-out', open ? 'grid-rows-[1fr]' : 'grid-rows-[0fr]')}
+      >
+        <div className="min-h-0 overflow-clip">{children}</div>
+      </div>
+    </div>
   );
 }
 
 /**
- * ClinicalForm (DESIGN_SYSTEM §4.2 left panel): generated entirely from schema.json — groups in schema
- * order, each feature rendered by type (numeric slider with reference band, binary No|Yes, categorical
- * segments). Group headers show edits, imputed inputs and the group's share of |SHAP| for the selected
- * target. `exclusive` keeps one group open at a time (1280 layout).
+ * ClinicalForm — every input, grouped by schema group, with the V2 rows (WORKSTATION_V2 §5.6): 32 px
+ * numeric rows that expand on focus, segmented categoricals and one FindingChips cloud per group. No
+ * share bars, no signed sums, no 11 px captions.
+ *
+ * Used where the Inputs drawer is not (the stacked compact layout and the `?layout=legacy` grid); the
+ * workstation stage uses `InputsDrawer`. Open groups live in `uiStore.panels.openGroups` for those
+ * layouts; `exclusive` keeps one group open at a time.
  */
 export function ClinicalForm({ exclusive = false, groups }: { exclusive?: boolean; groups?: string[] }) {
   const schema = useSchema();
@@ -56,6 +78,7 @@ export function ClinicalForm({ exclusive = false, groups }: { exclusive?: boolea
   const openGroups = useUiStore((s) => s.panels.openGroups);
   const toggleGroup = useUiStore((s) => s.toggleGroup);
   const info = useGroupInfo(index);
+  const { expanded, handlers } = useRowExpansion();
 
   if (schema.status === 'loading' || (!index && schema.status === 'ready')) {
     return (
@@ -77,23 +100,23 @@ export function ClinicalForm({ exclusive = false, groups }: { exclusive?: boolea
 
   const visible = groups ? index.groups.filter((g) => groups.includes(g.id)) : index.groups;
   return (
-    <Accordion label="Clinical inputs">
-      {visible.map((g) => (
-        <AccordionItem
-          key={g.id}
-          id={`group-${g.id}`}
-          open={openGroups.includes(g.id)}
-          onToggle={() => toggleGroup(g.id, exclusive)}
-          header={<GroupHeader label={g.label} info={info.get(g.id)} />}
-          aside={<GroupAside info={info.get(g.id)} />}
-        >
-          <div className="flex flex-col pb-2 pt-0.5">
-            {g.features.map((f) => (
-              <FeatureField key={f.key} spec={f} />
-            ))}
-          </div>
-        </AccordionItem>
-      ))}
-    </Accordion>
+    <div className="border-t border-hairline" role="group" aria-label="Clinical inputs" {...handlers}>
+      {visible.map((g) => {
+        const open = openGroups.includes(g.id);
+        const rows = g.features.filter((f) => f.type !== 'binary');
+        const chips = g.features.filter((f) => f.type === 'binary');
+        return (
+          <GroupSection key={g.id} id={`group-${g.id}`} label={g.label} info={info.get(g.id)} open={open} onToggle={() => toggleGroup(g.id, exclusive)}>
+            <div className="flex flex-col px-3 pb-2 pt-0.5">
+              {rows.map((f) => {
+                const rowId = `form-${g.id}:${f.key}`;
+                return <FieldRow key={f.key} spec={f} rowId={rowId} expanded={expanded === rowId} />;
+              })}
+              <FindingChips specs={chips} label={`${g.label} findings`} idPrefix={`form-${g.id}`} className={rows.length ? 'pt-1.5' : undefined} />
+            </div>
+          </GroupSection>
+        );
+      })}
+    </div>
   );
 }

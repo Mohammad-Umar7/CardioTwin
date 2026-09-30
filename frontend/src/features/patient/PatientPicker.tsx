@@ -1,39 +1,17 @@
-import { Check, ChevronDown, Lock, Search } from 'lucide-react';
+import { Check, ChevronDown, Search } from 'lucide-react';
 import { useEffect, useId, useMemo, useRef, useState, type KeyboardEvent } from 'react';
 import { Badge, Skeleton } from '@/design';
 import { useCohort } from '@/hooks/useData';
 import { cn } from '@/lib/cn';
 import { compactSummary, splitLabel } from '@/lib/patients';
 import { usePatientStore } from '@/state/patientStore';
+import { describeFeatures } from './lib/describe';
 import type { CohortPatient } from '@/types/contracts';
 
-const VESSELS = ['LAD', 'LCX', 'RCA'] as const;
-
-/** Ground-truth chips. Hidden for held-out TEST patients so "Reveal cath result" stays a real reveal. */
-function TruthChips({ patient }: { patient: CohortPatient }) {
-  if (patient.split === 'test') {
-    return (
-      <span className="inline-flex items-center gap-1 text-[0.6875rem] text-tertiary" title="Catheter result hidden until revealed">
-        <Lock aria-hidden className="size-3" /> cath hidden
-      </span>
-    );
-  }
-  return (
-    <span className="inline-flex items-center gap-1.5 text-[0.6875rem] text-tertiary">
-      <span className="sr-only">Catheterisation result:</span>
-      {VESSELS.map((v) => (
-        <span key={v} className="inline-flex items-center gap-0.5">
-          <span aria-hidden>{patient.labels[v] === 1 ? '●' : '○'}</span>
-          {v}
-        </span>
-      ))}
-    </span>
-  );
-}
-
 /**
- * PatientPicker combobox (DESIGN_SYSTEM §5): type to filter by ID or summary, arrow keys to move,
- * Enter to open a patient. Grouped "Held-out TEST" / "Dev"; the default patient is a TEST patient.
+ * @deprecated Phase-1 combobox, kept only for the `?layout=legacy` left panel (features/workstation/panels.tsx)
+ * until that layout is deleted. The V2 workstation switches patients from the top-bar chip
+ * (`PatientSwitcher`). Rows describe inputs only: no catheterisation result, not even "cath hidden".
  */
 export function PatientPicker({ className }: { className?: string }) {
   const cohort = useCohort();
@@ -117,7 +95,7 @@ export function PatientPicker({ className }: { className?: string }) {
   const renderGroup = (label: string, list: CohortPatient[], offset: number) =>
     list.length > 0 && (
       <li role="presentation">
-        <div className="sticky top-0 z-10 bg-surface-3 px-3 pb-1 pt-2 text-[0.6875rem] font-semibold uppercase tracking-[0.08em] text-tertiary">
+        <div className="eyebrow sticky top-0 z-10 bg-surface-3 px-3 pb-1 pt-2 text-tertiary">
           {label} · {list.length}
         </div>
         <ul role="group" aria-label={label}>
@@ -139,10 +117,7 @@ export function PatientPicker({ className }: { className?: string }) {
                 )}
               >
                 <span className="mono w-12 shrink-0 text-mono-s text-primary">{p.id}</span>
-                <span className="min-w-0 flex-1">
-                  <span className="block truncate text-label font-normal text-secondary">{p.summary}</span>
-                  <TruthChips patient={p} />
-                </span>
+                <span className="min-w-0 flex-1 truncate text-label font-normal text-secondary">{describeFeatures(p.features)}</span>
                 {isSelected && <Check aria-hidden className="size-4 shrink-0 text-accent" />}
               </li>
             );
@@ -174,8 +149,8 @@ export function PatientPicker({ className }: { className?: string }) {
           aria-activedescendant={open ? `${listId}-opt-${active}` : undefined}
           value={open ? query : ''}
           placeholder={
-            mode === 'custom'
-              ? 'Custom patient — pick a cohort patient'
+            mode !== 'cohort'
+              ? 'Blank patient'
               : selected
                 ? `${selected.id} · ${compactSummary(selected.summary)}`
                 : 'Choose a patient'
@@ -205,8 +180,8 @@ export function PatientPicker({ className }: { className?: string }) {
             <li className="px-3 py-3 text-body-s text-tertiary">No patient matches “{query}”.</li>
           ) : (
             <>
-              {renderGroup('Held-out TEST', filtered.test, 0)}
-              {renderGroup('Dev', filtered.dev, filtered.test.length)}
+              {renderGroup('Held-out test', filtered.test, 0)}
+              {renderGroup('Development', filtered.dev, filtered.test.length)}
             </>
           )}
         </ul>
