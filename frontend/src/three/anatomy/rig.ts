@@ -358,13 +358,17 @@ export class AnatomyRig {
       if (k === 'myocardium') sample(entry, 500, (p) => heart.push(p.clone()));
       else if (k === 'aorta' || k === 'systemicVein') sample(entry, 300, (p) => visibleIn(GREAT_VESSEL_CLIP, p) && keep.push(p.clone()));
       else if (k === 'pulmonaryArtery' || k === 'pulmonaryVeins') sample(entry, 300, (p) => visibleIn(PULMONARY_CLIP, p) && keep.push(p.clone()));
-      if (k === 'myocardium' || k === 'fat' || k === 'coronary' || k === 'leftMain') {
+      const vessel = k === 'aorta' || k === 'systemicVein' || k === 'pulmonaryArtery' || k === 'pulmonaryVeins';
+      if (k === 'myocardium' || k === 'fat' || k === 'coronary' || k === 'leftMain' || vessel) {
         const spec = entry.spec;
         const wall = entry.wall;
         if (spec && wall) riderDelta(spec, wall, 1, 1, openDelta);
         else if (spec) explodeDelta(spec, 1, openDelta);
         else openDelta.identity();
-        sample(entry, k === 'myocardium' ? 500 : 120, (p) => open.push(p.clone().applyMatrix4(openDelta)));
+        const clip = k === 'pulmonaryArtery' || k === 'pulmonaryVeins' ? PULMONARY_CLIP : GREAT_VESSEL_CLIP;
+        sample(entry, k === 'myocardium' ? 500 : 120, (p) => {
+          if (!vessel || visibleIn(clip, p)) open.push(p.clone().applyMatrix4(openDelta));
+        });
       }
     }
     const f = sceneRuntime.framing;

@@ -2,6 +2,7 @@ import { Vector3, type Matrix4 } from 'three';
 import { describe, expect, it } from 'vitest';
 import {
   DEFAULT_HEART_HINGE_DEG,
+  GREAT_VESSEL_LIFT,
   PEEL_DETENTS,
   PEEL_SPRING_OMEGA,
   PEEL_WINDOWS,
@@ -87,6 +88,17 @@ describe('explode specs from the manifest', () => {
     expect(specs.get('Heart_Wall_Posterior')!.hinge).toBeNull();
     expect(specs.get('Coronary_LAD')!.rides).toBe('Heart_Wall_Anterior');
     expect(specs.get('Coronary_LCX')!.rides).toBe('Heart_Wall_Posterior');
+  });
+
+  it('lifts the great vessels off the base in the open heart (a real exploded view, not only a lid)', () => {
+    const withVessels = buildExplodeSpecs(
+      { ...MANIFEST, structures: [...MANIFEST.structures, { node: 'GreatVessel_Aorta', layer: 'heart', explode: [0, 0, 0] }] },
+      frame,
+    );
+    expect(withVessels.get('GreatVessel_Aorta')!.vector.toArray()).toEqual([...GREAT_VESSEL_LIFT]);
+    expect(withVessels.get('GreatVessel_Aorta')!.window).toEqual(PEEL_WINDOWS.heart);
+    // A structure with its own vector keeps it; the posterior wall stays put.
+    expect(withVessels.get('Heart_Wall_Posterior')!.vector.toArray()).toEqual([0, 0, 0]);
   });
 
   it('prefers manifest hinge data when it exists', () => {

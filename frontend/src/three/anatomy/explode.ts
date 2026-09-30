@@ -224,6 +224,14 @@ function manifestHinge(src: { pivot?: unknown; hingeAxis?: unknown; hingeDeg?: u
 export const OPENING_WALL = 'Heart_Wall_Anterior';
 
 /**
+ * Secondary separation of the open heart, so it reads as a real exploded view and not only a lid: the great
+ * vessels (roots, ascending aorta, trunks, caval veins) lift off the base along +Y while the anterior half
+ * swings open. Added only where the manifest gives the structure no vector of its own.
+ */
+export const GREAT_VESSEL_LIFT: Vec3 = [0, 0.26, 0];
+const LIFTS_OFF_THE_BASE = /^GreatVessel_/;
+
+/**
  * One ExplodeSpec per structure node: vector = layer + structure explode, the layer's peel window, the
  * hinge (manifest first; the anterior heart half gets the derived AV-groove hinge), and the `rides` link.
  * Nodes listed in a layer's `nodes` but missing from `structures` move with the layer vector alone.
@@ -234,6 +242,7 @@ export function buildExplodeSpecs(manifest: ManifestLike, frame: HeartFrame | nu
   for (const s of manifest.structures) {
     const layer = layers.get(s.layer);
     const vector = vec(layer?.explode).add(vec(s.explode));
+    if (vector.lengthSq() < 1e-8 && s.layer === 'heart' && LIFTS_OFF_THE_BASE.test(s.node)) vector.set(...GREAT_VESSEL_LIFT);
     let hinge = manifestHinge(s) ?? (layer ? manifestHinge(layer) : null);
     if (!hinge && s.node === OPENING_WALL && frame) hinge = defaultHeartHinge(frame);
     specs.set(s.node, {
