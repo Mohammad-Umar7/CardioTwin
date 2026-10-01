@@ -1,4 +1,4 @@
-import { DataTexture, MeshPhysicalMaterial, MeshStandardMaterial, Vector3 } from 'three';
+import { DataTexture, MeshPhysicalMaterial, MeshStandardMaterial, ShaderLib, Vector3, type WebGLProgramParametersWithUniforms } from 'three';
 import { describe, expect, it } from 'vitest';
 import type { TissueKind } from './classify';
 import { REAL } from './palette';
@@ -10,8 +10,15 @@ const baked = (): BakedMaps => {
   return { map: tex(), normalMap: tex(), roughnessMap: orm, aoMap: orm };
 };
 
-function make(kind: TissueKind, maps: BakedMaps | null, look: SceneLookId = 'realistic', tier: QualityTier = 'B') {
-  return createTissueMaterial({ kind, look, tier, restOffset: new Vector3(), beatMode: 0, shared: createSharedUniforms(null), maps });
+function make(kind: TissueKind, maps: BakedMaps | null, look: SceneLookId = 'realistic', tier: QualityTier = 'B', extra = {}) {
+  return createTissueMaterial({ kind, look, tier, restOffset: new Vector3(), beatMode: 0, shared: createSharedUniforms(null), maps, ...extra });
+}
+
+/** The shader a material compiles to (its onBeforeCompile applied to three's physical shader). */
+function compiled(m: MeshStandardMaterial | MeshPhysicalMaterial) {
+  const shader = { vertexShader: ShaderLib.physical.vertexShader, fragmentShader: ShaderLib.physical.fragmentShader, uniforms: {} };
+  m.onBeforeCompile(shader as unknown as WebGLProgramParametersWithUniforms, undefined as never);
+  return shader;
 }
 
 describe('tissue materials (Realistic look)', () => {
@@ -90,5 +97,27 @@ describe('specimen cuts on the great vessels', () => {
     const { flags } = make('systemicVein', false).userData.ct;
     expect(flags.clipAlong).toBe(false);
     expect(flags.clipSphere).toBe(true);
+  });
+});
+
+describe('cut great vessels and the fat seam', () => {
+  it('shows a cut vessel`s lumen and its wall in section, also in the transparent two-pass draw', () => {
+    const m = make('aorta', baked());
+    expect(m.userData.ct.flags.cutRim).toBe(true);
+    expect(m.userData.ct.uniforms.uCutRim?.value).toBeGreaterThan(0);
+    const fs = compiled(m).fragmentShader;
+    // three.js draws a transparent double-sided material's back faces in a FLIP_SIDED pass with the front-face
+    // winding flipped: the inner side then reports gl_FrontFacing, and must still take the lumen colour.
+    expect(fs).toMatch(/#ifdef FLIP_SIDED\s*bool ctInner = gl_FrontFacing;\s*#else\s*bool ctInner = !gl_FrontFacing;/);
+    expect(fs).toContain('if (ctInner) diffuseColor.rgb = uInteriorColor');
+    expect(fs).toContain('ctCutDist = min(ctCutDist, ctCutAt - ctClipD);');
+    expect(make('coronary', baked()).userData.ct.flags.cutRim).toBe(false);
+  });
+
+  it('pulls the fat in along its seam-safe field when the rig computed one', () => {
+    const vs = compiled(make('fat', baked(), 'realistic', 'B', { deflateField: true })).vertexShader;
+    expect(vs).toContain('attribute vec3 aDeflate;');
+    expect(vs).toContain('transformed += aDeflate * uInflate;');
+    expect(compiled(make('fat', baked())).vertexShader).toContain('normalize(objectNormal) * uInflate');
   });
 });

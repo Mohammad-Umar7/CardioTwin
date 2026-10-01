@@ -102,6 +102,11 @@ export interface PatchFlags {
   clipAlong: boolean;
   /** Darken grazing angles (a thin dark outline that separates the coronaries from the fat they lie on). */
   edgeShade: boolean;
+  /**
+   * A cut vessel shows its wall's thickness: the inner surface within `uCutRim` of the cut takes the cut wall's
+   * colour (`uCutWallColor`), so the rim reads as a ring of wall around the lumen instead of a paper-thin edge.
+   */
+  cutRim: boolean;
   /** The beat is weighted per vertex by `aBeatW` (great vessels: 1 at the heart, 0 far along them). */
   beatWeighted: boolean;
   /** Noise octaves (tier dependent). */
@@ -123,6 +128,7 @@ export const NO_PATCH: PatchFlags = {
   fadeAlpha: false,
   clipAlong: false,
   edgeShade: false,
+  cutRim: false,
   beatWeighted: false,
   octaves: 3,
 };
@@ -141,6 +147,7 @@ export function patchKey(f: PatchFlags): string {
     f.cavity ? 'v' : '',
     f.fadeAlpha ? 'a' : '',
     f.clipAlong ? 'g' : '',
+    f.cutRim ? 'k' : '',
     f.edgeShade ? 'e' : '',
     f.beatWeighted ? 'w' : '',
     `o${f.octaves}`,
@@ -202,6 +209,7 @@ uniform float uFibreStretch;` : ''}
 ${f.fat ? 'uniform vec3 uFatColor;\nuniform float uFatAmount;\nuniform vec3 uHeartApex;\nuniform vec3 uHeartAxis;\nuniform float uHeartLength;' : ''}
 ${f.sss ? 'uniform float uWrap;\nuniform vec3 uWrapTint;\nuniform vec3 uSssColor;\nuniform float uSssStrength;' : ''}
 ${f.interior ? 'uniform vec3 uInteriorColor;' : ''}
+${f.cutRim ? 'uniform vec3 uCutWallColor;\nuniform float uCutRim;' : ''}
 ${f.territory ? 'uniform vec3 uP;\nuniform sampler2D uRiskLUT;\nuniform float uTerritoryOn;\nuniform vec3 uSelMask;\nuniform float uTerritoryGain;\nvarying vec3 vCtTerritory;' : ''}
 ${f.rim ? 'uniform vec3 uRimColor;\nuniform float uRimStrength;' : ''}
 ${f.clipSphere ? 'uniform vec3 uClipCentre;\nuniform float uClipRadius;\nuniform float uClipFeather;' : ''}
@@ -216,18 +224,21 @@ ${f.desaturateMap ? 'uniform float uSaturation;' : ''}`,
     `#include <clipping_planes_fragment>
 ${f.fadeAlpha ? 'float ctEdge = 0.0;' : MATERIALISE}
 ${f.clipAlong || f.clipSphere ? 'float ctClipKeep = 1.0;' : ''}
+${f.cutRim ? 'float ctCutDist = 1e3; // how far inside the kept part this fragment lies from the cut' : ''}
 ${f.clipAlong ? `// A clean, antialiased CUT (not an alpha smear) halfway through the fade band: the trimmed vessel ends in
 // a cross-section, its lumen seen through the cut (back faces take the interior colour), like a specimen.
 {
   float ctCutAt = 0.5 * (uAlongStart + uAlongEnd);
   float ctCutW = max(fwidth(vCtAlong), 1e-4);
   ctClipKeep *= 1.0 - smoothstep(ctCutAt - ctCutW, ctCutAt + ctCutW, vCtAlong);
+  ${f.cutRim ? 'ctCutDist = min(ctCutDist, ctCutAt - vCtAlong);' : ''}
 }` : ''}
 ${f.clipSphere ? `{
   float ctClipD = distance(vCtRest, uClipCentre);
   float ctCutAt = uClipRadius - 0.5 * uClipFeather;
   float ctCutW = max(fwidth(ctClipD), 1e-4);
   ctClipKeep *= 1.0 - smoothstep(ctCutAt - ctCutW, ctCutAt + ctCutW, ctClipD);
+  ${f.cutRim ? 'ctCutDist = min(ctCutDist, ctCutAt - ctClipD);' : ''}
 }` : ''}
 ${f.clipAlong || f.clipSphere ? 'if (ctClipKeep <= 0.0) discard;' : ''}`,
   );
@@ -287,7 +298,15 @@ ${f.territory ? `{
     diffuseColor.rgb *= 1.0 - 0.35 * ctSeam * ctMask;
   }
 }` : ''}
-${f.interior ? `if (!gl_FrontFacing) diffuseColor.rgb = uInteriorColor * (1.0 + 0.35 * ctDetail.x);` : ''}`,
+${f.interior || f.cutRim ? `// The mesh's inner side. A transparent double-sided material is drawn in two passes, and in its back-face pass
+// (FLIP_SIDED) three.js flips the front-face winding, so there the inner side reports gl_FrontFacing.
+#ifdef FLIP_SIDED
+bool ctInner = gl_FrontFacing;
+#else
+bool ctInner = !gl_FrontFacing;
+#endif` : ''}
+${f.interior ? `if (ctInner) diffuseColor.rgb = uInteriorColor * (1.0 + 0.35 * ctDetail.x);` : ''}
+${f.cutRim ? `if (ctInner) diffuseColor.rgb = mix(uCutWallColor * (1.0 + 0.2 * ctDetail.x), diffuseColor.rgb, smoothstep(0.7 * uCutRim, uCutRim, ctCutDist));` : ''}`,
   );
 
   if (f.detail) {

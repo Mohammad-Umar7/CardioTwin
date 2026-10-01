@@ -153,6 +153,8 @@ interface Look {
   deflate?: number;
   /** Dark grazing-angle outline strength (coronaries against the fat and the wall). */
   edgeShade?: number;
+  /** A cut vessel's wall in section: its colour and thickness (scene units) around the lumen at the cut. */
+  cutWall?: { color: string; width: number };
 }
 
 /**
@@ -307,6 +309,8 @@ const REALISTIC: Partial<Record<TissueKind, Look>> = {
     detail: { freq: 14, bump: 0.004, colorVar: 0.14, roughVar: 0.12, deep: REAL.adventitiaDeep },
     sss: { wrap: 0.35, tint: '#FFC2B0', color: '#9A4C3E', strength: 0.12 },
     interior: '#4A2322',
+    // the cut aortic wall: 2 mm of pale, elastic media around the lumen
+    cutWall: { color: '#D9CDB8', width: 0.02 },
     baked: { tint: '#EADCD4', saturation: 0.12, linear: [1.8, 1.48, 1.28] },
   },
   pulmonaryArtery: {
@@ -318,6 +322,8 @@ const REALISTIC: Partial<Record<TissueKind, Look>> = {
     detail: { freq: 14, bump: 0.004, colorVar: 0.14, roughVar: 0.12, deep: REAL.adventitiaDeep },
     sss: { wrap: 0.35, tint: '#FFC2B0', color: '#9A4C3E', strength: 0.12 },
     interior: '#4A2322',
+    // the cut pulmonary trunk: a thinner wall than the aorta's
+    cutWall: { color: '#D6BDB2', width: 0.015 },
     // The bake is atlas blue (deoxygenated): a specimen's trunk is the same pale pink-tan adventitia as the
     // aorta, so take the bake's detail and none of its hue, and lift its grey to the aorta's tone (a linear
     // factor above 1: the bake's luminance is low).
@@ -344,6 +350,8 @@ const REALISTIC: Partial<Record<TissueKind, Look>> = {
     clearcoatRoughness: 0.5,
     detail: { freq: 20, bump: 0.006, colorVar: 0.14, roughVar: 0.12, deep: REAL.systemicVeinDeep },
     interior: '#3A1A22',
+    // the caval walls are thin: a narrow, dusky rim
+    cutWall: { color: '#7A6070', width: 0.01 },
     baked: { tint: '#5E5878', saturation: 0.35 },
   },
   cardiacVein: {
@@ -522,6 +530,7 @@ export function createTissueMaterial(o: TissueOptions): TissueMaterial {
     fat: !!L.fat && !!L.detail && !maps?.map,
     sss: !!L.sss,
     interior: !!L.interior,
+    cutRim: !!L.cutWall && (!!clipOf(o.kind, o.shared) || along),
     territory: o.kind === 'myocardium' ? o.territoryAttribute ?? null : null,
     territoryOverlay: realistic && o.kind === 'myocardium' && !!o.territoryAttribute,
     rim: !!L.rim,
@@ -567,6 +576,7 @@ export function createTissueMaterial(o: TissueOptions): TissueMaterial {
     });
   }
   if (L.interior) uniforms.uInteriorColor = { value: new Color(L.interior) };
+  if (L.cutWall) Object.assign(uniforms, { uCutWallColor: { value: new Color(L.cutWall.color) }, uCutRim: { value: L.cutWall.width } });
   if (L.rim) Object.assign(uniforms, { uRimColor: { value: new Color(L.rim.color) }, uRimStrength: { value: L.rim.strength } });
   if (flags.territory) Object.assign(uniforms, o.shared.territory);
   if (flags.clipSphere) Object.assign(uniforms, clipOf(o.kind, o.shared));
