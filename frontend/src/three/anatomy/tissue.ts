@@ -160,13 +160,13 @@ interface Look {
 export const FAT_DEFLATE = 0.012;
 
 /**
- * The pulmonary trunk fades along its own wall (`_dist_heart`, from the pulmonary valve) — opaque from the
- * valve to its bifurcation, gone a little way into the branches — instead of inside the posterior sphere
- * that left the anterior trunk half transparent ("glass"). The pulmonary veins keep the sphere (they enter
- * the left atrium right at its centre).
+ * The pulmonary trunk is cut like a specimen, 30 mm above its valve and before it divides (the cut sits mid-band;
+ * `_dist_heart` is straightened into a plane across the trunk at load, vesselCuts.ts). A cut through the
+ * bifurcation left a ragged rim. The pulmonary veins are not drawn: the left atrium's own ostia stand for them
+ * (rig.ts).
  */
 export const ALONG_FADE: Partial<Record<TissueKind, readonly [number, number]>> = {
-  pulmonaryArtery: [0.32, 0.52],
+  pulmonaryArtery: [0.26, 0.34],
 };
 
 const CLINICAL: Partial<Record<TissueKind, Look>> = {

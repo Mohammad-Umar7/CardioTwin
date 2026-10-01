@@ -122,23 +122,21 @@ const smoothstep = (a: number, b: number, x: number) => {
   return t * t * (3 - 2 * t);
 };
 
+export interface WeldedGraph {
+  /** Graph node of each mesh vertex (coincident vertices share one). */
+  nodeOf: Int32Array;
+  /** Node positions, xyz. */
+  nodePos: number[];
+  /** Neighbouring nodes along the triangle edges. */
+  adj: number[][];
+}
+
 /**
- * Beat weight per vertex of one vessel mesh. `positions` are the vertices in the heart's rest frame (xyz),
- * `index` the triangle list (null = non-indexed triangles), `wall` the heart wall, `height` the normalised height
- * of a rest-frame point (beatDeform.heightOf). Vertices the junction cannot reach (another component, or a
- * vessel that never touches the heart) get 0. If nothing touches within `touch`, the radius doubles up to 4×
- * before giving up (a vessel cut a little short of its chamber still follows it).
+ * The mesh as a graph of welded vertices: coincident vertices (normal / UV seams) become one node, so the graph
+ * follows the surface across seams. `q` is the weld tolerance (scene units).
  */
-export function vesselBeatWeights(
-  positions: ArrayLike<number>,
-  index: ArrayLike<number> | null,
-  wall: PointHash,
-  height: (x: number, y: number, z: number) => number,
-  opts: VesselWeightOptions,
-): Float32Array {
+export function weldGraph(positions: ArrayLike<number>, index: ArrayLike<number> | null, q: number): WeldedGraph {
   const count = Math.floor(positions.length / 3);
-  // Weld coincident vertices (normal / UV seams) so the graph is one surface.
-  const q = Math.max(opts.touch * 0.02, 1e-9);
   const ids = new Map<string, number>();
   const nodeOf = new Int32Array(count);
   const nodePos: number[] = [];
@@ -155,8 +153,7 @@ export function vesselBeatWeights(
     }
     nodeOf[i] = id;
   }
-  const nodes = nodePos.length / 3;
-  const adj: number[][] = Array.from({ length: nodes }, () => []);
+  const adj: number[][] = Array.from({ length: nodePos.length / 3 }, () => []);
   const link = (a: number, b: number) => {
     if (a === b) return;
     adj[a]!.push(b);
@@ -171,6 +168,49 @@ export function vesselBeatWeights(
     link(b, c);
     link(c, a);
   }
+  return { nodeOf, nodePos, adj };
+}
+
+/** Connected component of each graph node (0-based, in discovery order). */
+export function graphComponents(adj: readonly number[][]): Int32Array {
+  const comp = new Int32Array(adj.length).fill(-1);
+  let next = 0;
+  const stack: number[] = [];
+  for (let s = 0; s < adj.length; s += 1) {
+    if (comp[s] !== -1) continue;
+    comp[s] = next;
+    stack.push(s);
+    while (stack.length > 0) {
+      const n = stack.pop()!;
+      for (const m of adj[n]!) {
+        if (comp[m] === -1) {
+          comp[m] = next;
+          stack.push(m);
+        }
+      }
+    }
+    next += 1;
+  }
+  return comp;
+}
+
+/**
+ * Beat weight per vertex of one vessel mesh. `positions` are the vertices in the heart's rest frame (xyz),
+ * `index` the triangle list (null = non-indexed triangles), `wall` the heart wall, `height` the normalised height
+ * of a rest-frame point (beatDeform.heightOf). Vertices the junction cannot reach (another component, or a
+ * vessel that never touches the heart) get 0. If nothing touches within `touch`, the radius doubles up to 4×
+ * before giving up (a vessel cut a little short of its chamber still follows it).
+ */
+export function vesselBeatWeights(
+  positions: ArrayLike<number>,
+  index: ArrayLike<number> | null,
+  wall: PointHash,
+  height: (x: number, y: number, z: number) => number,
+  opts: VesselWeightOptions,
+): Float32Array {
+  const count = Math.floor(positions.length / 3);
+  const { nodeOf, nodePos, adj } = weldGraph(positions, index, Math.max(opts.touch * 0.02, 1e-9));
+  const nodes = nodePos.length / 3;
 
   // Seeds: where the vessel touches the heart wall (its root only, for an artery).
   const dist = new Float64Array(nodes).fill(Number.POSITIVE_INFINITY);
