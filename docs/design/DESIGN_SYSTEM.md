@@ -815,7 +815,7 @@ The owner asked for anatomy that "looks real, super close to real human anatomy"
 | Only the coronary targets carry risk colour | Coronary targets keep `color = emissive = LUT(p)` in both looks, one colour per target, root to tip, animated through p. |
 | The myocardium never competes with the ramp | The muscle red is desaturated and dark (`#5A2622`, OKLab L ≈ 0.33, chroma ≈ 0.07), below the p = 0 vessel's lightness and far from the coral/apricot chroma. A baked albedo, when present, is clamped to 72 % saturation. The myocardium is never emissive. |
 | Glow means high risk | The emissive gain follows `0.3·k + 1.8·smoothstep(0.5, 1, p)`. The floor k is 0.45 in Realistic so glossy low-risk tubes still read as their hue. The bloom threshold (0.80) is crossed from p ≈ 0.70 only. |
-| Anatomical colour is never read as risk colour | Arteries use a pale adventitia (`#9C8274`), not red. Systemic veins use a dusty atlas blue (`#34405C`), darker and greyer than the ramp's low end and never emissive. Cardiac veins stay hidden by default ("not modelled"); when shown they are a translucent atlas-blue overlay, never a solid tube. |
+| Anatomical colour is never read as risk colour | Arteries use a pale adventitia (`#9C8274`), not red. Systemic veins use a specimen's dark plum-maroon (`#4A2E38`, barely glossy), darker and greyer than the ramp's low end and never emissive. Cardiac veins stay hidden by default ("not modelled"); when shown they are a translucent atlas-blue overlay, never a solid tube. |
 | Territory tint | Unchanged: `mix(albedo, Σ wᵢ·LUT(pᵢ), strength)`. The mode is Off · Selected · All, with 0.10 + 0.25·p in Selected mode and 0.10 + 0.30·Σwp in All mode, faded where COLOR_0's neutral weight dominates (atria). |
 | Pending or stale state | Achromatic `#4B5260`, exactly as §2.2 rule 6. |
 
@@ -828,7 +828,7 @@ The owner asked for anatomy that "looks real, super close to real human anatomy"
 | Myocardium | `#5A2622`, roughness 0.52, **clearcoat 0.9 / 0.16** (the wet epicardium), sheen 0.2 `#8E3A34` (tier A only), wrap-diffuse 0.55 tinted `#E0503C` and back-scatter `#B8322A` × 0.28 (the subsurface look where the rim light shines through thin edges), fibre-stretched detail, AV-groove fat, cavity AO. Chamber and cut faces `#3A1716`. |
 | Coronaries | Ramp colour, roughness 0.34, clearcoat 0.55 / 0.2, env 0.5, rim `#FFF4EC` × 0.10, 0.5 mm display inflation (§7.3). |
 | Valves, papillary muscles | Fibrous `#D6C4AA` with translucency; papillary muscles as myocardium `#5A2926`. |
-| Great arteries | Adventitia `#9C8274`, clearcoat 0.35. Pulmonary veins `#6E3D3B`. SVC, IVC and cardiac veins atlas blue `#34405C`. |
+| Great arteries | Adventitia `#9C8274`, clearcoat 0.35. Pulmonary veins `#6E3D3B`. SVC and IVC dark plum-maroon `#4A2E38` (lumen `#3A1A22`); cardiac veins dark plum-grey `#4A3E42`. |
 | Bone, cartilage | Ivory `#E2D6BF` with pore-scale bump and yellowed mottling. Cartilage is a glossy bluish white `#BCC9CB` with translucency. |
 | Lungs | Translucent spongy tissue (α 0.42 + fresnel rim, alveolar-scale bump) when closed; fresnel ghost once peeled. |
 | Skin, muscle, diaphragm | Skin is always a warm fresnel ghost. Muscle and diaphragm are striated wet muscle `#6E2622`. |
@@ -898,7 +898,7 @@ three-mesh-bvh raycasts against the heart walls, valves, great vessels and invis
 
 | § | Was | Now |
 |---|---|---|
-| §2.3 | `anat/vein`: "hidden by default, never blue" | Clinical unchanged. Realistic uses a muted atlas blue for the SVC, IVC and (when shown) cardiac veins, darker and greyer than the ramp's low end and never emissive. |
+| §2.3 | `anat/vein`: "hidden by default, never blue" | Clinical unchanged. Realistic uses a specimen's dark plum-maroon for the SVC and IVC and a dark plum-grey for the cardiac veins, darker and greyer than the ramp's low end and never emissive. |
 | §7.3 | "MeshStandardMaterial … No transmission and no physical sheen" | Clinical unchanged. Realistic uses MeshPhysicalMaterial with clearcoat (tiers A–C) and sheen (tier A). There is still no transmission. |
 | §7.7 | "Zero image textures: only the LUT and the blue-noise texture" | The shared 128 KB noise volume is also generated in code. Baked GLB textures are allowed (CONTRACTS §7.1) and uploaded lazily. |
 | §6 Peel | Layer vectors, rib hinge "phase 2" | Layer and structure vectors, the anterior-half hinge, riders, a critically damped spring and the cold-load assembly (§7.9.5). |
