@@ -245,14 +245,20 @@ const REALISTIC: Partial<Record<TissueKind, Look>> = {
     deflate: FAT_DEFLATE,
   },
   papillary: {
+    // Papillary muscles, moderator band and trabeculae carneae are the wall's own muscle under the same moist
+    // endocardium: the myocardium's maroon (its bake treatment, sheen and scatter), so they grow out of the wall
+    // instead of lying in the chambers as bright red sausages; a finer grain for their smaller forms.
     color: REAL.papillary,
-    roughness: 0.5,
-    env: 0.5,
-    clearcoat: 0.3,
-    clearcoatRoughness: 0.38,
-    detail: { freq: 12, bump: 0.005, colorVar: 0.18, roughVar: 0.1, deep: REAL.myocardiumDeep },
-    sss: { wrap: 0.5, tint: REAL.wrapTint, color: REAL.sss, strength: 0.25 },
-    baked: { tint: '#FFFFFF', saturation: 0.94 },
+    roughness: 0.58,
+    env: 0.45,
+    clearcoat: 0.12,
+    clearcoatRoughness: 0.55,
+    sheen: 0.3,
+    sheenColor: '#B85A4A',
+    sheenRoughness: 0.55,
+    detail: { freq: 12, bump: 0.004, colorVar: 0.2, roughVar: 0.12, deep: REAL.myocardiumDeep },
+    sss: { wrap: 0.55, tint: REAL.wrapTint, color: REAL.sss, strength: 0.24 },
+    baked: { saturation: 0.74, linear: [0.82, 0.73, 0.73] },
   },
   valve: {
     // Thin fibrous leaflets and chordae: a dim pink-ivory with strong back-scatter (light shows through the

@@ -339,13 +339,13 @@ def valve(name="L_Valve"):
 
 
 def papillary(name="L_Papillary"):
-    """Papillary muscles: smooth, endocardium-covered muscle (a soft mottle, no ridges), slightly paler at the head
-    where the chordae arise."""
+    """Papillary muscles, moderator band and trabeculae carneae: the wall's own muscle under the endocardium, in the
+    myocardium's red-brown (a soft mottle, no ridges), so they read as part of the wall they rise from."""
     g = G(name)
     p = g.obj()
     mott = g.noise(p, 10.0)
     fine = g.noise(p, 120.0, detail=2.0)
-    base = g.ramp(mott, [(0.3, srgb("#5e1a14")), (0.7, srgb("#7a2a20"))])
+    base = g.ramp(mott, [(0.25, MYO_DARK), (0.55, MYO), (0.85, MYO_LIGHT)])
     nrm = g.bump(fine, 0.08, 0.001)
     g.set(Subsurface_Weight=0.18, Subsurface_Radius=(1.0, 0.2, 0.1), Subsurface_Scale=0.01, Coat_Weight=0.08, Coat_Roughness=0.3)
     return g.finish(base=base, rough=g.maprange(fine, 0.0, 1.0, 0.42, 0.55), normal=nrm, category="Papillary")

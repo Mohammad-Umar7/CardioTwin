@@ -1215,13 +1215,14 @@ class Model:
         ax = self.apex - c_ma
         Lax = np.linalg.norm(ax)
         a = ax / Lax
-        # papillary levels from the LV papillary muscles (components near the LV axis)
+        # papillary levels from the LV papillary muscles (components near the LV axis that stand off the wall: their
+        # outer tenth lies more than 4 mm from it; the trabeculae carneae and the muscles' roots lie on it)
         pap = components(self.m["Papillary_Muscles"].V, self.m["Papillary_Muscles"].F, 30)
         lv_pap = []
         for V, _ in pap:
             d = V - c_ma
             rho = np.linalg.norm(d - np.outer(d @ a, a), axis=1)
-            if np.median(rho) < 0.22:
+            if np.median(rho) < 0.22 and np.quantile(trimesh.proximity.closest_point(self.H_tm, V)[1], 0.9) > 4.0 * MM:
                 lv_pap.append(V)
         if not lv_pap:
             lv_pap = [p[0] for p in pap]

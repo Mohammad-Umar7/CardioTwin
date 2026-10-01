@@ -872,6 +872,25 @@ def territory_colors(
 AHA_STANDARD = {1: 0, 2: 0, 7: 0, 8: 0, 13: 0, 14: 0, 17: 0, 3: 2, 4: 2, 9: 2, 10: 2, 15: 2, 5: 1, 6: 1, 11: 1, 12: 1, 16: 1}
 
 
+def papillary_proper(ob, WV: np.ndarray, WF: np.ndarray, scale: float) -> np.ndarray:
+    """World vertices of the papillary muscles proper: the components that stand off the wall (their outer tenth more
+    than 4 mm from it), not the trabeculae carneae, the moderator band or the muscles' roots that lie on it (the same
+    selection as ``anatomy/checks/measure_model.py`` Model.aha)."""
+    V = world_vertices(ob)
+    _, F = mesh_arrays(ob.data)
+    bvh = BVHTree.FromPolygons(WV.tolist(), WF.tolist(), all_triangles=True)
+    lab = mo.vertex_components(F, len(V))
+    keep = np.zeros(len(V), dtype=bool)
+    for c in np.unique(lab):
+        idx = np.flatnonzero(lab == c)
+        if len(idx) < 30:
+            continue
+        d = np.array([bvh.find_nearest(Vector(V[i]))[3] for i in idx])
+        if np.quantile(d, 0.9) > 4.0 * scale:
+            keep[idx] = True
+    return V[keep] if keep.sum() > 20 else V
+
+
 def aha_segments(P: np.ndarray, *, ma_c: np.ndarray, apex: np.ndarray, pap_V: np.ndarray, lad_V: np.ndarray,
                  pda_V: np.ndarray, with_angle: bool = False, epi: np.ndarray | None = None):
     """AHA-17 segment (0 = outside the LV sampling region) and axial position t for points of the LV.
@@ -1772,7 +1791,7 @@ def build(args: argparse.Namespace) -> None:
         proj = (mv - base) @ u_ba
         hinge = mv[touch & (proj <= np.quantile(proj, 0.25))]
         ma_c = hinge.mean(axis=0) if len(hinge) > 20 else mv.mean(axis=0)
-        pap_V = world_vertices(objects["Papillary_Muscles"])
+        pap_V = papillary_proper(objects["Papillary_Muscles"], wall_V, _wF, scale)
         lad_V = world_vertices(objects["Coronary_LAD"])
         pda_V = world_vertices(objects["Coronary_RCA_PDA"])
         lad_sep_V = np.concatenate([world_vertices(objects["Coronary_LAD_Septal"]), lad_V])

@@ -129,8 +129,8 @@
     },
     "Papillary_Muscles": {
       "fma_id": "FMA12154",
-      "provenance": "Synthesised cones placed from the BodyParts3D papillary muscles (anatomy/scripts/valves.py)",
-      "definition": "Papillary muscles: the left-ventricular anterolateral and posteromedial muscles (each with two heads) and the right-ventricular anterior, posterior and septal muscles, rising from the ventricular wall and anchoring the chordae tendineae of the atrioventricular valves.",
+      "provenance": "Synthesised muscles placed from the BodyParts3D papillary muscles, with the moderator band and trabeculae carneae (anatomy/scripts/valves.py)",
+      "definition": "Papillary muscles: the left-ventricular anterolateral and posteromedial muscles (each with two heads) and the right-ventricular anterior, posterior and septal muscles, rising from the ventricular wall and anchoring the chordae tendineae of the atrioventricular valves. The moderator band (septomarginal trabecula) crosses the right ventricle from the septum to the anterior muscle, carrying the right bundle branch; trabeculae carneae ridge the apical left ventricle and the right ventricle.",
       "clinical_relevance": "The posteromedial LV papillary muscle has a single (usually RCA/PDA) supply and is the one that ruptures after inferior infarction.",
       "fma_ids": [
         "FMA9352",

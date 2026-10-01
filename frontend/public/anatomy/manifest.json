@@ -1,11 +1,11 @@
 {
   "version": "1.1.0",
   "glb": "cardiotwin_anatomy.glb",
-  "glb_bytes": 7770128,
-  "glb_sha256": "0548b76fbf33a6e0481eaec5b1afa7d6227d0af964d0d80f100877ec4625c5ae",
+  "glb_bytes": 8013296,
+  "glb_sha256": "2f16a1f8ddde9b638c1e63cc870f93ac6f02a13b2dd605cc615c9791f1a5f27c",
   "textures": {
-    "gpu_mib": 46.4,
-    "webp_mb": 2.55,
+    "gpu_mib": 46.7,
+    "webp_mb": 2.59,
     "priority": [
       "Heart_Wall_Anterior",
       "Heart_Wall_Posterior",
@@ -1063,9 +1063,9 @@
       "definition": "Left atrioventricular valve, shown half open: the anterior (aortic) leaflet, about 22 mm tall on the third of the annulus next to the aortic root and in fibrous continuity with it, and the posterior leaflet, about 12.5 mm tall with three scallops (P1-P3), both thin veils thickening at the rough zone; first- and second-order chordae tendineae fan from the two heads of the anterolateral and posteromedial papillary muscles to the free edges and rough zones of both leaflets.",
       "clinical_relevance": "Mitral regurgitation after inferior or lateral infarction follows papillary-muscle dysfunction (posteromedial muscle: single RCA/PDA supply).",
       "center": [
-        0.1088,
+        0.1071,
         -0.0553,
-        -0.1256
+        -0.1283
       ],
       "bbox": {
         "min": [
@@ -1074,12 +1074,12 @@
           -0.3632
         ],
         "max": [
-          0.3318,
+          0.3284,
           0.1214,
-          0.112
+          0.1065
         ]
       },
-      "triangles": 6600,
+      "triangles": 6584,
       "realistic_color": "#eaddc1"
     },
     {
@@ -1218,7 +1218,7 @@
         0.0,
         0.0
       ],
-      "description": "Right- and left-ventricular papillary muscles. The posteromedial LV papillary muscle usually has a single blood supply (RCA/PDA), which makes it vulnerable in inferior infarction.",
+      "description": "Right- and left-ventricular papillary muscles, with the moderator band and the trabeculae carneae. The posteromedial LV papillary muscle usually has a single blood supply (RCA/PDA), which makes it vulnerable in inferior infarction.",
       "territory": null,
       "category": "Papillary",
       "material": "Papillary_Muscles_Mat",
@@ -1230,32 +1230,32 @@
         "FMA9352nsn"
       ],
       "fma_id": "FMA12154",
-      "provenance": "Synthesised cones placed from the BodyParts3D papillary muscles (anatomy/scripts/valves.py)",
-      "definition": "Papillary muscles: the left-ventricular anterolateral and posteromedial muscles (each with two heads) and the right-ventricular anterior, posterior and septal muscles, rising from the ventricular wall and anchoring the chordae tendineae of the atrioventricular valves.",
+      "provenance": "Synthesised muscles placed from the BodyParts3D papillary muscles, with the moderator band and trabeculae carneae (anatomy/scripts/valves.py)",
+      "definition": "Papillary muscles: the left-ventricular anterolateral and posteromedial muscles (each with two heads) and the right-ventricular anterior, posterior and septal muscles, rising from the ventricular wall and anchoring the chordae tendineae of the atrioventricular valves. The moderator band (septomarginal trabecula) crosses the right ventricle from the septum to the anterior muscle, carrying the right bundle branch; trabeculae carneae ridge the apical left ventricle and the right ventricle.",
       "clinical_relevance": "The posteromedial LV papillary muscle has a single (usually RCA/PDA) supply and is the one that ruptures after inferior infarction.",
       "fma_ids": [
         "FMA9352",
         "FMA7259"
       ],
       "center": [
-        0.1954,
-        -0.2019,
-        0.1714
+        0.1536,
+        -0.17,
+        0.2025
       ],
       "bbox": {
         "min": [
-          -0.1162,
-          -0.4828,
-          -0.1324
+          -0.2667,
+          -0.5058,
+          -0.1363
         ],
         "max": [
-          0.5069,
-          0.079,
-          0.4752
+          0.5739,
+          0.1658,
+          0.5412
         ]
       },
-      "triangles": 4000,
-      "realistic_color": "#6d231b"
+      "triangles": 15998,
+      "realistic_color": "#66211b"
     },
     {
       "id": "aorta",
@@ -2804,14 +2804,14 @@
       },
       "valve_mitral": {
         "position": [
-          0.5574,
-          0.3521,
-          1.1561
+          0.5523,
+          0.349,
+          1.1438
         ],
         "target": [
-          0.1088,
+          0.1071,
           -0.0553,
-          -0.1256
+          -0.1283
         ],
         "fov": 35.0
       },
@@ -2856,14 +2856,14 @@
       },
       "papillary_muscles": {
         "position": [
-          0.8221,
-          0.3672,
-          1.9621
+          0.9229,
+          0.5286,
+          2.4005
         ],
         "target": [
-          0.1954,
-          -0.2019,
-          0.1714
+          0.1536,
+          -0.17,
+          0.2025
         ],
         "fov": 35.0
       },

@@ -636,7 +636,7 @@
       "parts": [
         "SYN_PapillaryMuscles"
       ],
-      "budget": 4000,
+      "budget": 16000,
       "material": "Papillary",
       "explode": [
         0.0,
@@ -644,7 +644,7 @@
         0.0
       ],
       "target": null,
-      "description": "Right- and left-ventricular papillary muscles. The posteromedial LV papillary muscle usually has a single blood supply (RCA/PDA), which makes it vulnerable in inferior infarction.",
+      "description": "Right- and left-ventricular papillary muscles, with the moderator band and the trabeculae carneae. The posteromedial LV papillary muscle usually has a single blood supply (RCA/PDA), which makes it vulnerable in inferior infarction.",
       "source_parts": [
         "FMA7260",
         "FMA7261",
@@ -1304,7 +1304,7 @@
         ]
       },
       "SYN_PapillaryMuscles": {
-        "what": "Smooth conical papillary muscles (bifid heads in the LV) from the BodyParts3D muscles' roots to their heads",
+        "what": "Papillary muscles placed from the BodyParts3D muscles (fused to the wall below, free conical heads above, bifid in the LV, trabecular roots), the moderator band across the RV, and trabeculae carneae over the apical LV and the RV",
         "from": [
           "FMA7260",
           "FMA7261",
