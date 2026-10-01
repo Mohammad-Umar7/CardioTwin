@@ -32,7 +32,7 @@ export const REAL = {
   adventitiaDeep: '#6E564C',
   pulmonaryVein: '#6E3D3B',
   /** SVC and IVC: a dark indigo-plum venous wall (a pale, glossy atlas-blue tube read as a steel pipe). */
-  systemicVein: '#3E3858',
+  systemicVein: '#3C3858',
   systemicVeinDeep: '#262236',
   leftMain: '#8E7A72',
   bone: '#DCCDB0',
