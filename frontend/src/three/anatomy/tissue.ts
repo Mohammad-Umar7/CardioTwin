@@ -224,8 +224,9 @@ const REALISTIC: Partial<Record<TissueKind, Look>> = {
     color: REAL.fatMesh,
     roughness: 0.55,
     env: 0.3,
-    clearcoat: 0.08,
-    clearcoatRoughness: 0.55,
+    // Wet under the visceral pericardium, like the fat on a fresh heart: a soft but distinct gloss.
+    clearcoat: 0.18,
+    clearcoatRoughness: 0.35,
     sheen: 0.35,
     sheenColor: '#E8D8A8',
     sheenRoughness: 0.45,
@@ -236,7 +237,7 @@ const REALISTIC: Partial<Record<TissueKind, Look>> = {
     // decal otherwise), clearly lighter than the maroon wall it lies on (lum ≥ wall + 0.15) yet a step below
     // the risk-coloured coronaries in luminance and chroma (V2 §5.15 figure / ground; `__ct.stats` at P-011
     // home: fat 0.51 / 0.37 against the LAD's 0.53 / 0.38 and the wall's 0.18).
-    baked: { tint: '#D8CDB5', saturation: 0.6 },
+    baked: { tint: '#DCCDAE', saturation: 0.75 },
     normalScale: 1.5,
     recede: 0.008,
     deflate: FAT_DEFLATE,
