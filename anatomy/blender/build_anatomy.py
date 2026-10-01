@@ -1015,22 +1015,23 @@ FAT = {
     # The fat forms the bed of the atrioventricular and interventricular grooves: along every groove artery its surface
     # rises to ``embed`` x the vessel radius above the vessel centreline (about two-thirds of each trunk is buried, its
     # crown stays exposed as a continuous ridge, REFERENCE.md 5.8); a groove vein lies half in it (``vein_embed``). The
-    # bed falls off smoothly across the groove, feathering to nothing within 4-7 mm of the vessel, so the grooves read
-    # as fat-filled channels and the free walls stay bare. The inner surface is sunk into the myocardium, so the visible
+    # bed falls off smoothly across the groove, feathering out 10-13 mm from the vessel as on an adult heart (a lean
+    # 4-7 mm bed read as yellow paint along the vessels next to specimen photographs), with lobulated, lumpy fat;
+    # the free walls away from the grooves stay bare. The inner surface is sunk into the myocardium, so the visible
     # margin is a thin edge.
     "embed": 0.35,
     "vein_embed": -0.1,
-    "min_bed_mm": {"av": 2.0, "iv": 1.4, "branch": 0.8},   # a minimum bed thickness along each groove vessel
+    "min_bed_mm": {"av": 3.0, "iv": 2.2, "branch": 1.0},   # a minimum bed thickness along each groove vessel
     "branch_min_radius_mm": 0.6,           # twigs thinner than this run on the bare epicardium (no fat net)
-    "branch_prox_mm": {"default": 12.0, "AM": 25.0},   # branches keep a bed only over their proximal course
-    "half_width_mm": {"av": (2.0, 7.0), "iv": (1.5, 5.5), "branch": (0.8, 3.5)},  # full height up to a, none beyond b
-    "apex_thinning": 0.55,                  # interventricular fat thins towards the apex ...
+    "branch_prox_mm": {"default": 18.0, "AM": 40.0},   # branches keep a bed only over their proximal course
+    "half_width_mm": {"av": (4.0, 13.0), "iv": (3.0, 10.0), "branch": (1.2, 5.0)},  # full height up to a, none beyond b
+    "apex_thinning": 0.4,                   # interventricular fat thins towards the apex ...
     "apex_film_mm": (0.5, 12.0),            # ... which keeps a thin film (thickness, radius round the apex)
     "closing_rings": 2,                     # morphological closing of the thickness field (no bald spots inside the fat)
     "smooth_rings": 6,                      # feathering of the field over the wall mesh
     "lobule_mm": (3.2, 1.5),                # lobulation (value noise cell sizes), multiplicative amplitude and a
-    "lobule_amp": (0.18, 0.10),             #   small additive bump (mm) so lobules show on thin fat too
-    "lobule_bump_mm": 0.3,
+    "lobule_amp": (0.26, 0.14),             #   small additive bump (mm) so lobules show on thin fat too
+    "lobule_bump_mm": 0.45,
     "sink_mm": 1.0,                         # inner surface depth inside the myocardium
     "remesh_mm": 0.38,
 }
