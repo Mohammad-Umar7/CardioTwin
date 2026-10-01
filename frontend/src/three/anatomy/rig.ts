@@ -234,6 +234,13 @@ function defaultFlyIn(kind: TissueKind, restOffset: Vector3): Vector3 {
 const SMOOTH_KINDS: ReadonlySet<TissueKind> = new Set(['aorta', 'pulmonaryArtery', 'pulmonaryVeins', 'systemicVein']);
 
 /**
+ * The septal perforators run inside the septum: drawn true to size and depth, not inflated nor pulled toward the
+ * camera like the epicardial arteries under their fat (pulled, they showed through the septum's cut face as loose
+ * purple threads when the heart opened).
+ */
+const INTRAMURAL: ReadonlySet<string> = new Set(['Coronary_LAD_Septal', 'Coronary_RCA_Septal']);
+
+/**
  * Average the normals of coincident vertices (UV-seam duplicates) whose normals are within 60° of each
  * other, so a tube shades smoothly across its seams while real creases (a cut end) stay sharp. In place and
  * idempotent (marked on the geometry, which the GLB cache shares between mounts).
@@ -749,7 +756,7 @@ export class AnatomyRig {
         territoryAttribute: entry.kind === 'myocardium' ? (geometry.getAttribute('color') ? 'color' : null) : null,
         maps: entry.mapsReady ? entry.maps : null,
         clippingPlanes: heart ? this.sectionPlanes : null,
-        inflate: entry.kind === 'coronary' || entry.kind === 'leftMain' ? VESSEL_INFLATE : 0,
+        inflate: (entry.kind === 'coronary' || entry.kind === 'leftMain') && !INTRAMURAL.has(entry.node) ? VESSEL_INFLATE : 0,
         cavity: !!geometry.getAttribute('aCavity'),
         along: !!geometry.getAttribute('_dist_heart'),
         beatWeighted: !!geometry.getAttribute('aBeatW'),

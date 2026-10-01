@@ -12,10 +12,11 @@ export const ANTERIOR_SUFFIX = '_Anterior';
 /**
  * Split at the cut plane: the cardiac veins (the AIV and anterior veins open with the anterior half), the
  * LAD (the anterior interventricular groove belongs to the anterior half, its proximal stretch at the left
- * main and its apical wrap stay posterior) and the RCA (the right AV groove opens with the anterior half,
- * its crux end stays posterior).
+ * main and its apical wrap stay posterior), the RCA (the right AV groove opens with the anterior half,
+ * its crux end stays posterior) and the PDA (its apical end crosses the cut; whole, it hung off the posterior
+ * half's cut edge when the heart opened).
  */
-export const SPLIT_AT_CUT: readonly string[] = ['CardiacVeins', 'Coronary_LAD', 'Coronary_RCA'];
+export const SPLIT_AT_CUT: readonly string[] = ['CardiacVeins', 'Coronary_LAD', 'Coronary_RCA', 'Coronary_RCA_PDA'];
 
 /**
  * Split by whole piece instead of at the plane: each papillary muscle opens with the wall it grows from (the
