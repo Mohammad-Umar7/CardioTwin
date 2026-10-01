@@ -20,7 +20,8 @@ describe('flow particle material', () => {
   });
 
   it('shares the anatomy beat uniforms and clips with the section planes', () => {
-    expect(material.uniforms.uBeatMatrix).toBeDefined();
+    expect(material.uniforms.uBeatV).toBeDefined();
+    expect(material.uniforms.uBeatAtrial).toBeDefined();
     expect(material.uniforms.uBeatMode.value).toBe(1);
     expect(material.clipping).toBe(true);
     expect(material.vertexShader).toContain('ctBeat(');

@@ -2,13 +2,14 @@
  * The anatomy rig: owns every GLB mesh's materials, transforms and visibility, per frame, without React
  * state. GlbAnatomy builds one per loaded scene and calls `update()` from useFrame.
  *
- * Per mesh the displayed matrix is   M = E · A · B · R
+ * Per mesh the displayed matrix is   M = E · A · R
  *   R  rest local matrix (each GLB node is centred on itself; R carries its rest offset)
- *   B  affine ventricular beat in the heart's rest frame (heart walls, valves, coronaries, cardiac veins)
  *   A  cold-load assembly fly-in (explode direction, anterior half re-closing its hinge)
  *   E  peel / exploded view: layer + structure vectors, the anterior half's hinge, riders follow their wall
- * so a coronary that rides a wall shares E, A and B with it and can never detach. Every mesh also gets a
- * ghost twin (same geometry, additive fresnel) so solid ↔ ghost transitions crossfade instead of popping.
+ * so a coronary that rides a wall shares E and A with it and can never detach. The heartbeat is not in the
+ * matrix: ONE displacement field in the rest frame, in every heart and great-vessel vertex shader
+ * (beatDeform.ts), so meshes that touch at rest touch through the whole beat. Every mesh also gets a ghost twin
+ * (same geometry, additive fresnel) so solid ↔ ghost transitions crossfade instead of popping.
  */
 import {
   BufferAttribute,
@@ -29,13 +30,15 @@ import type { SceneLook } from '../stage/sceneControls';
 import { sceneRuntime } from '../stage/sceneRuntime';
 import { AssemblyClock, stageById, stagePose, type AssemblyStage } from './assembly';
 import { ANTERIOR_SUFFIX, SPLIT_AT_CUT } from './cutSplit';
-import { BEAT_UNIFORMS, beatMatrix, setBeatFrame } from './beatDeform';
+import { heightOf, setBeatActivation, setBeatFrame } from './beatDeform';
+import { PointHash, vesselBeatWeights } from './beatWeights';
 import { cavityAttribute, type CentrelinePoint } from './cavity';
 import { axial, correctWeights, meanAngle, rvShare } from './territory';
 import { FRAME_UNIFORMS } from './shaders';
 import {
   BEATS_WITH_HEART,
   CLIPPED_TREE_KINDS,
+  GREAT_VESSEL_KINDS,
   OUTER_KINDS,
   PICKABLE_KINDS,
   assemblyStageOf,
@@ -89,7 +92,6 @@ export interface RigEntry {
   flyIn: Pick<ExplodeSpec, 'vector' | 'hinge'>;
   /** Entry whose assembly transform a rider copies (its wall). */
   flyInFrom: RigEntry | null;
-  beats: boolean;
   maps: BakedMaps | null;
   mapsReady: boolean;
   solid: Map<string, TissueMaterial>;
@@ -145,6 +147,20 @@ const ASSEMBLY_WARMUP_FRAMES = 6;
 const LAMBDA_SECTION = 6;
 /** Section plane parked far away (nothing clipped) — the plane stays attached so no program recompiles. */
 const SECTION_OFF = 3;
+/** A great-vessel vertex this close to the heart wall (fraction of the apex-to-base length) seeds its junction. */
+const BEAT_WEIGHT_TOUCH = 0.02;
+/**
+ * How far along each great vessel the heartbeat reaches (fractions of the apex-to-base length L ≈ 72 mm): full
+ * weight up to `full`, still from `fade`. The aorta beats fully over its root and sinuses (the coronary ostia sit
+ * 13–16 mm above the annulus) and is still by the arch; the trunk likewise to its bifurcation; the veins stretch
+ * over their last few centimetres into the atria. Arteries seed only at their root (`maxSeedHeight`).
+ */
+const VESSEL_BEAT_WEIGHTS: Partial<Record<TissueKind, { full: number; fade: number; maxSeedHeight?: number }>> = {
+  aorta: { full: 0.35, fade: 0.9, maxSeedHeight: 1.25 },
+  pulmonaryArtery: { full: 0.25, fade: 0.7, maxSeedHeight: 1.35 },
+  pulmonaryVeins: { full: 0.06, fade: 0.4 },
+  systemicVein: { full: 0.06, fade: 0.4 },
+};
 /**
  * Pulmonary trees (V2 §5.15): keep the trunk, the proximal left / right pulmonary arteries and the veins
  * entering the left atrium; the intrapulmonary branches fade into the dark stage before the hila. The
@@ -353,7 +369,6 @@ export class AnatomyRig {
   private frameEma = 1 / 60;
   private look: SceneLook;
   private tier: QualityTier;
-  private readonly beatM = new Matrix4();
   private disposed = false;
 
   constructor(
@@ -427,7 +442,7 @@ export class AnatomyRig {
       mesh.raycast = () => {};
       mesh.renderOrder = kind === 'coronary' || kind === 'leftMain' ? 1 : 0;
 
-      const ghost = createGhostMaterial(kind, this.look, restOffset, this.shared);
+      const ghost = createGhostMaterial(kind, this.look, restOffset, this.shared, GREAT_VESSEL_KINDS.has(kind));
       const ghostMesh = new Mesh(mesh.geometry as BufferGeometry, ghost);
       ghostMesh.name = `${node}__ghost`;
       ghostMesh.userData.ctGhost = true;
@@ -453,7 +468,6 @@ export class AnatomyRig {
         stage: stageById(assemblyStageOf(kind, node)),
         flyIn: { vector: new Vector3(), hinge: null },
         flyInFrom: null,
-        beats: BEATS_WITH_HEART.has(kind),
         maps,
         mapsReady: !maps,
         solid: new Map(),
@@ -483,6 +497,8 @@ export class AnatomyRig {
       }
     }
 
+    // Before the first material: the great vessels' shaders read `aBeatW`.
+    this.assignBeatWeights();
     for (const entry of this.entries) {
       entry.mesh.material = this.solidFor(entry);
       entry.solidAmt = 0;
@@ -575,7 +591,7 @@ export class AnatomyRig {
     const key = `${this.look}-${this.tier}-${entry.mapsReady ? 'm' : ''}`;
     let m = entry.solid.get(key);
     if (!m) {
-      const heart = BEATS_WITH_HEART.has(entry.kind) || entry.kind === 'aorta' || entry.kind === 'pulmonaryArtery' || entry.kind === 'pulmonaryVeins' || entry.kind === 'systemicVein';
+      const heart = BEATS_WITH_HEART.has(entry.kind) || GREAT_VESSEL_KINDS.has(entry.kind);
       const geometry = entry.mesh.geometry as BufferGeometry;
       m = createTissueMaterial({
         kind: entry.kind,
@@ -590,10 +606,54 @@ export class AnatomyRig {
         inflate: entry.kind === 'coronary' || entry.kind === 'leftMain' ? VESSEL_INFLATE : 0,
         cavity: !!geometry.getAttribute('aCavity'),
         along: !!geometry.getAttribute('_dist_heart'),
+        beatWeighted: !!geometry.getAttribute('aBeatW'),
       });
       entry.solid.set(key, m);
     }
     return m;
+  }
+
+  /**
+   * `aBeatW` on every great vessel (beatWeights.ts): 1 where it joins the heart wall, fading to 0 along its own
+   * wall, so its junction beats exactly like the chamber it opens into and its far end stays still.
+   */
+  private assignBeatWeights(): void {
+    const L = this.frame.length;
+    const touch = L * BEAT_WEIGHT_TOUCH;
+    const wall = new PointHash(touch * 4);
+    for (const e of this.entries) {
+      if (e.kind !== 'myocardium') continue;
+      const pos = (e.mesh.geometry as BufferGeometry).getAttribute('position');
+      const pts = new Float32Array(pos.count * 3);
+      for (let i = 0; i < pos.count; i += 1) {
+        pts[i * 3] = pos.getX(i) + e.restOffset.x;
+        pts[i * 3 + 1] = pos.getY(i) + e.restOffset.y;
+        pts[i * 3 + 2] = pos.getZ(i) + e.restOffset.z;
+      }
+      wall.add(pts);
+    }
+    const p = new Vector3();
+    const height = (x: number, y: number, z: number) => heightOf(this.frame, p.set(x, y, z));
+    for (const e of this.entries) {
+      const o = VESSEL_BEAT_WEIGHTS[e.kind];
+      if (!o) continue;
+      const g = e.mesh.geometry as BufferGeometry;
+      if (g.getAttribute('aBeatW')) continue;
+      const pos = g.getAttribute('position');
+      const rest = new Float32Array(pos.count * 3);
+      for (let i = 0; i < pos.count; i += 1) {
+        rest[i * 3] = pos.getX(i) + e.restOffset.x;
+        rest[i * 3 + 1] = pos.getY(i) + e.restOffset.y;
+        rest[i * 3 + 2] = pos.getZ(i) + e.restOffset.z;
+      }
+      const w = vesselBeatWeights(rest, g.index ? g.index.array : null, wall, height, {
+        full: o.full * L,
+        fade: o.fade * L,
+        touch,
+        maxSeedHeight: o.maxSeedHeight,
+      });
+      g.setAttribute('aBeatW', new BufferAttribute(w, 1));
+    }
   }
 
   /** Every coronary material of a target (all looks / tiers built so far), for the risk animation. */
@@ -775,10 +835,8 @@ export class AnatomyRig {
     sceneRuntime.peel.e = this.e;
     sceneRuntime.peel.heartOpen = heartOpen;
 
-    // Beat (rest frame).
-    beatMatrix(this.frame, inp.beatV, this.beatM);
-    BEAT_UNIFORMS.uBeatMatrix.value.copy(this.beatM);
-    BEAT_UNIFORMS.uBeatAtrial.value = inp.beatA;
+    // Beat: one displacement field in the rest frame, applied in the vertex shaders (beatDeform.ts).
+    setBeatActivation(inp.beatV, inp.beatA);
 
     // Section plane: keep the posterior side of the cut plane (+ depth), glide in and out.
     const sTarget = inp.section ? inp.sectionDepth : SECTION_OFF;
@@ -837,10 +895,9 @@ export class AnatomyRig {
         explodeDelta(spec, kPeel, entry.explodeMatrix);
       } else entry.explodeMatrix.identity();
 
-      // ---- matrix: E · A · B · R
+      // ---- matrix: E · A · R (the beat runs in the vertex shaders)
       const m = entry.mesh.matrix;
       m.copy(entry.restMatrix);
-      if (entry.beats) m.premultiply(this.beatM);
       m.premultiply(entry.assemblyMatrix);
       m.premultiply(entry.explodeMatrix);
       entry.mesh.matrixWorldNeedsUpdate = true;

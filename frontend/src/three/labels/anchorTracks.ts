@@ -61,10 +61,10 @@ const tmpInv = new Matrix4();
 const tmpT = new Matrix4();
 
 /**
- * The node's current "explode · assembly" transform (E·A) without the heartbeat, from the anatomy rig's
- * matrix composition `matrix = E · A · B · T(centre)` (three/anatomy/rig.ts): labels follow the peel and
- * the assembly but never the beat (DESIGN_SYSTEM §6). `beat` is the shared beat matrix B, applied only
- * to nodes that beat with the heart.
+ * The node's current "explode · assembly" transform (E·A), from the anatomy rig's matrix composition
+ * `matrix = E · A · T(centre)` (three/anatomy/rig.ts): labels follow the peel and the assembly but never the
+ * beat (DESIGN_SYSTEM §6), which runs in the vertex shaders and is not in the matrix. `beat`, when given, is a
+ * matrix factored out of a node matrix of the older `E · A · B · T` form.
  */
 export function restToDisplayed(mesh: Object3D, centre: Vector3, beat: Matrix4 | null, out = new Matrix4()): Matrix4 {
   out.copy(mesh.matrix).multiply(tmpT.makeTranslation(-centre.x, -centre.y, -centre.z));

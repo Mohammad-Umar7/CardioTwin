@@ -35,9 +35,10 @@ caption.ts           caption wording, its one fixed spot (canvas centre, above t
   `observeHeartScale(Layer_Heart.scale.x)` phase-locks the clock to it (±15 % rate slew; no-op when locked).
 * **Node transforms are the contract.** Particles follow `node.matrixWorld` of every vessels.json node
   (`Coronary_*`), measured against the pristine glTF's rest pose. Anything you do to those nodes — layer and
-  structure explode, `rides`, hinges, the affine beat matrix — is followed automatically. Non-affine beat
-  terms must go through `BEAT_UNIFORMS` / `BEAT_VERTEX_PARS` (the particle and overlay shaders include them,
-  coronaries in `BEAT_MODE.atrial`).
+  structure explode, `rides`, hinges — is followed automatically. The heartbeat is not in the node matrices:
+  it is one displacement field in the rest frame (`anatomy/beatDeform.ts`), shared through `BEAT_UNIFORMS` /
+  `BEAT_VERTEX_PARS`; the particle and overlay shaders include it (`BEAT_MODE.heart`), so they move with the
+  vessel walls exactly.
 * **Hidden nodes hide their flow** (`visible` anywhere up the chain).
 * **`sceneRuntime` (stage/sceneRuntime.ts) is read, never written:** the ignition waits for
   `assembly.igniteAt` (cold-load fly-in), flow and pulse multiply by `nodes[name].solid` (isolate / ghost /

@@ -66,14 +66,18 @@ export function classifyNode(name: string, layerNode = ''): TissueKind {
   return LAYER_FALLBACK[layerNode] ?? 'other';
 }
 
-/** Kinds that live inside the heart group and ride its affine beat through their node matrix. */
+/** Kinds of the heart itself: the beat field moves them at full weight (beatDeform.ts). */
 export const BEATS_WITH_HEART: ReadonlySet<TissueKind> = new Set(['myocardium', 'coronary', 'leftMain', 'valve', 'papillary', 'cardiacVein', 'fat']);
 
-/** Vertex-shader beat mode for a kind (see beatDeform.ts). */
+/** Great vessels: the same field, weighted per vertex (`aBeatW`, beatWeights.ts) — 1 at the heart, 0 far away. */
+export const GREAT_VESSEL_KINDS: ReadonlySet<TissueKind> = new Set(['aorta', 'pulmonaryArtery', 'pulmonaryVeins', 'systemicVein']);
+
+/**
+ * Vertex-shader beat mode for a kind (see beatDeform.ts). Every kind that touches the heart shares ONE field, so
+ * no seam can open between them; the outer layers (chest wall, lungs, diaphragm) stay still.
+ */
 export function beatModeOf(kind: TissueKind): number {
-  if (BEATS_WITH_HEART.has(kind)) return BEAT_MODE.atrial;
-  if (kind === 'aorta' || kind === 'pulmonaryArtery' || kind === 'pulmonaryVeins' || kind === 'systemicVein') return BEAT_MODE.root;
-  return BEAT_MODE.none;
+  return BEATS_WITH_HEART.has(kind) || GREAT_VESSEL_KINDS.has(kind) ? BEAT_MODE.heart : BEAT_MODE.none;
 }
 
 /** Outer layers: rendered as ghosts once peeled, never pickable. */

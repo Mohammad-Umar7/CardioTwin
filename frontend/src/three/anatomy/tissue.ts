@@ -28,8 +28,8 @@ import {
   type Texture,
 } from 'three';
 import { ANATOMY, LIGHTS } from '@/theme/tokens';
-import { BEAT_UNIFORMS } from './beatDeform';
-import { OUTER_KINDS, type TissueKind } from './classify';
+import { BEAT_MODE, BEAT_UNIFORMS, BEAT_VERTEX, BEAT_VERTEX_PARS, BEAT_VERTEX_WEIGHTED, BEAT_WEIGHT_PARS } from './beatDeform';
+import { OUTER_KINDS, beatModeOf, type TissueKind } from './classify';
 import { getNoiseTexture } from './noiseTexture';
 import { GHOST, REAL } from './palette';
 import { FRAME_UNIFORMS, IGN, NO_PATCH, patchKey, patchTissueShader, type PatchFlags } from './shaders';
@@ -102,6 +102,8 @@ export interface TissueOptions {
   cavity?: boolean;
   /** The geometry carries `_dist_heart` (the pulmonary vessels fade along their wall, `ALONG_FADE`). */
   along?: boolean;
+  /** The geometry carries `aBeatW` (a great vessel: beats at its junction with the heart, still far along it). */
+  beatWeighted?: boolean;
 }
 
 /** Absolute display inflation of coronary walls (≈ the spec's 1.3×, documented in §7.3). */
@@ -513,6 +515,7 @@ export function createTissueMaterial(o: TissueOptions): TissueMaterial {
     desaturateMap: saturation < 0.995,
     cavity: !!o.cavity,
     fadeAlpha,
+    beatWeighted: !!o.beatWeighted && o.beatMode !== BEAT_MODE.none,
     octaves: TIER_OCTAVES[o.tier],
   };
 
@@ -623,6 +626,7 @@ export interface GhostUniforms extends Record<string, IUniform> {
   uFade: IUniform<number>;
   uNearFade: IUniform<number>;
   uRestOffset: IUniform<Vector3>;
+  uBeatMode: IUniform<number>;
   uGhostMask: IUniform<Vector2>;
 }
 
@@ -681,17 +685,29 @@ function ghostTint(kind: TissueKind, look: SceneLookId): string {
  * No depth write, no environment. Fades out right in front of the lens (exploded skin swings through the
  * camera) and honours the pulmonary sphere clip so a ghosted tree is still trimmed.
  */
-export function createGhostMaterial(kind: TissueKind, look: SceneLookId, restOffset: Vector3, shared: SharedUniforms | null): GhostMaterial {
+export function createGhostMaterial(
+  kind: TissueKind,
+  look: SceneLookId,
+  restOffset: Vector3,
+  shared: SharedUniforms | null,
+  /** The geometry carries `aBeatW` (a great vessel). */
+  beatWeighted = false,
+): GhostMaterial {
   const [base, rim, power] = GHOST_CURVES[kind] ?? [0.015, 0.16, 2];
   const clipSet = shared ? clipOf(kind, shared) : null;
   const clip = !!clipSet;
+  // A ghosted heart part keeps beating with the solid ones (same field, beatDeform.ts).
+  const beatMode = beatModeOf(kind);
+  const weighted = beatWeighted && beatMode !== BEAT_MODE.none;
   const uniforms: GhostUniforms = {
+    ...BEAT_UNIFORMS,
     uBase: { value: base },
     uRim: { value: rim },
     uPower: { value: power },
     uFade: { value: 1 },
     uNearFade: { value: 0.9 },
     uRestOffset: { value: restOffset.clone() },
+    uBeatMode: { value: beatMode },
     ...GHOST_MASK,
     ...(clipSet ?? {}),
   };
@@ -708,13 +724,13 @@ export function createGhostMaterial(kind: TissueKind, look: SceneLookId, restOff
     shader.vertexShader = shader.vertexShader
       .replace(
         '#include <common>',
-        '#include <common>\nuniform vec3 uRestOffset;\nvarying vec3 vCtNormal;\nvarying vec3 vCtView;\nvarying vec3 vCtRest;\nvarying float vCtDepth;\nvarying vec2 vCtClip;',
+        `#include <common>\n${BEAT_VERTEX_PARS}\n${weighted ? BEAT_WEIGHT_PARS : ''}\nvarying vec3 vCtNormal;\nvarying vec3 vCtView;\nvarying vec3 vCtRest;\nvarying float vCtDepth;\nvarying vec2 vCtClip;`,
       )
-      .replace('#include <begin_vertex>', '#include <begin_vertex>\nvCtRest = transformed + uRestOffset;')
+      .replace('#include <begin_vertex>', `#include <begin_vertex>\nvCtRest = transformed + uRestOffset;\n${weighted ? BEAT_VERTEX_WEIGHTED : BEAT_VERTEX}`)
       .replace(
         '#include <project_vertex>',
         `#include <project_vertex>
-        vCtNormal = normalize(normalMatrix * normal);
+        vCtNormal = normalize(normalMatrix * ctBeatNormal(normal, position + uRestOffset, ${weighted ? 'aBeatW' : '1.0'}));
         vCtView = normalize(-mvPosition.xyz);
         vCtDepth = -mvPosition.z;
         vCtClip = gl_Position.xw;`,
@@ -747,7 +763,7 @@ ${clip ? 'uniform vec3 uClipCentre;\nuniform float uClipRadius;\nuniform float u
         #include <opaque_fragment>`,
       );
   };
-  const key = `ct-ghost-${clip ? 'c' : ''}`;
+  const key = `ct-ghost-${clip ? 'c' : ''}${weighted ? 'w' : ''}`;
   material.customProgramCacheKey = () => key;
   return material;
 }

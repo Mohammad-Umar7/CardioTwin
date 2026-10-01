@@ -1,6 +1,7 @@
 import { BoxGeometry, BufferAttribute, DataTexture, Group, Mesh, MeshStandardMaterial, Vector3 } from 'three';
 import { describe, expect, it } from 'vitest';
 import type { AnatomyManifest, TargetId } from '@/types/contracts';
+import { BEAT_UNIFORMS } from './beatDeform';
 import { Picker } from './picking';
 import { AnatomyRig, type RigInputs } from './rig';
 
@@ -161,11 +162,21 @@ describe('anatomy rig: exploded view', () => {
     expect(worldOf(back.mesh).distanceTo(new Vector3(0.33, -0.08, 0.24))).toBeLessThan(1e-9);
   });
 
-  it('beats the heart and its coronaries together but never the great vessels’ node', () => {
+  it('beats in the shaders with one shared field, never through a node matrix', () => {
     const { rig, node } = makeRig();
-    rig.update(inputs({ beatV: 1 }));
-    expect(worldOf(node('Heart_Wall_Anterior').mesh).distanceTo(new Vector3(0, 0, 0.13))).toBeGreaterThan(1e-4);
+    rig.update(inputs({ beatV: 1, beatA: 0.5 }));
+    // No node matrix carries the beat (walls and vessels cannot disagree at a junction).
+    expect(worldOf(node('Heart_Wall_Anterior').mesh).distanceTo(new Vector3(0, 0, 0.13))).toBeLessThan(1e-9);
     expect(worldOf(node('GreatVessel_Aorta').mesh).distanceTo(new Vector3(-0.1, 0.4, -0.2))).toBeLessThan(1e-9);
+    // The shared uniforms drive every heart and great-vessel shader.
+    expect(BEAT_UNIFORMS.uBeatV.value).toBe(1);
+    expect(BEAT_UNIFORMS.uBeatAtrial.value).toBe(0.5);
+    // Great vessels carry a per-vertex weight (1 at the heart, 0 far along them); heart parts do not need one.
+    const aorta = node('GreatVessel_Aorta').mesh.geometry;
+    expect(aorta.getAttribute('aBeatW')?.count).toBe(aorta.getAttribute('position').count);
+    expect(node('Heart_Wall_Anterior').mesh.geometry.getAttribute('aBeatW')).toBeUndefined();
+    rig.update(inputs());
+    expect(BEAT_UNIFORMS.uBeatV.value).toBe(0);
   });
 });
 

@@ -9,7 +9,7 @@ import {
   stageById,
   stagePose,
 } from './assembly';
-import { BEATS_WITH_HEART, PICKABLE_KINDS, assemblyStageOf, beatModeOf, classifyNode } from './classify';
+import { BEATS_WITH_HEART, GREAT_VESSEL_KINDS, PICKABLE_KINDS, assemblyStageOf, beatModeOf, classifyNode } from './classify';
 import { BEAT_MODE } from './beatDeform';
 
 describe('cold-load assembly choreography', () => {
@@ -105,11 +105,18 @@ describe('node classification', () => {
     expect(assemblyStageOf('oesophagus', 'Oesophagus')).toBe('lungs');
   });
 
-  it('beats the heart and its riders through node matrices and blends the great-vessel roots', () => {
-    expect(beatModeOf('myocardium')).toBe(BEAT_MODE.atrial);
-    expect(beatModeOf('coronary')).toBe(BEAT_MODE.atrial);
-    expect(beatModeOf('aorta')).toBe(BEAT_MODE.root);
-    expect(beatModeOf('bone')).toBe(BEAT_MODE.none);
+  it('moves the heart, its riders and the great vessels with ONE beat field, and keeps the chest still', () => {
+    // One field for every kind that touches the heart: no seam can open between any two of them.
+    for (const kind of ['myocardium', 'coronary', 'leftMain', 'valve', 'papillary', 'cardiacVein', 'fat'] as const) {
+      expect(beatModeOf(kind)).toBe(BEAT_MODE.heart);
+    }
+    for (const kind of ['aorta', 'pulmonaryArtery', 'pulmonaryVeins', 'systemicVein'] as const) {
+      expect(beatModeOf(kind)).toBe(BEAT_MODE.heart);
+      expect(GREAT_VESSEL_KINDS.has(kind)).toBe(true);
+    }
+    for (const kind of ['bone', 'cartilage', 'lung', 'skin', 'muscle', 'diaphragm', 'airway', 'oesophagus'] as const) {
+      expect(beatModeOf(kind)).toBe(BEAT_MODE.none);
+    }
   });
 
   it('assigns the halves of the heart to their own assembly beats', () => {

@@ -5,7 +5,7 @@
  * layered on top when a GLB carries them.
  */
 import { ShaderChunk, type IUniform } from 'three';
-import { BEAT_VERTEX, BEAT_VERTEX_PARS } from './beatDeform';
+import { BEAT_VERTEX, BEAT_VERTEX_PARS, BEAT_VERTEX_WEIGHTED, BEAT_WEIGHT_PARS, beatNormalChunk } from './beatDeform';
 
 type Shader = { vertexShader: string; fragmentShader: string; uniforms: Record<string, IUniform> };
 
@@ -102,6 +102,8 @@ export interface PatchFlags {
   clipAlong: boolean;
   /** Darken grazing angles (a thin dark outline that separates the coronaries from the fat they lie on). */
   edgeShade: boolean;
+  /** The beat is weighted per vertex by `aBeatW` (great vessels: 1 at the heart, 0 far along them). */
+  beatWeighted: boolean;
   /** Noise octaves (tier dependent). */
   octaves: number;
 }
@@ -121,6 +123,7 @@ export const NO_PATCH: PatchFlags = {
   fadeAlpha: false,
   clipAlong: false,
   edgeShade: false,
+  beatWeighted: false,
   octaves: 3,
 };
 
@@ -139,6 +142,7 @@ export function patchKey(f: PatchFlags): string {
     f.fadeAlpha ? 'a' : '',
     f.clipAlong ? 'g' : '',
     f.edgeShade ? 'e' : '',
+    f.beatWeighted ? 'w' : '',
     `o${f.octaves}`,
   ].join('');
 }
@@ -155,16 +159,19 @@ export function patchTissueShader(shader: Shader, uniforms: Record<string, IUnif
     '#include <common>',
     `#include <common>
 ${BEAT_VERTEX_PARS}
+${f.beatWeighted ? BEAT_WEIGHT_PARS : ''}
 varying vec3 vCtRest;
 ${f.territory ? `attribute vec3 ${f.territory};\nvarying vec3 vCtTerritory;` : ''}
 ${f.cavity ? 'attribute vec3 aCavity;\nvarying vec3 vCtCavity;' : ''}
 ${f.clipAlong ? 'attribute float _dist_heart;\nvarying float vCtAlong;' : ''}`,
   );
+  // The twist turns the surface, so it turns the normal too (before three derives the view-space normal).
+  vs = vs.replace('#include <beginnormal_vertex>', `#include <beginnormal_vertex>\n${beatNormalChunk(f.beatWeighted)}`);
   vs = vs.replace(
     '#include <begin_vertex>',
     `#include <begin_vertex>
 vCtRest = transformed + uRestOffset;
-${BEAT_VERTEX}
+${f.beatWeighted ? BEAT_VERTEX_WEIGHTED : BEAT_VERTEX}
 ${f.territory ? `vCtTerritory = ${f.territory};` : ''}
 ${f.cavity ? 'vCtCavity = aCavity;' : ''}
 ${f.clipAlong ? 'vCtAlong = _dist_heart;' : ''}`,

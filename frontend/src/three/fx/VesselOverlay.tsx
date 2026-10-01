@@ -122,7 +122,7 @@ export function VesselOverlay({ tier, treeLengthOf, restOffsetOf }: VesselOverla
       }
       const source = baseNode(nodeName);
       const rest = restOffsetOf(source);
-      const material = createOverlayMaterial(shared, attribute, rest ? BEAT_MODE.atrial : BEAT_MODE.none);
+      const material = createOverlayMaterial(shared, attribute, rest ? BEAT_MODE.heart : BEAT_MODE.none);
       if (rest) material.uniforms.uRestOffset.value.copy(rest);
       material.uniforms.uTreeLength.value = treeLengthOf(source) ?? 1;
       const overlay = new Mesh(object.geometry, material);

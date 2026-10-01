@@ -74,7 +74,7 @@ const vertexShader = /* glsl */ `
   varying float vAlpha;
   varying float vHalo;
 
-  // The anatomy's non-affine beat terms (atrial kick) — same chunk and shared uniforms as the vessels.
+  // The anatomy's heartbeat field — same chunk and shared uniforms as the vessels (beatDeform.ts).
   ${BEAT_VERTEX_PARS}
   #include <clipping_planes_pars_vertex>
 
@@ -89,7 +89,7 @@ const vertexShader = /* glsl */ `
   vec3 toWorld(vec4 t, out float alpha) {
     int n = nodeOf(t.w);
     alpha = uNodeAlpha[n];
-    return (uNode[n] * vec4(ctBeat(t.xyz), 1.0)).xyz;
+    return (uNode[n] * vec4(ctBeat(t.xyz, 1.0), 1.0)).xyz;
   }
 
   void collapse() {
@@ -267,7 +267,7 @@ export function createFlowMaterial(riskLut: Texture, inflate: number): FlowMater
     // are already in the rest frame, hence a zero rest offset; coronaries use the atrial-only mode.
     ...BEAT_UNIFORMS,
     uRestOffset: { value: new Vector3() },
-    uBeatMode: { value: BEAT_MODE.atrial },
+    uBeatMode: { value: BEAT_MODE.heart },
     uCentre: { value: null },
     uTexWidth: { value: 1 },
     uSpacing: { value: 0.008 },

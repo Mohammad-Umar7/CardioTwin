@@ -5,8 +5,6 @@ import { useManifest, useSchemaIndex, useVessels } from '@/hooks/useData';
 import { useUiStore, type Chrome } from '@/state/uiStore';
 import { useViewerStore } from '@/state/viewerStore';
 import { anchorsVersion, getAnchors } from '../anatomy/anchors';
-import { BEAT_UNIFORMS } from '../anatomy/beatDeform';
-import { BEATS_WITH_HEART, type TissueKind } from '../anatomy/classify';
 import { ANTERIOR_SUFFIX, cutSide, isSplitNode } from '../anatomy/cutSplit';
 import { heartFrameFrom } from '../anatomy/explode';
 import { useCameraState } from '../camera/cameraState';
@@ -278,8 +276,9 @@ export function LabelProjector() {
       let anchor: Vector3 | null = null;
       let face = 1;
       if (track && track.centre && mesh) {
-        const kind = mesh.userData.ctKind as TissueKind;
-        const beat = BEATS_WITH_HEART.has(kind) ? BEAT_UNIFORMS.uBeatMatrix.value : null;
+        // Node matrices carry the peel and the assembly, never the beat (it runs in the vertex shaders), so the
+        // anchors follow the dissection and hold still through the heartbeat (DESIGN_SYSTEM §6).
+        const beat = null;
         restToDisplayed(mesh, track.centre, beat, displayed);
         // A vessel split at the cut plane (cutSplit.ts): its opening-side trunk rides the anterior half.
         const front = isSplitNode(track.node) ? nodeMesh(`${track.node}${ANTERIOR_SUFFIX}`, now) : null;

@@ -101,7 +101,7 @@ export function createOverlayMaterial(shared: OverlayShared, arclenAttribute: st
         vec4 mvPosition = mv;
         #include <clipping_planes_vertex>
         vArc = ${arclenAttribute};
-        vNormalV = normalize(normalMatrix * normal);
+        vNormalV = normalize(normalMatrix * ctBeatNormal(normal, position + uRestOffset, 1.0));
         vViewV = -mv.xyz;
         gl_Position = projectionMatrix * mv;
       }

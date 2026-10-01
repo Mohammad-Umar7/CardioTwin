@@ -90,17 +90,30 @@ export function atrial(phase: number): number {
 }
 
 /**
- * Deformation amplitudes (fractions) applied at full activation. They sit inside LUMEN's 3 % budget for
- * the visible silhouette; the longitudinal term is what makes the base "descend" toward a nearly still
- * apex, which is how a real ventricle ejects (AV-plane displacement).
+ * Deformation amplitudes at full activation (end-systole, or the peak of the atrial kick), as fractions of the
+ * apex-to-base length L or of the local radius. They follow adult cine-MRI / speckle-tracking norms, scaled to
+ * this heart (L ≈ 72 mm), and drive the one displacement field of `beatDeform.ts`:
+ *   - the AV plane descends toward a nearly still apex: mitral annular plane systolic excursion (MAPSE)
+ *     12–15 mm, i.e. 13 % of L here; the ventricles shorten evenly from apex to base;
+ *   - the epicardium moves in by about 6 % of its radius at mid-ventricle (the cavity far more; the wall
+ *     thickens 30–50 %);
+ *   - LV twist: the apex rotates about 9° counter-clockwise and the base about 4° clockwise, viewed from the
+ *     apex (net twist 10–15°);
+ *   - the atria fill and swell while the ventricles eject (reservoir phase), then squeeze in the atrial kick.
  */
 export const BEAT_AMPLITUDE = {
-  /** Radial shortening toward the long axis at end-systole. */
-  radial: 0.03,
-  /** Longitudinal shortening along the long axis (the base moves toward the apex). */
-  longitudinal: 0.045,
-  /** Regional atrial squeeze toward the atrial centre at the peak of the kick. */
-  atrial: 0.04,
+  /** AV-plane descent toward the apex at end-systole, fraction of the apex-to-base length. */
+  longitudinal: 0.13,
+  /** Inward motion of the ventricular epicardium toward the long axis at end-systole, fraction of the radius. */
+  radial: 0.06,
+  /** Rotation of the apex at end-systole, degrees, counter-clockwise viewed from the apex. */
+  twistApexDeg: 9,
+  /** Rotation of the base at end-systole, degrees, clockwise viewed from the apex. */
+  twistBaseDeg: 4,
+  /** Atrial squeeze toward the atrial centre at the peak of the kick, fraction of the distance. */
+  atrial: 0.06,
+  /** Atrial swell away from the atrial centre at end-systole (reservoir filling), fraction of the distance. */
+  atrialReservoir: 0.03,
 } as const;
 
 /** Legacy uniform scale (procedural heart, fx phase lock): 1 → SYSTOLE_SCALE at end-systole, never > 1. */
