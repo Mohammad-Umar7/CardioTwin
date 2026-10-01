@@ -33,6 +33,7 @@ import { ANTERIOR_SUFFIX, SPLIT_AT_CUT, SPLIT_BY_PIECE } from './cutSplit';
 import { heightOf, setBeatActivation, setBeatFrame } from './beatDeform';
 import { PointHash, graphComponents, vesselBeatWeights, weldGraph } from './beatWeights';
 import { straightCutDistance } from './vesselCuts';
+import { deflateDirections } from './fatDeflate';
 import { cavityAttribute, type CentrelinePoint } from './cavity';
 import { axial, correctWeights, meanAngle, rvShare } from './territory';
 import { FRAME_UNIFORMS } from './shaders';
@@ -158,6 +159,8 @@ const BEAT_WEIGHT_TOUCH = 0.02;
  */
 const DESCENDING_AORTA = { behind: 0.4, cutAbove: 0.95, floor: 0 } as const;
 /** Specimen cuts (vesselCuts.ts): a vessel's root is where `_dist_heart` < 1.5 mm; 10 mm geodesic margin. */
+/** Within 2 mm of the cut the fat's pull-in keeps to the plane, so its cut faces stay flat (fatDeflate.ts). */
+const FAT_SEAM_BAND = 0.02;
 const VESSEL_CUT_ROOT = 0.015;
 const VESSEL_CUT_MARGIN = 0.1;
 /**
@@ -638,10 +641,12 @@ export class AnatomyRig {
       }
     }
 
-    // Before the first material: the great vessels' shaders read `aBeatW` and the straightened `_dist_heart`.
+    // Before the first material: the great vessels' shaders read `aBeatW` and the straightened `_dist_heart`, the
+    // fat's reads `aDeflate`.
     this.straightenVesselCuts();
     this.cutDescendingAorta();
     this.assignBeatWeights();
+    this.assignFatDeflate();
     for (const entry of this.entries) {
       entry.mesh.material = this.solidFor(entry);
       entry.solidAmt = 0;
@@ -748,6 +753,7 @@ export class AnatomyRig {
         cavity: !!geometry.getAttribute('aCavity'),
         along: !!geometry.getAttribute('_dist_heart'),
         beatWeighted: !!geometry.getAttribute('aBeatW'),
+        deflateField: !!geometry.getAttribute('aDeflate'),
       });
       entry.solid.set(key, m);
     }
@@ -848,6 +854,29 @@ export class AnatomyRig {
       });
       g.setAttribute('aBeatW', new BufferAttribute(w, 1));
     }
+  }
+
+  /**
+   * `aDeflate` on the epicardial fat (fatDeflate.ts): its pull-in direction (tissue.ts `FAT_DEFLATE`) as a function
+   * of position, the same in both halves where they meet at the cut, so the fat closes over its seam at rest.
+   */
+  private assignFatDeflate(): void {
+    const fat = this.entries.filter((e) => e.kind === 'fat');
+    if (fat.length === 0 || fat.every((e) => (e.mesh.geometry as BufferGeometry).getAttribute('aDeflate'))) return;
+    const parts = fat.map((e) => {
+      const g = e.mesh.geometry as BufferGeometry;
+      const pos = g.getAttribute('position');
+      const positions = new Float32Array(pos.count * 3);
+      for (let i = 0; i < pos.count; i += 1) {
+        positions[i * 3] = pos.getX(i);
+        positions[i * 3 + 1] = pos.getY(i);
+        positions[i * 3 + 2] = pos.getZ(i);
+      }
+      return { positions, index: g.index ? g.index.array : null, offset: [e.restOffset.x, e.restOffset.y, e.restOffset.z] as const };
+    });
+    const { cutPoint: p, cutNormal: n } = this.frame;
+    const dirs = deflateDirections(parts, { point: [p.x, p.y, p.z], normal: [n.x, n.y, n.z] }, { band: FAT_SEAM_BAND });
+    fat.forEach((e, k) => (e.mesh.geometry as BufferGeometry).setAttribute('aDeflate', new BufferAttribute(dirs[k]!, 3)));
   }
 
   /** Every coronary material of a target (all looks / tiers built so far), for the risk animation. */

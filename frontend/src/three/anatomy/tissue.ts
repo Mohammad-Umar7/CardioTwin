@@ -104,6 +104,8 @@ export interface TissueOptions {
   along?: boolean;
   /** The geometry carries `aBeatW` (a great vessel: beats at its junction with the heart, still far along it). */
   beatWeighted?: boolean;
+  /** The geometry carries `aDeflate` (the fat's pull-in direction, the same in both halves at their seam). */
+  deflateField?: boolean;
 }
 
 /** Absolute display inflation of coronary walls (≈ the spec's 1.3×, documented in §7.3). */
@@ -580,13 +582,19 @@ export function createTissueMaterial(o: TissueOptions): TissueMaterial {
   material.userData.ct = { uniforms, kind: o.kind, look: o.look, flags, floorScale: realistic ? 0.45 : 1 };
   const inflate = (o.inflate ?? 0) > 0;
   const deflate = !inflate && !!L.deflate;
+  // Along `aDeflate` (fatDeflate.ts) when the rig computed it: a cut half's own normals differ from the other
+  // half's at the seam and pulled the halves apart there (the cap showed through as a pale line).
+  const deflateField = deflate && !!o.deflateField;
   const recede = !inflate ? L.recede ?? 0 : 0;
   material.onBeforeCompile = (shader) => {
     patchTissueShader(shader, uniforms, flags);
     if (deflate) {
       shader.vertexShader = shader.vertexShader
-        .replace('#include <common>', '#include <common>\nuniform float uInflate;')
-        .replace('vCtRest = transformed + uRestOffset;', 'vCtRest = transformed + uRestOffset;\ntransformed += normalize(objectNormal) * uInflate;');
+        .replace('#include <common>', `#include <common>\nuniform float uInflate;${deflateField ? '\nattribute vec3 aDeflate;' : ''}`)
+        .replace(
+          'vCtRest = transformed + uRestOffset;',
+          `vCtRest = transformed + uRestOffset;\ntransformed += ${deflateField ? 'aDeflate' : 'normalize(objectNormal)'} * uInflate;`,
+        );
     }
     if (recede > 0) {
       // Push the DEPTH (not the screen position) away from the camera, like the coronaries' pull toward it.
@@ -618,7 +626,7 @@ export function createTissueMaterial(o: TissueOptions): TissueMaterial {
         );
     }
   };
-  const key = `ct-tissue-${physical ? 'P' : 'S'}-${patchKey(flags)}-${inflate ? 'inf' : deflate ? 'def' : ''}${recede > 0 ? `-rec${recede}` : ''}`;
+  const key = `ct-tissue-${physical ? 'P' : 'S'}-${patchKey(flags)}-${inflate ? 'inf' : deflateField ? 'defF' : deflate ? 'def' : ''}${recede > 0 ? `-rec${recede}` : ''}`;
   material.customProgramCacheKey = () => key;
   return material;
 }
