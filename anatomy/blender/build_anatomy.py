@@ -482,6 +482,18 @@ def carve_lung(lung: bpy.types.Object, masters: list[bpy.types.Object], margin: 
             R = np.array(m.matrix_world)[:3, :3]
             N = N.reshape(-1, 3) @ R.T
             N /= np.maximum(np.linalg.norm(N, axis=1, keepdims=True), 1e-12)
+            # An open master has no inside for the exact solver (it can remove nearly the whole organ): skip it.
+            e_ = np.sort(np.concatenate([mF[:, [0, 1]], mF[:, [1, 2]], mF[:, [2, 0]]]), axis=1)
+            _, e_count = np.unique(e_, axis=0, return_counts=True)
+            if int((e_count == 1).sum()) > 0:
+                log(f"    carve {lung.name}: master {m.name} is open ({int((e_count == 1).sum())} boundary edges); skipped")
+                continue
+            # An inside-out master would be inflated inwards and, as an inverted cutter, subtract everything
+            # outside it: turn it right way out for the cutter, and say so.
+            if mo.signed_volume(mV, mF) < 0:
+                N = -N
+                mF = mF[:, ::-1].copy()
+                log(f"    carve {lung.name}: master {m.name} is inside-out; flipped for the cutter")
             cut = new_object("_LungCutter", new_mesh("_LungCutter", mV + N * inflate, mF))
             if coarse and tri_count(cut) > 20000:  # a coarse impression of the big masters for the first pass (thin
                 decimate_to(cut, 12000)             # vessel tubes are never decimated: collapsing a thin tube shrinks it)
@@ -1869,10 +1881,24 @@ def build(args: argparse.Namespace) -> None:
         log("collisions: " + "; ".join(f"{k}: {v['max_penetration_before_mm']} mm" for k, v in collisions.items()))
     carve_cfg = cfg.get("lung_carve")
     if carve_cfg:
+        # A carve that fails, or collapses the organ, keeps it uncarved (and says why).
         for lung_name in ("Lung_L", "Lung_R"):
             if lung_name in objects:
-                info = carve_lung(objects[lung_name], [objects[n] for n in carve_cfg["masters"] if n in objects],
-                                  carve_cfg["margin_mm"] * scale, next(s_.budget for s_ in specs if s_.node == lung_name))
+                names = carve_cfg["masters"]
+                budget = next(s_.budget for s_ in specs if s_.node == lung_name)
+                ob_ = objects[lung_name]
+                backup = ob_.data.copy()
+                try:
+                    info = carve_lung(ob_, [objects[n] for n in names if n in objects], carve_cfg["margin_mm"] * scale, budget)
+                    if tri_count(ob_) < 0.3 * budget:
+                        raise ValueError(f"collapsed to {tri_count(ob_)} triangles")
+                except ValueError as err:
+                    failed = ob_.data
+                    ob_.data = backup
+                    bpy.data.meshes.remove(failed)
+                    info = {"skipped": str(err)}
+                else:
+                    bpy.data.meshes.remove(backup)
                 collisions[f"{lung_name} carved"] = info
                 log(f"  {lung_name}: cardiac impression carved {info}")
 
