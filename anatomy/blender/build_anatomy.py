@@ -872,6 +872,57 @@ def territory_colors(
 AHA_STANDARD = {1: 0, 2: 0, 7: 0, 8: 0, 13: 0, 14: 0, 17: 0, 3: 2, 4: 2, 9: 2, 10: 2, 15: 2, 5: 1, 6: 1, 11: 1, 12: 1, 16: 1}
 
 
+#: Samples of the LV cavity profile along its axis (apex -> mitral centre) and rays per sample.
+LV_PROFILE_SAMPLES, LV_PROFILE_RAYS = 17, 36
+
+
+def lv_cavity_profile(WV: np.ndarray, WF: np.ndarray, mv_V: np.ndarray, base: np.ndarray, apex: np.ndarray,
+                      scale: float) -> dict:
+    """The LV's own frame for the heartbeat's wall thickening: its axis from the apex to the mitral hinge centre
+    (valve vertices touching the wall, basal quartile; the AHA-17 definition) and, at each of LV_PROFILE_SAMPLES
+    heights along it, the radii of its cavity and of the wall around it: the median distances from the axis to the
+    first wall surface each of LV_PROFILE_RAYS rays across it meets (the endocardium; 0 where the axis runs inside
+    the myocardium, at the apex) and to where the ray leaves that wall again (the epicardium of the free wall, the
+    RV face of the septum)."""
+    u_ba = mo.unit(apex - base)
+    touch = nearest_distance(mv_V, WV) <= 1.0 * scale
+    proj = (mv_V - base) @ u_ba
+    hinge = mv_V[touch & (proj <= np.quantile(proj, 0.25))]
+    ma_c = hinge.mean(axis=0) if len(hinge) > 20 else mv_V.mean(axis=0)
+    axis = ma_c - apex
+    L = float(np.linalg.norm(axis))
+    a = axis / L
+    e1 = mo.unit(np.cross(a, [0.0, 0.0, 1.0]) if abs(a[2]) < 0.9 else np.cross(a, [1.0, 0.0, 0.0]))
+    e2 = np.cross(a, e1)
+    bvh = BVHTree.FromPolygons(WV.tolist(), WF.tolist(), all_triangles=True)
+    endo, epi = [], []
+    for u in np.linspace(0.0, 1.0, LV_PROFILE_SAMPLES):
+        o = apex + a * (u * L)
+        r_in, r_out = [], []
+        for t in np.linspace(0.0, 2 * np.pi, LV_PROFILE_RAYS, endpoint=False):
+            d = Vector(math.cos(t) * e1 + math.sin(t) * e2)
+            loc, nrm, _, dist = bvh.ray_cast(Vector(o), d, 60.0 * scale)
+            if loc is None:
+                continue
+            # a face seen from its front: the ray left the cavity; from its back: it started in the myocardium
+            start = float(dist) if Vector(nrm).dot(d) < 0.0 else 0.0
+            if start > 0.0:
+                loc2, nrm2, _, dist2 = bvh.ray_cast(loc + d * (1e-3 * scale), d, 40.0 * scale)
+                if loc2 is None or Vector(nrm2).dot(d) <= 0.0:
+                    continue
+                r_in.append(start)
+                r_out.append(start + 1e-3 * scale + float(dist2))
+            else:
+                r_in.append(0.0)
+                r_out.append(float(dist))
+        endo.append(float(np.median(r_in)) if r_in else 0.0)
+        epi.append(float(np.median(r_out)) if r_out else 0.0)
+    endo, epi = np.array(endo), np.array(epi)
+    endo[0] = 0.0
+    epi = np.maximum(epi, endo)
+    return {"apex": apex, "mitral_center": ma_c, "endo_radius": endo, "epi_radius": epi}
+
+
 def papillary_proper(ob, WV: np.ndarray, WF: np.ndarray, scale: float) -> np.ndarray:
     """World vertices of the papillary muscles proper: the components that stand off the wall (their outer tenth more
     than 4 mm from it), not the trabeculae carneae, the moderator band or the muscles' roots that lie on it (the same
@@ -1731,6 +1782,9 @@ def build(args: argparse.Namespace) -> None:
     base, apex, axis = mo.heart_long_axis(world_vertices(wall), valve_V)
     plane_co, plane_no = mo.heart_cut_plane(base, apex, ANTERIOR)
     log(f"heart long axis {np.round(axis, 3).tolist()}, cut normal {np.round(plane_no, 3).tolist()}")
+    lv = lv_cavity_profile(wall_V, _wF, to_scene(cache.get("FMA7235")[0]), base, apex, scale)
+    log(f"LV radii (mm, apex -> mitral centre): cavity {np.round(lv['endo_radius'] / scale, 1).tolist()}, "
+        f"wall {np.round(lv['epi_radius'] / scale, 1).tolist()}")
 
     # --- epicardial fat in the AV and interventricular grooves (split with the same plane) ---------
     fat_specs = [s for s in specs if s.raw.get("generate") == "epicardial_fat"]
@@ -2009,6 +2063,12 @@ def build(args: argparse.Namespace) -> None:
             "cut_plane": {
                 "point": np.round(mo.to_gltf(plane_co[None])[0], 5).tolist(),
                 "normal": np.round(mo.to_gltf(plane_no[None])[0], 5).tolist(),
+            },
+            "lv": {
+                "apex": np.round(mo.to_gltf(lv["apex"][None])[0], 5).tolist(),
+                "mitral_center": np.round(mo.to_gltf(lv["mitral_center"][None])[0], 5).tolist(),
+                "endo_radius": np.round(lv["endo_radius"], 5).tolist(),
+                "epi_radius": np.round(lv["epi_radius"], 5).tolist(),
             },
         },
         "territories": {**terr_cfg, "encoding": "COLOR_0.rgb = (LAD, LCX, RCA) weights; r+g+b = territory confidence"},

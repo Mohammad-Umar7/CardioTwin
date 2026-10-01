@@ -1,7 +1,17 @@
 import { Vector3 } from 'three';
 import { describe, expect, it } from 'vitest';
-import { ANCHOR_HEIGHT, BEAT_VERTEX_PARS, atrialWeight, beatDisplace, heightOf, longitudinalProfile, twistProfile } from './beatDeform';
-import { heartFrameFrom } from './explode';
+import {
+  ANCHOR_HEIGHT,
+  BEAT_VERTEX_PARS,
+  atrialWeight,
+  beatDisplace,
+  heightOf,
+  longitudinalProfile,
+  lvContractedRadius,
+  lvRadii,
+  twistProfile,
+} from './beatDeform';
+import { LV_ENDO_SAMPLES, heartFrameFrom } from './explode';
 import {
   ATRIAL_FILL,
   BEAT_AMPLITUDE,
@@ -218,7 +228,103 @@ describe('beat deformation (one field in the rest frame)', () => {
   it('compiles the same constants into the shader as the CPU twin uses', () => {
     expect(BEAT_VERTEX_PARS).toContain(`CT_LONG = ${BEAT_AMPLITUDE.longitudinal}`);
     expect(BEAT_VERTEX_PARS).toContain(`CT_RAD = ${BEAT_AMPLITUDE.radial}`);
+    expect(BEAT_VERTEX_PARS).toContain(`CT_LV_AREA = ${BEAT_AMPLITUDE.lvArea}`);
+    expect(BEAT_VERTEX_PARS).toContain(`uLvEndo[${LV_ENDO_SAMPLES}]`);
     expect(BEAT_VERTEX_PARS).toContain(`CT_ANCHOR = ${ANCHOR_HEIGHT}`);
     expect(BEAT_VERTEX_PARS).not.toMatch(/\$\{/);
+  });
+});
+
+describe('LV wall thickening (the LV frame)', () => {
+  // A cavity along the heart's own axis (so twist and AV-plane descent move a radial line rigidly): 24 mm across at
+  // the base, narrowing to the apex, in a 9 mm wall.
+  const n = LV_ENDO_SAMPLES - 1;
+  const endo = Array.from({ length: LV_ENDO_SAMPLES }, (_, i) => 0.24 * Math.sqrt(i / n));
+  const epi = endo.map((r) => r + 0.09);
+  const apex = [0.47, -0.42, 0.36];
+  const base = [-0.09, -0.13, 0];
+  const lvOf = (e: unknown, o: unknown) => ({ apex, mitral_center: base, endo_radius: e, epi_radius: o });
+  const frame = heartFrameFrom({ apex, base_center: base, lv: lvOf(endo, epi) });
+  const L = frame.length;
+  const side = new Vector3(0, 0, 1).cross(frame.axis).normalize();
+  const side2 = new Vector3().crossVectors(frame.axis, side).normalize();
+  const at = (h: number, r = 0, theta = 0) =>
+    frame.apex
+      .clone()
+      .addScaledVector(frame.axis, h * L)
+      .addScaledVector(side, Math.cos(theta) * r)
+      .addScaledVector(side2, Math.sin(theta) * r);
+  const move = (p: Vector3, v: number, a = 0) => beatDisplace(frame, v, a, p);
+  /** Distance of a moved point from the moved axis at the same height. */
+  const radius = (h: number, r: number, v: number, theta = 0.4) => move(at(h, r, theta), v).distanceTo(move(at(h), v));
+  const outer = 1 - BEAT_AMPLITUDE.radial; // the whole heart's own inward motion at mid-ventricle
+  const k = BEAT_AMPLITUDE.lvArea;
+
+  it('reads the LV frame from the manifest, and ignores a malformed one', () => {
+    expect(frame.lv?.endo).toHaveLength(LV_ENDO_SAMPLES);
+    expect(frame.lv?.axis.dot(frame.axis)).toBeCloseTo(1, 9);
+    expect(heartFrameFrom({ apex, base_center: base, lv: lvOf([0.1, 0.2], epi) }).lv).toBeUndefined();
+    expect(heartFrameFrom({ apex, base_center: base, lv: lvOf(endo, undefined) }).lv).toBeUndefined();
+    expect(heartFrameFrom({ apex, base_center: base }).lv).toBeUndefined();
+    const [re, ro] = lvRadii(frame.lv!, 0.5);
+    expect(re).toBeCloseTo(0.24 * Math.sqrt(0.5), 2);
+    expect(ro - re).toBeCloseTo(0.09, 9);
+  });
+
+  it('shrinks the cavity far more than the heart and thickens the wall, keeping the outer surface', () => {
+    const h = 0.5;
+    const [re, ro] = lvRadii(frame.lv!, h);
+    const ri = radius(h, re, 1);
+    const rw = radius(h, ro, 1);
+    expect((ri * ri) / (re * re)).toBeCloseTo((1 - k) * outer * outer, 6);
+    expect(rw / ro).toBeCloseTo(outer, 6);
+    // the endocardium moves in several times farther than the epicardium, and the wall thickens 30–50 %
+    expect(re - ri).toBeGreaterThan(2.5 * (ro - rw));
+    expect((rw - ri) / (ro - re)).toBeGreaterThan(1.3);
+    expect((rw - ri) / (ro - re)).toBeLessThan(1.5);
+    // through the wall every ring keeps its share of the (grown) wall
+    const mid = radius(h, (re + ro) / 2, 1);
+    expect(mid).toBeGreaterThan(ri);
+    expect(mid).toBeLessThan(rw);
+  });
+
+  it('scales what lies inside the cavity (papillary muscles, chordae) evenly toward the axis', () => {
+    const h = 0.6;
+    const [re, ro] = lvRadii(frame.lv!, h);
+    for (const f of [0.2, 0.5, 0.9]) expect(radius(h, f * re, 1) / (f * re)).toBeCloseTo(Math.sqrt(1 - k) * outer, 6);
+    // continuous at both surfaces of the wall
+    expect(lvContractedRadius(re + 1e-9, re, ro, k)).toBeCloseTo(re * Math.sqrt(1 - k), 6);
+    expect(lvContractedRadius(ro - 1e-9, re, ro, k)).toBeCloseTo(ro, 6);
+  });
+
+  it('moves everything outside the LV wall (the RV, the fat) only with the whole heart', () => {
+    const h = 0.55;
+    const [, ro] = lvRadii(frame.lv!, h);
+    expect(radius(h, ro + 0.06, 1) / (ro + 0.06)).toBeCloseTo(outer, 6);
+  });
+
+  it('leaves the apex still and the atria to the atrial terms', () => {
+    expect(move(frame.apex, 1).distanceTo(frame.apex)).toBeLessThan(1e-12);
+    const r0 = at(1.4, 0.2).distanceTo(at(1.4));
+    expect(radius(1.4, 0.2, 1)).toBeCloseTo(r0 * (1 + BEAT_AMPLITUDE.atrialReservoir * atrialWeight(1.4)), 6);
+  });
+
+  it('is continuous everywhere, so meshes that touch at rest still touch through the whole beat', () => {
+    const eps = 1e-4 * L;
+    let worst = 0;
+    for (let i = 0; i < 4000; i += 1) {
+      const h = -0.2 + (2.6 * i) / 4000;
+      const p = at(h, (0.05 + ((i * 37) % 100) / 200) * L, i * 0.61);
+      const d = new Vector3(Math.sin(i * 1.3), Math.cos(i * 0.7), Math.sin(i * 2.1)).normalize().multiplyScalar(eps);
+      const q = p.clone().add(d);
+      for (const [v, a] of [
+        [1, 0],
+        [0.5, 0],
+        [-ATRIAL_FILL, 1],
+      ] as const) {
+        worst = Math.max(worst, move(q, v, a).sub(move(p, v, a)).sub(d).length() / eps);
+      }
+    }
+    expect(worst).toBeLessThan(1);
   });
 });

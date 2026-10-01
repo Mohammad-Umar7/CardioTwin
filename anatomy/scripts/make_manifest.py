@@ -409,6 +409,7 @@ def build_manifest(cfg: dict, report: dict, vessels: dict | None = None, definit
             "long_axis": report["heart"]["long_axis"],
             "apex": report["heart"]["apex"],
             "base_center": report["heart"]["base_center"],
+            **({"lv": report["heart"]["lv"]} if "lv" in report["heart"] else {}),
         },
         "territories": {
             "nodes": [s["node"] for s in structures if "territory_weights" in s],

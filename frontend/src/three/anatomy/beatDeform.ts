@@ -13,7 +13,9 @@
  *   - the AV plane descends toward a nearly still apex, the ventricles shortening evenly from apex to base;
  *   - above the AV plane the atria and the great-vessel roots STRETCH between the descending plane and their
  *     anchored roof and venous entries, which stay still (the atrial reservoir phase);
- *   - the ventricular walls move in toward the long axis;
+ *   - the ventricular walls move in toward the long axis, and inside the LV wall the cavity shrinks further around
+ *     the LV's own axis while the wall, nearly incompressible and shortening, gains cross-section: the endocardium
+ *     moves in far more than the epicardium and the wall thickens (`lvContractedRadius`);
  *   - the LV twists: the apex counter-clockwise, the base clockwise, viewed from the apex;
  *   - the atria swell while the ventricles eject and squeeze in the atrial kick.
  * Outside the heart, each great vessel carries a per-vertex weight (`aBeatW`, `beatWeights.ts`): 1 where it
@@ -24,7 +26,7 @@
  * weighted variants) to deform exactly like the anatomy, and `beatDisplace` is the CPU twin.
  */
 import { Vector3, type IUniform } from 'three';
-import type { HeartFrame } from './explode';
+import { LV_ENDO_SAMPLES, type HeartFrame, type LvFrame } from './explode';
 import { BEAT_AMPLITUDE } from './heartbeat';
 
 /** Normalised height (0 = apex, 1 = AV plane) above which the atrial roof and venous anchors stay still. */
@@ -72,10 +74,42 @@ export function heightOf(frame: Pick<HeartFrame, 'apex' | 'axis' | 'length'>, p:
   );
 }
 
+/** Thinnest LV wall the contraction assumes (scene units): a profile sample where no wall was measured. */
+export const LV_MIN_WALL = 0.03;
+
+const lerpProfile = (a: readonly number[], u: number) => {
+  const n = a.length - 1;
+  const x = clamp01(u) * n;
+  const i = Math.min(n - 1, Math.floor(x));
+  return a[i]! + (a[i + 1]! - a[i]!) * (x - i);
+};
+
+/** LV cavity radius and outer wall radius at fraction u of the LV axis (linear between the profile's samples). */
+export function lvRadii(lv: Pick<LvFrame, 'endo' | 'epi'>, u: number): [number, number] {
+  const re = lerpProfile(lv.endo, u);
+  return [re, Math.max(lerpProfile(lv.epi, u), re + LV_MIN_WALL)];
+}
+
+/**
+ * Distance from the LV axis after the LV wall's own contraction by k, a fraction of the cavity's cross-section
+ * (cavity radius re, outer wall radius ro): inside the cavity everything scales by √(1 − k); the outer surface
+ * stays, so the wall's cross-section grows from ro² − re² to ro² − (1 − k)·re² (it thickens, as the nearly
+ * incompressible wall does while it shortens) and each ring keeps its share of it; outside the wall nothing moves.
+ * Continuous at re and at ro.
+ */
+export function lvContractedRadius(r: number, re: number, ro: number, k: number): number {
+  if (r <= re) return r * Math.sqrt(1 - k);
+  if (r >= ro) return r;
+  const g = (ro * ro - (1 - k) * re * re) / (ro * ro - re * re);
+  return Math.sqrt((1 - k) * re * re + (r * r - re * re) * g);
+}
+
 const tmpC = new Vector3();
 const tmpR = new Vector3();
 const tmpK = new Vector3();
 const tmpCa = new Vector3();
+const tmpQ = new Vector3();
+const tmpL = new Vector3();
 
 /** Rodrigues rotation of v about unit k by ang (in place). */
 function rotateAbout(v: Vector3, k: Vector3, ang: number): Vector3 {
@@ -93,7 +127,7 @@ function rotateAbout(v: Vector3, k: Vector3, ang: number): Vector3 {
  * (1 = heart, 0 = still). Allocation-free; `out` may alias p.
  */
 export function beatDisplace(
-  frame: Pick<HeartFrame, 'apex' | 'axis' | 'length'>,
+  frame: Pick<HeartFrame, 'apex' | 'axis' | 'length' | 'lv'>,
   v: number,
   a: number,
   p: Vector3,
@@ -107,6 +141,20 @@ export function beatDisplace(
   const c = tmpC.copy(frame.apex).addScaledVector(ax, h * L);
   const r = tmpR.copy(p).sub(c);
   rotateAbout(r, ax, v * twistProfile(h));
+  const lv = frame.lv;
+  const k = BEAT_AMPLITUDE.lvArea * v * radialProfile(h);
+  if (lv && k !== 0) {
+    // inside the LV wall: the twisted point, contracted toward the LV's own axis
+    const q = tmpQ.copy(c).add(r);
+    const s = (q.x - lv.apex.x) * lv.axis.x + (q.y - lv.apex.y) * lv.axis.y + (q.z - lv.apex.z) * lv.axis.z;
+    const lc = tmpL.copy(lv.apex).addScaledVector(lv.axis, s);
+    const rr = q.distanceTo(lc);
+    if (rr > 1e-12) {
+      const [re, ro] = lvRadii(lv, s / lv.length);
+      q.sub(lc).multiplyScalar(lvContractedRadius(rr, re, ro, k) / rr).add(lc);
+      r.copy(q).sub(c);
+    }
+  }
   r.multiplyScalar(1 - BEAT_AMPLITUDE.radial * v * radialProfile(h));
   const qx = c.x + r.x - ax.x * BEAT_AMPLITUDE.longitudinal * L * v * longitudinalProfile(h);
   const qy = c.y + r.y - ax.y * BEAT_AMPLITUDE.longitudinal * L * v * longitudinalProfile(h);
@@ -139,6 +187,12 @@ export interface BeatUniforms {
   uHeartApex: IUniform<Vector3>;
   uHeartAxis: IUniform<Vector3>;
   uHeartLength: IUniform<number>;
+  /** The LV's own frame (`HeartFrame.lv`); uLvLength 0 = none (the fallback uniform contraction). */
+  uLvApex: IUniform<Vector3>;
+  uLvAxis: IUniform<Vector3>;
+  uLvLength: IUniform<number>;
+  uLvEndo: IUniform<number[]>;
+  uLvEpi: IUniform<number[]>;
 }
 
 /** The one shared set (module singleton, one canvas per page). Updated each frame by the anatomy. */
@@ -148,13 +202,28 @@ export const BEAT_UNIFORMS: BeatUniforms = {
   uHeartApex: { value: new Vector3() },
   uHeartAxis: { value: new Vector3(0, 1, 0) },
   uHeartLength: { value: 1 },
+  uLvApex: { value: new Vector3() },
+  uLvAxis: { value: new Vector3(0, 1, 0) },
+  uLvLength: { value: 0 },
+  uLvEndo: { value: new Array<number>(LV_ENDO_SAMPLES).fill(0) },
+  uLvEpi: { value: new Array<number>(LV_ENDO_SAMPLES).fill(0) },
 };
 
 /** Point the shared uniforms at a heart frame (once per loaded anatomy). */
-export function setBeatFrame(frame: Pick<HeartFrame, 'apex' | 'axis' | 'length'>): void {
+export function setBeatFrame(frame: Pick<HeartFrame, 'apex' | 'axis' | 'length' | 'lv'>): void {
   BEAT_UNIFORMS.uHeartApex.value.copy(frame.apex);
   BEAT_UNIFORMS.uHeartAxis.value.copy(frame.axis);
   BEAT_UNIFORMS.uHeartLength.value = frame.length;
+  const lv = frame.lv;
+  BEAT_UNIFORMS.uLvLength.value = lv ? lv.length : 0;
+  if (lv) {
+    BEAT_UNIFORMS.uLvApex.value.copy(lv.apex);
+    BEAT_UNIFORMS.uLvAxis.value.copy(lv.axis);
+    for (let i = 0; i < LV_ENDO_SAMPLES; i += 1) {
+      BEAT_UNIFORMS.uLvEndo.value[i] = lv.endo[i] ?? 0;
+      BEAT_UNIFORMS.uLvEpi.value[i] = lv.epi[i] ?? 0;
+    }
+  }
 }
 
 /** Set this frame's activations (the anatomy rig, once per frame). */
@@ -177,10 +246,17 @@ uniform float uBeatAtrial;
 uniform vec3 uHeartApex;
 uniform vec3 uHeartAxis;
 uniform float uHeartLength;
+uniform vec3 uLvApex;
+uniform vec3 uLvAxis;
+uniform float uLvLength;
+uniform float uLvEndo[${LV_ENDO_SAMPLES}];
+uniform float uLvEpi[${LV_ENDO_SAMPLES}];
 uniform vec3 uRestOffset;
 uniform float uBeatMode; // 0 = still, 1 = moves with the heart (BEAT_MODE)
 const float CT_LONG = ${glslFloat(BEAT_AMPLITUDE.longitudinal)};
 const float CT_RAD = ${glslFloat(BEAT_AMPLITUDE.radial)};
+const float CT_LV_AREA = ${glslFloat(BEAT_AMPLITUDE.lvArea)};
+const float CT_LV_MIN_WALL = ${glslFloat(LV_MIN_WALL)};
 const float CT_TWIST_APEX = ${glslFloat(TWIST_APEX)};
 const float CT_TWIST_BASE = ${glslFloat(TWIST_BASE)};
 const float CT_ATRIAL = ${glslFloat(BEAT_AMPLITUDE.atrial)};
@@ -196,6 +272,23 @@ vec3 ctRotateAbout(vec3 v, vec3 k, float ang) {
   float s = sin(ang);
   return v * c + cross(k, v) * s + k * (dot(k, v) * (1.0 - c));
 }
+// The LV wall's own contraction toward the LV axis (lvRadii, lvContractedRadius).
+vec3 ctLvContract(vec3 q, float k) {
+  float s = dot(q - uLvApex, uLvAxis);
+  vec3 lc = uLvApex + uLvAxis * s;
+  vec3 d = q - lc;
+  float r = length(d);
+  if (r < 1e-9 || k == 0.0) return q;
+  float x = clamp(s / uLvLength, 0.0, 1.0) * ${glslFloat(LV_ENDO_SAMPLES - 1)};
+  int i = int(min(floor(x), ${glslFloat(LV_ENDO_SAMPLES - 2)}));
+  float re = mix(uLvEndo[i], uLvEndo[i + 1], x - float(i));
+  float ro = max(mix(uLvEpi[i], uLvEpi[i + 1], x - float(i)), re + CT_LV_MIN_WALL);
+  if (r >= ro) return q;
+  float rn = r <= re
+    ? r * sqrt(1.0 - k)
+    : sqrt((1.0 - k) * re * re + (r * r - re * re) * (ro * ro - (1.0 - k) * re * re) / (ro * ro - re * re));
+  return lc + d * (rn / r);
+}
 vec3 ctBeatField(vec3 p) {
   float L = uHeartLength;
   vec3 ax = uHeartAxis;
@@ -203,6 +296,7 @@ vec3 ctBeatField(vec3 p) {
   float h = dot(p - uHeartApex, ax) / L;
   vec3 c = uHeartApex + ax * (h * L);
   vec3 r = ctRotateAbout(p - c, ax, v * ctTwistProfile(h));
+  if (uLvLength > 0.0) r = ctLvContract(c + r, CT_LV_AREA * v * ctRadialProfile(h)) - c;
   r *= 1.0 - CT_RAD * v * ctRadialProfile(h);
   vec3 q = c + r - ax * (CT_LONG * L * v * ctLongProfile(h));
   float wa = ctAtrialProfile(h);

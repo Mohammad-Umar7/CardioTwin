@@ -165,6 +165,40 @@ export interface HeartFrame {
   /** Cut plane that splits the anterior and posterior halves (for hinge and section). */
   cutPoint: Vector3;
   cutNormal: Vector3;
+  /** The LV's own axis and cavity (manifest `heart.lv`), for the heartbeat's wall thickening; absent = none. */
+  lv?: LvFrame;
+}
+
+/** The LV cavity along its own axis: apex → mitral hinge centre, radius at evenly spaced heights. */
+export interface LvFrame {
+  apex: Vector3;
+  /** Unit axis, apex → mitral centre. */
+  axis: Vector3;
+  length: number;
+  /** Cavity (endocardial) radius at heights i / (n - 1) of `length`, scene units; 0 at the apex. */
+  endo: readonly number[];
+  /** Outer radius of the LV wall (free-wall epicardium, the septum's RV face) at the same heights, ≥ `endo`. */
+  epi: readonly number[];
+}
+
+/** Samples of `LvFrame.endo` (the shader's array size). */
+export const LV_ENDO_SAMPLES = 17;
+
+function lvFrameFrom(lv: unknown): LvFrame | undefined {
+  const o = (lv ?? null) as Record<string, unknown> | null;
+  if (!o || !isVec3(o.apex) || !isVec3(o.mitral_center)) return undefined;
+  const radii = (v: unknown): number[] | null =>
+    Array.isArray(v) && v.length === LV_ENDO_SAMPLES && v.every((r) => typeof r === 'number' && Number.isFinite(r) && r >= 0)
+      ? (v as number[])
+      : null;
+  const endo = radii(o.endo_radius);
+  const epi = radii(o.epi_radius);
+  if (!endo || !epi) return undefined;
+  const apex = new Vector3(...o.apex);
+  const axis = new Vector3(...o.mitral_center).sub(apex);
+  const length = axis.length();
+  if (length < 1e-3) return undefined;
+  return { apex, axis: axis.divideScalar(length), length, endo, epi: epi.map((r, i) => Math.max(r, endo[i]!)) };
 }
 
 const isVec3 = (v: unknown): v is Vec3 =>
@@ -194,7 +228,8 @@ export function heartFrameFrom(heart: unknown): HeartFrame {
   axis.divideScalar(length);
   const cutPoint = new Vector3(...(isVec3(cut.point) ? cut.point : FALLBACK_HEART.cutPoint));
   const cutNormal = new Vector3(...(isVec3(cut.normal) ? cut.normal : FALLBACK_HEART.cutNormal)).normalize();
-  return { apex, base, axis, length, cutPoint, cutNormal };
+  const lv = lvFrameFrom(h.lv);
+  return { apex, base, axis, length, cutPoint, cutNormal, ...(lv ? { lv } : {}) };
 }
 
 /**

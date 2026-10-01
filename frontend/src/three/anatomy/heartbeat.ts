@@ -95,8 +95,9 @@ export function atrial(phase: number): number {
  * this heart (L ≈ 72 mm), and drive the one displacement field of `beatDeform.ts`:
  *   - the AV plane descends toward a nearly still apex: mitral annular plane systolic excursion (MAPSE)
  *     12–15 mm, i.e. 13 % of L here; the ventricles shorten evenly from apex to base;
- *   - the epicardium moves in by about 6 % of its radius at mid-ventricle (the cavity far more; the wall
- *     thickens 30–50 %);
+ *   - the epicardium moves in by about 6 % of its radius; inside the LV wall the cavity loses another 45 % of its
+ *     cross-section while the shortening, nearly incompressible wall gains area: the endocardium moves in 5–8 mm,
+ *     the wall thickens ~40 % (a heart without its LV frame keeps the 6 % only);
  *   - LV twist: the apex rotates about 9° counter-clockwise and the base about 4° clockwise, viewed from the
  *     apex (net twist 10–15°);
  *   - the atria fill and swell while the ventricles eject (reservoir phase), then squeeze in the atrial kick.
@@ -106,6 +107,8 @@ export const BEAT_AMPLITUDE = {
   longitudinal: 0.13,
   /** Inward motion of the ventricular epicardium toward the long axis at end-systole, fraction of the radius. */
   radial: 0.06,
+  /** Further fraction of the LV cavity's cross-section lost inside its wall at end-systole (the wall thickens). */
+  lvArea: 0.45,
   /** Rotation of the apex at end-systole, degrees, counter-clockwise viewed from the apex. */
   twistApexDeg: 9,
   /** Rotation of the base at end-systole, degrees, clockwise viewed from the apex. */
