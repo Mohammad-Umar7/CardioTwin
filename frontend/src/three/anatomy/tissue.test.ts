@@ -67,3 +67,28 @@ describe('tissue materials (Realistic look)', () => {
     expect(m.userData.ct.flags.detail).toBe(false);
   });
 });
+
+describe('specimen cuts on the great vessels', () => {
+  const make = (kind: TissueKind, along: boolean) =>
+    createTissueMaterial({ kind, look: 'realistic', tier: 'B', restOffset: new Vector3(), beatMode: 1, shared: createSharedUniforms(null), along });
+
+  it('cuts the descending aorta with a plane and keeps the sphere round the ascending aorta', () => {
+    const { flags, uniforms } = make('aorta', true).userData.ct;
+    expect(flags.clipAlong).toBe(true);
+    expect(flags.clipSphere).toBe(true);
+    expect(uniforms.uAlongStart).toBeDefined();
+    expect(uniforms.uClipRadius).toBeDefined();
+  });
+
+  it('cuts the pulmonary trunk along its wall only (the sphere left its anterior half glassy)', () => {
+    const { flags } = make('pulmonaryArtery', true).userData.ct;
+    expect(flags.clipAlong).toBe(true);
+    expect(flags.clipSphere).toBe(false);
+  });
+
+  it('keeps the sphere for a great vessel without an along-the-wall value', () => {
+    const { flags } = make('systemicVein', false).userData.ct;
+    expect(flags.clipAlong).toBe(false);
+    expect(flags.clipSphere).toBe(true);
+  });
+});

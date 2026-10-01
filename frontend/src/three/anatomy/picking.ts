@@ -23,7 +23,7 @@ import type { PickInfo } from '../stage/pickStore';
 import { PICKABLE_KINDS } from './classify';
 import { ANTERIOR_SUFFIX, isSplitNode, splitSegments } from './cutSplit';
 import { GREAT_VESSEL_CLIP, PULMONARY_CLIP, type RigEntry } from './rig';
-import { ALONG_FADE } from './tissue';
+import { ALONG_FADE, ALONG_KEEPS_SPHERE } from './tissue';
 import type { HeartFrame } from './explode';
 import { segmentAtFace, segmentTable, territoryAtFace, veinTable, type SegmentInfo, type VeinInfo } from './segments';
 import { axial, heartWall, meanAngle, type AxisFrame, type RvArc } from './territory';
@@ -109,18 +109,19 @@ const proxyMaterial = new MeshBasicMaterial({ visible: false });
 function fadedTest(entry: RigEntry): ((hit: Intersection) => boolean) | null {
   const kind = entry.kind;
   const geometry = entry.mesh.geometry as BufferGeometry;
-  const along = kind === 'pulmonaryArtery' ? geometry.getAttribute('_dist_heart') : null;
   const fade = ALONG_FADE[kind];
-  if (along && fade) {
-    const limit = fade[0] + 0.5 * (fade[1] - fade[0]);
-    return (hit) => {
-      const f = hit.face;
-      if (!f) return false;
-      return (along.getX(f.a) + along.getX(f.b) + along.getX(f.c)) / 3 > limit;
-    };
-  }
+  const along = fade ? geometry.getAttribute('_dist_heart') : null;
+  const alongCut =
+    along && fade
+      ? (hit: Intersection) => {
+          const f = hit.face;
+          if (!f) return false;
+          return (along.getX(f.a) + along.getX(f.b) + along.getX(f.c)) / 3 > fade[0] + 0.5 * (fade[1] - fade[0]);
+        }
+      : null;
+  if (alongCut && !ALONG_KEEPS_SPHERE.has(kind)) return alongCut;
   const clip = kind === 'pulmonaryArtery' || kind === 'pulmonaryVeins' ? PULMONARY_CLIP : kind === 'aorta' || kind === 'systemicVein' ? GREAT_VESSEL_CLIP : null;
-  if (!clip) return null;
+  if (!clip) return alongCut;
   const fixedCentre = new Vector3(...clip.centre);
   const rest = new Vector3();
   // The sphere's live uniforms when the material has them (the systemic sphere tightens while a vessel is
@@ -135,6 +136,7 @@ function fadedTest(entry: RigEntry): ((hit: Intersection) => boolean) | null {
       : { centre: fixedCentre, limit: clip.radius - 0.5 * clip.feather };
   };
   return (hit) => {
+    if (alongCut?.(hit)) return true;
     const { centre, limit } = live();
     return entry.mesh.worldToLocal(rest.copy(hit.point)).add(entry.restOffset).distanceTo(centre) > limit;
   };

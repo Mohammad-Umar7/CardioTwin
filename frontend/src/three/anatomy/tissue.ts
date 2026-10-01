@@ -163,11 +163,16 @@ export const FAT_DEFLATE = 0.012;
  * The pulmonary trunk is cut like a specimen, 30 mm above its valve and before it divides (the cut sits mid-band;
  * `_dist_heart` is straightened into a plane across the trunk at load, vesselCuts.ts). A cut through the
  * bifurcation left a ragged rim. The pulmonary veins are not drawn: the left atrium's own ostia stand for them
- * (rig.ts).
+ * (rig.ts). The descending aorta is cut away below the arch with a plane (rig.ts `cutDescendingAorta` writes its
+ * `_dist_heart`); the ascending aorta keeps the great-vessel sphere as well (ALONG_KEEPS_SPHERE).
  */
 export const ALONG_FADE: Partial<Record<TissueKind, readonly [number, number]>> = {
   pulmonaryArtery: [0.26, 0.34],
+  aorta: [-0.002, 0.002],
 };
+
+/** Kinds whose along-the-wall cut is added to their sphere clip instead of replacing it. */
+export const ALONG_KEEPS_SPHERE: ReadonlySet<TissueKind> = new Set(['aorta']);
 
 const CLINICAL: Partial<Record<TissueKind, Look>> = {
   myocardium: { color: ANATOMY.clay, roughness: 0.62, env: 0.25, sss: { wrap: 0.25, tint: ANATOMY.clayWrap, color: '#000000', strength: 0 }, interior: ANATOMY.cutFace, rim: { color: ANATOMY.fresnelRim, strength: 0.1 } },
@@ -509,7 +514,7 @@ export function createTissueMaterial(o: TissueOptions): TissueMaterial {
     territory: o.kind === 'myocardium' ? o.territoryAttribute ?? null : null,
     territoryOverlay: realistic && o.kind === 'myocardium' && !!o.territoryAttribute,
     rim: !!L.rim,
-    clipSphere: !along && !!clipOf(o.kind, o.shared),
+    clipSphere: !!clipOf(o.kind, o.shared) && (!along || ALONG_KEEPS_SPHERE.has(o.kind)),
     clipAlong: along,
     edgeShade: !!L.edgeShade,
     desaturateMap: saturation < 0.995,

@@ -215,16 +215,21 @@ ${f.desaturateMap ? 'uniform float uSaturation;' : ''}`,
     '#include <clipping_planes_fragment>',
     `#include <clipping_planes_fragment>
 ${f.fadeAlpha ? 'float ctEdge = 0.0;' : MATERIALISE}
+${f.clipAlong || f.clipSphere ? 'float ctClipKeep = 1.0;' : ''}
 ${f.clipAlong ? `// A clean, antialiased CUT (not an alpha smear) halfway through the fade band: the trimmed vessel ends in
 // a cross-section, its lumen seen through the cut (back faces take the interior colour), like a specimen.
-float ctCutAt = 0.5 * (uAlongStart + uAlongEnd);
-float ctCutW = max(fwidth(vCtAlong), 1e-4);
-float ctClipKeep = 1.0 - smoothstep(ctCutAt - ctCutW, ctCutAt + ctCutW, vCtAlong);
-if (ctClipKeep <= 0.0) discard;` : f.clipSphere ? `float ctClipD = distance(vCtRest, uClipCentre);
-float ctCutAt = uClipRadius - 0.5 * uClipFeather;
-float ctCutW = max(fwidth(ctClipD), 1e-4);
-float ctClipKeep = 1.0 - smoothstep(ctCutAt - ctCutW, ctCutAt + ctCutW, ctClipD);
-if (ctClipKeep <= 0.0) discard;` : ''}`,
+{
+  float ctCutAt = 0.5 * (uAlongStart + uAlongEnd);
+  float ctCutW = max(fwidth(vCtAlong), 1e-4);
+  ctClipKeep *= 1.0 - smoothstep(ctCutAt - ctCutW, ctCutAt + ctCutW, vCtAlong);
+}` : ''}
+${f.clipSphere ? `{
+  float ctClipD = distance(vCtRest, uClipCentre);
+  float ctCutAt = uClipRadius - 0.5 * uClipFeather;
+  float ctCutW = max(fwidth(ctClipD), 1e-4);
+  ctClipKeep *= 1.0 - smoothstep(ctCutAt - ctCutW, ctCutAt + ctCutW, ctClipD);
+}` : ''}
+${f.clipAlong || f.clipSphere ? 'if (ctClipKeep <= 0.0) discard;' : ''}`,
   );
 
   fs = fs.replace(
