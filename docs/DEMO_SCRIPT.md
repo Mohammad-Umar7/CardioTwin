@@ -310,7 +310,7 @@ with identical explanations,
 so the app works with no server at all.
 The anatomy comes from BodyParts3D,
 through a scripted Blender pipeline,
-checked against 70 cited anatomical criteria.
+checked against 78 cited anatomical criteria.
 One command to run. Tested in CI.
 ```
 

@@ -83,7 +83,7 @@ chordae), a [coronary close-up](docs/media/renders/coronary_detail.jpg), the
 | Predict CAD and LAD / LCX / RCA stenosis | Four calibrated classifiers (logistic regression + XGBoost margin ensemble, Platt scaling, Youden threshold) | [`ml/`](ml/README.md), [`ml/configs/targets.yaml`](ml/configs/targets.yaml) |
 | Exclude LAD, LCX, RCA, Cath from the inputs | Enforced four times: training leakage guard, unit test, API 422 `leakage_feature`, browser input sanitiser | `ml/src/cardiotwin_ml/preprocess.py`, `ml/tests/test_leakage.py`, `backend/app/validation.py`, `frontend/src/services/engine.ts` |
 | Accuracy, precision, recall, F1, ROC-AUC | On a locked 61-patient test set with 95 % bootstrap CIs, plus PR-AUC, MCC, Brier, calibration and decision curves | [`ml/reports/results.md`](ml/reports/results.md), `/performance` page |
-| Interactive 3D torso and heart | 41 anatomical structures in 7 layers (≈ 400k triangles), with rotate, zoom, pan, C-arm presets and click or keyboard selection | [`anatomy/`](anatomy/README.md), `frontend/src/three/` |
+| Interactive 3D torso and heart | 41 anatomical structures in 7 layers (≈ 408k triangles), with rotate, zoom, pan, C-arm presets and click or keyboard selection | [`anatomy/`](anatomy/README.md), `frontend/src/three/` |
 | Vessels colour-coded by stenosis probability | Each artery's mesh is driven by its own target's probability on one perceptual ramp shared by the 3D view, the charts and the legend | `frontend/src/theme/risk.ts`, `frontend/src/three/anatomy/useRiskAnimation.ts` |
 | Clinical dashboard: CAD status and vessel probabilities | Risk summary card (CAD verdict, flagged vessels) and vessel inspector (probability, band, threshold, territory) | `frontend/src/features/risk/` |
 | SHAP/LIME breakdown | Exact SHAP: linear SHAP plus float64 TreeSHAP, additive to ≤ 1.8e-15, shown as a waterfall in percentage points | `frontend/src/features/explain/`, `ml/src/cardiotwin_ml/explain.py` |
@@ -254,7 +254,7 @@ artifact byte for byte (apart from the `generated_at` timestamp), and CI trains 
 ```bash
 .venv/bin/python anatomy/build.py                  # fetch -> Blender -> centrelines -> optimise -> verify -> manifest -> explode check
 .venv/bin/python anatomy/build.py --renders        # ... plus the Cycles renders in docs/media/renders
-.venv/bin/python anatomy/checks/measure_model.py   # grade the published GLB against the cited anatomical reference (70 checks)
+.venv/bin/python anatomy/checks/measure_model.py   # grade the published GLB against the cited anatomical reference (78 checks)
 ```
 
 This needs Blender 5.1 (`--blender PATH` or `CARDIOTWIN_BLENDER`), Node, and internet for the first fetch

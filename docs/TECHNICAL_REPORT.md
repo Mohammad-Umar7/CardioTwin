@@ -21,7 +21,7 @@ matching artery of an interactive 3D heart built from open anatomy. The contribu
 2. **Exact, portable explanations.** One JSON model is evaluated identically by the Python server and a TypeScript
    engine in the browser (|Δp| ≤ 2.2e-16, identical SHAP), so a static deployment needs no backend.
 3. **An anatomically validated 3D pipeline.** BodyParts3D is processed by Blender into a 41-structure glTF with
-   perfusion territories, SCCT 2014 coronary segments and flow centrelines. The asset is graded against 70 cited
+   perfusion territories, SCCT 2014 coronary segments and flow centrelines. The asset is graded against 78 cited
    anatomical criteria.
 
 ## 2 Data and preprocessing
@@ -184,19 +184,20 @@ and internet once for the ~190 MB STL fetch. The Cycles portfolio renders are op
    (`_ARCLEN`, which drives the flow particles). Of 2,612 centreline points, 99.85 % lie inside their vessel
    (max 0.31 mm outside).
 6. **Web optimisation and contracts.** meshopt compression and WebP PBR textures (≤ 16 MB budget; the current GLB is
-   8.3 MB) bring the asset to 41 named structures in 7 layers and ≈ 400k triangles. Node names and transforms are
+   7.7 MB) bring the asset to 41 named structures in 7 layers and ≈ 408k triangles. Node names and transforms are
    verified. A triangle-level check guarantees that the exploded layout creates no new collisions, and the manifest
    maps each model target to its nodes.
 
 **Anatomical validation.** `docs/anatomy/REFERENCE.md` compiles the target anatomy from cited sources (SCCT 2014,
-AHA 2002, ASE/EACVI 2015, Radiopaedia and others). `reference_checks.yaml` turns it into 70 graded criteria covering
+AHA 2002, ASE/EACVI 2015, Radiopaedia and others). `reference_checks.yaml` turns it into 78 graded criteria covering
 position, chambers, valves, great vessels, coronaries, veins and colour conventions, and `measure_model.py`
 measures the published GLB against them.
 
-| Snapshot | PASS | MINOR | FAIL |
-| --- | --- | --- | --- |
-| Baseline, before the realism work (`anatomy/checks/gap_report.md`) | 35 | 12 | 23 |
-| Current asset: the 41-structure realism rebuild (re-run for this report, 30 Sep 2026) | **45** | 8 | 17 |
+| Snapshot (`anatomy/checks/gap_report.md`) | PASS | MINOR | FAIL | of |
+| --- | --- | --- | --- | --- |
+| Baseline, before the realism work | 35 | 12 | 23 | 70 |
+| Realism round 1 / round 2 | 45 / 52 | 8 / 8 | 17 / 13 | 70 / 73 |
+| Current asset: realism round 3 (published 1 Oct 2026) | **60** | 8 | 10 | 78 |
 
 Passes include:
 
@@ -290,7 +291,7 @@ on Windows and Linux.
 - External, multi-centre validation with local recalibration.
 - Thresholds chosen for the clinical costs of each setting.
 - Imaging inputs (CT coronary angiography or perfusion) for lesion-level targets.
-- Closing the remaining anatomical checks: the LCX and RCA courses, the valve annuli, the SVC and the coronary sinus.
+- Closing the remaining anatomical checks: the coronary-sinus course, vessel seating in the grooves, and the sourced pulmonary/tricuspid annuli and SVC length.
 
 <p class="refs"><b>References.</b> Alizadehsani R. et al., Extension of Z-Alizadeh Sani dataset, UCI ML Repository, doi:10.24432/C5461K ·
 Lundberg S.M. et al., Consistent individualized feature attribution for tree ensembles, 2018 · Nadeau C., Bengio Y., Inference for the

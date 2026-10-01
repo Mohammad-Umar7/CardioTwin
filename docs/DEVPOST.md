@@ -19,7 +19,7 @@ demo video at `<YouTube link>` · [six-page technical report](TECHNICAL_REPORT.p
 | **0.934** | Median CAD ROC-AUC over 200 random re-splits with the whole recipe re-run (LAD 0.844). The locked test split was among the hardest 3 % |
 | **+0.069** (95 % CI +0.024 to +0.115) | LAD ROC-AUC gained by adding ECG, labs and echo to bedside data |
 | **2.2e-16** | Largest probability difference between the Python server and the in-browser engine, with identical SHAP values. The browser answers in 1.2 ms (p50) |
-| **45 / 70** | Cited anatomical reference checks the 3D heart passes (up from 35 at baseline; 8 minor, 17 still fail), across 41 structures and 18 SCCT coronary segments |
+| **60 / 78** | Cited anatomical reference checks the 3D heart passes (up from 35 / 70 at baseline; 8 minor, 10 still fail), across 41 structures and 18 SCCT coronary segments |
 
 ## Inspiration
 
@@ -95,7 +95,7 @@ patient's record drives it? It had to be honest about uncertainty, and it had to
   patient at a split threshold. I built a bit-level oracle and probed all 444 thresholds (4,130 probes) until every
   one routed the same way in TypeScript and Python.
 - **Anatomy that is actually right.** BodyParts3D comes from one cadaver: the veins are collapsed, and there is no
-  aortic valve or root. I compiled a cited anatomical reference, turned it into 70 automated checks, and closed gaps
+  aortic valve or root. I compiled a cited anatomical reference, turned it into 78 automated checks, and closed gaps
   one by one. Some checks still fail, and I list them.
 
 ## Accomplishments that I'm proud of
@@ -124,8 +124,8 @@ patient's record drives it? It had to be honest about uncertainty, and it had to
 - External, multi-centre validation with recalibration to local prevalence, and decision thresholds set by the
   clinical costs of each setting.
 - Imaging inputs (CT coronary angiography, perfusion) to move from vessel-level to lesion-level targets.
-- Closing the remaining anatomical checks: the circumflex course, the aortic root down to the annulus, and territory
-  shares.
+- Closing the remaining anatomical checks: the coronary-sinus course, vessel seating in the grooves, and the
+  BodyParts3D-sourced pulmonary/tricuspid annuli and SVC length.
 - A FHIR import, so a real (de-identified) record can be opened in the workstation.
 
 ## Built with

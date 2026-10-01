@@ -144,7 +144,7 @@ flowchart LR
     VF --> MF["6 Manifest<br/>layers · structures · targets<br/>best views · label anchors"]
     MF --> EX["6b Explode check<br/>no new collisions at t = 1"]
     EX --> R["7 Renders<br/>Cycles · docs/media"]
-    MF --> QA["QA: measure_model.py<br/>70 cited reference checks"]
+    MF --> QA["QA: measure_model.py<br/>78 cited reference checks"]
 ```
 
 **Frame and units.** 1 scene unit = 10 cm and the origin is the centre of the heart-wall bounding box. +Y is
@@ -165,11 +165,11 @@ viewer can explode them safely.
 | Adaptive quality | Tier B at start, promoted to A at ≥ 58 fps and demoted to C below 45 fps (locked after 3 flip-flops). On-demand frame loop when idle. Tier D (no WebGL2 or repeated context loss) switches to a 2D SVG schematic with the same selection behaviour |
 | Accessibility | `SceneSummary` describes each vessel's band and verdict, the selection and the dissection stage in text. Every control is keyboard operable |
 
-**Anatomical validation.** `anatomy/checks/measure_model.py` grades the published GLB against 70 machine-checkable
+**Anatomical validation.** `anatomy/checks/measure_model.py` grades the published GLB against 78 machine-checkable
 criteria derived from the cited reference ([`anatomy/REFERENCE.md`](anatomy/REFERENCE.md): SCCT 2014, AHA 2002,
 ASE/EACVI 2015 and others). The baseline before the realism work scored 35 PASS, 12 MINOR and 23 FAIL
-([`gap_report.md`](../anatomy/checks/gap_report.md)). A re-run on the current 41-structure realism rebuild
-(30 Sep 2026) scored **45 PASS, 8 MINOR and 17 FAIL**. The coronary centrelines lie 99.85 % inside their vessel
+([`gap_report.md`](../anatomy/checks/gap_report.md)). After three realism rounds the published 41-structure asset
+(1 Oct 2026) scores **60 PASS, 8 MINOR and 10 FAIL** of 78 checks (round 1: 45/8/17 of 70; round 2: 52/8/13 of 73). The coronary centrelines lie 99.85 % inside their vessel
 meshes (max 0.31 mm outside).
 
 ## 6. Design system
