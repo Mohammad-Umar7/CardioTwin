@@ -6,9 +6,9 @@
  *    p = 0 vessel (#386695, L 0.50) and well below the ramp's coral/apricot chroma, so the Ember-coded
  *    coronary tree stays the most saturated and brightest thing on screen (V2 §5.15 figure/ground).
  *  - No tissue is emissive; only the coronary targets glow (bloom onset ≈ p 0.70).
- *  - Specimen colours, muted: the caval veins a dark plum-maroon (a specimen's thin venous wall, darker and
- *    greyer than the ramp's low end, and never emissive), arteries as pale adventitia (not red), so no
- *    anatomical colour can be read as a risk colour.
+ *  - Specimen colours, muted: the caval veins a dark indigo-plum (deoxygenated blood behind a thin venous
+ *    wall, darker and greyer than the ramp's low end, and never emissive), arteries as pale adventitia (not
+ *    red), so no anatomical colour can be read as a risk colour.
  *  - These are the colours BEFORE the baked GLB maps arrive (and for a GLB without maps). Once a mesh's
  *    baked albedo is uploaded it carries the colour itself, multiplied by a light tint (tissue.ts `baked`).
  */
@@ -31,9 +31,9 @@ export const REAL = {
   adventitia: '#9C8274',
   adventitiaDeep: '#6E564C',
   pulmonaryVein: '#6E3D3B',
-  /** SVC and IVC: dark plum-maroon venous wall (an atlas blue tube read as a steel pipe). */
-  systemicVein: '#4A2E38',
-  systemicVeinDeep: '#2C1A22',
+  /** SVC and IVC: a dark indigo-plum venous wall (a pale, glossy atlas-blue tube read as a steel pipe). */
+  systemicVein: '#3E3858',
+  systemicVeinDeep: '#262236',
   leftMain: '#8E7A72',
   bone: '#DCCDB0',
   boneDeep: '#A88F68',

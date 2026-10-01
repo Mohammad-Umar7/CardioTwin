@@ -334,8 +334,9 @@ const REALISTIC: Partial<Record<TissueKind, Look>> = {
     baked: { tint: '#D2C0BC', saturation: 0.35 },
   },
   systemicVein: {
-    // A specimen's caval stumps: a thin, dark plum-maroon venous wall with a fine grain, barely glossy (a smooth,
-    // glossy blue tube read as a steel pipe), the lumen a dark venous red; never the ramp's blue.
+    // The caval stumps: a thin venous wall over deoxygenated blood, a dark indigo-plum with a fine grain, barely
+    // glossy (a smooth, pale, glossy blue tube read as a steel pipe), the lumen a dark venous red; never the ramp's
+    // blue.
     color: REAL.systemicVein,
     roughness: 0.6,
     env: 0.3,
@@ -343,7 +344,7 @@ const REALISTIC: Partial<Record<TissueKind, Look>> = {
     clearcoatRoughness: 0.5,
     detail: { freq: 20, bump: 0.006, colorVar: 0.14, roughVar: 0.12, deep: REAL.systemicVeinDeep },
     interior: '#3A1A22',
-    baked: { tint: '#7E5A68', saturation: 0.12 },
+    baked: { tint: '#5E5878', saturation: 0.35 },
   },
   cardiacVein: {
     // Neutral dark plum-grey (chroma < 0.1 on screen): the bake's atlas blue would sit on the risk ramp's low
