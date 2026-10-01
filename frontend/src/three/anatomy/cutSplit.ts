@@ -17,6 +17,14 @@ export const ANTERIOR_SUFFIX = '_Anterior';
  */
 export const SPLIT_AT_CUT: readonly string[] = ['CardiacVeins', 'Coronary_LAD', 'Coronary_RCA'];
 
+/**
+ * Split by whole piece instead of at the plane: each papillary muscle opens with the wall it grows from (the
+ * anterolateral and the right-ventricular anterior muscles with the anterior half), whole, like a bivalved
+ * specimen; their chordae stay cut on the leaflets. Left whole on the posterior half, the anterior-rooted muscles
+ * hung loose in the opened chambers.
+ */
+export const SPLIT_BY_PIECE: readonly string[] = ['Papillary_Muscles'];
+
 export interface CutPlane {
   cutPoint: Vector3;
   cutNormal: Vector3;

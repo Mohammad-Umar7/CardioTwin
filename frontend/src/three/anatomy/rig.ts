@@ -29,9 +29,9 @@ import { getRiskLUT } from '../riskLut';
 import type { SceneLook } from '../stage/sceneControls';
 import { sceneRuntime } from '../stage/sceneRuntime';
 import { AssemblyClock, stageById, stagePose, type AssemblyStage } from './assembly';
-import { ANTERIOR_SUFFIX, SPLIT_AT_CUT } from './cutSplit';
+import { ANTERIOR_SUFFIX, SPLIT_AT_CUT, SPLIT_BY_PIECE } from './cutSplit';
 import { heightOf, setBeatActivation, setBeatFrame } from './beatDeform';
-import { PointHash, vesselBeatWeights } from './beatWeights';
+import { PointHash, graphComponents, vesselBeatWeights, weldGraph } from './beatWeights';
 import { straightCutDistance } from './vesselCuts';
 import { cavityAttribute, type CentrelinePoint } from './cavity';
 import { axial, correctWeights, meanAngle, rvShare } from './territory';
@@ -63,6 +63,7 @@ import {
 } from './explode';
 import {
   ALONG_FADE,
+  ALONG_KEEPS_SPHERE,
   VESSEL_INFLATE,
   createGhostMaterial,
   createSharedUniforms,
@@ -150,6 +151,12 @@ const LAMBDA_SECTION = 6;
 const SECTION_OFF = 3;
 /** A great-vessel vertex this close to the heart wall (fraction of the apex-to-base length) seeds its junction. */
 const BEAT_WEIGHT_TOUCH = 0.02;
+/**
+ * The descending limb (more than 40 mm behind the AV-plane centre; the ascending aorta lies within 29 mm of it) is
+ * cut below a plane 95 mm above that centre (all of it inside the great-vessel sphere), and the whole aorta below
+ * the AV plane (`floor`: the root starts above it).
+ */
+const DESCENDING_AORTA = { behind: 0.4, cutAbove: 0.95, floor: 0 } as const;
 /** Specimen cuts (vesselCuts.ts): a vessel's root is where `_dist_heart` < 1.5 mm; 10 mm geodesic margin. */
 const VESSEL_CUT_ROOT = 0.015;
 const VESSEL_CUT_MARGIN = 0.1;
@@ -284,7 +291,111 @@ const POSTERIOR_WALL = 'Heart_Wall_Posterior';
  * the LAD on the posterior half and the RCA on the anterior one). Idempotent (a rebuilt rig on the same scene
  * finds the sibling already there).
  */
-function splitAtCutPlane(root: Object3D, rootInverse: Matrix4, node: string, frame: HeartFrame, specs: Map<string, ExplodeSpec>): void {
+/** Pieces of the opening wall that hang from the posterior half (adoptWallTips). */
+export const POSTERIOR_TIPS = 'Heart_Wall_Posterior_Tips';
+
+/**
+ * The plane cut that opens the heart leaves the anterior wall with a few pieces attached only to the POSTERIOR
+ * half (a 22 mm piece of the right atrium's roof that crossed the plane). Riding the anterior half, they flew away
+ * from the atrium as the heart opened. At load they move to a sibling mesh that rides the posterior half; pieces
+ * that touch the anterior wall's main body stay.
+ */
+function adoptWallTips(root: Object3D, rootInverse: Matrix4, specs: Map<string, ExplodeSpec>): void {
+  let front: Mesh | null = null;
+  let back: Mesh | null = null;
+  let done = false;
+  root.traverse((o) => {
+    if (o.name === POSTERIOR_TIPS) done = true;
+    if (!(o instanceof Mesh) || o.userData.ctGhost) return;
+    if (o.name === OPENING_WALL || (!o.name && o.parent?.name === OPENING_WALL)) front ??= o;
+    if (o.name === POSTERIOR_WALL || (!o.name && o.parent?.name === POSTERIOR_WALL)) back ??= o;
+  });
+  const frontSpec = specs.get(OPENING_WALL);
+  const backSpec = specs.get(POSTERIOR_WALL);
+  const setSpec = () => {
+    if (frontSpec && backSpec && !specs.has(POSTERIOR_TIPS))
+      specs.set(POSTERIOR_TIPS, { ...frontSpec, node: POSTERIOR_TIPS, vector: backSpec.vector.clone(), rides: POSTERIOR_WALL, hinge: null });
+  };
+  if (done) return setSpec();
+  const f = front as Mesh | null;
+  const b = back as Mesh | null;
+  if (!f || !b) return;
+  const restOf = (m: Mesh) => {
+    const pos = (m.geometry as BufferGeometry).getAttribute('position');
+    const toRest = rootInverse.clone().multiply(m.matrixWorld);
+    const out = new Float32Array(pos.count * 3);
+    const v = new Vector3();
+    for (let i = 0; i < pos.count; i += 1) v.fromBufferAttribute(pos, i).applyMatrix4(toRest).toArray(out, i * 3);
+    return out;
+  };
+  const g = f.geometry as BufferGeometry;
+  const index = g.index;
+  if (!index) return;
+  const xyz = restOf(f);
+  const { nodeOf, adj } = weldGraph(xyz, index.array, 1e-6);
+  const comp = graphComponents(adj);
+  const faces = new Map<number, number>();
+  for (let t = 0; t < index.count; t += 3) {
+    const k = comp[nodeOf[index.getX(t)]!]!;
+    faces.set(k, (faces.get(k) ?? 0) + 1);
+  }
+  let main = -1;
+  for (const [k, n] of faces) if (main < 0 || n > faces.get(main)!) main = k;
+  const TOUCH = 0.002; // 0.2 mm
+  const backHash = new PointHash(TOUCH * 2);
+  backHash.add(restOf(b));
+  const mainHash = new PointHash(TOUCH * 2);
+  const mainPts: number[] = [];
+  for (let i = 0; i < nodeOf.length; i += 1) if (comp[nodeOf[i]!] === main) mainPts.push(xyz[i * 3]!, xyz[i * 3 + 1]!, xyz[i * 3 + 2]!);
+  mainHash.add(mainPts);
+  const adopt = new Set<number>();
+  const checked = new Map<number, [boolean, boolean]>();
+  for (let i = 0; i < nodeOf.length; i += 1) {
+    const k = comp[nodeOf[i]!]!;
+    if (k === main) continue;
+    const c = checked.get(k) ?? [false, false];
+    c[0] ||= backHash.near(xyz[i * 3]!, xyz[i * 3 + 1]!, xyz[i * 3 + 2]!, TOUCH);
+    c[1] ||= mainHash.near(xyz[i * 3]!, xyz[i * 3 + 1]!, xyz[i * 3 + 2]!, TOUCH * 1.5);
+    checked.set(k, c);
+  }
+  for (const [k, [touchesBack, touchesMain]] of checked) if (touchesBack && !touchesMain) adopt.add(k);
+  if (adopt.size === 0) return;
+  const keep: number[] = [];
+  const tips: number[] = [];
+  for (let t = 0; t + 2 < index.count; t += 3) {
+    const a = index.getX(t);
+    (adopt.has(comp[nodeOf[a]!]!) ? tips : keep).push(a, index.getX(t + 1), index.getX(t + 2));
+  }
+  const part = (indices: number[]) => {
+    const out = new BufferGeometry();
+    for (const [key, attr] of Object.entries(g.attributes)) out.setAttribute(key, attr);
+    out.setIndex(indices);
+    out.computeBoundingBox();
+    out.computeBoundingSphere();
+    return out;
+  };
+  f.geometry = part(keep);
+  const mesh = new Mesh(part(tips), f.material);
+  mesh.name = POSTERIOR_TIPS;
+  // It answers to the posterior wall (label, picking, territory target); its UVs stay in the anterior wall's atlas.
+  mesh.userData.ctSplitFrom = POSTERIOR_WALL;
+  mesh.matrix.copy(f.matrix);
+  mesh.matrix.decompose(mesh.position, mesh.quaternion, mesh.scale);
+  mesh.frustumCulled = f.frustumCulled;
+  f.parent?.add(mesh);
+  mesh.updateMatrixWorld(true);
+  setSpec();
+}
+
+function splitAtCutPlane(
+  root: Object3D,
+  rootInverse: Matrix4,
+  node: string,
+  frame: HeartFrame,
+  specs: Map<string, ExplodeSpec>,
+  /** Keep every connected piece whole, on the side of its centroid (SPLIT_BY_PIECE). */
+  byPiece = false,
+): void {
   const name = `${node}${ANTERIOR_SUFFIX}`;
   let found: Mesh | null = null;
   let done = false;
@@ -317,10 +428,34 @@ function splitAtCutPlane(root: Object3D, rootInverse: Matrix4, node: string, fra
   const back: number[] = [];
   const n = frame.cutNormal;
   const d0 = n.dot(frame.cutPoint);
+  // Whole pieces: the side of each connected piece's centroid (welded graph, beatWeights.ts).
+  let pieceFront: ((vertex: number) => boolean) | null = null;
+  if (byPiece) {
+    const xyz = new Float32Array(pos.count * 3);
+    for (let i = 0; i < pos.count; i += 1) a.fromBufferAttribute(pos, i).applyMatrix4(toRest).toArray(xyz, i * 3);
+    const { nodeOf, adj } = weldGraph(xyz, index ? index.array : null, 1e-6);
+    const comp = graphComponents(adj);
+    const sum = new Map<number, [number, number]>();
+    for (let i = 0; i < pos.count; i += 1) {
+      const k = comp[nodeOf[i]!]!;
+      const s = sum.get(k) ?? [0, 0];
+      s[0] += n.x * xyz[i * 3]! + n.y * xyz[i * 3 + 1]! + n.z * xyz[i * 3 + 2]! - d0;
+      s[1] += 1;
+      sum.set(k, s);
+    }
+    pieceFront = (v) => {
+      const s = sum.get(comp[nodeOf[v]!]!)!;
+      return s[0] / s[1] > 0;
+    };
+  }
   for (let i = 0; i + 2 < count; i += 3) {
     const ia = at(i);
     const ib = at(i + 1);
     const ic = at(i + 2);
+    if (pieceFront) {
+      (pieceFront(ia) ? front : back).push(ia, ib, ic);
+      continue;
+    }
     a.fromBufferAttribute(pos, ia).applyMatrix4(toRest);
     b.fromBufferAttribute(pos, ib).applyMatrix4(toRest);
     c.fromBufferAttribute(pos, ic).applyMatrix4(toRest);
@@ -411,6 +546,8 @@ export class AnatomyRig {
     // the RCA in the right AV groove open WITH the anterior half instead of hanging over the opened chambers,
     // while the LAD's proximal stretch at the left main and the RCA's crux end stay on the posterior half.
     for (const node of SPLIT_AT_CUT) splitAtCutPlane(root, rootInverse, node, this.frame, specs);
+    for (const node of SPLIT_BY_PIECE) splitAtCutPlane(root, rootInverse, node, this.frame, specs, true);
+    adoptWallTips(root, rootInverse, specs);
     const meshes: Mesh[] = [];
     root.traverse((o) => {
       if (o instanceof Mesh && !o.userData.ctGhost) meshes.push(o);
@@ -503,6 +640,7 @@ export class AnatomyRig {
 
     // Before the first material: the great vessels' shaders read `aBeatW` and the straightened `_dist_heart`.
     this.straightenVesselCuts();
+    this.cutDescendingAorta();
     this.assignBeatWeights();
     for (const entry of this.entries) {
       entry.mesh.material = this.solidFor(entry);
@@ -539,22 +677,31 @@ export class AnatomyRig {
     // "Visible" = inside the clean cut halfway through the feather (shaders.ts: the trimmed vessels end in a cut).
     const visibleIn = (clip: { centre: readonly number[]; radius: number; feather: number }, p: Vector3) =>
       Math.hypot(p.x - clip.centre[0]!, p.y - clip.centre[1]!, p.z - clip.centre[2]!) < clip.radius - clip.feather * 0.5;
+    // A great vessel's vertex is visible when it is before every cut its material applies (shaders.ts): the
+    // along-the-wall cut (halfway through the fade band) and/or the sphere.
+    const sampleVisible = (entry: RigEntry, budget: number, each: (p: Vector3) => void) => {
+      const k = entry.kind;
+      const geometry = entry.mesh.geometry as BufferGeometry;
+      const pos = geometry.getAttribute('position');
+      const along = geometry.getAttribute('_dist_heart');
+      const fade = ALONG_FADE[k];
+      const limit = fade ? fade[0] + 0.5 * (fade[1] - fade[0]) : 0;
+      const useAlong = !!(along && fade);
+      const sphere = k === 'pulmonaryArtery' || k === 'pulmonaryVeins' ? PULMONARY_CLIP : GREAT_VESSEL_CLIP;
+      const useSphere = !useAlong || ALONG_KEEPS_SPHERE.has(k);
+      restWorld.copy(rootInverse).multiply(entry.mesh.matrixWorld);
+      const step = Math.max(1, Math.floor(pos.count / budget));
+      for (let i = 0; i < pos.count; i += step) {
+        if (useAlong && along!.getX(i) >= limit) continue;
+        const p = v.fromBufferAttribute(pos, i).applyMatrix4(restWorld);
+        if (!useSphere || visibleIn(sphere, p)) each(p);
+      }
+    };
     for (const entry of this.entries) {
       const k = entry.kind;
       if (k === 'myocardium') sample(entry, 500, (p) => heart.push(p.clone()));
-      else if (k === 'aorta' || k === 'systemicVein') sample(entry, 300, (p) => visibleIn(GREAT_VESSEL_CLIP, p) && keep.push(p.clone()));
-      else if (k === 'pulmonaryArtery' || k === 'pulmonaryVeins') {
-        const along = (entry.mesh.geometry as BufferGeometry).getAttribute('_dist_heart');
-        const fade = ALONG_FADE[k];
-        if (along && fade) {
-          // Visible = before the along-the-wall cut (halfway through the fade band).
-          const pos = (entry.mesh.geometry as BufferGeometry).getAttribute('position');
-          restWorld.copy(rootInverse).multiply(entry.mesh.matrixWorld);
-          const step = Math.max(1, Math.floor(pos.count / 300));
-          const limit = fade[0] + 0.5 * (fade[1] - fade[0]);
-          for (let i = 0; i < pos.count; i += step) if (along.getX(i) < limit) keep.push(v.fromBufferAttribute(pos, i).applyMatrix4(restWorld).clone());
-        } else sample(entry, 300, (p) => visibleIn(PULMONARY_CLIP, p) && keep.push(p.clone()));
-      }
+      else if (k === 'aorta' || k === 'systemicVein' || k === 'pulmonaryArtery' || k === 'pulmonaryVeins')
+        sampleVisible(entry, 300, (p) => keep.push(p.clone()));
       const vessel = k === 'aorta' || k === 'systemicVein' || k === 'pulmonaryArtery' || k === 'pulmonaryVeins';
       if (k === 'myocardium' || k === 'fat' || k === 'coronary' || k === 'leftMain' || vessel) {
         const spec = entry.spec;
@@ -568,19 +715,8 @@ export class AnatomyRig {
           open.push(p.clone().applyMatrix4(openDelta));
           openWindow.push(win);
         };
-        const clip = k === 'pulmonaryArtery' || k === 'pulmonaryVeins' ? PULMONARY_CLIP : GREAT_VESSEL_CLIP;
-        const along = (entry.mesh.geometry as BufferGeometry).getAttribute('_dist_heart');
-        const fade = ALONG_FADE[k];
-        if (vessel && along && fade) {
-          const pos = (entry.mesh.geometry as BufferGeometry).getAttribute('position');
-          restWorld.copy(rootInverse).multiply(entry.mesh.matrixWorld);
-          const step = Math.max(1, Math.floor(pos.count / 120));
-          const limit = fade[0] + 0.5 * (fade[1] - fade[0]);
-          for (let i = 0; i < pos.count; i += step) if (along.getX(i) < limit) push(v.fromBufferAttribute(pos, i).applyMatrix4(restWorld));
-        } else
-          sample(entry, k === 'myocardium' ? 500 : 120, (p) => {
-            if (!vessel || visibleIn(clip, p)) push(p);
-          });
+        if (vessel) sampleVisible(entry, 120, push);
+        else sample(entry, k === 'myocardium' ? 500 : 120, push);
       }
     }
     const f = sceneRuntime.framing;
@@ -628,7 +764,7 @@ export class AnatomyRig {
       const band = ALONG_FADE[e.kind];
       const g = e.mesh.geometry as BufferGeometry;
       const along = g.getAttribute('_dist_heart');
-      if (!band || !along) continue;
+      if (!band || !along || e.kind !== 'pulmonaryArtery') continue;
       const pos = g.getAttribute('position');
       const p = new Float32Array(pos.count * 3);
       const a = new Float32Array(pos.count);
@@ -646,6 +782,29 @@ export class AnatomyRig {
       });
       g.setAttribute('_dist_heart', new BufferAttribute(out, 1));
     }
+  }
+
+  /**
+   * The descending aorta is cut away below the arch, as on a heart specimen; the ascending aorta keeps its sphere
+   * clip (ALONG_KEEPS_SPHERE). The sphere cut the descending limb's posterior wall obliquely and left an oval
+   * window through which the left atrium showed, and the limb hid the left atrium and the coronary sinus from
+   * behind. Its `_dist_heart` (absent from the GLB) becomes the depth below a plane across the descending limb.
+   */
+  private cutDescendingAorta(): void {
+    const e = this.byNode.get('GreatVessel_Aorta');
+    if (!e) return;
+    const g = e.mesh.geometry as BufferGeometry;
+    const pos = g.getAttribute('position');
+    const base = this.frame.base;
+    const out = new Float32Array(pos.count);
+    for (let i = 0; i < pos.count; i += 1) {
+      const behind = base.z - (pos.getZ(i) + e.restOffset.z); // posterior of the AV-plane centre
+      const up = pos.getY(i) + e.restOffset.y - base.y;
+      // The limb behind the heart up to the arch, and everything below the AV plane (only the descending aorta
+      // reaches there; it comes forward on its way to the diaphragm).
+      out[i] = Math.max(behind > DESCENDING_AORTA.behind ? DESCENDING_AORTA.cutAbove - up : -1, DESCENDING_AORTA.floor - up);
+    }
+    g.setAttribute('_dist_heart', new BufferAttribute(out, 1));
   }
 
   /**
