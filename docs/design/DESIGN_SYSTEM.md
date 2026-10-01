@@ -541,7 +541,7 @@ Every panel is schema-driven: groups and features come from `schema.json`; vesse
 8. **ICE strips** recompute in a Web Worker 150 ms after commit (54 features × 32 samples for the selected target) and crossfade over 160 ms. The dragged feature's own strip does not change.
 
 **Physiology loops**
-- **Heartbeat.** HR comes from `PR`, clamped to 40–140 bpm. Systole takes 35% of the RR interval and scales radially toward the heart centre from 1 → 0.97 (range 0.965–0.975), ease-in-out. Diastole takes 65%, ease-out. A new rate takes effect at the next beat boundary.
+- **Heartbeat.** HR comes from `PR`, clamped to 40–140 bpm. Systole takes 35% of the RR interval, diastole 65%. A new rate takes effect at the next beat boundary. The shape change is physiological (§7.9.6); the procedural placeholder heart keeps a radial 1 → 0.97 scale.
   - The same `uBeat` vertex function runs in the heart and coronary materials, so vessels never detach.
   - Labels are anchored in a group that does not beat.
   - The beat changes scale only, never luminance.
@@ -771,7 +771,7 @@ Everything else from the rejected list in §0 is banned.
 6. **Motion and photosensitivity.**
    - `prefers-reduced-motion` and Calm mode are both honoured (§6).
    - Nothing flashes more than 3 times per second.
-   - The heartbeat is a 3% scale change with no luminance change, bloom never pulses, and the band ring is throttled to once per 1.2 s.
+   - The heartbeat is a physiological shape change with no luminance change (§7.9.6), bloom never pulses, and the band ring is throttled to once per 1.2 s.
 7. **Targets and inputs.**
    - Hit areas are at least 24×24 px, and 32 px for primary actions.
    - 3D hit tubes are 3× vessel radius.
@@ -873,8 +873,10 @@ The owner asked for anatomy that "looks real, super close to real human anatomy"
 
 - **Clock.** The beat runs on the scene's shared cardiac clock (`fx/cardiacClock.ts`, idempotent per frame) at the patient's PR (40–140 bpm), so the anatomy, the flow and the pulse share one phase.
 - **Ventricular curve** (`heartbeat.ts`, tested). Isovolumic contraction (0–0.05); ejection peaking at end-systole (0.35 of the cycle); isovolumic relaxation (to 0.42); rapid filling (to 0.60); diastasis; an **atrial kick** (0.84–1.0) that over-fills the ventricles by 12 %.
-- **Deformation.** Radial shortening of 3 % toward the long axis and longitudinal shortening of 4.5 % toward a point near the apex, so the base descends and the apex barely moves. This is an affine matrix in the node matrices of the walls, valves and coronaries. The atrial squeeze (4 %) and the great-vessel roots (which follow the beat near the base and stay still distally) use the same uniforms in the vertex shader (`BEAT_VERTEX_PARS` / `BEAT_VERTEX`).
-- **Rules kept.** The beat is scale only, never luminance. It fades in and out over about 0.6 s and is off in Calm mode and under reduced motion.
+- **Deformation: one field.** A single continuous displacement field in the heart's rest frame (`beatDeform.ts`, CPU twin `beatDisplace`, tested) moves every heart and great-vessel mesh in its vertex shader (`BEAT_VERTEX_PARS` / `BEAT_VERTEX`), plus the flow particles and the risk overlay. Because the displacement depends only on position, meshes that touch at rest touch through the whole beat: no seam opens where a vein joins its atrium. No node matrix carries the beat.
+- **Physiology** (`BEAT_AMPLITUDE`, adult cine-MRI / speckle-tracking norms). The AV plane descends toward a still apex by 13 % of the apex-to-base length (MAPSE; 9.7 mm on this 72 mm heart). The ventricles shorten evenly from apex to base, and their epicardium moves in by 6 % of its radius. The LV twists: the apex 9° counter-clockwise and the base 4° clockwise, viewed from the apex. Above the AV plane the atria stretch between the descending plane and their still roof and venous entries, swelling by 3 % in systole (reservoir) and squeezing by 6 % in the atrial kick, which also lifts the AV plane a little (the A wave). The twist rotates the normals too.
+- **Great vessels.** Each carries a per-vertex weight (`aBeatW`, `beatWeights.ts`), measured along the vessel's own wall from where it touches the heart: 1 at the junction, fading to 0 by the arch, the pulmonary bifurcation and a few centimetres up the veins. The descending aorta and the arch branches stay still. Measured on the live model: 0 mm gap at every venous and arterial junction at end-systole (5 mm before). The only relative motion left is sliding between surfaces that also slide in life, such as the left atrium over the descending aorta.
+- **Rules kept.** The beat is geometry only, never luminance. It fades in and out over about 0.6 s and is off in Calm mode and under reduced motion. Labels follow the peel, never the beat.
 
 ### 7.9.7 Picking API
 
