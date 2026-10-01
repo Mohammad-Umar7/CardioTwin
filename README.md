@@ -50,14 +50,42 @@ chordae), a [coronary close-up](docs/media/renders/coronary_detail.jpg), the
 [posterior surface](docs/media/renders/heart_posterior.jpg) with the coronary sinus, and a
 [7-second turntable](docs/media/renders/heart_turntable.mp4).
 
-<!-- SCREENSHOT: landing → docs/media/screenshots/landing.png (1440×900, landing hero with the KPI strip) -->
-<!-- SCREENSHOT: workstation → docs/media/screenshots/workstation.png (1440×900, test patient, risk summary card, vessels coloured) -->
-<!-- SCREENSHOT: workstation-lad → docs/media/screenshots/workstation-lad.png (LAD selected: camera at its best view, vessel inspector open) -->
-<!-- SCREENSHOT: dissection → docs/media/screenshots/dissection.png (peel slider at the open heart) -->
-<!-- SCREENSHOT: explain-why → docs/media/screenshots/explain-why.png (Explain drawer, Why tab: SHAP waterfall and modality strip) -->
-<!-- SCREENSHOT: whatif → docs/media/screenshots/whatif.png (Edit inputs drawer with two edits, what-if pill, recorded vs what-if) -->
-<!-- SCREENSHOT: performance → docs/media/screenshots/performance.png (performance page: summary tiles, CIs, robustness) -->
-<!-- SCREENSHOT: report → docs/media/screenshots/report.png (printable two-page clinical report) -->
+**The app** (1920 × 1080 captures of the live workstation):
+
+<table>
+  <tr>
+    <td width="50%"><img src="docs/media/screenshots/landing.jpg" alt="Landing page: the claim, live KPIs with CIs, and the attract-mode heart"></td>
+    <td width="50%"><img src="docs/media/screenshots/workstation.jpg" alt="Workstation, held-out test patient P-003: CAD ≥ 95 %, LAD 91 % flagged, LCX and RCA not flagged"></td>
+  </tr>
+  <tr>
+    <td>Landing page: the claim, live KPIs with CIs, and the attract-mode heart</td>
+    <td>Workstation, held-out test patient P-003: CAD ≥ 95 %, LAD 91 % flagged, LCX and RCA not flagged</td>
+  </tr>
+  <tr>
+    <td width="50%"><img src="docs/media/screenshots/workstation-lad.jpg" alt="LAD selected (key 1): the camera flies to its best view and the vessel inspector opens"></td>
+    <td width="50%"><img src="docs/media/screenshots/dissection.jpg" alt="Dissection (key P): chest, ribs and lungs peel away and the heart opens on its chambers and valves"></td>
+  </tr>
+  <tr>
+    <td>LAD selected (key 1): the camera flies to its best view and the vessel inspector opens</td>
+    <td>Dissection (key P): chest, ribs and lungs peel away and the heart opens on its chambers and valves</td>
+  </tr>
+  <tr>
+    <td width="50%"><img src="docs/media/screenshots/whatif.jpg" alt="What-if: typical angina off, so CAD falls to 72 % (below its threshold); hold R to compare with the record"></td>
+    <td width="50%"><img src="docs/media/screenshots/explain-why.jpg" alt="Explain drawer: exact SHAP drivers for the LAD in percentage points, grouped by modality"></td>
+  </tr>
+  <tr>
+    <td>What-if: typical angina off, so CAD falls to 72 % (below its threshold); hold R to compare with the record</td>
+    <td>Explain drawer: exact SHAP drivers for the LAD in percentage points, grouped by modality</td>
+  </tr>
+  <tr>
+    <td width="50%"><img src="docs/media/screenshots/performance.jpg" alt="Performance: test metrics with bootstrap CIs, multimodal value and 200-split robustness"></td>
+    <td width="50%"><img src="docs/media/screenshots/report.jpg" alt="Printable clinical report with the full safety disclaimer"></td>
+  </tr>
+  <tr>
+    <td>Performance: test metrics with bootstrap CIs, multimodal value and 200-split robustness</td>
+    <td>Printable clinical report with the full safety disclaimer</td>
+  </tr>
+</table>
 
 **Documentation:** [technical report (6 pages, PDF)](docs/TECHNICAL_REPORT.pdf) ·
 [architecture](docs/ARCHITECTURE.md) · [model card](docs/MODEL_CARD.md) · [full results](ml/reports/results.md) ·
