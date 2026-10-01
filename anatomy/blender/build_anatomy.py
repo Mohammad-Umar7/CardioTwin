@@ -1574,6 +1574,60 @@ def set_float_attribute(ob: bpy.types.Object, name: str, values: np.ndarray) -> 
     attr.data.foreach_set("value", np.asarray(values, dtype=np.float32))
 
 
+#: The structures that carry `_ENCLOSURE`: the walls, what lies in the chambers, and what lies on the heart and
+#: reaches into a chamber or a great-vessel stump (the fat at the aortic root, the coronary sinus' mouth). Not the
+#: coronary arteries: the left main and the RCA lie deep in their crevices and grooves, and their risk colour must
+#: read there.
+ENCLOSED_NODES = ("Heart_Wall_Anterior", "Heart_Wall_Posterior", "Papillary_Muscles", "Valve_Mitral", "Valve_Tricuspid",
+                  "Valve_Aortic", "Valve_Pulmonary", "EpicardialFat_Anterior", "EpicardialFat_Posterior", "CardiacVeins")
+#: Rays per vertex and their reach (mm).
+ENCLOSURE_RAYS, ENCLOSURE_REACH_MM = 24, 80.0
+#: The viewer's great-vessel clip (frontend/src/three/anatomy/rig.ts GREAT_VESSEL_CLIP): centre (glTF frame) and the
+#: radius where its cut lies (radius - feather / 2), scene units.
+VIEWER_GREAT_VESSEL_CLIP = ((0.0, 0.05, -0.05), 0.8 - 0.24 / 2)
+#: The viewer's cut of the descending aorta (rig.ts DESCENDING_AORTA: behind, cutAbove, floor; glTF frame from the
+#: base centre) and of the pulmonary trunk (tissue.ts ALONG_FADE midpoint, distance from its cardiac end).
+VIEWER_DESCENDING_AORTA = (0.4, 0.95, 0.0)
+VIEWER_PULMONARY_CUT = 0.30
+
+
+def _hemisphere_dirs(n: int) -> np.ndarray:
+    """``n`` cosine-weighted directions over the +Z hemisphere (Fibonacci spiral)."""
+    k = np.arange(n) + 0.5
+    r = np.sqrt(k / n)
+    phi = k * math.pi * (3.0 - math.sqrt(5.0))
+    return np.column_stack([r * np.cos(phi), r * np.sin(phi), np.sqrt(1.0 - r * r)])
+
+
+def enclosure_attribute(ob: bpy.types.Object, bvh: BVHTree, scale: float) -> np.ndarray:
+    """_ENCLOSURE: the share of a vertex's (cosine-weighted) sky that the closed heart hides, 0 out in the open to 1
+    deep in a chamber. Light does not reach the inside of a closed heart: the viewer darkens what lies in its
+    chambers while the heart is closed (looking down a cut vena cava or the aorta showed the atrium and the
+    ventricle as brightly lit as the outside) and lifts it as the heart opens."""
+    V = world_vertices(ob)
+    N = np.empty(len(ob.data.vertices) * 3, dtype=np.float32)
+    ob.data.vertices.foreach_get("normal", N)
+    M = np.array(ob.matrix_world)[:3, :3]
+    N = N.reshape(-1, 3).astype(np.float64) @ M.T
+    N /= np.maximum(np.linalg.norm(N, axis=1, keepdims=True), 1e-12)
+    local = _hemisphere_dirs(ENCLOSURE_RAYS)
+    reach = ENCLOSURE_REACH_MM * scale
+    lift = 0.3 * scale
+    out = np.zeros(len(V), dtype=np.float32)
+    for i in range(len(V)):
+        n = N[i]
+        t = np.cross(n, (0.0, 0.0, 1.0) if abs(n[2]) < 0.9 else (1.0, 0.0, 0.0))
+        t /= np.linalg.norm(t)
+        b = np.cross(n, t)
+        o = Vector(V[i] + n * lift)
+        hits = 0
+        for d in local[:, :1] * t + local[:, 1:2] * b + local[:, 2:3] * n:
+            if bvh.ray_cast(o, Vector(d), reach)[0] is not None:
+                hits += 1
+        out[i] = hits / ENCLOSURE_RAYS
+    return out
+
+
 def pulmonary_attributes(ob: bpy.types.Object, seeds_world_fn, lungs: list[bpy.types.Object]) -> dict:
     """_DIST_HEART: geodesic distance (scene units) along the vessel from its cardiac end.
     _DIST_HILUM: signed geodesic distance from where the vessel enters a lung (< 0 outside the lungs, towards
@@ -2017,6 +2071,42 @@ def build(args: argparse.Namespace) -> None:
         if not spec.is_coronary:  # coronary colour comes from the risk ramp; everything else gets baked maps
             uv_unwrap(ob)
     bpy.context.view_layer.update()  # refresh matrix_world after re-centring / parenting
+
+    # --- how far inside the closed heart each wall / valve / papillary vertex lies (_ENCLOSURE) -----------
+    # Occluders: the closed wall and the great-vessel stumps the viewer keeps (rig.ts): the venae cavae and the
+    # ascending aorta inside the great-vessel clip sphere (not the descending limb it cuts away), the pulmonary
+    # trunk up to its cut. A stump's tube shades what lies inside it (the cavo-atrial junction, the aortic root),
+    # while the hidden or cut-away rest of the vessels does not shade the heart's outside.
+    occ = [(wall_V, _wF)]
+    clip_c = np.asarray(VIEWER_GREAT_VESSEL_CLIP[0], float) @ mo.BLENDER_TO_GLTF  # glTF -> Blender world
+    clip_r = VIEWER_GREAT_VESSEL_CLIP[1]
+    base_g = mo.to_gltf(base[None])[0]
+    for name in ("GreatVessel_SVC", "GreatVessel_IVC", "GreatVessel_Aorta"):
+        if name in objects:
+            V = world_vertices(objects[name])
+            F = mesh_arrays(objects[name].data)[1]
+            C = V[F].mean(axis=1)
+            keep = np.linalg.norm(C - clip_c, axis=1) < clip_r
+            if name == "GreatVessel_Aorta":
+                Cg = mo.to_gltf(C)
+                up, behind = Cg[:, 1] - base_g[1], base_g[2] - Cg[:, 2]
+                keep &= (up >= VIEWER_DESCENDING_AORTA[2]) & ((behind <= VIEWER_DESCENDING_AORTA[0]) | (up >= VIEWER_DESCENDING_AORTA[1]))
+            occ.append((V, F[keep]))
+    pa = objects.get("GreatVessel_PulmonaryArtery")
+    if pa is not None and "_DIST_HEART" in pa.data.attributes:
+        d = np.empty(len(pa.data.vertices), dtype=np.float32)
+        pa.data.attributes["_DIST_HEART"].data.foreach_get("value", d)
+        F = mesh_arrays(pa.data)[1]
+        occ.append((world_vertices(pa), F[(d[F] < VIEWER_PULMONARY_CUT).all(axis=1)]))
+    occ_V, occ_F = mo.concat(occ)
+    heart_bvh = BVHTree.FromPolygons(occ_V.tolist(), occ_F.tolist(), all_triangles=True)
+    for name in ENCLOSED_NODES:
+        if name in objects:
+            e = enclosure_attribute(objects[name], heart_bvh, scale)
+            set_float_attribute(objects[name], "_ENCLOSURE", e)
+            node_stats.setdefault(name, {})["enclosed_fraction"] = round(float((e > 0.8).mean()), 3)
+    log("  enclosure (share of vertices > 0.8): "
+        + ", ".join(f"{n} {node_stats[n]['enclosed_fraction']}" for n in ENCLOSED_NODES if n in objects))
 
     # --- per-vessel meshes for the centreline stage (glTF frame) --------------------------------
     VESSEL_MESH_DIR.mkdir(parents=True, exist_ok=True)

@@ -65,6 +65,8 @@ export interface SharedUniforms {
   clip: ClipUniforms;
   /** Systemic great vessels: a larger sphere around the heart (the descending aorta and IVC fade out). */
   clipGreat: ClipUniforms;
+  /** How far the heart is open (dissected or sectioned), 0..1: lifts the darkness of its closed chambers. */
+  interior: { uHeartOpen: IUniform<number> };
 }
 
 /** Kinds trimmed by a clip sphere, and which one. */
@@ -106,6 +108,8 @@ export interface TissueOptions {
   beatWeighted?: boolean;
   /** The geometry carries `aDeflate` (the fat's pull-in direction, the same in both halves at their seam). */
   deflateField?: boolean;
+  /** The geometry carries `_enclosure` (how far inside the closed heart each vertex lies). */
+  enclosure?: boolean;
 }
 
 /** Absolute display inflation of coronary walls (≈ the spec's 1.3×, documented in §7.3). */
@@ -463,6 +467,7 @@ export function createSharedUniforms(lut: Texture | null): SharedUniforms {
       uClipRadius: { value: 100 },
       uClipFeather: { value: 0.4 },
     },
+    interior: { uHeartOpen: { value: 0 } },
   };
 }
 
@@ -531,6 +536,7 @@ export function createTissueMaterial(o: TissueOptions): TissueMaterial {
     sss: !!L.sss,
     interior: !!L.interior,
     cutRim: !!L.cutWall && (!!clipOf(o.kind, o.shared) || along),
+    enclosure: !!o.enclosure,
     territory: o.kind === 'myocardium' ? o.territoryAttribute ?? null : null,
     territoryOverlay: realistic && o.kind === 'myocardium' && !!o.territoryAttribute,
     rim: !!L.rim,
@@ -577,6 +583,7 @@ export function createTissueMaterial(o: TissueOptions): TissueMaterial {
   }
   if (L.interior) uniforms.uInteriorColor = { value: new Color(L.interior) };
   if (L.cutWall) Object.assign(uniforms, { uCutWallColor: { value: new Color(L.cutWall.color) }, uCutRim: { value: L.cutWall.width } });
+  if (o.enclosure) Object.assign(uniforms, o.shared.interior);
   if (L.rim) Object.assign(uniforms, { uRimColor: { value: new Color(L.rim.color) }, uRimStrength: { value: L.rim.strength } });
   if (flags.territory) Object.assign(uniforms, o.shared.territory);
   if (flags.clipSphere) Object.assign(uniforms, clipOf(o.kind, o.shared));

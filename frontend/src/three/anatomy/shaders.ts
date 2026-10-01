@@ -64,6 +64,9 @@ if (uReveal < 0.999) {
 }
 `;
 
+/** How far into a cut vessel's lumen the light from the cut reaches (scene units: 12 mm). */
+export const LUMEN_REACH = 0.012;
+
 export interface PatchFlags {
   /** Procedural bump + albedo variation. */
   detail: boolean;
@@ -107,6 +110,11 @@ export interface PatchFlags {
    * colour (`uCutWallColor`), so the rim reads as a ring of wall around the lumen instead of a paper-thin edge.
    */
   cutRim: boolean;
+  /**
+   * Per-vertex `_enclosure` (how far inside the closed heart a wall / valve / papillary vertex lies): what lies in
+   * the chambers stays dark while the heart is closed (`uHeartOpen` lifts it as the heart opens or is sectioned).
+   */
+  enclosure: boolean;
   /** The beat is weighted per vertex by `aBeatW` (great vessels: 1 at the heart, 0 far along them). */
   beatWeighted: boolean;
   /** Noise octaves (tier dependent). */
@@ -129,6 +137,7 @@ export const NO_PATCH: PatchFlags = {
   clipAlong: false,
   edgeShade: false,
   cutRim: false,
+  enclosure: false,
   beatWeighted: false,
   octaves: 3,
 };
@@ -148,6 +157,7 @@ export function patchKey(f: PatchFlags): string {
     f.fadeAlpha ? 'a' : '',
     f.clipAlong ? 'g' : '',
     f.cutRim ? 'k' : '',
+    f.enclosure ? 'n' : '',
     f.edgeShade ? 'e' : '',
     f.beatWeighted ? 'w' : '',
     `o${f.octaves}`,
@@ -170,7 +180,8 @@ ${f.beatWeighted ? BEAT_WEIGHT_PARS : ''}
 varying vec3 vCtRest;
 ${f.territory ? `attribute vec3 ${f.territory};\nvarying vec3 vCtTerritory;` : ''}
 ${f.cavity ? 'attribute vec3 aCavity;\nvarying vec3 vCtCavity;' : ''}
-${f.clipAlong ? 'attribute float _dist_heart;\nvarying float vCtAlong;' : ''}`,
+${f.clipAlong ? 'attribute float _dist_heart;\nvarying float vCtAlong;' : ''}
+${f.enclosure ? 'attribute float _enclosure;\nvarying float vCtEnclosure;' : ''}`,
   );
   // The twist turns the surface, so it turns the normal too (before three derives the view-space normal).
   vs = vs.replace('#include <beginnormal_vertex>', `#include <beginnormal_vertex>\n${beatNormalChunk(f.beatWeighted)}`);
@@ -181,7 +192,8 @@ vCtRest = transformed + uRestOffset;
 ${f.beatWeighted ? BEAT_VERTEX_WEIGHTED : BEAT_VERTEX}
 ${f.territory ? `vCtTerritory = ${f.territory};` : ''}
 ${f.cavity ? 'vCtCavity = aCavity;' : ''}
-${f.clipAlong ? 'vCtAlong = _dist_heart;' : ''}`,
+${f.clipAlong ? 'vCtAlong = _dist_heart;' : ''}
+${f.enclosure ? 'vCtEnclosure = _enclosure;' : ''}`,
   );
   shader.vertexShader = vs;
 
@@ -210,6 +222,7 @@ ${f.fat ? 'uniform vec3 uFatColor;\nuniform float uFatAmount;\nuniform vec3 uHea
 ${f.sss ? 'uniform float uWrap;\nuniform vec3 uWrapTint;\nuniform vec3 uSssColor;\nuniform float uSssStrength;' : ''}
 ${f.interior ? 'uniform vec3 uInteriorColor;' : ''}
 ${f.cutRim ? 'uniform vec3 uCutWallColor;\nuniform float uCutRim;' : ''}
+${f.enclosure ? 'varying float vCtEnclosure;\nuniform float uHeartOpen;' : ''}
 ${f.territory ? 'uniform vec3 uP;\nuniform sampler2D uRiskLUT;\nuniform float uTerritoryOn;\nuniform vec3 uSelMask;\nuniform float uTerritoryGain;\nvarying vec3 vCtTerritory;' : ''}
 ${f.rim ? 'uniform vec3 uRimColor;\nuniform float uRimStrength;' : ''}
 ${f.clipSphere ? 'uniform vec3 uClipCentre;\nuniform float uClipRadius;\nuniform float uClipFeather;' : ''}
@@ -323,6 +336,56 @@ roughnessFactor = clamp(roughnessFactor + uRoughVar * ctDetail.x, 0.04, 1.0);`,
   vec3 ctG = normalMatrix * ctDetail.yzw;
   vec3 ctT = ctG - dot(ctG, normal) * normal;
   normal = normalize(normal - uBump * ctT);
+}`,
+    );
+  }
+
+  if (f.enclosure) {
+    // Light does not reach the inside of a closed heart: whatever lies deep in its chambers (the endocardium, the
+    // valves, the papillary muscles) stays dark while it is closed, so a cut vena cava or aorta opens onto a dark
+    // atrium or ventricle instead of a lit, see-through one; the light comes back as the heart opens.
+    fs = fs.replace(
+      '#include <aomap_fragment>',
+      `#include <aomap_fragment>
+{
+  float ctShut = smoothstep(0.55, 0.9, vCtEnclosure) * (1.0 - uHeartOpen);
+  float ctLit = 1.0 - 0.94 * ctShut;
+  reflectedLight.directDiffuse *= ctLit;
+  reflectedLight.directSpecular *= ctLit;
+  reflectedLight.indirectDiffuse *= ctLit;
+  reflectedLight.indirectSpecular *= ctLit;
+  #ifdef USE_CLEARCOAT
+  clearcoatSpecularDirect *= ctLit;
+  clearcoatSpecularIndirect *= ctLit;
+  #endif
+  #ifdef USE_SHEEN
+  sheenSpecularDirect *= ctLit;
+  sheenSpecularIndirect *= ctLit;
+  #endif
+}`,
+    );
+  }
+
+  if (f.cutRim) {
+    // A cut vessel's lumen is a tunnel: the light that comes in through the cut fades within a centimetre or two,
+    // so its far wall and its closed end read as a dark lumen, never as a lit floor seen through the vessel.
+    fs = fs.replace(
+      '#include <aomap_fragment>',
+      `#include <aomap_fragment>
+if (ctInner) {
+  float ctTunnel = mix(0.05, 1.0, exp(-max(ctCutDist - uCutRim, 0.0) / ${LUMEN_REACH.toFixed(4)}));
+  reflectedLight.directDiffuse *= ctTunnel;
+  reflectedLight.directSpecular *= ctTunnel;
+  reflectedLight.indirectDiffuse *= ctTunnel;
+  reflectedLight.indirectSpecular *= ctTunnel;
+  #ifdef USE_CLEARCOAT
+  clearcoatSpecularDirect *= ctTunnel;
+  clearcoatSpecularIndirect *= ctTunnel;
+  #endif
+  #ifdef USE_SHEEN
+  sheenSpecularDirect *= ctTunnel;
+  sheenSpecularIndirect *= ctTunnel;
+  #endif
 }`,
     );
   }

@@ -114,6 +114,23 @@ describe('cut great vessels and the fat seam', () => {
     expect(make('coronary', baked()).userData.ct.flags.cutRim).toBe(false);
   });
 
+  it('makes a cut vessel`s lumen a dark tunnel beyond its lit rim', () => {
+    const fs = compiled(make('systemicVein', baked())).fragmentShader;
+    expect(fs).toContain('if (ctInner) {');
+    expect(fs).toMatch(/float ctTunnel = mix\(0\.05, 1\.0, exp\(-max\(ctCutDist - uCutRim, 0\.0\)/);
+  });
+
+  it('keeps the closed heart`s chambers dark until it opens (one shared uHeartOpen)', () => {
+    const shared = createSharedUniforms(null);
+    const m = createTissueMaterial({ kind: 'myocardium', look: 'realistic', tier: 'B', restOffset: new Vector3(), beatMode: 0, shared, maps: baked(), enclosure: true });
+    expect(m.userData.ct.flags.enclosure).toBe(true);
+    expect(m.userData.ct.uniforms.uHeartOpen).toBe(shared.interior.uHeartOpen);
+    const { vertexShader, fragmentShader } = compiled(m);
+    expect(vertexShader).toContain('attribute float _enclosure;');
+    expect(fragmentShader).toContain('float ctShut = smoothstep(0.55, 0.9, vCtEnclosure) * (1.0 - uHeartOpen);');
+    expect(make('myocardium', baked()).userData.ct.flags.enclosure).toBe(false);
+  });
+
   it('pulls the fat in along its seam-safe field when the rig computed one', () => {
     const vs = compiled(make('fat', baked(), 'realistic', 'B', { deflateField: true })).vertexShader;
     expect(vs).toContain('attribute vec3 aDeflate;');

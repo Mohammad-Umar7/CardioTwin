@@ -161,6 +161,11 @@ const DESCENDING_AORTA = { behind: 0.4, cutAbove: 0.95, floor: 0 } as const;
 /** Specimen cuts (vesselCuts.ts): a vessel's root is where `_dist_heart` < 1.5 mm; 10 mm geodesic margin. */
 /** Within 2 mm of the cut the fat's pull-in keeps to the plane, so its cut faces stay flat (fatDeflate.ts). */
 const FAT_SEAM_BAND = 0.02;
+
+const smooth01 = (x: number) => {
+  const t = Math.min(1, Math.max(0, x));
+  return t * t * (3 - 2 * t);
+};
 const VESSEL_CUT_ROOT = 0.015;
 const VESSEL_CUT_MARGIN = 0.1;
 /**
@@ -761,6 +766,7 @@ export class AnatomyRig {
         along: !!geometry.getAttribute('_dist_heart'),
         beatWeighted: !!geometry.getAttribute('aBeatW'),
         deflateField: !!geometry.getAttribute('aDeflate'),
+        enclosure: !!geometry.getAttribute('_enclosure'),
       });
       entry.solid.set(key, m);
     }
@@ -1075,6 +1081,9 @@ export class AnatomyRig {
     const n = this.frame.cutNormal;
     this.sectionPlanes[0]!.normal.copy(n).negate();
     this.sectionPlanes[0]!.constant = n.dot(this.frame.cutPoint) + this.sectionS;
+    // The closed heart's chambers are dark; light reaches them as the halves part or a section cuts in (and once
+    // the walls stop being solid, below).
+    const heartLit = Math.max(smooth01(heartOpen / 0.35), 1 - smooth01((this.sectionS - 0.4) / 0.4));
 
     const sel = inp.selected;
     const chestAway = inp.stage === 'workstation' && this.e >= PEEL_CHEST_AWAY;
@@ -1224,6 +1233,11 @@ export class AnatomyRig {
       pub.solid = solidVisible;
       pub.ghost = ghostVisible;
     }
+
+    // ...and with walls ghosted, isolated away or not yet assembled, what lies inside is in plain view: lit.
+    let wallSolid = 1;
+    for (const e of this.entries) if (e.kind === 'myocardium') wallSolid = Math.min(wallSolid, e.solidAmt * e.assemblyReveal);
+    this.shared.interior.uHeartOpen.value = Math.max(heartLit, 1 - wallSolid);
 
     return moving;
   }
