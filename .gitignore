@@ -35,3 +35,6 @@ Thumbs.db
 
 # Claude local
 .claude/
+
+# Demo-video build output (/brag + HyperFrames): large media, not source
+brag-output*/
