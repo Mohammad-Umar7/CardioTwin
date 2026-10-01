@@ -32,6 +32,7 @@ import { AssemblyClock, stageById, stagePose, type AssemblyStage } from './assem
 import { ANTERIOR_SUFFIX, SPLIT_AT_CUT } from './cutSplit';
 import { heightOf, setBeatActivation, setBeatFrame } from './beatDeform';
 import { PointHash, vesselBeatWeights } from './beatWeights';
+import { straightCutDistance } from './vesselCuts';
 import { cavityAttribute, type CentrelinePoint } from './cavity';
 import { axial, correctWeights, meanAngle, rvShare } from './territory';
 import { FRAME_UNIFORMS } from './shaders';
@@ -149,6 +150,9 @@ const LAMBDA_SECTION = 6;
 const SECTION_OFF = 3;
 /** A great-vessel vertex this close to the heart wall (fraction of the apex-to-base length) seeds its junction. */
 const BEAT_WEIGHT_TOUCH = 0.02;
+/** Specimen cuts (vesselCuts.ts): a vessel's root is where `_dist_heart` < 1.5 mm; 10 mm geodesic margin. */
+const VESSEL_CUT_ROOT = 0.015;
+const VESSEL_CUT_MARGIN = 0.1;
 /**
  * How far along each great vessel the heartbeat reaches (fractions of the apex-to-base length L ≈ 72 mm): full
  * weight up to `full`, still from `fade`. The aorta beats fully over its root and sinuses (the coronary ostia sit
@@ -497,7 +501,8 @@ export class AnatomyRig {
       }
     }
 
-    // Before the first material: the great vessels' shaders read `aBeatW`.
+    // Before the first material: the great vessels' shaders read `aBeatW` and the straightened `_dist_heart`.
+    this.straightenVesselCuts();
     this.assignBeatWeights();
     for (const entry of this.entries) {
       entry.mesh.material = this.solidFor(entry);
@@ -611,6 +616,36 @@ export class AnatomyRig {
       entry.solid.set(key, m);
     }
     return m;
+  }
+
+  /**
+   * Specimen cuts for the pulmonary vessels (vesselCuts.ts): `_dist_heart` becomes the distance past each
+   * vessel's root along its own direction, so `ALONG_FADE` trims the trunk and each vein with a clean plane
+   * (the published geodesic field zig-zags across a vessel and left ragged rims).
+   */
+  private straightenVesselCuts(): void {
+    for (const e of this.entries) {
+      const band = ALONG_FADE[e.kind];
+      const g = e.mesh.geometry as BufferGeometry;
+      const along = g.getAttribute('_dist_heart');
+      if (!band || !along) continue;
+      const pos = g.getAttribute('position');
+      const p = new Float32Array(pos.count * 3);
+      const a = new Float32Array(pos.count);
+      for (let i = 0; i < pos.count; i += 1) {
+        p[i * 3] = pos.getX(i);
+        p[i * 3 + 1] = pos.getY(i);
+        p[i * 3 + 2] = pos.getZ(i);
+        a[i] = along.getX(i);
+      }
+      const cut = (band[0] + band[1]) / 2;
+      const out = straightCutDistance(p, g.index ? g.index.array : null, a, {
+        rootBand: VESSEL_CUT_ROOT,
+        axisBand: [cut * 0.45, cut * 0.9],
+        margin: VESSEL_CUT_MARGIN,
+      });
+      g.setAttribute('_dist_heart', new BufferAttribute(out, 1));
+    }
   }
 
   /**
@@ -923,7 +958,11 @@ export class AnatomyRig {
       // Valves and papillary muscles live inside the chambers: they appear as the heart opens or is cut
       // (the pulmonary valve would otherwise poke through the BodyParts3D outflow tract).
       const inner = (entry.kind === 'valve' || entry.kind === 'papillary') && heartOpen < 0.02 && !inp.section;
-      if (!layerVisible || inner || (inp.isolate && sel && !isolateMember) || (entry.kind === 'cardiacVein' && !inp.showVeins)) {
+      // The left atrium carries its own four pulmonary-vein ostia (thick, cleanly cut stumps); the separate
+      // BodyParts3D vein trees do not line up with them and, trimmed near the heart, doubled them into ragged
+      // clusters and claw-like crescents. The atrium's ostia stand for the cut veins, as on a specimen.
+      const hiddenTree = entry.kind === 'pulmonaryVeins';
+      if (!layerVisible || inner || hiddenTree || (inp.isolate && sel && !isolateMember) || (entry.kind === 'cardiacVein' && !inp.showVeins)) {
         solidT = 0;
       } else if (entry.kind === 'fat' && inp.look === 'clinical') {
         // Clinical: the fat is a translucent ghost over the clay, so the coronaries in their grooves are never
