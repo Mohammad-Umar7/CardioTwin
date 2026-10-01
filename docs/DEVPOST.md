@@ -9,7 +9,7 @@ from routine clinical data and paints each vessel's risk onto an interactive 3D 
 **Links:** code at [github.com/Mohammad-Umar7/CardioTwin](https://github.com/Mohammad-Umar7/CardioTwin) ·
 demo video at `<YouTube link>` · [six-page technical report](TECHNICAL_REPORT.pdf)
 
-<!-- SCREENSHOT: workstation → docs/media/screenshots/workstation.png (Devpost cover image; 3:2 crop of the workstation with LAD selected) -->
+![CardioTwin workstation with the LAD selected](media/screenshots/workstation-lad.jpg)
 
 ## The five numbers
 
