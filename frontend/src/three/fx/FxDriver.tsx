@@ -21,6 +21,7 @@ import {
   takeIgnitionRequest,
   targetSlots,
 } from './fxState';
+import { currentBeatProfile } from '../anatomy/useHeartbeat';
 import { sceneRuntime } from '../stage/sceneRuntime';
 import { isAttached } from './sceneNodes';
 
@@ -91,7 +92,9 @@ export function FxDriver() {
     f.time = now;
 
     // --- clock (+ phase lock to the anatomy's own beat while it keeps a private phase)
-    cardiacClock.setRate(patient.features.PR);
+    const profile = currentBeatProfile();
+    cardiacClock.setRate(profile.bpm);
+    cardiacClock.setPhysiology(profile);
     const beats0 = cardiacClock.beats;
     // Keyed by the R3F frame clock: the anatomy's heartbeat hook ticks the same clock in the same frame
     // and the second call is a no-op (the key only has to be equal within one frame).

@@ -13,29 +13,41 @@ import {
 } from './beatDeform';
 import { LV_ENDO_SAMPLES, heartFrameFrom } from './explode';
 import {
-  ATRIAL_FILL,
+  ATRIAL_SHARE,
   BEAT_AMPLITUDE,
+  DEFAULT_PROFILE,
+  DIASTASIS_SHARE,
   PHASES,
+  PHASE_INTERVALS,
   SYSTOLE_FRACTION,
   SYSTOLE_SCALE,
   atrial,
+  beatProfileFrom,
   beatScale,
   beatState,
   clampHeartRate,
+  diastasisShareFor,
   inDiastole,
+  phaseDurations,
+  twist,
   ventricular,
 } from './heartbeat';
 
 const samples = (n = 2000) => Array.from({ length: n }, (_, i) => i / n);
+/** Largest change of the slope across x (a kink), from one-sided differences of step h. */
+const kink = (f: (x: number) => number, x: number, h = 1e-5) => Math.abs((f(x + h) - f(x)) / h - (f(x) - f(x - h)) / h);
 
-describe('physiological heartbeat curve', () => {
-  it('is at rest at the onset of systole and fully contracted at end-systole', () => {
+describe('physiological heartbeat curves', () => {
+  it('is at end-diastole at the onset of systole and fully contracted at end-systole', () => {
     expect(ventricular(0)).toBeCloseTo(0, 9);
     expect(ventricular(SYSTOLE_FRACTION)).toBeCloseTo(1, 9);
-    for (const x of samples()) expect(ventricular(x)).toBeLessThanOrEqual(1 + 1e-12);
+    for (const x of samples()) {
+      expect(ventricular(x)).toBeLessThanOrEqual(1 + 1e-12);
+      expect(ventricular(x)).toBeGreaterThanOrEqual(-1e-12);
+    }
   });
 
-  it('peaks exactly at end-systole (ventricular systole ≈ one third of the cycle)', () => {
+  it('peaks exactly at end-systole (ventricular systole ≈ a third of the cycle)', () => {
     let best = -Infinity;
     let at = 0;
     for (const x of samples(10000)) {
@@ -50,46 +62,89 @@ describe('physiological heartbeat curve', () => {
     expect(SYSTOLE_FRACTION).toBeLessThan(0.4);
   });
 
-  it('rises monotonically through ejection and relaxes monotonically through filling', () => {
+  it('empties through ejection and only refills through diastole: the ventricles never shrink before systole', () => {
     let prev = -Infinity;
-    for (let x = 0; x <= SYSTOLE_FRACTION; x += 0.001) {
+    for (let x = 0; x <= SYSTOLE_FRACTION; x += 0.0005) {
       const v = ventricular(x);
       expect(v).toBeGreaterThanOrEqual(prev - 1e-12);
       prev = v;
     }
     prev = Infinity;
-    for (let x = SYSTOLE_FRACTION; x <= PHASES.atrialOnset; x += 0.001) {
+    for (let x = SYSTOLE_FRACTION; x < 1; x += 0.0005) {
       const v = ventricular(x);
       expect(v).toBeLessThanOrEqual(prev + 1e-12);
       prev = v;
     }
+    // end-diastole (the fullest) is reached at mitral closure, at the very end of the atrial kick
+    expect(ventricular(1 - 1e-9)).toBeCloseTo(0, 6);
   });
 
-  it('spends most of the recoil in rapid filling, then is nearly still in diastasis', () => {
-    const drop = (a: number, b: number) => ventricular(a) - ventricular(b);
-    const rapid = drop(PHASES.mitralOpening, PHASES.endRapidFilling);
-    const diastasis = drop(PHASES.endRapidFilling, PHASES.atrialOnset);
-    expect(rapid).toBeGreaterThan(0.7);
-    expect(diastasis).toBeLessThan(0.1);
+  it('refills most in rapid filling, little in diastasis and the rest in the atrial kick', () => {
+    const drop = (a: number, b: number, share = ATRIAL_SHARE) => ventricular(a, share) - ventricular(b, share);
+    expect(drop(PHASES.mitralOpening, PHASES.endRapidFilling)).toBeGreaterThan(0.55);
+    expect(drop(PHASES.endRapidFilling, PHASES.atrialOnset)).toBeCloseTo(DIASTASIS_SHARE, 9);
+    expect(drop(PHASES.atrialOnset, 1 - 1e-12)).toBeCloseTo(ATRIAL_SHARE, 6);
+    // an older heart leans on its atria: a larger atrial share leaves less for the E wave
+    expect(drop(PHASES.atrialOnset, 1 - 1e-12, 0.4)).toBeCloseTo(0.4, 6);
+    expect(drop(PHASES.mitralOpening, PHASES.endRapidFilling, 0.4)).toBeLessThan(drop(PHASES.mitralOpening, PHASES.endRapidFilling));
   });
 
-  it('has an atrial kick at end-diastole that slightly over-fills the ventricles', () => {
-    expect(atrial(PHASES.atrialPeak)).toBeCloseTo(1, 9);
+  it('ejects and fills fast early (peak rate in the first half of each), and holds its volume isovolumically', () => {
+    const rateAt = (x: number) => (ventricular(x + 1e-5) - ventricular(x)) / 1e-5;
+    const peakOf = (a: number, b: number) => {
+      let best = 0;
+      let at = a;
+      for (let x = a; x < b; x += (b - a) / 400) {
+        const r = Math.abs(rateAt(x));
+        if (r > best) {
+          best = r;
+          at = x;
+        }
+      }
+      return (at - a) / (b - a);
+    };
+    expect(peakOf(PHASES.isovolumicContraction, PHASES.endSystole)).toBeLessThan(0.45);
+    expect(peakOf(PHASES.mitralOpening, PHASES.endRapidFilling)).toBeLessThan(0.45);
+    expect(ventricular(PHASES.isovolumicContraction)).toBeLessThan(0.06);
+    expect(1 - ventricular(PHASES.mitralOpening)).toBeLessThan(0.05);
+  });
+
+  it('contracts the atria through the A wave, holds to mitral closure and lets go early in systole', () => {
     for (const x of samples()) {
-      if (x < PHASES.atrialOnset) expect(atrial(x)).toBe(0);
       expect(atrial(x)).toBeGreaterThanOrEqual(0);
       expect(atrial(x)).toBeLessThanOrEqual(1);
+      if (x > 0.13 && x < PHASES.atrialOnset) expect(atrial(x)).toBe(0);
     }
-    expect(ventricular(PHASES.atrialPeak)).toBeCloseTo(-ATRIAL_FILL, 9);
+    expect(atrial(PHASES.atrialPeak)).toBeCloseTo(1, 9);
+    expect(atrial(0.999)).toBe(1);
+    expect(atrial(0)).toBeCloseTo(1, 9);
+    expect(atrial(0.06)).toBeGreaterThan(0.2);
+    expect(atrial(0.06)).toBeLessThan(0.8);
   });
 
-  it('is continuous everywhere, including across the wrap from one beat to the next', () => {
+  it('twists with ejection and untwists well ahead of the volume (~40 % within isovolumic relaxation)', () => {
+    expect(twist(SYSTOLE_FRACTION)).toBeCloseTo(1, 9);
+    expect(twist(0.2)).toBeCloseTo(ventricular(0.2), 9);
+    const ivr = 1 - twist(PHASES.mitralOpening);
+    expect(ivr).toBeGreaterThan(0.3);
+    expect(ivr).toBeLessThan(0.55);
+    expect(twist(0.5)).toBeLessThan(0.1);
+    expect(twist(0.56)).toBe(0);
+    for (const x of samples()) if (x > SYSTOLE_FRACTION) expect(twist(x)).toBeLessThanOrEqual(ventricular(x) + 1e-12);
+  });
+
+  it('is continuous and smooth (no kink) everywhere, including across the wrap from one beat to the next', () => {
     const eps = 1e-6;
     for (const x of [...samples(400), 0.999999]) {
       expect(Math.abs(ventricular(x + eps) - ventricular(x))).toBeLessThan(1e-3);
       expect(Math.abs(atrial(x + eps) - atrial(x))).toBeLessThan(1e-3);
+      expect(Math.abs(twist(x + eps) - twist(x))).toBeLessThan(1e-3);
     }
-    expect(ventricular(1 - 1e-9)).toBeCloseTo(ventricular(0), 6);
+    for (const x of [1, ...PHASE_INTERVALS.map(([a]) => a).slice(1), PHASES.atrialPeak, 0.12, 0.55]) {
+      expect(kink(ventricular, x)).toBeLessThan(0.05);
+      expect(kink(atrial, x)).toBeLessThan(0.05);
+      expect(kink(twist, x)).toBeLessThan(0.05);
+    }
     expect(ventricular(2.35)).toBeCloseTo(ventricular(0.35), 9);
   });
 
@@ -104,15 +159,87 @@ describe('physiological heartbeat curve', () => {
     expect(inDiastole(0.5)).toBe(true);
   });
 
-  it('settles to the resting shape when the envelope is off', () => {
-    expect(beatState(0.3, 0)).toEqual({ v: 0, a: 0 });
+  it('settles to the resting shape when the envelope is off, and scales the contraction by the patient', () => {
+    expect(beatState(0.3, 0)).toEqual({ v: 0, a: 0, t: 0 });
     expect(beatState(0.3, 1).v).toBeCloseTo(ventricular(0.3), 12);
+    const weak = beatState(0.3, 1, { atrialShare: ATRIAL_SHARE, contractility: 0.5 });
+    expect(weak.v).toBeCloseTo(0.5 * ventricular(0.3), 12);
+    expect(weak.t).toBeCloseTo(0.5 * twist(0.3), 12);
+    expect(weak.a).toBeCloseTo(atrial(0.3), 12);
   });
 
   it('clamps the rate to 40–140 bpm', () => {
     expect(clampHeartRate(20)).toBe(40);
     expect(clampHeartRate(200)).toBe(140);
     expect(clampHeartRate('x')).toBe(72);
+  });
+});
+
+describe("the beat at the patient's rate (real interval durations)", () => {
+  const at = (bpm: number) => phaseDurations({ ...DEFAULT_PROFILE, bpm });
+  const sum = (d: number[]) => d.reduce((a, b) => a + b, 0);
+
+  it('fills exactly one RR interval at any rate, every interval non-negative', () => {
+    for (const bpm of [40, 55, 72, 90, 110, 140]) {
+      const d = at(bpm);
+      expect(d).toHaveLength(PHASE_INTERVALS.length);
+      expect(sum(d)).toBeCloseTo(60 / bpm, 9);
+      for (const x of d) expect(x).toBeGreaterThanOrEqual(0);
+    }
+  });
+
+  it('keeps systole near its resting length while diastole absorbs the rate (Weissler LVET)', () => {
+    const systole = (bpm: number) => at(bpm)[0]! + at(bpm)[1]!;
+    expect(systole(72)).toBeGreaterThan(0.31);
+    expect(systole(72)).toBeLessThan(0.36);
+    // from 60 to 120 bpm the RR halves; systole loses only ~a third, diastole far more
+    const s60 = systole(60);
+    const s120 = systole(120);
+    expect(s120 / s60).toBeGreaterThan(0.6);
+    const d60 = 1 - s60;
+    const d120 = 0.5 - s120;
+    expect(d120 / d60).toBeLessThan(0.45);
+    // the systolic share of the cycle grows with the rate
+    expect(systole(120) / 0.5).toBeGreaterThan(systole(60) / 1);
+  });
+
+  it('runs out of diastasis first, then shortens the E and A waves together (fusion at high rates)', () => {
+    const [, , , e72, dia72, a72] = at(72);
+    expect(dia72).toBeGreaterThan(0.05);
+    const [, , , e140, dia140, a140] = at(140);
+    expect(dia140).toBeLessThan(0.015);
+    expect(e140! / e72!).toBeCloseTo(a140! / a72!, 6);
+    expect(e140).toBeLessThan(e72!);
+  });
+
+  it('scales the slow filling with the diastasis, so fast rates do not jump it', () => {
+    expect(diastasisShareFor(at(50)[4]!)).toBeCloseTo(DIASTASIS_SHARE, 9);
+    expect(diastasisShareFor(at(140)[4]!)).toBeLessThan(0.006);
+    expect(diastasisShareFor(0)).toBe(0);
+    // with no slow filling the E wave hands straight over to the atrial kick
+    expect(ventricular(PHASES.endRapidFilling, ATRIAL_SHARE, 0)).toBeCloseTo(ventricular(PHASES.atrialOnset, ATRIAL_SHARE, 0), 9);
+  });
+
+  it('lengthens isovolumic relaxation with age and hypertension', () => {
+    const ivrt = (age: number, hypertension: boolean) => phaseDurations({ bpm: 70, age, hypertension, female: false })[2]!;
+    expect(ivrt(30, false)).toBeGreaterThan(0.06);
+    expect(ivrt(70, false)).toBeGreaterThan(ivrt(30, false));
+    expect(ivrt(58, true)).toBeGreaterThan(ivrt(58, false));
+    expect(ivrt(58, true)).toBeLessThan(0.12);
+  });
+
+  it('reads the profile from the cohort inputs, with safe defaults', () => {
+    const p = beatProfileFrom({ Age: 58, HTN: 1, Sex: 'Male', PR: 70, 'EF-TTE': 50 });
+    expect(p.bpm).toBe(70);
+    expect(p.hypertension).toBe(true);
+    expect(p.female).toBe(false);
+    expect(p.contractility).toBeCloseTo(50 / 58, 9);
+    expect(p.atrialShare).toBeGreaterThan(beatProfileFrom({ Age: 30 }).atrialShare);
+    expect(beatProfileFrom({ 'EF-TTE': 20 }).contractility).toBeCloseTo(0.35, 9);
+    expect(beatProfileFrom({ Sex: 'Female' }).female).toBe(true);
+    const d = beatProfileFrom(null);
+    expect(d.bpm).toBe(72);
+    expect(d.contractility).toBe(1);
   });
 });
 
@@ -128,7 +255,7 @@ describe('beat deformation (one field in the rest frame)', () => {
       .addScaledVector(frame.axis, h * L)
       .addScaledVector(side, Math.cos(theta) * r * L)
       .addScaledVector(side2, Math.sin(theta) * r * L);
-  const move = (p: Vector3, v: number, a = 0, w = 1) => beatDisplace(frame, v, a, p, new Vector3(), w);
+  const move = (p: Vector3, v: number, a = 0, w = 1, t = v) => beatDisplace(frame, v, a, p, new Vector3(), w, t);
 
   it('is the identity at rest and for meshes that stay still', () => {
     for (const p of [at(0.5, 0.3), at(1.4, 0.2, 1), at(2.2, 0.4, 2)]) {
@@ -193,12 +320,13 @@ describe('beat deformation (one field in the rest frame)', () => {
       const p = at(h, 0.05 + ((i * 37) % 100) / 200, i * 0.61);
       const d = new Vector3(Math.sin(i * 1.3), Math.cos(i * 0.7), Math.sin(i * 2.1)).normalize().multiplyScalar(eps);
       const q = p.clone().add(d);
-      for (const [v, a] of [
-        [1, 0],
-        [0.5, 0],
-        [-ATRIAL_FILL, 1],
+      for (const [v, a, t] of [
+        [1, 0, 1],
+        [0.5, 0, 0.5],
+        [0.97, 0, 0.55],
+        [0, 1, 0],
       ] as const) {
-        worst = Math.max(worst, move(q, v, a).sub(move(p, v, a)).sub(d).length() / eps);
+        worst = Math.max(worst, move(q, v, a, 1, t).sub(move(p, v, a, 1, t)).sub(d).length() / eps);
       }
     }
     // Two points eps apart drift apart by less than eps anywhere (apex, AV plane, atria, anchors): no tearing.
@@ -210,11 +338,26 @@ describe('beat deformation (one field in the rest frame)', () => {
     expect(move(p, 1, 0, 0.5).distanceTo(p.clone().lerp(move(p, 1), 0.5))).toBeLessThan(1e-12);
   });
 
-  it('squeezes the atria in the kick and lifts the AV plane a little (the A wave)', () => {
+  it('squeezes the atria in the kick while the AV plane rises back to end-diastole (the A wave)', () => {
     const p = at(1.3, 0.3);
     const c = at(1.22);
-    expect(move(p, -ATRIAL_FILL, 1).distanceTo(move(c, -ATRIAL_FILL, 1))).toBeLessThan(p.distanceTo(c));
-    expect(move(frame.base, -ATRIAL_FILL, 1).sub(frame.base).dot(frame.axis)).toBeGreaterThan(0);
+    expect(move(p, 0, 1).distanceTo(move(c, 0, 1))).toBeLessThan(p.distanceTo(c));
+    // diastasis (the atrial share of the filling still to come) -> end-diastole: the base moves back up the axis
+    const before = move(frame.base, ATRIAL_SHARE, 0).sub(frame.base).dot(frame.axis);
+    const after = move(frame.base, 0, 1).sub(frame.base).dot(frame.axis);
+    expect(after).toBeGreaterThan(before);
+  });
+
+  it('turns with its own twist activation: untwisted, the base still descends', () => {
+    const p = at(0.2, 0.3, 0.7);
+    const c = at(0.2);
+    const r0 = p.clone().sub(c);
+    const turned = move(p, 0.97, 0, 1, 1).sub(move(c, 0.97, 0, 1, 1));
+    const recoiled = move(p, 0.97, 0, 1, 0).sub(move(c, 0.97, 0, 1, 0));
+    const angle = (r1: Vector3) => Math.atan2(frame.axis.dot(r0.clone().cross(r1)), r0.dot(r1));
+    expect(Math.abs(angle(turned))).toBeGreaterThan(0.05);
+    expect(Math.abs(angle(recoiled))).toBeLessThan(1e-9);
+    expect(move(frame.base, 0.97, 0, 1, 0).distanceTo(frame.base)).toBeGreaterThan(0);
   });
 
   it('weights the atrial terms to the atria only', () => {
@@ -254,7 +397,7 @@ describe('LV wall thickening (the LV frame)', () => {
       .addScaledVector(frame.axis, h * L)
       .addScaledVector(side, Math.cos(theta) * r)
       .addScaledVector(side2, Math.sin(theta) * r);
-  const move = (p: Vector3, v: number, a = 0) => beatDisplace(frame, v, a, p);
+  const move = (p: Vector3, v: number, a = 0, w = 1, t = v) => beatDisplace(frame, v, a, p, new Vector3(), w, t);
   /** Distance of a moved point from the moved axis at the same height. */
   const radius = (h: number, r: number, v: number, theta = 0.4) => move(at(h, r, theta), v).distanceTo(move(at(h), v));
   const outer = 1 - BEAT_AMPLITUDE.radial; // the whole heart's own inward motion at mid-ventricle
@@ -317,12 +460,13 @@ describe('LV wall thickening (the LV frame)', () => {
       const p = at(h, (0.05 + ((i * 37) % 100) / 200) * L, i * 0.61);
       const d = new Vector3(Math.sin(i * 1.3), Math.cos(i * 0.7), Math.sin(i * 2.1)).normalize().multiplyScalar(eps);
       const q = p.clone().add(d);
-      for (const [v, a] of [
-        [1, 0],
-        [0.5, 0],
-        [-ATRIAL_FILL, 1],
+      for (const [v, a, t] of [
+        [1, 0, 1],
+        [0.5, 0, 0.5],
+        [0.97, 0, 0.55],
+        [0, 1, 0],
       ] as const) {
-        worst = Math.max(worst, move(q, v, a).sub(move(p, v, a)).sub(d).length() / eps);
+        worst = Math.max(worst, move(q, v, a, 1, t).sub(move(p, v, a, 1, t)).sub(d).length() / eps);
       }
     }
     expect(worst).toBeLessThan(1);

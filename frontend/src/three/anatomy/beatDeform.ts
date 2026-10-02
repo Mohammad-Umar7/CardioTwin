@@ -16,7 +16,8 @@
  *   - the ventricular walls move in toward the long axis, and inside the LV wall the cavity shrinks further around
  *     the LV's own axis while the wall, nearly incompressible and shortening, gains cross-section: the endocardium
  *     moves in far more than the epicardium and the wall thickens (`lvContractedRadius`);
- *   - the LV twists: the apex counter-clockwise, the base clockwise, viewed from the apex;
+ *   - the LV twists: the apex counter-clockwise, the base clockwise, viewed from the apex — on its own activation
+ *     (`twist` in heartbeat.ts), which recoils well ahead of the volume;
  *   - the atria swell while the ventricles eject and squeeze in the atrial kick.
  * Outside the heart, each great vessel carries a per-vertex weight (`aBeatW`, `beatWeights.ts`): 1 where it
  * joins the heart (so the junction moves exactly like the chamber), fading to 0 along the vessel, so the arch,
@@ -123,8 +124,8 @@ function rotateAbout(v: Vector3, k: Vector3, ang: number): Vector3 {
 
 /**
  * CPU twin of the vertex shader's `ctBeat`: the beat-displaced position of rest-frame point p at ventricular
- * activation v (1 = end-systole, < 0 = atrial over-fill) and atrial activation a, blended by weight w
- * (1 = heart, 0 = still). Allocation-free; `out` may alias p.
+ * activation v (0 = end-diastole, 1 = end-systole), atrial activation a and LV twist t (default: with v), blended by
+ * weight w (1 = heart, 0 = still). Allocation-free; `out` may alias p.
  */
 export function beatDisplace(
   frame: Pick<HeartFrame, 'apex' | 'axis' | 'length' | 'lv'>,
@@ -133,14 +134,15 @@ export function beatDisplace(
   p: Vector3,
   out = new Vector3(),
   w = 1,
+  t = v,
 ): Vector3 {
-  if (w <= 0 || (v === 0 && a === 0)) return out.copy(p);
+  if (w <= 0 || (v === 0 && a === 0 && t === 0)) return out.copy(p);
   const L = frame.length;
   const ax = frame.axis;
   const h = heightOf(frame, p);
   const c = tmpC.copy(frame.apex).addScaledVector(ax, h * L);
   const r = tmpR.copy(p).sub(c);
-  rotateAbout(r, ax, v * twistProfile(h));
+  rotateAbout(r, ax, t * twistProfile(h));
   const lv = frame.lv;
   const k = BEAT_AMPLITUDE.lvArea * v * radialProfile(h);
   if (lv && k !== 0) {
@@ -180,10 +182,12 @@ export function beatDisplace(
 // ----------------------------------------------------------------------------------------- GLSL
 
 export interface BeatUniforms {
-  /** Ventricular activation (1 = end-systole, < 0 = atrial over-fill). */
+  /** Ventricular activation (0 = end-diastole, 1 = end-systole). */
   uBeatV: IUniform<number>;
   /** Atrial activation 0..1. */
   uBeatAtrial: IUniform<number>;
+  /** LV twist 0..1 (1 = end-systole). */
+  uBeatTwist: IUniform<number>;
   uHeartApex: IUniform<Vector3>;
   uHeartAxis: IUniform<Vector3>;
   uHeartLength: IUniform<number>;
@@ -199,6 +203,7 @@ export interface BeatUniforms {
 export const BEAT_UNIFORMS: BeatUniforms = {
   uBeatV: { value: 0 },
   uBeatAtrial: { value: 0 },
+  uBeatTwist: { value: 0 },
   uHeartApex: { value: new Vector3() },
   uHeartAxis: { value: new Vector3(0, 1, 0) },
   uHeartLength: { value: 1 },
@@ -226,10 +231,11 @@ export function setBeatFrame(frame: Pick<HeartFrame, 'apex' | 'axis' | 'length' 
   }
 }
 
-/** Set this frame's activations (the anatomy rig, once per frame). */
-export function setBeatActivation(v: number, a: number): void {
+/** Set this frame's activations (the anatomy rig, once per frame); the twist defaults to following v. */
+export function setBeatActivation(v: number, a: number, t = v): void {
   BEAT_UNIFORMS.uBeatV.value = v;
   BEAT_UNIFORMS.uBeatAtrial.value = a;
+  BEAT_UNIFORMS.uBeatTwist.value = t;
 }
 
 const glslFloat = (x: number) => (Number.isInteger(x) ? `${x}.0` : `${x}`);
@@ -243,6 +249,7 @@ const glslFloat = (x: number) => (Number.isInteger(x) ? `${x}.0` : `${x}`);
 export const BEAT_VERTEX_PARS = /* glsl */ `
 uniform float uBeatV;
 uniform float uBeatAtrial;
+uniform float uBeatTwist;
 uniform vec3 uHeartApex;
 uniform vec3 uHeartAxis;
 uniform float uHeartLength;
@@ -295,7 +302,7 @@ vec3 ctBeatField(vec3 p) {
   float v = uBeatV;
   float h = dot(p - uHeartApex, ax) / L;
   vec3 c = uHeartApex + ax * (h * L);
-  vec3 r = ctRotateAbout(p - c, ax, v * ctTwistProfile(h));
+  vec3 r = ctRotateAbout(p - c, ax, uBeatTwist * ctTwistProfile(h));
   if (uLvLength > 0.0) r = ctLvContract(c + r, CT_LV_AREA * v * ctRadialProfile(h)) - c;
   r *= 1.0 - CT_RAD * v * ctRadialProfile(h);
   vec3 q = c + r - ax * (CT_LONG * L * v * ctLongProfile(h));
@@ -308,14 +315,14 @@ vec3 ctBeatField(vec3 p) {
 }
 // p: rest-frame position; w: 1 = heart, 0 = still (great vessels fade along their length, aBeatW).
 vec3 ctBeat(vec3 p, float w) {
-  if (uBeatMode < 0.5 || w <= 0.0 || (uBeatV == 0.0 && uBeatAtrial == 0.0)) return p;
+  if (uBeatMode < 0.5 || w <= 0.0 || (uBeatV == 0.0 && uBeatAtrial == 0.0 && uBeatTwist == 0.0)) return p;
   return mix(p, ctBeatField(p), w);
 }
 // The twist rotates the surface, so it rotates the normal with it (the small strains do not, noticeably).
 vec3 ctBeatNormal(vec3 n, vec3 p, float w) {
-  if (uBeatMode < 0.5 || w <= 0.0 || uBeatV == 0.0) return n;
+  if (uBeatMode < 0.5 || w <= 0.0 || uBeatTwist == 0.0) return n;
   float h = dot(p - uHeartApex, uHeartAxis) / uHeartLength;
-  return ctRotateAbout(n, uHeartAxis, w * uBeatV * ctTwistProfile(h));
+  return ctRotateAbout(n, uHeartAxis, w * uBeatTwist * ctTwistProfile(h));
 }
 `;
 

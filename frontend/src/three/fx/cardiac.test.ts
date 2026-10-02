@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { SYSTOLE_FRACTION, beatScale } from '../anatomy/heartbeat';
+import { DEFAULT_PROFILE, PHASES, SYSTOLE_FRACTION, beatScale, phaseDurations } from '../anatomy/heartbeat';
 import {
   PULSE_OVERSHOOT,
   PULSE_TRAVEL,
@@ -124,22 +124,69 @@ describe('pulse wavefront', () => {
 });
 
 describe('CardiacClock', () => {
-  it('advances at the requested rate and only once per frame key', () => {
+  let key = 0;
+  /** Advance by `seconds` in frames of at most 0.05 s (a frame is clamped to 0.1 s). */
+  const run = (clock: CardiacClock, seconds: number) => {
+    const n = Math.max(1, Math.ceil(seconds / 0.05));
+    for (let i = 0; i < n; i += 1) clock.tick(seconds / n, (key += 1));
+  };
+  it('completes exactly one beat per RR interval, only once per frame key', () => {
     const clock = new CardiacClock();
     clock.reset(0, 60);
     clock.tick(0.05, 1);
+    const once = clock.beats;
     clock.tick(0.05, 1); // same frame: ignored
-    expect(clock.beats).toBeCloseTo(0.05, 9);
+    expect(clock.beats).toBe(once);
     for (let i = 2; i <= 25; i += 1) clock.tick(0.05, i);
-    expect(clock.beats).toBeCloseTo(1.25, 9);
-    expect(clock.phase).toBeCloseTo(0.25, 9);
+    // 1.25 s at 60 bpm: one whole beat, then a quarter second into the next (steps of any size add up the same)
+    const quarter = new CardiacClock();
+    quarter.reset(0, 60);
+    quarter.tick(0.1, 1);
+    quarter.tick(0.1, 2);
+    quarter.tick(0.05, 3);
+    expect(clock.beats).toBeCloseTo(1 + quarter.beats, 9);
+    const whole = new CardiacClock();
+    whole.reset(0, 72);
+    for (let i = 1; i <= 600; i += 1) whole.tick(1 / 60, i); // 10 s at 72 bpm
+    expect(whole.beats).toBeCloseTo(12, 6);
+  });
+
+  it('runs each interval of the beat in its own real duration (systole holds its length as the rate rises)', () => {
+    for (const bpm of [50, 72, 120]) {
+      const clock = new CardiacClock();
+      clock.reset(0, bpm);
+      const d = phaseDurations({ ...DEFAULT_PROFILE, bpm });
+      expect(clock.intervalDurations).toEqual(d);
+      run(clock, d[0]!);
+      expect(clock.phase).toBeCloseTo(PHASES.isovolumicContraction, 9);
+      run(clock, d[1]!);
+      expect(clock.phase).toBeCloseTo(SYSTOLE_FRACTION, 9);
+      run(clock, d[2]! / 2);
+      expect(clock.phase).toBeCloseTo((SYSTOLE_FRACTION + PHASES.mitralOpening) / 2, 9);
+    }
   });
 
   it('clamps huge frame gaps (background tab) to 0.1 s', () => {
+    const gap = new CardiacClock();
+    gap.reset(0, 60);
+    gap.tick(5, 1);
+    const tenth = new CardiacClock();
+    tenth.reset(0, 60);
+    tenth.tick(0.1, 1);
+    expect(gap.beats).toBeCloseTo(tenth.beats, 12);
+    expect(gap.beats).toBeGreaterThan(0.05);
+    expect(gap.beats).toBeLessThan(0.2);
+  });
+
+  it('switches to a new physiology only at the next beat boundary', () => {
     const clock = new CardiacClock();
-    clock.reset(0, 60);
-    clock.tick(5, 1);
-    expect(clock.beats).toBeCloseTo(0.1, 9);
+    clock.reset(0, 70);
+    const before = clock.intervalDurations;
+    clock.setPhysiology({ age: 80, hypertension: true, female: true });
+    clock.tick(0.1, 1);
+    expect(clock.intervalDurations).toBe(before);
+    for (let i = 2; i < 12; i += 1) clock.tick(0.1, i);
+    expect(clock.intervalDurations[2]).toBeGreaterThan(before[2]!);
   });
 
   it('switches to a new rate only at the next beat boundary, clamped to 40–140 bpm', () => {
@@ -161,20 +208,21 @@ describe('CardiacClock', () => {
     expect(clock.inDiastole).toBe(true);
   });
 
-  /** Simulates the anatomy's own heartbeat (a separate phase) and the fx clock observing its scale. */
+  /** Simulates the anatomy's own heartbeat (a separate clock at an offset) and the fx clock observing its scale. */
   function simulateLock(offset: number, fps: number, bpm: number, seconds: number) {
     const clock = new CardiacClock();
     clock.reset(0, bpm);
-    let heart = offset;
-    let lastScale = beatScale(heart);
+    const heart = new CardiacClock();
+    heart.reset(offset, bpm);
+    let lastScale = beatScale(heart.phase);
     const dt = 1 / fps;
     for (let i = 1; i <= seconds * fps; i += 1) {
       clock.tick(dt, i); // priority −1: before the heart's own useFrame
       clock.observeHeartScale(lastScale); // reads the scale the heart set last frame
-      heart += (dt * bpm) / 60; // the heart's useFrame
-      lastScale = beatScale(heart);
+      heart.tick(dt, i); // the heart's useFrame
+      lastScale = beatScale(heart.phase);
     }
-    return phaseError(clock.phase, wrapPhase(heart));
+    return phaseError(clock.phase, heart.phase);
   }
 
   it('phase-locks onto an independently running heartbeat', () => {
@@ -192,15 +240,17 @@ describe('CardiacClock', () => {
   it('stays put when it already drives the heart (no jitter once locked)', () => {
     const clock = new CardiacClock();
     clock.reset(0, 72);
-    let expected = 0;
+    const free = new CardiacClock();
+    free.reset(0, 72);
     let lastScale = beatScale(0);
     for (let i = 1; i <= 600; i += 1) {
       clock.tick(1 / 60, i);
-      expected += 72 / 60 / 60;
+      free.tick(1 / 60, i);
       clock.observeHeartScale(lastScale);
       lastScale = beatScale(clock.beats); // the heart reads the clock
     }
-    expect(clock.beats).toBeCloseTo(expected, 9);
+    expect(clock.beats).toBeCloseTo(free.beats, 9);
+    expect(clock.beats).toBeCloseTo(12, 6);
   });
 
   it('free-runs when the heart does not beat', () => {
