@@ -21,6 +21,24 @@ export interface VesselCutOptions {
   margin: number;
 }
 
+/** Where the descending aorta is cut (rig.ts): posterior of the AV-plane centre past `behind` and below `cutAbove`, or
+ * anywhere below `floor` (scene units, heights from that centre). */
+export interface DescendingCut {
+  behind: number;
+  cutAbove: number;
+  floor: number;
+}
+
+/**
+ * The aorta's cut depth (`_dist_heart`, cut where above 0): the descending limb behind the heart up to the arch, and
+ * everything below the AV plane. Continuous (the larger / smaller of distances to the cut planes), so a triangle that
+ * straddles the limb's boundary is cut at the boundary; a step there left the part of a long triangle short of its
+ * interpolated zero standing as a flat sliver of the descending limb.
+ */
+export function descendingAortaCut(behind: number, up: number, cut: DescendingCut): number {
+  return Math.max(Math.min(behind - cut.behind, cut.cutAbove - up), cut.floor - up);
+}
+
 /** Per-vertex cut distance (see the module comment). A piece without a root or an axis keeps `along`. */
 export function straightCutDistance(
   positions: ArrayLike<number>,

@@ -1,11 +1,11 @@
 {
   "version": "1.1.0",
   "glb": "cardiotwin_anatomy.glb",
-  "glb_bytes": 8262496,
-  "glb_sha256": "63367c1028491fd4d31410fec935a44d5cf8e669b108871934ad883f7c4bbe93",
+  "glb_bytes": 8277176,
+  "glb_sha256": "fbd9d405b793ea826fdb223ca60c1fd0c205257a307ae12126ade1596e0ae5ab",
   "textures": {
     "gpu_mib": 46.7,
-    "webp_mb": 2.59,
+    "webp_mb": 2.58,
     "priority": [
       "Heart_Wall_Anterior",
       "Heart_Wall_Posterior",
@@ -814,7 +814,7 @@
           0.7494
         ]
       },
-      "triangles": 17060,
+      "triangles": 16992,
       "realistic_color": "#c99a9b"
     },
     {
@@ -853,12 +853,12 @@
           -1.0544
         ],
         "max": [
-          -0.2298,
+          -0.2296,
           1.3542,
           0.7567
         ]
       },
-      "triangles": 13630,
+      "triangles": 14058,
       "realistic_color": "#ca9a9c"
     },
     {
@@ -929,13 +929,13 @@
       "center": [
         -0.1978,
         0.4111,
-        -0.3639
+        -0.3608
       ],
       "bbox": {
         "min": [
           -0.3395,
           -0.7077,
-          -0.5931
+          -0.5868
         ],
         "max": [
           -0.0561,
@@ -1511,7 +1511,7 @@
       "definition": "Superior vena cava, formed behind the right 1st costal cartilage by the brachiocephalic veins, running vertically to the right of the ascending aorta into the roof of the right atrium at the level of the right 3rd costal cartilage; 45 mm long in this model (in vivo 60-80 mm: BodyParts3D's is short).",
       "clinical_relevance": "Route of central venous catheters and pacemaker leads; the sino-atrial node lies at its junction with the right atrium.",
       "center": [
-        -0.3685,
+        -0.3699,
         0.6042,
         -0.0643
       ],
@@ -1522,13 +1522,13 @@
           -0.1833
         ],
         "max": [
-          -0.2555,
+          -0.2583,
           0.8278,
           0.0547
         ]
       },
       "triangles": 1532,
-      "realistic_color": "#41508e"
+      "realistic_color": "#41518f"
     },
     {
       "id": "brachiocephalic_veins",
@@ -1695,21 +1695,21 @@
       "center": [
         -0.0117,
         -0.0699,
-        0.1716
+        0.1815
       ],
       "bbox": {
         "min": [
-          -0.5651,
+          -0.5653,
           -0.5216,
-          -0.1451
+          -0.1254
         ],
         "max": [
-          0.5417,
+          0.5419,
           0.3818,
           0.4884
         ]
       },
-      "triangles": 18352,
+      "triangles": 18616,
       "realistic_color": "#d2a248",
       "rides": "Heart_Wall_Anterior"
     },
@@ -1742,7 +1742,7 @@
         "min": [
           -0.4348,
           -0.5477,
-          -0.5514
+          -0.5515
         ],
         "max": [
           0.571,
@@ -1750,8 +1750,8 @@
           0.3803
         ]
       },
-      "triangles": 21436,
-      "realistic_color": "#d2a147",
+      "triangles": 21082,
+      "realistic_color": "#d1a147",
       "rides": "Heart_Wall_Posterior"
     },
     {
@@ -1777,23 +1777,23 @@
       "definition": "Left main coronary artery (SCCT 5): from its ostium in the left sinus of Valsalva, leftward behind the pulmonary trunk to its bifurcation into the LAD and LCX at the anterior end of the left AV groove, under the left auricle (about 16 mm long in this model; in vivo 10 +/- 5 mm, 3.5-4.5 mm wide).",
       "clinical_relevance": "Feeds both the LAD and LCX territories (~70 % of the LV); significant left-main disease is a surgical indication. Not a model target itself.",
       "center": [
-        0.1288,
+        0.1346,
         0.179,
-        -0.1097
+        -0.1094
       ],
       "bbox": {
         "min": [
-          0.0637,
+          0.0753,
           0.1129,
-          -0.1351
+          -0.1358
         ],
         "max": [
           0.1938,
           0.2451,
-          -0.0844
+          -0.0831
         ]
       },
-      "triangles": 280,
+      "triangles": 230,
       "feeds": [
         "LAD",
         "LCX"
@@ -1995,7 +1995,7 @@
           0.5027
         ]
       },
-      "triangles": 5000,
+      "triangles": 4938,
       "rides": "Heart_Wall_Anterior",
       "labelAnchor": [
         -0.3332,
@@ -2777,8 +2777,8 @@
       "lung_r": {
         "position": [
           -6.9515,
-          1.9335,
-          0.8572
+          1.9336,
+          0.8574
         ],
         "target": [
           -0.8624,
@@ -2803,13 +2803,13 @@
       "oesophagus": {
         "position": [
           -0.1978,
-          1.6757,
-          3.8514
+          1.675,
+          3.8523
         ],
         "target": [
           -0.1978,
           0.4111,
-          -0.3639
+          -0.3608
         ],
         "fov": 35.0
       },
@@ -2921,7 +2921,7 @@
         "position": [
           2.1323,
           1.273,
-          -6.6319
+          -6.6318
         ],
         "target": [
           -0.0879,
@@ -2971,12 +2971,12 @@
       },
       "svc": {
         "position": [
-          0.0744,
+          0.0731,
           1.0065,
           1.2014
         ],
         "target": [
-          -0.3685,
+          -0.3699,
           0.6042,
           -0.0643
         ],
@@ -3023,14 +3023,14 @@
       },
       "epicardial_fat_anterior": {
         "position": [
-          0.9339,
-          0.7888,
-          2.8733
+          0.9293,
+          0.7847,
+          2.8701
         ],
         "target": [
           -0.0117,
           -0.0699,
-          0.1716
+          0.1815
         ],
         "fov": 35.0
       },
@@ -3049,14 +3049,14 @@
       },
       "lm": {
         "position": [
-          0.9328,
-          1.7583,
-          -0.795
+          0.9662,
+          1.7477,
+          -0.7858
         ],
         "target": [
-          0.1288,
+          0.1346,
           0.179,
-          -0.1097
+          -0.1094
         ],
         "fov": 35.0
       },

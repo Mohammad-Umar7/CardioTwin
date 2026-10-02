@@ -32,7 +32,7 @@ import { AssemblyClock, stageById, stagePose, type AssemblyStage } from './assem
 import { ANTERIOR_SUFFIX, SPLIT_AT_CUT, SPLIT_BY_PIECE } from './cutSplit';
 import { heightOf, setBeatActivation, setBeatFrame } from './beatDeform';
 import { PointHash, graphComponents, vesselBeatWeights, weldGraph } from './beatWeights';
-import { straightCutDistance } from './vesselCuts';
+import { descendingAortaCut, straightCutDistance } from './vesselCuts';
 import { deflateDirections } from './fatDeflate';
 import { cavityAttribute, type CentrelinePoint } from './cavity';
 import { axial, correctWeights, meanAngle, rvShare } from './territory';
@@ -168,6 +168,8 @@ const smooth01 = (x: number) => {
 };
 const VESSEL_CUT_ROOT = 0.015;
 const VESSEL_CUT_MARGIN = 0.1;
+/** The trunk's direction runs to the centroid of its wall between these `_dist_heart` values (13.5–27 mm). */
+const VESSEL_CUT_AXIS = [0.135, 0.27] as const;
 /**
  * How far along each great vessel the heartbeat reaches (fractions of the apex-to-base length L ≈ 72 mm): full
  * weight up to `full`, still from `fade`. The aorta beats fully over its root and sinuses (the coronary ostia sit
@@ -767,6 +769,7 @@ export class AnatomyRig {
         beatWeighted: !!geometry.getAttribute('aBeatW'),
         deflateField: !!geometry.getAttribute('aDeflate'),
         enclosure: !!geometry.getAttribute('_enclosure'),
+        pullField: !!geometry.getAttribute('_pull'),
       });
       entry.solid.set(key, m);
     }
@@ -784,6 +787,13 @@ export class AnatomyRig {
       const g = e.mesh.geometry as BufferGeometry;
       const along = g.getAttribute('_dist_heart');
       if (!band || !along || e.kind !== 'pulmonaryArtery') continue;
+      // The build straightens the trunk's cut on its shape from before its collision dents (`_dist_cut`): straightened
+      // here from the dented positions, the plane sliced a slot down the wall pushed off the aorta.
+      const pre = g.getAttribute('_dist_cut');
+      if (pre) {
+        g.setAttribute('_dist_heart', pre);
+        continue;
+      }
       const pos = g.getAttribute('position');
       const p = new Float32Array(pos.count * 3);
       const a = new Float32Array(pos.count);
@@ -793,10 +803,9 @@ export class AnatomyRig {
         p[i * 3 + 2] = pos.getZ(i);
         a[i] = along.getX(i);
       }
-      const cut = (band[0] + band[1]) / 2;
       const out = straightCutDistance(p, g.index ? g.index.array : null, a, {
         rootBand: VESSEL_CUT_ROOT,
-        axisBand: [cut * 0.45, cut * 0.9],
+        axisBand: VESSEL_CUT_AXIS,
         margin: VESSEL_CUT_MARGIN,
       });
       g.setAttribute('_dist_heart', new BufferAttribute(out, 1));
@@ -807,7 +816,8 @@ export class AnatomyRig {
    * The descending aorta is cut away below the arch, as on a heart specimen; the ascending aorta keeps its sphere
    * clip (ALONG_KEEPS_SPHERE). The sphere cut the descending limb's posterior wall obliquely and left an oval
    * window through which the left atrium showed, and the limb hid the left atrium and the coronary sinus from
-   * behind. Its `_dist_heart` (absent from the GLB) becomes the depth below a plane across the descending limb.
+   * behind. Its `_dist_heart` (absent from the GLB) becomes the depth past the planes round the descending limb
+   * (vesselCuts.ts `descendingAortaCut`).
    */
   private cutDescendingAorta(): void {
     const e = this.byNode.get('GreatVessel_Aorta');
@@ -821,7 +831,7 @@ export class AnatomyRig {
       const up = pos.getY(i) + e.restOffset.y - base.y;
       // The limb behind the heart up to the arch, and everything below the AV plane (only the descending aorta
       // reaches there; it comes forward on its way to the diaphragm).
-      out[i] = Math.max(behind > DESCENDING_AORTA.behind ? DESCENDING_AORTA.cutAbove - up : -1, DESCENDING_AORTA.floor - up);
+      out[i] = descendingAortaCut(behind, up, DESCENDING_AORTA);
     }
     g.setAttribute('_dist_heart', new BufferAttribute(out, 1));
   }

@@ -110,6 +110,11 @@ export interface TissueOptions {
   deflateField?: boolean;
   /** The geometry carries `_enclosure` (how far inside the closed heart each vertex lies). */
   enclosure?: boolean;
+  /**
+   * The geometry carries `_pull` (a coronary: 0 by a great-vessel stump, 1 clear of it), which scales its display
+   * inflation and depth pull, so an artery running by a cut stump never shows through the stump into its lumen.
+   */
+  pullField?: boolean;
 }
 
 /** Absolute display inflation of coronary walls (≈ the spec's 1.3×, documented in §7.3). */
@@ -168,14 +173,15 @@ interface Look {
 export const FAT_DEFLATE = 0.012;
 
 /**
- * The pulmonary trunk is cut like a specimen, 30 mm above its valve and before it divides (the cut sits mid-band;
- * `_dist_heart` is straightened into a plane across the trunk at load, vesselCuts.ts). A cut through the
- * bifurcation left a ragged rim. The pulmonary veins are not drawn: the left atrium's own ostia stand for them
+ * The pulmonary trunk is cut like a specimen, 20 mm above its valve and well before it divides (the cut sits
+ * mid-band; `_dist_heart` is a plane across the trunk: the build's `_dist_cut`, or straightened at load,
+ * vesselCuts.ts). A cut through the bifurcation left a ragged rim, and one at 30 mm notched the wall that wraps the
+ * aorta (pushed off it by the build, where the trunk overlapped the aorta). The pulmonary veins are not drawn: the left atrium's own ostia stand for them
  * (rig.ts). The descending aorta is cut away below the arch with a plane (rig.ts `cutDescendingAorta` writes its
  * `_dist_heart`); the ascending aorta keeps the great-vessel sphere as well (ALONG_KEEPS_SPHERE).
  */
 export const ALONG_FADE: Partial<Record<TissueKind, readonly [number, number]>> = {
-  pulmonaryArtery: [0.26, 0.34],
+  pulmonaryArtery: [0.16, 0.24],
   aorta: [-0.002, 0.002],
 };
 
@@ -606,6 +612,7 @@ export function createTissueMaterial(o: TissueOptions): TissueMaterial {
   if (L.deflate) uniforms.uInflate!.value = -L.deflate;
   material.userData.ct = { uniforms, kind: o.kind, look: o.look, flags, floorScale: realistic ? 0.45 : 1 };
   const inflate = (o.inflate ?? 0) > 0;
+  const pullField = inflate && !!o.pullField;
   const deflate = !inflate && !!L.deflate;
   // Along `aDeflate` (fatDeflate.ts) when the rig computed it: a cut half's own normals differ from the other
   // half's at the seam and pulled the halves apart there (the cap showed through as a pale line).
@@ -639,19 +646,25 @@ export function createTissueMaterial(o: TissueOptions): TissueMaterial {
       // position) toward the camera so the risk-coloured artery reads through the thin fat over it, while
       // the heart wall itself still hides the far side.
       shader.vertexShader = shader.vertexShader
-        .replace('#include <common>', `#include <common>\nuniform float uInflate;\nconst float CT_DEPTH_PULL = ${VESSEL_DEPTH_PULL.toFixed(4)};`)
-        .replace('vCtRest = transformed + uRestOffset;', 'transformed += normalize(objectNormal) * uInflate;\nvCtRest = transformed + uRestOffset;')
+        .replace(
+          '#include <common>',
+          `#include <common>\nuniform float uInflate;\nconst float CT_DEPTH_PULL = ${VESSEL_DEPTH_PULL.toFixed(4)};${pullField ? '\nattribute float _pull;' : ''}`,
+        )
+        .replace(
+          'vCtRest = transformed + uRestOffset;',
+          `transformed += normalize(objectNormal) * uInflate${pullField ? ' * _pull' : ''};\nvCtRest = transformed + uRestOffset;`,
+        )
         .replace(
           '#include <project_vertex>',
           `#include <project_vertex>
 {
-  vec4 ctPulled = projectionMatrix * vec4(mvPosition.xy, mvPosition.z + CT_DEPTH_PULL, 1.0);
+  vec4 ctPulled = projectionMatrix * vec4(mvPosition.xy, mvPosition.z + CT_DEPTH_PULL${pullField ? ' * _pull' : ''}, 1.0);
   gl_Position.z = ctPulled.z / ctPulled.w * gl_Position.w;
 }`,
         );
     }
   };
-  const key = `ct-tissue-${physical ? 'P' : 'S'}-${patchKey(flags)}-${inflate ? 'inf' : deflateField ? 'defF' : deflate ? 'def' : ''}${recede > 0 ? `-rec${recede}` : ''}`;
+  const key = `ct-tissue-${physical ? 'P' : 'S'}-${patchKey(flags)}-${inflate ? (pullField ? 'infP' : 'inf') : deflateField ? 'defF' : deflate ? 'def' : ''}${recede > 0 ? `-rec${recede}` : ''}`;
   material.customProgramCacheKey = () => key;
   return material;
 }

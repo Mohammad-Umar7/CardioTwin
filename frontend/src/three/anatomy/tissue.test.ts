@@ -114,10 +114,29 @@ describe('cut great vessels and the fat seam', () => {
     expect(make('coronary', baked()).userData.ct.flags.cutRim).toBe(false);
   });
 
+  it('measures the along-the-wall cut in world units, however stretched the field', () => {
+    const fs = compiled(make('pulmonaryArtery', baked(), 'realistic', 'B', { along: true })).fragmentShader;
+    expect(fs).toContain('float ctAlongSlope(float f, vec3 p) {');
+    expect(fs).toContain('ctCutDist = min(ctCutDist, (ctCutAt - vCtAlong) / ctAlongSlope(vCtAlong, vCtRest));');
+    expect(compiled(make('systemicVein', baked())).fragmentShader).not.toContain('ctAlongSlope');
+  });
+
   it('makes a cut vessel`s lumen a dark tunnel beyond its lit rim', () => {
     const fs = compiled(make('systemicVein', baked())).fragmentShader;
     expect(fs).toContain('if (ctInner) {');
     expect(fs).toMatch(/float ctTunnel = mix\(0\.05, 1\.0, exp\(-max\(ctCutDist - uCutRim, 0\.0\)/);
+  });
+
+  it('fades a coronary`s inflation and depth pull out by a great-vessel stump when the GLB says where', () => {
+    const shared = createSharedUniforms(null);
+    const opts = { kind: 'coronary' as const, look: 'realistic' as const, tier: 'B' as const, restOffset: new Vector3(), beatMode: 0, shared, maps: baked(), inflate: 0.005 };
+    const vs = compiled(createTissueMaterial({ ...opts, pullField: true })).vertexShader;
+    expect(vs).toContain('attribute float _pull;');
+    expect(vs).toContain('transformed += normalize(objectNormal) * uInflate * _pull;');
+    expect(vs).toContain('mvPosition.z + CT_DEPTH_PULL * _pull');
+    const plain = compiled(createTissueMaterial(opts)).vertexShader;
+    expect(plain).not.toContain('_pull');
+    expect(plain).toContain('mvPosition.z + CT_DEPTH_PULL, 1.0');
   });
 
   it('keeps the closed heart`s chambers dark until it opens (one shared uHeartOpen)', () => {

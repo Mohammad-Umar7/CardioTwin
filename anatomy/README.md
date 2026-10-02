@@ -157,7 +157,12 @@ origin — the viewer can offset or scale any node safely.
 * **Collisions** — display-only neighbours yield to the structures they intersect (`collisions` in the config): a
   two-sided test (neighbour vertices inside a master, and master vertices inside a coarse neighbour) moves the
   neighbour along the surface normal and spreads the dent smoothly; the diaphragm is lowered 8 mm as a whole; the
-  intrapulmonary branches of the pulmonary veins keep 6 mm from the heart, its fat and the epicardial vessels.
+  intrapulmonary branches of the pulmonary veins keep 6 mm from the heart, its fat and the epicardial vessels. The
+  great vessels the viewer cuts open keep a real gap before the fat is shaped round them (their lumens are on show):
+  the pulmonary trunk and the SVC leave the aorta by 1 mm (one-sided, to the full depth of the overlap, about 5 mm
+  for the trunk), and the aorta's stump gives way 0.5 mm where it still bulges between their vertices; the fat stops
+  0.8 mm short of every great vessel; the left main and the RCA are trimmed where they started inside the aortic root,
+  so they begin (capped) 0.5 mm off its wall.
 * **Cardiac impression** — after the push-out each lung is decimated to 55 % of its budget and the heart halves, fat,
   great vessels, coronaries and cardiac veins, inflated by 2.2 mm along their normals, are subtracted (exact Boolean;
   `lung_carve` in the config; the big masters are coarse cutters in this pass); a very dense impression is decimated
@@ -165,12 +170,15 @@ origin — the viewer can offset or scale any node safely.
   so no heart structure intersects a lung; Boolean crumbs and inside-out slivers are dropped and slits filled, so each
   lung stays a closed surface.
 * **Pulmonary distances** — `_DIST_HEART` (geodesic distance from the pulmonary valve / left-atrial ostia) and
-  `_DIST_HILUM` (signed geodesic distance from the lung entry, > 0 inside the lungs) on both pulmonary trees.
+  `_DIST_HILUM` (signed geodesic distance from the lung entry, > 0 inside the lungs) on both pulmonary trees; the
+  trunk's are measured on its shape from before the collisions dent it round the aorta, and it carries `_DIST_CUT`,
+  the viewer's straightened cut distance (a plane across its root direction, `vesselCuts.ts`) on that shape too: the
+  viewer cuts the trunk there (20 mm above its valve), so the wall pushed off the aorta keeps its place below the cut.
 * **UVs** — Smart UV projection (66°) on every non-coronary node for the baked textures; islands are packed with their
   concave shapes (`pack_islands(shape_method="CONCAVE")`), which fits the 1024² heart atlases at a higher texel
   density.
 
-### Triangle budget (total 407,737 in the GLB ≤ 430,000)
+### Triangle budget (total 420,735 in the GLB ≤ 430,000)
 
 The budget rose from 400k to 430k for the lobulated epicardial fat (40k) and the synthesised valve apparatus (16k); the
 GLB stays at about 8 MB.
@@ -382,6 +390,14 @@ the viewer's staggered peel windows hide most of that.
   read as plastic.
 * **Pulmonary trees**: `_DIST_HEART` / `_DIST_HILUM` (three.js: `_dist_heart` / `_dist_hilum`) let the viewer keep the trunk, main
   branches and venous ostia (`_DIST_HILUM < ~0.02`) and fade the intrapulmonary tree.
+* **Enclosure**: the heart walls, valves, papillary muscles, epicardial fat and `CardiacVeins` carry `_ENCLOSURE`
+  (three.js `_enclosure`, 0 – 1): the share of a vertex's sky the closed heart hides (the walls and the great-vessel
+  stumps the viewer keeps, the venae cavae and the aorta closed at their cut). The viewer keeps what lies in the
+  chambers dark while the heart is closed, so a cut vessel opens onto a dark atrium or ventricle.
+* **Coronary pull**: every `Coronary_*` node carries `_PULL` (three.js `_pull`, 0 – 1): 0 within 3.5 mm of a
+  great-vessel stump's wall, 1 from 6 mm. The viewer scales the coronaries' display inflation and depth pull by it, so
+  an artery running by a stump (the sinus-node artery at the SVC, the ostia on the aortic root) never shows through
+  the stump into its dark lumen.
 * **Baked maps**: every non-coronary material has a baseColor WebP map and, where they carry information, a normal
   and an occlusion-roughness map (otherwise a roughness factor), with neutral factors; `COLOR_0` on the heart walls is territory DATA — a spec-compliant viewer would multiply it into the albedo,
   so the Realistic look must not (the web preview doesn't).

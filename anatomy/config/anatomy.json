@@ -1350,18 +1350,61 @@
       "margin_mm": 0.8
     },
     {
+      "_comment": "...and the aorta's own wall gives way where it bulges between the yielder's vertices into its lumen (shallow only: a dent, never a fold).",
+      "yielder": "GreatVessel_Aorta",
+      "masters": [
+        "GreatVessel_PulmonaryArtery"
+      ],
+      "margin_mm": 0.5,
+      "passes": 8,
+      "depth_mm": 3.0,
+      "two_sided": false,
+      "mask": "viewer_stump"
+    },
+    {
+      "yielder": "GreatVessel_Aorta",
+      "masters": [
+        "GreatVessel_SVC"
+      ],
+      "margin_mm": 0.5,
+      "passes": 8,
+      "depth_mm": 3.0,
+      "two_sided": false,
+      "mask": "viewer_stump"
+    },
+    {
+      "_comment": "The cut great vessels show their lumens: a neighbour's wall inside one (the trunk against the aortic root, the aorta against the SVC) stood in the dark lumen as a lit patch, so they keep a real gap, before the fat is shaped round them. One-sided, to the full depth of the overlap (a vertex left deep inside the master tangled the trunk round the aorta): the yielder's vertices leave the master; the inward pull of the two-sided test kept re-denting the trunk where the aorta sits in it, until it caved in.",
       "yielder": "GreatVessel_PulmonaryArtery",
       "masters": [
         "GreatVessel_Aorta"
       ],
-      "margin_mm": 0.3
+      "margin_mm": 1.0,
+      "passes": 16,
+      "depth_mm": 15.0,
+      "two_sided": false,
+      "before_fat": true
     },
     {
       "yielder": "GreatVessel_SVC",
       "masters": [
         "GreatVessel_Aorta"
       ],
-      "margin_mm": 0.3
+      "margin_mm": 1.0,
+      "passes": 16,
+      "depth_mm": 15.0,
+      "two_sided": false,
+      "before_fat": true
+    },
+    {
+      "_comment": "The left main and the RCA start at their ostia on the aortic root: their first millimetres, inside the root, are trimmed so they start on its wall, 0.5 mm off it (no stub in the lumen; their flat end cap spans the root's curve).",
+      "trim": "Coronary_LM",
+      "host": "GreatVessel_Aorta",
+      "margin_mm": 0.5
+    },
+    {
+      "trim": "Coronary_RCA",
+      "host": "GreatVessel_Aorta",
+      "margin_mm": 0.5
     },
     {
       "yielder": "GreatVessel_SVC_BrachiocephalicVeins",

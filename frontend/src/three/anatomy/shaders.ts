@@ -231,6 +231,25 @@ ${f.edgeShade ? 'uniform float uEdgeShade;' : ''}
 ${f.desaturateMap ? 'uniform float uSaturation;' : ''}`,
   );
 
+  if (f.cutRim && f.clipAlong) {
+    // How fast the along-the-wall field changes per world unit across the surface, from its screen-space derivatives
+    // and the surface's (least-norm gradient): the cut distance in world units. A vessel wall dented by the build's
+    // collisions keeps its field from before the dent, so it changes slowly where the wall was stretched; read raw,
+    // the cut rim and the lit mouth of the lumen there spread into a band down the wall.
+    fs = fs.replace(
+      'void main() {',
+      `float ctAlongSlope(float f, vec3 p) {
+  vec3 px = dFdx(p), py = dFdy(p);
+  float fx = dFdx(f), fy = dFdy(f);
+  float a = dot(px, px), b = dot(px, py), c = dot(py, py);
+  float det = a * c - b * b;
+  float g2 = det > 1e-24 ? (c * fx * fx - 2.0 * b * fx * fy + a * fy * fy) / det : 1.0;
+  return clamp(sqrt(max(g2, 0.0)), 0.05, 20.0);
+}
+void main() {`,
+    );
+  }
+
   // Materialise (world-space noise front, see MATERIALISE) and the pulmonary / great-vessel sphere clip.
   fs = fs.replace(
     '#include <clipping_planes_fragment>',
@@ -244,7 +263,7 @@ ${f.clipAlong ? `// A clean, antialiased CUT (not an alpha smear) halfway throug
   float ctCutAt = 0.5 * (uAlongStart + uAlongEnd);
   float ctCutW = max(fwidth(vCtAlong), 1e-4);
   ctClipKeep *= 1.0 - smoothstep(ctCutAt - ctCutW, ctCutAt + ctCutW, vCtAlong);
-  ${f.cutRim ? 'ctCutDist = min(ctCutDist, ctCutAt - vCtAlong);' : ''}
+  ${f.cutRim ? 'ctCutDist = min(ctCutDist, (ctCutAt - vCtAlong) / ctAlongSlope(vCtAlong, vCtRest));' : ''}
 }` : ''}
 ${f.clipSphere ? `{
   float ctClipD = distance(vCtRest, uClipCentre);

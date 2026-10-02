@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { straightCutDistance } from './vesselCuts';
+import { descendingAortaCut, straightCutDistance } from './vesselCuts';
 
 const SEG = 16;
 
@@ -74,5 +74,23 @@ describe('specimen cuts for the pulmonary vessels', () => {
     const t = tube([0, 0, 0], [0, 1, 0], 3); // too short to reach the axis band
     const out = straightCutDistance(t.pos, t.idx, t.along, OPTS);
     expect(Array.from(out)).toEqual(t.along.map((v) => Math.fround(v)));
+  });
+});
+
+describe('the descending aorta cut', () => {
+  const CUT = { behind: 0.4, cutAbove: 0.95, floor: 0 };
+
+  it('cuts the limb behind the heart below the arch and everything below the AV plane', () => {
+    expect(descendingAortaCut(0.5, 0.5, CUT)).toBeGreaterThan(0); // the descending limb
+    expect(descendingAortaCut(0.5, 1.0, CUT)).toBeLessThan(0); // above its cut: the arch
+    expect(descendingAortaCut(0.1, 0.5, CUT)).toBeLessThan(0); // the ascending aorta
+    expect(descendingAortaCut(0.1, -0.05, CUT)).toBeGreaterThan(0); // below the AV plane
+  });
+
+  it('is continuous across the limb boundary, so a triangle straddling it is cut at the boundary', () => {
+    // an edge from 0.3 to 0.6 behind the AV-plane centre: its interpolated zero lies on the boundary (0.4)
+    const a = descendingAortaCut(0.3, 0.5, CUT);
+    const b = descendingAortaCut(0.6, 0.5, CUT);
+    expect(0.3 + (a / (a - b)) * 0.3).toBeCloseTo(0.4, 6);
   });
 });

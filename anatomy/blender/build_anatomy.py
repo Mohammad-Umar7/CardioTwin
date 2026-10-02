@@ -1104,7 +1104,31 @@ FAT = {
     "lobule_bump_mm": 0.45,
     "sink_mm": 1.0,                         # inner surface depth inside the myocardium
     "remesh_mm": 0.38,
+    "vessel_clear_mm": 0.8,                 # gap kept to the great vessels' walls (FAT_CLEAR_OF)
 }
+#: The great vessels the fat stays out of: their cut stumps show their lumens in the viewer, where fat that had grown
+#: into them (the bed along the left main and the RCA runs up to their ostia on the aortic root, the AV-groove fat
+#: reaches round the venae cavae) stood lit inside the dark lumen.
+FAT_CLEAR_OF = ("GreatVessel_Aorta", "GreatVessel_PulmonaryArtery", "GreatVessel_SVC", "GreatVessel_IVC")
+
+
+def clamp_to_vessels(V: np.ndarray, N: np.ndarray, t: np.ndarray, vessels: list, clear: float) -> np.ndarray:
+    """Fat thickness ``t`` (scene units, per wall vertex) that stops ``clear`` short of the first great-vessel wall along
+    the vertex normal; a wall vertex inside a vessel, or against its wall, carries none (the aortic root sits in the
+    heart's base, so the wall round it lies partly inside the root)."""
+    gV, gF = mo.concat([(world_vertices(v), mesh_arrays(v.data)[1]) for v in vessels])
+    bvh = BVHTree.FromPolygons(gV.tolist(), gF.tolist(), all_triangles=True)
+    out = t.copy()
+    for i in np.nonzero(t > 0)[0]:
+        p = Vector(V[i])
+        loc, nrm, _, dist = bvh.find_nearest(p)
+        if loc is not None and dist < 0.15 and (p - loc).dot(nrm) < clear:
+            out[i] = 0.0
+            continue
+        hit = bvh.ray_cast(p, Vector(N[i]), float(t[i]) + clear)
+        if hit[0] is not None:
+            out[i] = max(0.0, hit[3] - clear)
+    return out
 #: Vessels that lie in a groove (and get a fat bed): arteries by code, veins by label.
 FAT_GROOVE = {
     "av": {"arteries": {"LM", "pCx", "RCA"}, "veins": {"CS", "GCV", "SCV"}},
@@ -1355,6 +1379,11 @@ def make_epicardial_fat(wall, objects, fat_specs, base, apex, plane_co, plane_no
     t, carries = fat_thickness(V, epi=epi.astype(float), vessels=vessels, base=base, apex=apex, scale=scale, wall_sd=wall_sd,
                                F=F, sees=sees, space=space)
     log(f"  epicardial fat: {int(epi.sum())} epicardial vertices, {int((carries & ~epi).sum())} groove vertices under an overhang carry fat")
+    great = [objects[n] for n in FAT_CLEAR_OF if n in objects]
+    if great:
+        t0 = t
+        t = clamp_to_vessels(V, N, t, great, FAT["vessel_clear_mm"] * scale)
+        log(f"  epicardial fat: {int(((t0 > 0) & (t < t0 - 1e-9)).sum())} groove vertices stop short of a great vessel")
     FV, FF = build_fat_shell(V, F, N, t, scale)
     fat = new_object("EpicardialFat", new_mesh("EpicardialFat", FV, FF))
     remesh_seamless(fat, FAT["remesh_mm"] * scale)
@@ -1370,6 +1399,9 @@ def make_epicardial_fat(wall, objects, fat_specs, base, apex, plane_co, plane_no
     decimate_to(fat, budget)
     reorient_after_decimation(fat)
     taubin_object(fat, 2)
+    if great:  # what the voxel union and the smoothing still bulge into a vessel, before the split (one seam)
+        clear_info = push_out(fat, great, FAT["vessel_clear_mm"] * scale, passes=12, depth=0.03, two_sided=False)
+        log(f"  epicardial fat clear of the great vessels: {clear_info}")
     # genus of the fat shell (handles = tunnels through it, which read as dark pits): report it
     FV2, FF2 = mesh_arrays(fat.data)
     e2 = mo.unique_edges(FF2)
@@ -1424,7 +1456,7 @@ def mesh_edges(F: np.ndarray) -> np.ndarray:
 
 
 def push_out(yielder: bpy.types.Object, masters: list[bpy.types.Object], margin: float, *, spread: int = 10,
-             mask=None, passes: int = 6, reach: float = 0.011) -> dict:
+             mask=None, passes: int = 6, reach: float = 0.011, depth: float = 0.05, two_sided: bool = True) -> dict:
     """Make ``yielder`` give way to ``masters`` (display-only neighbours yield to the structures they touch).
 
     Two-sided test, because the yielder can be much coarser than the master (a lung triangle may cut through a
@@ -1435,7 +1467,10 @@ def push_out(yielder: bpy.types.Object, masters: list[bpy.types.Object], margin:
       normal) by their depth + ``margin``, with a quadratic falloff over ``reach``.
 
     The displacement field is spread over the yielder's mesh so each dent stays smooth. ``mask(V_world) ->
-    bool`` limits which yielder vertices may move. Returns the deepest penetration found before the first pass.
+    bool`` limits which yielder vertices may move; only points within ``depth`` of the other surface count.
+    ``two_sided=False`` skips the second test (a master that passes right through the yielder, a vena cava through the
+    fat over its mouth, cannot be cleared by a dent). Returns the deepest penetration found before the first pass and
+    the deepest one left after the last.
     """
     me = yielder.data
     V, F = mesh_arrays(me)
@@ -1453,6 +1488,7 @@ def push_out(yielder: bpy.types.Object, masters: list[bpy.types.Object], margin:
         master_pts.append(mV)
     master_pts = np.concatenate(master_pts) if master_pts else np.zeros((0, 3))
     first_depth = None
+    last_depth = 0.0
     it = 0
     for it in range(passes):
         need = np.zeros_like(Vw)
@@ -1466,7 +1502,7 @@ def push_out(yielder: bpy.types.Object, masters: list[bpy.types.Object], margin:
                 if loc is None:
                     continue
                 s_ = (Vector(Vw[i]) - loc).dot(nrm)
-                if s_ < margin and dist < 0.05:
+                if s_ < margin and dist < depth:
                     m_ = margin - s_
                     worst = max(worst, -s_)
                     if m_ > mag[i]:
@@ -1475,11 +1511,11 @@ def push_out(yielder: bpy.types.Object, masters: list[bpy.types.Object], margin:
         # (b) master vertices inside the yielder
         ybvh = BVHTree.FromPolygons(Vw.tolist(), F.tolist(), all_triangles=True)
         lo, hi = Vw.min(axis=0) - margin, Vw.max(axis=0) + margin
-        cand = master_pts[np.all((master_pts >= lo) & (master_pts <= hi), axis=1)]
+        cand = master_pts[np.all((master_pts >= lo) & (master_pts <= hi), axis=1)] if two_sided else master_pts[:0]
         pen_loc, pen_vec = [], []
         for q in cand:
             loc, nrm, _, dist = ybvh.find_nearest(Vector(q))
-            if loc is None or dist > 0.05:
+            if loc is None or dist > depth:
                 continue
             s_ = (Vector(q) - loc).dot(nrm)
             if s_ < margin:
@@ -1501,6 +1537,7 @@ def push_out(yielder: bpy.types.Object, masters: list[bpy.types.Object], margin:
                         need[i] = cand_v
         if first_depth is None:
             first_depth = worst
+        last_depth = worst
         if not (mag > 1e-6).any():
             break
         disp = need.copy()
@@ -1518,7 +1555,101 @@ def push_out(yielder: bpy.types.Object, masters: list[bpy.types.Object], margin:
     Vl = Vw @ Minv[:3, :3].T + Minv[:3, 3]
     me.vertices.foreach_set("co", Vl.astype(np.float32).ravel())
     me.update()
-    return {"max_penetration_before_mm": round((first_depth or 0.0) / 0.01, 2), "passes": it + 1}
+    return {"max_penetration_before_mm": round((first_depth or 0.0) / 0.01, 2),
+            "max_penetration_last_pass_mm": round(last_depth / 0.01, 2), "passes": it + 1}
+
+
+def trim_inside(ob: bpy.types.Object, host: bpy.types.Object, margin: float, depth: float = 0.08) -> dict:
+    """Trim what of ``ob`` lies inside ``host``: a coronary artery starts at its ostium on the aortic root, so its
+    first millimetres (a tube centred on the sinus wall) stood in the aortic lumen as a stub, lit inside the dark
+    lumen. Faces wholly inside (or within ``margin`` of the wall) go; a vertex of a kept face left there moves onto the
+    wall + ``margin``, so the artery starts flush on the host's outer surface; the cut end is capped there."""
+    hV = world_vertices(host)
+    _, hF = mesh_arrays(host.data)
+    bvh = BVHTree.FromPolygons(hV.tolist(), hF.tolist(), all_triangles=True)
+    M = np.array(ob.matrix_world)
+    Minv = np.linalg.inv(M)
+    bm = bmesh.new()
+    bm.from_mesh(ob.data)
+    bm.verts.ensure_lookup_table()
+    inside = np.zeros(len(bm.verts), dtype=bool)
+    target = {}
+    for v in bm.verts:
+        p = Vector((M @ np.array([*v.co, 1.0]))[:3])
+        loc, nrm, _, dist = bvh.find_nearest(p)
+        if loc is None or dist > depth:
+            continue
+        if (p - loc).dot(nrm) < margin:
+            inside[v.index] = True
+            target[v.index] = loc + nrm * margin
+    drop = [f for f in bm.faces if all(inside[v.index] for v in f.verts)]
+    moved = 0
+    for f in bm.faces:
+        if f in drop:
+            continue
+        for v in f.verts:
+            if inside[v.index] and v.index in target:
+                v.co = Vector((Minv @ np.array([*target.pop(v.index), 1.0]))[:3])
+                moved += 1
+    before = len(bm.faces)
+    bmesh.ops.delete(bm, geom=drop, context="FACES")
+    after = len(bm.faces)
+    # close the cut end again (it lies on the wall, under the artery): the lung carve and the centreline stage take
+    # closed vessels
+    filled = bmesh.ops.holes_fill(bm, edges=[e for e in bm.edges if e.is_boundary], sides=0)["faces"]
+    bmesh.ops.triangulate(bm, faces=filled)
+    bm.to_mesh(ob.data)
+    bm.free()
+    ob.data.update()
+    return {"faces_trimmed": before - after, "vertices_moved_to_wall": moved, "cap_faces": len(filled)}
+
+
+def resolve_collisions(rules: list[dict], objects: dict, *, base: np.ndarray, walls: list, scale: float) -> dict:
+    """Apply the config's collision rules in order: a ``yielder`` gives way to its ``masters`` (push_out, with optional
+    ``passes``, ``depth_mm``, ``reach_mm`` and ``two_sided``), or a ``trim`` node loses what lies inside its ``host``
+    (trim_inside)."""
+    out = {}
+    for rule in rules:
+        if "trim" in rule:
+            if rule["trim"] in objects and rule["host"] in objects:
+                out[f"{rule['trim']} trimmed by {rule['host']}"] = trim_inside(
+                    objects[rule["trim"]], objects[rule["host"]], rule["margin_mm"] * scale)
+            continue
+        if "yielder" not in rule or rule["yielder"] not in objects:
+            continue
+        masters = [objects[m] for m in rule["masters"] if m in objects]
+        mask = None
+        if rule.get("mask") == "descending_aorta":
+            def mask(Vw, _b=base):  # posterior, below the arch: the descending limb only (never the root, which
+                # sits in the outflow tract since the synthesis moved it to the anterior mitral hinge)
+                return (Vw[:, 1] > _b[1] + 0.35) & (Vw[:, 2] < _b[2] + 0.25)
+        elif rule.get("mask") == "viewer_stump":
+            # the part of a great vessel the viewer keeps (inside its great-vessel clip sphere, and of the aorta not
+            # the descending limb or what lies below the AV plane, rig.ts DESCENDING_AORTA): never the arch or the
+            # descending aorta it cuts away, which lie against the spine and the lower-lobe arteries
+            clip_c_ = np.asarray(VIEWER_GREAT_VESSEL_CLIP[0], float) @ mo.BLENDER_TO_GLTF
+            behind_, above_, floor_ = VIEWER_DESCENDING_AORTA
+
+            def mask(Vw, _c=clip_c_, _r=VIEWER_GREAT_VESSEL_CLIP[1] + 0.05, _b=base):
+                up, behind = Vw[:, 2] - _b[2], Vw[:, 1] - _b[1]  # Blender: +Z superior, +Y posterior
+                kept = (up >= floor_) & ((behind <= behind_) | (up >= above_))
+                return kept & (np.linalg.norm(Vw - _c, axis=1) < _r)
+        elif rule.get("mask") == "away_from_heart":
+            # the intrapulmonary branches (lingular and lower-lobe veins lie against the heart), never the ostia
+            walls_ = np.concatenate([world_vertices(w) for w in walls])
+
+            def mask(Vw, _w=walls_, _r=rule.get("mask_mm", 30.0) * scale):
+                d_ = nearest_distance(Vw, _w)
+                touch = Vw[d_ < 1.5 * scale]
+                return nearest_distance(Vw, touch) > _r if len(touch) else np.ones(len(Vw), dtype=bool)
+        kw = {k: rule[f"{k}_mm"] * scale for k in ("depth", "reach") if f"{k}_mm" in rule}
+        if "passes" in rule:
+            kw["passes"] = int(rule["passes"])
+        if "two_sided" in rule:
+            kw["two_sided"] = bool(rule["two_sided"])
+        out[rule["yielder"] + " <- " + ",".join(rule["masters"])] = push_out(
+            objects[rule["yielder"]], masters, rule["margin_mm"] * scale, mask=mask, **kw)
+    return out
 
 
 # --------------------------------------------------------------------------------------------
@@ -1580,6 +1711,9 @@ def set_float_attribute(ob: bpy.types.Object, name: str, values: np.ndarray) -> 
 #: read there.
 ENCLOSED_NODES = ("Heart_Wall_Anterior", "Heart_Wall_Posterior", "Papillary_Muscles", "Valve_Mitral", "Valve_Tricuspid",
                   "Valve_Aortic", "Valve_Pulmonary", "EpicardialFat_Anterior", "EpicardialFat_Posterior", "CardiacVeins")
+#: A coronary within the first distance of a great-vessel stump's wall gets no display inflation or depth pull, full
+#: from the second (mm; `_PULL`, the viewer's tissue.ts VESSEL_DEPTH_PULL is 3 mm).
+CORONARY_PULL_CLEAR_MM = (3.5, 6.0)
 #: Rays per vertex and their reach (mm).
 ENCLOSURE_RAYS, ENCLOSURE_REACH_MM = 24, 80.0
 #: The viewer's great-vessel clip (frontend/src/three/anatomy/rig.ts GREAT_VESSEL_CLIP): centre (glTF frame) and the
@@ -1588,7 +1722,73 @@ VIEWER_GREAT_VESSEL_CLIP = ((0.0, 0.05, -0.05), 0.8 - 0.24 / 2)
 #: The viewer's cut of the descending aorta (rig.ts DESCENDING_AORTA: behind, cutAbove, floor; glTF frame from the
 #: base centre) and of the pulmonary trunk (tissue.ts ALONG_FADE midpoint, distance from its cardiac end).
 VIEWER_DESCENDING_AORTA = (0.4, 0.95, 0.0)
-VIEWER_PULMONARY_CUT = 0.30
+VIEWER_PULMONARY_CUT = 0.20
+#: The viewer's straightened cut (rig.ts VESSEL_CUT_ROOT, VESSEL_CUT_AXIS, VESSEL_CUT_MARGIN; scene units).
+VIEWER_VESSEL_CUT = {"root": 0.015, "axis": (0.135, 0.27), "margin": 0.1}
+
+
+def straight_cut_distance(V: np.ndarray, F: np.ndarray, along: np.ndarray) -> np.ndarray:
+    """The viewer's straightened cut distance (frontend vesselCuts.ts ``straightCutDistance``): per connected piece,
+    the distance past its root along the direction to its centroid a short way along it, or ``along`` less a margin
+    where that is larger. Computed here on the trunk's shape from before its collision dents (``_DIST_CUT``): the
+    viewer, straightening on the dented positions, cut a slot down the wall pushed off the aorta."""
+    root_band, (a0, a1), margin = VIEWER_VESSEL_CUT["root"], VIEWER_VESSEL_CUT["axis"], VIEWER_VESSEL_CUT["margin"]
+    along = np.asarray(along, dtype=float)
+    comp = mo.vertex_components(F, len(V))
+    out = along.copy()
+    for c in np.unique(comp):
+        m = comp == c
+        r = m & (along < root_band)
+        a = m & (along >= a0) & (along <= a1)
+        if not r.any() or not a.any():
+            continue
+        o = V[r].mean(axis=0)
+        d = V[a].mean(axis=0) - o
+        n = float(np.linalg.norm(d))
+        if n < 1e-9:
+            continue
+        out[m] = np.maximum((V[m] - o) @ (d / n), along[m] - margin)
+    return out
+
+
+def cut_caps(V: np.ndarray, F: np.ndarray, keep: np.ndarray, near=None) -> tuple[np.ndarray, np.ndarray]:
+    """The kept faces of a vessel plus fan triangles closing every loop where ``keep`` cuts it (the edges of the kept
+    faces that the whole mesh does not end on), each round its loop's centroid; ``near(centroid) -> bool`` picks the
+    loops to close. Returns (vertices + centroids, kept faces + caps)."""
+    def open_edges(faces):
+        e = np.sort(np.concatenate([faces[:, [0, 1]], faces[:, [1, 2]], faces[:, [2, 0]]]), axis=1)
+        u, c = np.unique(e, axis=0, return_counts=True)
+        return {tuple(x) for x in u[c == 1].tolist()}
+
+    cut = sorted(open_edges(F[keep]) - open_edges(F))
+    parent = {}
+
+    def find(a):
+        while parent.setdefault(a, a) != a:
+            parent[a] = parent[parent[a]]
+            a = parent[a]
+        return a
+
+    for a, b in cut:
+        parent[find(a)] = find(b)
+    loops: dict[int, list[tuple[int, int]]] = {}
+    for a, b in cut:
+        loops.setdefault(find(a), []).append((a, b))
+    # orient each cap like the kept faces it closes (the winding does not matter to the ray casts, only coverage)
+    extra_V, extra_F = [], []
+    for edges in loops.values():
+        if len(edges) < 3:
+            continue
+        idx = np.unique(np.array(edges))
+        c = V[idx].mean(axis=0)
+        if near is not None and not near(c):
+            continue
+        k = len(V) + len(extra_V)
+        extra_V.append(c)
+        extra_F.extend([a, b, k] for a, b in edges)
+    if not extra_V:
+        return V, F[keep]
+    return np.vstack([V, np.array(extra_V)]), np.vstack([F[keep], np.array(extra_F, dtype=np.int64)])
 
 
 def _hemisphere_dirs(n: int) -> np.ndarray:
@@ -1628,12 +1828,16 @@ def enclosure_attribute(ob: bpy.types.Object, bvh: BVHTree, scale: float) -> np.
     return out
 
 
-def pulmonary_attributes(ob: bpy.types.Object, seeds_world_fn, lungs: list[bpy.types.Object]) -> dict:
+def pulmonary_attributes(ob: bpy.types.Object, seeds_world_fn, lungs: list[bpy.types.Object],
+                         rest_V: np.ndarray | None = None) -> dict:
     """_DIST_HEART: geodesic distance (scene units) along the vessel from its cardiac end.
     _DIST_HILUM: signed geodesic distance from where the vessel enters a lung (< 0 outside the lungs, towards
     the heart; > 0 inside, into the lung) — lets the viewer keep the proximal vessels and fade the
-    intrapulmonary tree."""
+    intrapulmonary tree. ``rest_V`` (local vertices, same topology): measure along the vessel as it was before the
+    collisions dented it, so a dent does not stretch the distances (the viewer cuts at a fixed distance)."""
     V, F = mesh_arrays(ob.data)
+    if rest_V is not None and len(rest_V) == len(V):
+        V = rest_V
     Vw = world_vertices(ob)
     seeds = seeds_world_fn(Vw)
     d_heart = geodesic(V, F, seeds)
@@ -1840,6 +2044,14 @@ def build(args: argparse.Namespace) -> None:
     log(f"LV radii (mm, apex -> mitral centre): cavity {np.round(lv['endo_radius'] / scale, 1).tolist()}, "
         f"wall {np.round(lv['epi_radius'] / scale, 1).tolist()}")
 
+    # --- the great vessels clear of each other first: the fat is shaped round them --------------------
+    # (the trunk's distances along its wall are measured on its shape from before: its dent round the aorta
+    # stretched the wall there, and the viewer's cut at a fixed distance tore a slot down the trunk)
+    pa_ob = objects.get("GreatVessel_PulmonaryArtery")
+    pa_rest = mesh_arrays(pa_ob.data)[0].copy() if pa_ob is not None else None
+    collisions = resolve_collisions([r for r in cfg.get("collisions", []) if r.get("before_fat")], objects,
+                                    base=base, walls=[], scale=scale)
+
     # --- epicardial fat in the AV and interventricular grooves (split with the same plane) ---------
     fat_specs = [s for s in specs if s.raw.get("generate") == "epicardial_fat"]
     if fat_specs:
@@ -1985,28 +2197,10 @@ def build(args: argparse.Namespace) -> None:
         log(f"  territories {spec.node}: {stats}")
 
     # --- collisions: display-only neighbours yield (dents spread smoothly) ---------------------------
-    collisions = {}
-    for rule in cfg.get("collisions", []):
-        if "yielder" not in rule or rule["yielder"] not in objects:
-            continue
-        masters = [objects[m] for m in rule["masters"] if m in objects]
-        mask = None
-        if rule.get("mask") == "descending_aorta":
-            def mask(Vw, _b=base):  # posterior, below the arch: the descending limb only (never the root, which
-                # sits in the outflow tract since the synthesis moved it to the anterior mitral hinge)
-                return (Vw[:, 1] > _b[1] + 0.35) & (Vw[:, 2] < _b[2] + 0.25)
-        elif rule.get("mask") == "away_from_heart":
-            # the intrapulmonary branches (lingular and lower-lobe veins lie against the heart), never the ostia
-            walls_ = np.concatenate([world_vertices(objects[s_.node]) for s_ in heart_specs])
-
-            def mask(Vw, _w=walls_, _r=rule.get("mask_mm", 30.0) * scale):
-                d_ = nearest_distance(Vw, _w)
-                touch = Vw[d_ < 1.5 * scale]
-                return nearest_distance(Vw, touch) > _r if len(touch) else np.ones(len(Vw), dtype=bool)
-        collisions[rule["yielder"] + " <- " + ",".join(rule["masters"])] = push_out(
-            objects[rule["yielder"]], masters, rule["margin_mm"] * scale, mask=mask)
+    collisions.update(resolve_collisions([r for r in cfg.get("collisions", []) if not r.get("before_fat")], objects,
+                                         base=base, walls=[objects[s_.node] for s_ in heart_specs], scale=scale))
     if collisions:
-        log("collisions: " + "; ".join(f"{k}: {v['max_penetration_before_mm']} mm" for k, v in collisions.items()))
+        log("collisions: " + "; ".join(f"{k}: {v.get('max_penetration_before_mm', v)}" for k, v in collisions.items()))
     carve_cfg = cfg.get("lung_carve")
     if carve_cfg:
         # A carve that fails, or collapses the organ, keeps it uncarved (and says why).
@@ -2036,11 +2230,19 @@ def build(args: argparse.Namespace) -> None:
     if "GreatVessel_PulmonaryArtery" in objects and "Valve_Pulmonary" in objects:
         pv_valve = world_vertices(objects["Valve_Pulmonary"])
         pulmonary["GreatVessel_PulmonaryArtery"] = pulmonary_attributes(
-            objects["GreatVessel_PulmonaryArtery"], lambda Vw: nearest_distance(Vw, pv_valve) < 6.0 * scale, lungs)
+            objects["GreatVessel_PulmonaryArtery"], lambda Vw: nearest_distance(Vw, pv_valve) < 6.0 * scale, lungs,
+            rest_V=pa_rest)
     if "GreatVessel_PulmonaryVeins" in objects:
         walls = np.concatenate([world_vertices(objects[s.node]) for s in heart_specs])
         pulmonary["GreatVessel_PulmonaryVeins"] = pulmonary_attributes(
             objects["GreatVessel_PulmonaryVeins"], lambda Vw: nearest_distance(Vw, walls) < 2.5 * scale, lungs)
+    if "GreatVessel_PulmonaryArtery" in pulmonary and pa_rest is not None:
+        pa_ = objects["GreatVessel_PulmonaryArtery"]
+        d_ = np.empty(len(pa_.data.vertices), dtype=np.float32)
+        pa_.data.attributes["_DIST_HEART"].data.foreach_get("value", d_)
+        cut_ = straight_cut_distance(pa_rest, mesh_arrays(pa_.data)[1], d_)
+        set_float_attribute(pa_, "_DIST_CUT", cut_)
+        pulmonary["GreatVessel_PulmonaryArtery"]["kept_fraction"] = round(float((cut_ < VIEWER_PULMONARY_CUT).mean()), 3)
     for k, v in pulmonary.items():
         node_stats[k].update(v)
         log(f"  {k}: {v}")
@@ -2076,7 +2278,10 @@ def build(args: argparse.Namespace) -> None:
     # Occluders: the closed wall and the great-vessel stumps the viewer keeps (rig.ts): the venae cavae and the
     # ascending aorta inside the great-vessel clip sphere (not the descending limb it cuts away), the pulmonary
     # trunk up to its cut. A stump's tube shades what lies inside it (the cavo-atrial junction, the aortic root),
-    # while the hidden or cut-away rest of the vessels does not shade the heart's outside.
+    # while the hidden or cut-away rest of the vessels does not shade the heart's outside. The venae cavae and the
+    # aorta are closed at their (sphere) cut: the viewer darkens a cut lumen with depth (shaders.ts, the tunnel), so
+    # the atrial wall at a vena cava's mouth or the aortic root, seen down a stump, is as dark as the lumen around
+    # it, not lit by the cut.
     occ = [(wall_V, _wF)]
     clip_c = np.asarray(VIEWER_GREAT_VESSEL_CLIP[0], float) @ mo.BLENDER_TO_GLTF  # glTF -> Blender world
     clip_r = VIEWER_GREAT_VESSEL_CLIP[1]
@@ -2091,12 +2296,16 @@ def build(args: argparse.Namespace) -> None:
                 Cg = mo.to_gltf(C)
                 up, behind = Cg[:, 1] - base_g[1], base_g[2] - Cg[:, 2]
                 keep &= (up >= VIEWER_DESCENDING_AORTA[2]) & ((behind <= VIEWER_DESCENDING_AORTA[0]) | (up >= VIEWER_DESCENDING_AORTA[1]))
-            occ.append((V, F[keep]))
+            # close the sphere's cut (not the root's floor, inside the heart)
+            occ.append(cut_caps(V, F, keep, near=lambda c, _c=clip_c, _r=clip_r: np.linalg.norm(c - _c) > _r - 0.12))
     pa = objects.get("GreatVessel_PulmonaryArtery")
-    if pa is not None and "_DIST_HEART" in pa.data.attributes:
+    pa_cut = next((n for n in ("_DIST_CUT", "_DIST_HEART") if pa is not None and n in pa.data.attributes), None)
+    if pa_cut:
         d = np.empty(len(pa.data.vertices), dtype=np.float32)
-        pa.data.attributes["_DIST_HEART"].data.foreach_get("value", d)
+        pa.data.attributes[pa_cut].data.foreach_get("value", d)
         F = mesh_arrays(pa.data)[1]
+        # not closed: its cut crosses the curved trunk obliquely, so a fan across it would leave the tube on the
+        # inner side of the bend and shade the left atrial roof beneath (outside the heart)
         occ.append((world_vertices(pa), F[(d[F] < VIEWER_PULMONARY_CUT).all(axis=1)]))
     occ_V, occ_F = mo.concat(occ)
     heart_bvh = BVHTree.FromPolygons(occ_V.tolist(), occ_F.tolist(), all_triangles=True)
@@ -2107,6 +2316,24 @@ def build(args: argparse.Namespace) -> None:
             node_stats.setdefault(name, {})["enclosed_fraction"] = round(float((e > 0.8).mean()), 3)
     log("  enclosure (share of vertices > 0.8): "
         + ", ".join(f"{n} {node_stats[n]['enclosed_fraction']}" for n in ENCLOSED_NODES if n in objects))
+
+    # --- coronaries by a great-vessel stump: no display inflation or depth pull there (_PULL) --------------
+    # The viewer inflates the coronaries and pulls their depth 3 mm toward the camera (tissue.ts) so they read
+    # through the groove fat. Where one runs by a stump the viewer cuts open (the sinus-node artery at the SVC, the
+    # left main and the RCA at their ostia on the aortic root, the RCA by the IVC), that showed it through the
+    # stump's wall as a lit spot in the dark lumen, and pushed its flush ostial end into the aortic root.
+    stump_V, stump_F = mo.concat(occ[1:])
+    stump_bvh = BVHTree.FromPolygons(stump_V.tolist(), stump_F.tolist(), all_triangles=True)
+    lo_mm, hi_mm = CORONARY_PULL_CLEAR_MM
+    pulled = {}
+    for spec in specs:
+        if spec.is_coronary and spec.node in objects:
+            ob = objects[spec.node]
+            d = np.array([stump_bvh.find_nearest(Vector(p))[3] for p in world_vertices(ob)], dtype=float)
+            pull = mo.smoothstep(lo_mm * scale, hi_mm * scale, d)
+            set_float_attribute(ob, "_PULL", pull)
+            pulled[spec.node] = round(float((pull < 0.99).mean()), 3)
+    log(f"  coronary pull reduced by a stump (share of vertices): {pulled}")
 
     # --- per-vessel meshes for the centreline stage (glTF frame) --------------------------------
     VESSEL_MESH_DIR.mkdir(parents=True, exist_ok=True)
