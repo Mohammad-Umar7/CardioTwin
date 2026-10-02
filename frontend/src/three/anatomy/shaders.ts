@@ -26,10 +26,12 @@ vec4 ctNoised(vec3 x) {
   vec4 t = texture(uNoise3D, x * 0.125);
   return vec4(t.x * 2.0 - 1.0, (t.yzw * 2.0 - 1.0) * 4.0);
 }
+uniform float uCtOctaves;
 vec4 ctFbm(vec3 p, float f, float aa) {
   vec4 sum = vec4(0.0);
   float amp = 0.5;
   for (int i = 0; i < CT_OCTAVES; i++) {
+    if (float(i) >= uCtOctaves) break;
     float fade = 1.0 - smoothstep(0.25, 0.6, aa * f);
     if (fade <= 0.0) break;
     vec4 n = ctNoised(p * f + float(i) * vec3(2.71, 5.37, 1.19));
@@ -42,10 +44,16 @@ vec4 ctFbm(vec3 p, float f, float aa) {
 `;
 
 /**
- * Uniforms shared by every tissue material (by reference): a frame counter, and the gain of the warm edge
- * that rims the materialise front while the cold-load assembly plays (0 otherwise, so peel fades stay plain).
+ * Uniforms shared by every tissue material (by reference): a frame counter, the gain of the warm edge that rims
+ * the materialise front while the cold-load assembly plays (0 otherwise, so peel fades stay plain), and the
+ * tier's noise octaves. The octaves are a uniform under a compile-time maximum (`PatchFlags.octaves`), so tiers A
+ * and B share their programs: promoting B to A no longer recompiled every tissue program (a 3 s freeze).
  */
-export const FRAME_UNIFORMS = { uCtFrame: { value: 0 } as IUniform<number>, uCtEdgeGain: { value: 0 } as IUniform<number> };
+export const FRAME_UNIFORMS = {
+  uCtFrame: { value: 0 } as IUniform<number>,
+  uCtEdgeGain: { value: 0 } as IUniform<number>,
+  uCtOctaves: { value: 3 } as IUniform<number>,
+};
 
 /**
  * Materialise (assembly dissolve, solid ↔ ghost peel fades): a WORLD-SPACE noise front in the tissue's rest
@@ -117,7 +125,7 @@ export interface PatchFlags {
   enclosure: boolean;
   /** The beat is weighted per vertex by `aBeatW` (great vessels: 1 at the heart, 0 far along them). */
   beatWeighted: boolean;
-  /** Noise octaves (tier dependent). */
+  /** Most noise octaves the program can run (the tier's own count is the shared `uCtOctaves`). */
   octaves: number;
 }
 

@@ -112,6 +112,9 @@ export function FlowParticles({ pristine, centrelines, count }: FlowParticlesPro
     geometry.instanceCount = 0;
 
     const material = createFlowMaterial(getRiskLUT(), VESSEL_INFLATE);
+    // Clipped from the start (the anatomy published its section plane before the flow layer mounted), so the
+    // shader warm-up compiles the very program the first frame draws.
+    if (sceneRuntime.sectionPlanes.length > 0) material.clippingPlanes = sceneRuntime.sectionPlanes;
     material.uniforms.uCentre.value = texture;
     material.uniforms.uTexWidth.value = packed.width;
     material.uniforms.uSpacing.value = step;

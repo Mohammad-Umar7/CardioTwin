@@ -975,7 +975,10 @@ export function CameraRig() {
 
     // First frame with anatomy (V2 §5.18): the slot crossfades the poster away on this signal.
     if (!useCameraState.getState().firstFrame && stage !== 'hidden') {
-      if (useViewerStore.getState().anatomySource !== 'loading') {
+      // ...and with the GLB drawn: it stays hidden until its shaders are warm (stage/warmup.ts).
+      const viewer = useViewerStore.getState();
+      const shown = viewer.anatomySource !== 'glb' || (!viewer.warming && sceneRuntime.anatomyShown);
+      if (viewer.anatomySource !== 'loading' && shown) {
         readyFrames.current += 1;
         if (readyFrames.current >= 2) useCameraState.getState().markFirstFrame();
         else invalidate();

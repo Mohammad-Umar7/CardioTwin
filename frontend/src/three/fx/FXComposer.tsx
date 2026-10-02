@@ -42,6 +42,7 @@ export function FXComposer({ tier }: { tier: RenderTier }) {
   const scene = useThree((s) => s.scene);
   const camera = useThree((s) => s.camera);
   const levels = tier === 'A' ? BLOOM.levels.A : BLOOM.levels.B;
+  const initialLevels = useRef(levels);
 
   const bloom = useMemo(() => {
     const effect = new SelectiveBloomEffect(scene, camera, {
@@ -51,14 +52,20 @@ export function FXComposer({ tier }: { tier: RenderTier }) {
       luminanceSmoothing: BLOOM.luminanceSmoothing,
       intensity: BLOOM.intensity,
       radius: BLOOM.radius,
-      levels,
+      levels: initialLevels.current,
       resolutionScale: BLOOM.resolutionScale,
     });
     effect.selection.layer = BLOOM_LAYER;
     // `depthMaskMaterial` is public in postprocessing but missing from its typings.
     (effect as unknown as { depthMaskMaterial: { epsilon: number } }).depthMaskMaterial.epsilon = MASK_EPSILON;
     return effect;
-  }, [scene, camera, levels]);
+  }, [scene, camera]);
+
+  // A tier switch changes only the blur's mip chain, in place: re-creating the effect rebuilt the merged effect
+  // pass and recompiled its program (a hitch on every A <-> B promotion).
+  useEffect(() => {
+    bloom.mipmapBlurPass.levels = levels;
+  }, [bloom, levels]);
 
   const countdown = useRef(0);
   // Leave the anatomy's meshes as we found them (the selection toggles a layer bit on each) and free the

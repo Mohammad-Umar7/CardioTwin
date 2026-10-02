@@ -34,7 +34,7 @@ import { heightOf, setBeatActivation, setBeatFrame } from './beatDeform';
 import { PointHash, graphComponents, vesselBeatWeights, weldGraph } from './beatWeights';
 import { descendingAortaCut, straightCutDistance } from './vesselCuts';
 import { deflateDirections } from './fatDeflate';
-import { cavityAttribute, type CentrelinePoint } from './cavity';
+import { cavityAttribute, type CavityInput, type CentrelinePoint } from './cavity';
 import { axial, correctWeights, meanAngle, rvShare } from './territory';
 import { FRAME_UNIFORMS } from './shaders';
 import {
@@ -65,6 +65,7 @@ import {
 import {
   ALONG_FADE,
   ALONG_KEEPS_SPHERE,
+  TIER_OCTAVES,
   VESSEL_INFLATE,
   createGhostMaterial,
   createSharedUniforms,
@@ -131,6 +132,8 @@ export interface RigInputs {
   /** Ventricular / atrial activation (already enveloped). */
   beatV: number;
   beatA: number;
+  /** LV twist activation (heartbeat.ts `twist`); absent = follows beatV. */
+  beatT?: number;
 }
 
 export interface RigOptions {
@@ -511,6 +514,9 @@ function bakedMaps(material: Material | Material[]): BakedMaps | null {
   return maps.map || maps.normalMap || maps.roughnessMap || maps.aoMap ? maps : null;
 }
 
+/** Tiers whose materials are identical: A and B (MeshPhysical), C (MeshStandard). */
+const tierClass = (tier: QualityTier) => (tier === 'A' || tier === 'B' ? 'AB' : 'C');
+
 export class AnatomyRig {
   readonly entries: RigEntry[] = [];
   readonly byNode = new Map<string, RigEntry>();
@@ -535,6 +541,7 @@ export class AnatomyRig {
     const manifest = options.manifest;
     this.look = options.look;
     this.tier = options.tier;
+    FRAME_UNIFORMS.uCtOctaves.value = TIER_OCTAVES[this.tier];
     this.e = initialExplode;
     this.frame = heartFrameFrom(manifest?.heart);
     setBeatFrame(this.frame);
@@ -747,21 +754,22 @@ export class AnatomyRig {
     f.version += 1;
   }
 
-  private solidFor(entry: RigEntry): TissueMaterial {
-    const key = `${this.look}-${this.tier}-${entry.mapsReady ? 'm' : ''}`;
+  private solidFor(entry: RigEntry, look: SceneLook = this.look, mapsReady: boolean = entry.mapsReady): TissueMaterial {
+    // Tiers A and B build the same materials (their noise octaves are a shared uniform): one set for both.
+    const key = `${look}-${tierClass(this.tier)}-${mapsReady ? 'm' : ''}`;
     let m = entry.solid.get(key);
     if (!m) {
       const heart = BEATS_WITH_HEART.has(entry.kind) || GREAT_VESSEL_KINDS.has(entry.kind);
       const geometry = entry.mesh.geometry as BufferGeometry;
       m = createTissueMaterial({
         kind: entry.kind,
-        look: this.look,
+        look,
         tier: this.tier,
         restOffset: entry.restOffset,
         beatMode: beatModeOf(entry.kind),
         shared: this.shared,
         territoryAttribute: entry.kind === 'myocardium' ? (geometry.getAttribute('color') ? 'color' : null) : null,
-        maps: entry.mapsReady ? entry.maps : null,
+        maps: mapsReady ? entry.maps : null,
         clippingPlanes: heart ? this.sectionPlanes : null,
         inflate: (entry.kind === 'coronary' || entry.kind === 'leftMain') && !INTRAMURAL.has(entry.node) ? VESSEL_INFLATE : 0,
         cavity: !!geometry.getAttribute('aCavity'),
@@ -913,6 +921,22 @@ export class AnatomyRig {
     return [...new Set(this.entries.filter((e) => e.target).map((e) => e.target as string))];
   }
 
+  /**
+   * Materials a later interaction would first draw, built now (not assigned) so their programs can compile in the
+   * background (stage/warmup.ts): the other look's, and the outer layers' textured ones (closing the chest). Each
+   * with the mesh it belongs to.
+   */
+  materialsToPrewarm(): { object: Mesh; material: TissueMaterial }[] {
+    const other: SceneLook = this.look === 'realistic' ? 'clinical' : 'realistic';
+    const out: { object: Mesh; material: TissueMaterial }[] = [];
+    for (const e of this.entries) {
+      const outer = OUTER_KINDS.has(e.kind);
+      out.push({ object: e.mesh, material: this.solidFor(e, other, e.mapsReady || outer) });
+      if (outer && e.maps) out.push({ object: e.mesh, material: this.solidFor(e, this.look, true) });
+    }
+    return out;
+  }
+
   setLook(look: SceneLook): void {
     if (look === this.look) return;
     this.look = look;
@@ -924,8 +948,10 @@ export class AnatomyRig {
 
   setTier(tier: QualityTier): void {
     if (tier === this.tier || tier === 'D') return;
+    const rebuild = tierClass(tier) !== tierClass(this.tier);
     this.tier = tier;
-    for (const e of this.entries) e.mesh.material = this.solidFor(e);
+    FRAME_UNIFORMS.uCtOctaves.value = TIER_OCTAVES[tier];
+    if (rebuild) for (const e of this.entries) e.mesh.material = this.solidFor(e);
   }
 
   /** Mark a mesh's baked maps as uploaded: its Realistic materials are rebuilt with them. */
@@ -995,39 +1021,58 @@ export class AnatomyRig {
   }
 
   /**
-   * Fill the heart walls' `aCavity` attribute (crease AO, vessel grooves, fat along the arteries) from the
-   * mesh and the coronary centrelines. One wall per call: schedule the calls in idle time.
+   * Inputs for the heart walls' `aCavity` attribute (crease AO, vessel grooves, fat along the arteries): each wall's
+   * rest-frame positions and normals, its triangles, and the coronary centreline points. `cavity.ts` turns one
+   * into the attribute — in a worker (GlbAnatomy), or `cavityJobs` here — and `applyCavity` stores it.
    */
-  cavityJobs(centrelines: readonly { segments: readonly { points: readonly (readonly number[])[]; radius?: readonly number[] }[] }[]): (() => void)[] {
+  cavityInputs(centrelines: readonly { segments: readonly { points: readonly (readonly number[])[]; radius?: readonly number[] }[] }[]): {
+    points: CentrelinePoint[];
+    walls: { entry: RigEntry; input: CavityInput & { positions: Float32Array; normals: Float32Array } }[];
+  } {
     const points: CentrelinePoint[] = [];
     for (const v of centrelines)
       for (const seg of v.segments)
         seg.points.forEach((q, i) => points.push({ x: q[0]!, y: q[1]!, z: q[2]!, r: seg.radius?.[i] ?? 0.012 }));
-    return this.entries
-      .filter((e) => e.kind === 'myocardium')
-      .map((e) => () => {
-        if (this.disposed) return;
-        const g = e.mesh.geometry as BufferGeometry;
-        const pos = g.getAttribute('position');
-        const nor = g.getAttribute('normal');
-        const attr = g.getAttribute('aCavity') as BufferAttribute | undefined;
-        if (!pos || !nor || !attr) return;
-        const n = pos.count;
-        const positions = new Float32Array(n * 3);
-        const normals = new Float32Array(n * 3);
-        const o = e.restOffset;
-        for (let i = 0; i < n; i += 1) {
-          positions[i * 3] = pos.getX(i) + o.x;
-          positions[i * 3 + 1] = pos.getY(i) + o.y;
-          positions[i * 3 + 2] = pos.getZ(i) + o.z;
-          normals[i * 3] = nor.getX(i);
-          normals[i * 3 + 1] = nor.getY(i);
-          normals[i * 3 + 2] = nor.getZ(i);
-        }
-        const index = g.index ? (g.index.array as ArrayLike<number>) : null;
-        (attr.array as Float32Array).set(cavityAttribute({ positions, normals, index, vertexCount: n }, points));
-        attr.needsUpdate = true;
-      });
+    const walls: { entry: RigEntry; input: CavityInput & { positions: Float32Array; normals: Float32Array } }[] = [];
+    for (const e of this.entries) {
+      if (e.kind !== 'myocardium') continue;
+      const g = e.mesh.geometry as BufferGeometry;
+      const pos = g.getAttribute('position');
+      const nor = g.getAttribute('normal');
+      if (!pos || !nor || !g.getAttribute('aCavity')) continue;
+      const n = pos.count;
+      const positions = new Float32Array(n * 3);
+      const normals = new Float32Array(n * 3);
+      const o = e.restOffset;
+      for (let i = 0; i < n; i += 1) {
+        positions[i * 3] = pos.getX(i) + o.x;
+        positions[i * 3 + 1] = pos.getY(i) + o.y;
+        positions[i * 3 + 2] = pos.getZ(i) + o.z;
+        normals[i * 3] = nor.getX(i);
+        normals[i * 3 + 1] = nor.getY(i);
+        normals[i * 3 + 2] = nor.getZ(i);
+      }
+      const index = g.index ? (g.index.array as ArrayLike<number>) : null;
+      walls.push({ entry: e, input: { positions, normals, index, vertexCount: n } });
+    }
+    return { points, walls };
+  }
+
+  /** Store one wall's computed cavity attribute (from `cavityAttribute`). */
+  applyCavity(entry: RigEntry, values: Float32Array): void {
+    if (this.disposed) return;
+    const attr = (entry.mesh.geometry as BufferGeometry).getAttribute('aCavity') as BufferAttribute | undefined;
+    if (!attr || attr.array.length !== values.length) return;
+    (attr.array as Float32Array).set(values);
+    attr.needsUpdate = true;
+  }
+
+  /** The cavity attribute computed here, one wall per call (where no worker is available). */
+  cavityJobs(centrelines: Parameters<AnatomyRig['cavityInputs']>[0]): (() => void)[] {
+    const { points, walls } = this.cavityInputs(centrelines);
+    return walls.map(({ entry, input }) => () => {
+      if (!this.disposed) this.applyCavity(entry, cavityAttribute(input, points));
+    });
   }
 
   /** Displayed peel scalar (after the spring). */
@@ -1082,7 +1127,7 @@ export class AnatomyRig {
     sceneRuntime.peel.heartOpen = heartOpen;
 
     // Beat: one displacement field in the rest frame, applied in the vertex shaders (beatDeform.ts).
-    setBeatActivation(inp.beatV, inp.beatA);
+    setBeatActivation(inp.beatV, inp.beatA, inp.beatT ?? inp.beatV);
 
     // Section plane: keep the posterior side of the cut plane (+ depth), glide in and out.
     const sTarget = inp.section ? inp.sectionDepth : SECTION_OFF;

@@ -2,6 +2,10 @@ import { useFrame } from '@react-three/fiber';
 import { useEffect, useRef } from 'react';
 import { useViewerStore } from '@/state/viewerStore';
 import { qualityStep, type QualitySampler } from './qualitySampler';
+import { sceneRuntime } from './sceneRuntime';
+
+/** Frames to ignore after the cold-load assembly ends: the scene is still settling (labels, ignition, fx). */
+const SETTLE_MS = 1500;
 
 /**
  * Adaptive render tier (DESIGN_SYSTEM §7.7): start at B; promote to A when the frame rate stays at
@@ -10,11 +14,13 @@ import { qualityStep, type QualitySampler } from './qualitySampler';
  * It measures only frames the page really composites: mount it only while the frame loop is "always"
  * (`enabled`), and any gap longer than `QUALITY_MONITOR.gapMs` (a hidden tab, a throttled pane, an on-demand
  * pause) restarts the window instead of counting as a slow frame — so a background tab never drops the
- * tier, and it comes back with the tier it left with.
+ * tier, and it comes back with the tier it left with. The cold-load assembly and the moment after it are not a
+ * measure of the machine either (the anatomy's first frames upload and settle): sampling starts once it is done.
  */
 export function QualityMonitor({ enabled }: { enabled: boolean }) {
   const sampler = useRef<QualitySampler>({ last: 0, t0: 0, frames: 0, windows: [], lastMove: 0, flips: 0 });
   const lastFps = useRef(0);
+  const settledAt = useRef<number | null>(null);
 
   useEffect(() => {
     if (!enabled) sampler.current.last = 0;
@@ -22,9 +28,20 @@ export function QualityMonitor({ enabled }: { enabled: boolean }) {
 
   useFrame(() => {
     if (!enabled) return;
+    if (!sceneRuntime.assembly.done) {
+      settledAt.current = null;
+      sampler.current.last = 0;
+      return;
+    }
+    const now = performance.now();
+    settledAt.current ??= now;
+    if (now - settledAt.current < SETTLE_MS) {
+      sampler.current.last = 0;
+      return;
+    }
     const viewer = useViewerStore.getState();
     const hidden = typeof document !== 'undefined' && document.visibilityState === 'hidden';
-    const out = qualityStep(sampler.current, performance.now(), hidden);
+    const out = qualityStep(sampler.current, now, hidden);
     if (out.fps !== null && Math.abs(out.fps - lastFps.current) >= 2) {
       lastFps.current = out.fps;
       viewer.setFps(out.fps);

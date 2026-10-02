@@ -123,6 +123,8 @@ export function VesselOverlay({ tier, treeLengthOf, restOffsetOf }: VesselOverla
       const source = baseNode(nodeName);
       const rest = restOffsetOf(source);
       const material = createOverlayMaterial(shared, attribute, rest ? BEAT_MODE.heart : BEAT_MODE.none);
+      // Clipped from the start, so the shader warm-up compiles the program the first lit frame draws.
+      if (sceneRuntime.sectionPlanes.length > 0) material.clippingPlanes = sceneRuntime.sectionPlanes;
       if (rest) material.uniforms.uRestOffset.value.copy(rest);
       material.uniforms.uTreeLength.value = treeLengthOf(source) ?? 1;
       const overlay = new Mesh(object.geometry, material);
@@ -142,6 +144,14 @@ export function VesselOverlay({ tier, treeLengthOf, restOffsetOf }: VesselOverla
       entries.current.set(object, { source: object, overlay, material, slot: slotOf(slots, target), node: nodeName || object.name, arcMin, arcMax });
     });
   };
+
+  // First scan at mount, not on the first frame: the overlays then exist while the anatomy's shaders warm up
+  // (no frames are drawn meanwhile), so their programs are ready before the ignition first lights them.
+  useEffect(() => {
+    scan();
+    countdown.current = SCAN_EVERY;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [nodeTarget, scene]);
 
   useFrame(() => {
     if (countdown.current-- <= 0) {

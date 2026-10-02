@@ -446,7 +446,8 @@ const REALISTIC: Partial<Record<TissueKind, Look>> = {
   },
 };
 
-const TIER_OCTAVES: Record<QualityTier, number> = { A: 3, B: 2, C: 1, D: 1 };
+/** Noise octaves per tier (the shared `uCtOctaves`); the programs are compiled for the most their look runs. */
+export const TIER_OCTAVES: Record<QualityTier, number> = { A: 3, B: 2, C: 1, D: 1 };
 
 function lookFor(kind: TissueKind, look: SceneLookId): Look {
   const table = look === 'realistic' ? REALISTIC : CLINICAL;
@@ -553,7 +554,8 @@ export function createTissueMaterial(o: TissueOptions): TissueMaterial {
     cavity: !!o.cavity,
     fadeAlpha,
     beatWeighted: !!o.beatWeighted && o.beatMode !== BEAT_MODE.none,
-    octaves: TIER_OCTAVES[o.tier],
+    // A and B differ only in the uniform octave count: one program for both (no recompile on promotion).
+    octaves: o.tier === 'A' || o.tier === 'B' ? TIER_OCTAVES.A : TIER_OCTAVES.C,
   };
 
   const uniforms: TissueUniforms = {

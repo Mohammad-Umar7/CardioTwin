@@ -1,6 +1,6 @@
 import { useGLTF } from '@react-three/drei';
 import { useFrame, useThree, type ThreeEvent } from '@react-three/fiber';
-import { useCallback, useEffect, useMemo, useRef } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Box3, Mesh, Vector3, type Object3D, type Texture } from 'three';
 import { useManifest, useSchemaIndex, useVessels } from '@/hooks/useData';
 import { useReducedMotion } from '@/hooks/useMediaQuery';
@@ -13,6 +13,8 @@ import { debugHandles } from '../stage/debug';
 import { pickPointer, usePickStore } from '../stage/pickStore';
 import { readScene, useSceneControls } from '../stage/sceneControls';
 import { sceneRuntime } from '../stage/sceneRuntime';
+import { warmPrograms } from '../stage/warmup';
+import type { CavityRequest, CavityResponse } from '../../workers/cavity.worker';
 import { clearAnchors, setAnchors, toVector, type LabelAnchor } from './anchors';
 import { ASSEMBLY_IGNITE_AT } from './assembly';
 import { Picker, type CentrelineLike } from './picking';
@@ -60,6 +62,7 @@ const EMPTY_INPUTS: RigInputs = {
   reduced: false,
   beatV: 0,
   beatA: 0,
+  beatT: 0,
 };
 
 /**
@@ -107,6 +110,8 @@ export function GlbAnatomy({ url }: { url: string }) {
   const manifest = manifestState.data;
   const vessels = useVessels().data;
   const gl = useThree((s) => s.gl);
+  const rootScene = useThree((s) => s.scene);
+  const camera = useThree((s) => s.camera);
   const raycaster = useThree((s) => s.raycaster);
   const invalidate = useThree((s) => s.invalidate);
   const setAnatomySource = useViewerStore((s) => s.setAnatomySource);
@@ -131,28 +136,75 @@ export function GlbAnatomy({ url }: { url: string }) {
 
   useEffect(() => {
     if (debugHandles()) (window as unknown as { __ctRig?: unknown }).__ctRig = rig;
-    return () => rig?.dispose();
+    return () => {
+      rig?.dispose();
+      sceneRuntime.anatomyShown = false;
+    };
   }, [rig]);
 
-  // Cavity attribute (crease AO, vessel grooves, fat along the arteries): one heart wall per idle slice.
+  // Cavity attribute (crease AO, vessel grooves, fat along the arteries), computed in a worker
+  // (workers/cavity.worker.ts): one wall took 80–370 ms on the main thread, a visible stall while the assembly
+  // played. `cavityDone` lets the warm-up hold the first frame for it briefly, so the creases never pop in.
+  const cavityDone = useRef(false);
   useEffect(() => {
     if (!rig || !vessels?.vessels) return;
+    cavityDone.current = false;
     // The RV free wall's territory belongs to the RCA (the GLB's COLOR_0 gives it to the LAD).
     rig.correctTerritories(vessels.vessels as unknown as Parameters<AnatomyRig['correctTerritories']>[0]);
-    const jobs = rig.cavityJobs(vessels.vessels as unknown as Parameters<AnatomyRig['cavityJobs']>[0]);
+    const centrelines = vessels.vessels as unknown as Parameters<AnatomyRig['cavityInputs']>[0];
+    let worker: Worker | null = null;
+    try {
+      worker =
+        typeof Worker === 'undefined'
+          ? null
+          : new Worker(new URL('../../workers/cavity.worker.ts', import.meta.url), { type: 'module', name: 'cardiotwin-cavity' });
+    } catch {
+      worker = null;
+    }
     let cancelled = false;
     let handle: ReturnType<typeof setTimeout> | null = null;
-    const next = () => {
-      if (cancelled) return;
-      const job = jobs.shift();
-      if (!job) return;
-      job();
-      invalidate();
-      handle = setTimeout(next, 60);
+    // Without a worker: on the main thread, one wall per idle slice.
+    const fallback = () => {
+      const jobs = rig.cavityJobs(centrelines);
+      const next = () => {
+        if (cancelled) return;
+        const job = jobs.shift();
+        if (!job) {
+          cavityDone.current = true;
+          return;
+        }
+        job();
+        invalidate();
+        handle = setTimeout(next, 60);
+      };
+      handle = setTimeout(next, 300);
     };
-    handle = setTimeout(next, 300);
+    if (!worker) fallback();
+    else {
+      const { points, walls } = rig.cavityInputs(centrelines);
+      let left = walls.length;
+      if (left === 0) cavityDone.current = true;
+      worker.onmessage = (event: MessageEvent<CavityResponse>) => {
+        const wall = walls[event.data.id];
+        if (cancelled || !wall) return;
+        rig.applyCavity(wall.entry, event.data.values);
+        left -= 1;
+        if (left === 0) cavityDone.current = true;
+        invalidate();
+      };
+      worker.onerror = () => {
+        worker?.terminate();
+        worker = null;
+        if (!cancelled && left > 0) fallback();
+      };
+      walls.forEach(({ input }, id) => {
+        const request: CavityRequest = { id, input, points };
+        worker?.postMessage(request, [input.positions.buffer, input.normals.buffer]);
+      });
+    }
     return () => {
       cancelled = true;
+      worker?.terminate();
       if (handle) clearTimeout(handle);
     };
   }, [rig, vessels, invalidate]);
@@ -189,29 +241,86 @@ export function GlbAnatomy({ url }: { url: string }) {
     [gl],
   );
 
-  // Lazy texture upgrade (CONTRACTS §7.1): upload one mesh's baked maps per idle slice, then switch its
-  // Realistic material to the textured variant. Until then the procedural detail carries the look.
+  // Warm-up (stage/warmup.ts), before the anatomy's first frame: the heart's baked maps go up to the GPU (one
+  // mesh per slice) and every program the scene draws compiles on the browser's compiler threads. The canvas
+  // renders no frames meanwhile (`warming`) and the poster covers the stage, so neither the first frame nor the
+  // assembly ever waits on a compile — they froze the page for ~2.8 s on a cold load, then again each time a
+  // textured variant first drew, and the assembly skipped itself. The outer layers rest as ghosts: their maps go
+  // up when they turn solid (`nextSolidWithoutMaps`).
+  const vesselsLoaded = useRef(false);
+  vesselsLoaded.current = !!vessels?.vessels;
+  // The anatomy stays hidden until its own rig is warm (a `visible` prop, so R3F's Suspense un-hide keeps it hidden
+  // too): a frame already queued when it commits would otherwise draw it before the loop pauses, compiling every
+  // program synchronously.
+  const [warmRig, setWarmRig] = useState<AnatomyRig | null>(null);
   useEffect(() => {
     if (!rig) return;
-    const queue = rig.pendingTextures();
-    if (queue.length === 0) return;
+    let cancelled = false;
+    const isCancelled = () => cancelled;
+    const pause = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms));
+    const { setWarming } = useViewerStore.getState();
+    const intoTarget = () => {
+      const tier = useViewerStore.getState().tier;
+      return tier === 'A' || tier === 'B'; // the post chain draws the scene into a render target
+    };
+    setWarming(true, 0);
+    void (async () => {
+      try {
+        for (const item of rig.pendingTextures()) {
+          for (const t of item.textures) upload(t);
+          rig.markMapsReady(item.entry);
+          await pause(0);
+          if (cancelled) return;
+        }
+        await warmPrograms(gl, rootScene, camera, { intoTarget: intoTarget(), cancelled: isCancelled, onProgress: (k) => setWarming(true, 0.85 * k) });
+        // The flow layer mounts once the anatomy is in and the centrelines have arrived: warm it too.
+        for (let waited = 0; !vesselsLoaded.current && waited < 3000 && !cancelled; waited += 50) await pause(50);
+        await pause(50);
+        if (cancelled) return;
+        await warmPrograms(gl, rootScene, camera, { intoTarget: intoTarget(), cancelled: isCancelled, onProgress: (k) => setWarming(true, 0.85 + 0.15 * k) });
+        // The walls' creases (cavity worker) usually land during the compile; hold the first frame briefly for them.
+        for (let waited = 0; !cavityDone.current && waited < 1500 && !cancelled; waited += 50) await pause(50);
+      } catch (error) {
+        console.warn('CardioTwin: shader warm-up failed; programs compile on first draw.', error);
+      } finally {
+        if (!cancelled) {
+          setWarmRig(rig);
+          useViewerStore.getState().setWarming(false);
+        }
+      }
+    })();
+    return () => {
+      cancelled = true;
+      useViewerStore.getState().setWarming(false);
+    };
+  }, [rig, gl, rootScene, camera, upload]);
+
+  // Background prewarm once the scene has settled (after the assembly): the programs a later interaction would
+  // first draw — the other look, the chest layers turning solid with their maps — compile on the compiler threads
+  // now, so switching the look or closing the chest never stalls on a compile (it froze ~2 s on a cold cache).
+  useEffect(() => {
+    if (!rig || warmRig !== rig) return;
     let cancelled = false;
     let handle: ReturnType<typeof setTimeout> | null = null;
-    const next = () => {
+    const start = () => {
       if (cancelled) return;
-      const item = queue.shift();
-      if (!item) return;
-      for (const t of item.textures) upload(t);
-      rig.markMapsReady(item.entry);
-      invalidate();
-      handle = setTimeout(next, 120);
+      if (!sceneRuntime.assembly.done) {
+        handle = setTimeout(start, 500);
+        return;
+      }
+      const tier = useViewerStore.getState().tier;
+      warmPrograms(gl, rootScene, camera, {
+        intoTarget: tier === 'A' || tier === 'B',
+        pairs: rig.materialsToPrewarm(),
+        cancelled: () => cancelled,
+      }).catch(() => undefined);
     };
-    handle = setTimeout(next, 600);
+    handle = setTimeout(start, 2500);
     return () => {
       cancelled = true;
       if (handle) clearTimeout(handle);
     };
-  }, [rig, upload, invalidate]);
+  }, [rig, warmRig, gl, rootScene, camera]);
 
   // Label anchors: manifest `labelAnchor` first; else the target node's most anterior vertex. The anchor
   // objects are updated in place every frame so labels follow the exploded wall (never the beat).
@@ -295,6 +404,8 @@ export function GlbAnatomy({ url }: { url: string }) {
   const inputs = useRef<RigInputs | null>(null);
   useFrame((state, delta) => {
     if (!rig) return;
+    sceneRuntime.anatomyShown = warmRig === rig && scene.visible;
+    if (warmRig !== rig) return;
     const viewer = useViewerStore.getState();
     const controls = useSceneControls.getState();
     const read = readScene();
@@ -321,6 +432,7 @@ export function GlbAnatomy({ url }: { url: string }) {
     inp.reduced = reduced || viewer.calm;
     inp.beatV = beat.current.v;
     inp.beatA = beat.current.a;
+    inp.beatT = beat.current.t;
     const moving = rig.update(inp);
     // The camera frames the pieces where they are THIS frame (the peel follower, CameraRig).
     cameraRigApi.followPeel?.();
@@ -410,6 +522,7 @@ export function GlbAnatomy({ url }: { url: string }) {
   return (
     <primitive
       object={scene}
+      visible={warmRig === rig}
       onPointerMove={publishHover}
       onPointerOut={onPointerOut}
       onClick={onClick}

@@ -94,16 +94,25 @@ const mb = (bytes: number) => (bytes / 1e6).toFixed(1);
  */
 function StageLoader({ loading }: { loading: boolean }) {
   const progress = useViewerStore((s) => s.anatomyProgress);
+  const source = useViewerStore((s) => s.anatomySource);
+  const warming = useViewerStore((s) => s.warming);
+  const warmProgress = useViewerStore((s) => s.warmProgress);
   const glb = useAnatomyGlbUrl().data;
   const bytes = useGlbBytes(glb);
   const shown = useSteadyFlag(loading, LOADER_DELAY_MS, LOADER_MIN_MS);
   if (!shown) return null;
+  // Once the GLB is in, the stage waits for its shaders (stage/warmup.ts), not for bytes: say so, with their
+  // progress, instead of a download figure that stopped moving.
+  const preparing = warming || source !== 'loading';
   // The loader reports whole files, so 0 % until the GLB is in: show the size alone (indeterminate hairline)
   // rather than a progress that looks stuck.
-  const raw = progress && progress.total > 0 ? Math.min(1, progress.loaded / progress.total) : 0;
+  const raw = preparing ? warmProgress ?? 0 : progress && progress.total > 0 ? Math.min(1, progress.loaded / progress.total) : 0;
   const share = raw > 0 ? raw : null;
-  const text =
-    share === null
+  const text = preparing
+    ? share === null
+      ? 'Preparing the 3D heart…'
+      : `Preparing the 3D heart ${Math.round(share * 100)} %`
+    : share === null
       ? bytes
         ? `Loading anatomy · ${mb(bytes)} MB`
         : 'Loading anatomy…'

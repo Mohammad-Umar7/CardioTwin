@@ -69,12 +69,13 @@ function useDocumentVisible(): boolean {
  *
  * Render loop (§7.7): "always" only while something animates (heartbeat, landing turntable), the tab is
  * visible and a page shows the canvas; otherwise "demand" (frames on input or data change); "never" when
- * parked or hidden.
+ * parked or hidden, and while the anatomy's shaders warm up.
  */
 export default function SceneCanvas({ active }: { active: boolean }) {
   const tier = useViewerStore((s) => s.tier);
   const stage = useViewerStore((s) => s.stage);
   const heartbeat = useViewerStore((s) => s.heartbeat);
+  const warming = useViewerStore((s) => s.warming);
   const setTier = useViewerStore((s) => s.setTier);
   const reduced = useReducedMotion();
   const visible = useDocumentVisible();
@@ -91,7 +92,9 @@ export default function SceneCanvas({ active }: { active: boolean }) {
   }, [setTier]);
 
   const animating = !reduced && (heartbeat || stage === 'hero');
-  const frameloop = !active || !visible ? 'never' : animating ? 'always' : 'demand';
+  // No frames while the anatomy's shaders compile (stage/warmup.ts): a frame drawn now would compile them
+  // synchronously and freeze the page. The poster covers the stage until the first frame.
+  const frameloop = !active || !visible || warming ? 'never' : animating ? 'always' : 'demand';
 
   // A click on empty space (not a drag) clears the selection (DESIGN_SYSTEM §7.5, V2 §8.2).
   const onPointerMissed = (e: MouseEvent) => {

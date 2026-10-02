@@ -63,6 +63,12 @@ export interface ViewerState {
   anatomySource: AnatomySource;
   /** Bytes of the GLB loaded so far / total, while loading. */
   anatomyProgress: { loaded: number; total: number } | null;
+  /**
+   * The loaded anatomy's shader programs are compiling (stage/warmup.ts): the canvas renders no frames until they
+   * are ready, so no frame ever waits on a compile. `warmProgress` is the share ready, 0..1.
+   */
+  warming: boolean;
+  warmProgress: number | null;
   cameraCommand: CameraCommand | null;
   /** Live C-arm readout, updated at most a few times per second by the camera rig. */
   carm: { azimuth: number; elevation: number } | null;
@@ -88,6 +94,7 @@ export interface ViewerState {
   setFps(fps: number | null): void;
   setStage(stage: Stage): void;
   setAnatomySource(source: AnatomySource, progress?: { loaded: number; total: number } | null): void;
+  setWarming(warming: boolean, progress?: number | null): void;
   flyHome(): void;
   flyToPreset(preset: string): void;
   focusTarget(target: TargetId): void;
@@ -138,6 +145,8 @@ export const useViewerStore = create<ViewerState>()((set) => ({
   stage: 'hidden',
   anatomySource: 'loading',
   anatomyProgress: null,
+  warming: false,
+  warmProgress: null,
   cameraCommand: null,
   carm: null,
   territoryMode: 'selected',
@@ -173,6 +182,7 @@ export const useViewerStore = create<ViewerState>()((set) => ({
   setFps: (fps) => set({ fps }),
   setStage: (stage) => set({ stage }),
   setAnatomySource: (anatomySource, anatomyProgress = null) => set({ anatomySource, anatomyProgress }),
+  setWarming: (warming, warmProgress = null) => set({ warming, warmProgress: warming ? warmProgress : null }),
   flyHome: () =>
     set({ cameraCommand: { kind: 'home', nonce: nextNonce() }, selectedStructure: null, ...CLEARED_SELECTION_MODES }),
   flyToPreset: (preset) => set({ cameraCommand: { kind: 'preset', preset, nonce: nextNonce() } }),
