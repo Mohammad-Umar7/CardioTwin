@@ -313,7 +313,7 @@ export function NumericRow({ spec, rowId, expanded, suffix, className }: RowProp
       onPointerLeave={() => useUiStore.getState().highlightFeature(null)}
       className={cn(
         'relative rounded-sm outline-none transition-colors duration-fast',
-        open ? 'bg-surface-1' : highlighted ? 'bg-surface-1' : 'hover:bg-surface-1/60',
+        open ? 'bg-surface-1' : highlighted ? 'bg-surface-1' : 'hover:bg-white/[0.04]',
         className,
       )}
     >
@@ -334,7 +334,7 @@ export function NumericRow({ spec, rowId, expanded, suffix, className }: RowProp
           onKeyDown={onKeyDown}
           className={cn(
             'num h-6 w-full rounded-sm border bg-transparent px-1.5 text-right text-numeral-m text-primary outline-none transition-colors duration-instant',
-            'hover:border-line hover:bg-surface-1 focus:bg-surface-2',
+            'hover:border-line hover:bg-white/[0.05] focus:bg-white/[0.07]',
             invalid ? 'border-danger focus:border-danger' : 'border-transparent focus:border-accent/60',
             field.edited && 'font-semibold',
           )}
@@ -417,7 +417,7 @@ export function CategoricalRow({ spec, rowId, suffix, className }: RowProps) {
       className={cn(
         'relative grid grid-cols-[minmax(0,1fr)_auto_auto] items-center gap-1.5 rounded-sm pl-1 pr-1 outline-none transition-colors duration-fast',
         ROW,
-        highlighted ? 'bg-surface-1' : 'hover:bg-surface-1/60',
+        highlighted ? 'bg-surface-1' : 'hover:bg-white/[0.04]',
         className,
       )}
     >
@@ -472,7 +472,7 @@ export function BinaryRow({ spec, rowId, suffix, className }: RowProps) {
       className={cn(
         'relative grid grid-cols-[minmax(0,1fr)_auto_auto_24px] items-center gap-1.5 rounded-sm pl-1 pr-1 outline-none transition-colors duration-fast',
         ROW,
-        highlighted ? 'bg-surface-1' : 'hover:bg-surface-1/60',
+        highlighted ? 'bg-surface-1' : 'hover:bg-white/[0.04]',
         className,
       )}
     >

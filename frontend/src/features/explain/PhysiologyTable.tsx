@@ -140,7 +140,7 @@ export function PhysiologyTable({ target }: { target: string }) {
                   onMouseLeave={() => highlight(null)}
                   className={cn(
                     'h-8 cursor-pointer transition-colors duration-instant [&>*:first-child]:rounded-l-sm [&>*:last-child]:rounded-r-sm',
-                    lit === spec.key ? 'bg-surface-2' : 'hover:bg-surface-1',
+                    lit === spec.key ? 'bg-surface-2' : 'hover:bg-white/[0.05]',
                   )}
                 >
                   <th scope="row" className="py-1 pl-1 text-left align-middle font-normal">
@@ -220,7 +220,7 @@ export function PhysiologyTable({ target }: { target: string }) {
                     aria-label={`${findingLabel(s)}: present, ${Math.abs(shap) < NEGLIGIBLE_SHAP ? 'negligible effect' : `${up ? 'raises' : 'lowers'} ${target}, ${f.spoken}`}.${isAssociationOnly(s.key) ? ' Association only, not a known cause.' : ''} Edit this input.`}
                     className={cn(
                       'inline-flex h-7 items-center gap-1.5 rounded-sm border border-line bg-surface-1 px-2 text-label text-primary outline-none transition-colors duration-instant',
-                      'hover:bg-surface-2 focus-visible:shadow-focus',
+                      'hover:bg-white/[0.07] focus-visible:shadow-focus',
                       lit === s.key && 'border-line-strong bg-surface-2',
                     )}
                   >

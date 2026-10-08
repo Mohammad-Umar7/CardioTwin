@@ -1,5 +1,8 @@
-import { useRef, type KeyboardEvent, type ReactNode } from 'react';
+import { motion } from 'framer-motion';
+import { useId, useRef, type KeyboardEvent, type ReactNode } from 'react';
+import { useIsReducedMotion } from '@/hooks/useMediaQuery';
 import { cn } from '@/lib/cn';
+import { SPRING } from '@/theme/tokens';
 import { Tooltip } from './Tooltip';
 
 export interface SegmentOption<V extends string | number> {
@@ -42,6 +45,8 @@ export function SegmentedControl<const V extends string | number>({
   const refs = useRef<(HTMLButtonElement | null)[]>([]);
   const selectedIndex = options.findIndex((o) => o.value === value);
   const focusIndex = selectedIndex >= 0 ? selectedIndex : 0;
+  const thumbId = `segment-thumb-${useId()}`;
+  const reduced = useIsReducedMotion();
 
   const move = (from: number, delta: number) => {
     const n = options.length;
@@ -72,7 +77,7 @@ export function SegmentedControl<const V extends string | number>({
       aria-label={label}
       aria-disabled={disabled || undefined}
       className={cn(
-        'inline-flex items-stretch rounded-sm border border-line bg-surface-1 p-0.5',
+        'inline-flex items-stretch rounded-sm bg-black/25 p-0.5 shadow-[inset_0_0_0_1px_rgba(255,255,255,0.08),inset_0_1px_2px_rgba(0,0,0,0.35)]',
         size === 'xs' ? 'h-xs' : 'h-sm',
         fullWidth && 'flex w-full',
         className,
@@ -98,14 +103,22 @@ export function SegmentedControl<const V extends string | number>({
             onFocus={() => onPreview?.(opt.value)}
             onBlur={() => onPreview?.(null)}
             className={cn(
-              'num relative min-w-max flex-1 whitespace-nowrap rounded-[3px] px-2 text-label transition-colors duration-fast ease-out',
-              selected
-                ? 'bg-surface-3 text-primary shadow-[inset_0_0_0_1px_rgb(var(--c-border-strong))]'
-                : 'text-secondary hover:bg-surface-2 hover:text-primary',
+              'num relative isolate min-w-max flex-1 whitespace-nowrap rounded-[4px] px-2 text-label transition-colors duration-fast ease-out',
+              selected ? 'text-primary' : 'text-secondary hover:bg-white/[0.05] hover:text-primary',
               'disabled:cursor-not-allowed disabled:text-disabled disabled:hover:bg-transparent',
             )}
           >
-            {selected && <span aria-hidden className="absolute inset-x-2 bottom-0 h-px bg-accent" />}
+            {selected && (
+              // The selection thumb glides between options (LUMEN 2): raised glass with a lit accent rule.
+              <motion.span
+                aria-hidden
+                layoutId={thumbId}
+                transition={reduced ? { duration: 0 } : SPRING.indicator}
+                className="absolute inset-0 -z-10 rounded-[4px] bg-[linear-gradient(180deg,rgba(255,255,255,0.12),rgba(255,255,255,0.06))] shadow-[inset_0_0_0_1px_rgba(255,255,255,0.12),0_1px_3px_rgba(0,0,0,0.4)]"
+              >
+                <span className="absolute inset-x-2 bottom-0 h-px bg-accent shadow-[0_0_6px_rgba(86,194,230,0.9)]" />
+              </motion.span>
+            )}
             {opt.label}
           </button>
         );

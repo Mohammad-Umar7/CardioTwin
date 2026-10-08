@@ -15,3 +15,18 @@ createRoot(container).render(
     <App />
   </StrictMode>,
 );
+
+// Boot screen (index.html): fade it out once the app has painted its first frame, then drop it. A timer backs
+// up the frame callbacks, which never fire in a background tab.
+const boot = document.getElementById('boot');
+if (boot) {
+  let done = false;
+  const dismiss = () => {
+    if (done) return;
+    done = true;
+    boot.classList.add('boot-out');
+    window.setTimeout(() => boot.remove(), 700);
+  };
+  requestAnimationFrame(() => requestAnimationFrame(dismiss));
+  window.setTimeout(dismiss, 400);
+}

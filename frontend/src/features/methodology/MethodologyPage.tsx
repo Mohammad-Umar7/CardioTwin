@@ -1,3 +1,4 @@
+import { motion } from 'framer-motion';
 import { ArrowUpRight } from 'lucide-react';
 import { Fragment, useEffect, useMemo, useRef, type ReactNode } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
@@ -5,7 +6,9 @@ import { Skeleton } from '@/design';
 import { REPOSITORY_URL } from '@/features/landing/InfoCards';
 import { scrollToSection, useActiveSection } from '@/features/performance/useActiveSection';
 import { useManifest, useMetrics, useSchema } from '@/hooks/useData';
+import { useIsReducedMotion } from '@/hooks/useMediaQuery';
 import { cn } from '@/lib/cn';
+import { SPRING } from '@/theme/tokens';
 import { formatPercent } from '@/lib/format';
 import { TEST_SET } from '@/lib/testSetCopy';
 import { ROUTES } from '@/routes';
@@ -97,17 +100,25 @@ function Section({ id, index, name, title, lede, aside, wide, children }: Sectio
     <section
       id={id}
       aria-labelledby={`${id}-title`}
-      className="flex scroll-mt-[calc(var(--topbar-h)+24px)] flex-col gap-6 border-t border-hairline pt-8"
+      className="relative flex scroll-mt-[calc(var(--topbar-h)+24px)] flex-col gap-6 pt-8"
     >
+      {/* LUMEN 2: a rule that fades out from the left, lit where the section number sits. */}
+      <span
+        aria-hidden
+        className="pointer-events-none absolute inset-x-0 top-0 h-px bg-[linear-gradient(90deg,rgba(86,194,230,0.45),rgba(255,255,255,0.08)_18%,rgba(255,255,255,0.04)_70%,transparent)]"
+      />
       <div
         className={cn('grid grid-cols-1 gap-x-10 gap-y-6', aside && 'xl:grid-cols-[minmax(0,680px)_280px]')}
       >
         <div className="flex min-w-0 max-w-[680px] flex-col gap-4">
-          <div className="flex flex-col gap-2">
-            <p className="eyebrow text-tertiary">
-              <span className="font-mono">{pad(index)}</span> · {name}
+          <div data-reveal className="flex flex-col gap-2">
+            <p className="eyebrow flex items-center gap-2 text-tertiary">
+              <span className="grid h-5 min-w-[28px] place-items-center rounded-full bg-accent/[0.1] px-1.5 font-mono text-accent shadow-[inset_0_0_0_1px_rgba(86,194,230,0.25)]">
+                {pad(index)}
+              </span>
+              {name}
             </p>
-            <h2 id={`${id}-title`} className="text-title-1 text-primary text-balance">
+            <h2 id={`${id}-title`} className="text-gradient pb-0.5 text-title-1 text-balance min-[1440px]:text-[1.5rem] min-[1440px]:leading-8">
               {title}
             </h2>
           </div>
@@ -152,17 +163,24 @@ function ExternalLink({ href, children }: { href: string; children: ReactNode })
 function Toc() {
   const active = useActiveSection(TOC_IDS, '-96px 0px -60% 0px');
   const navigate = useNavigate();
+  const reduced = useIsReducedMotion();
   return (
     <nav aria-label="On this page" className="hidden lg:block">
       <div className="sticky top-[calc(var(--topbar-h)+32px)] flex flex-col gap-3">
         <p className="eyebrow pl-3 text-tertiary">On this page</p>
-        <ol className="flex flex-col border-l border-hairline">
+        <ol className="flex flex-col border-l border-white/[0.08]">
           {TOC.map(([id, label], i) => {
             const on = active === id;
             return (
               <li key={id} className="relative">
                 {on && (
-                  <span aria-hidden className="absolute -left-px inset-y-1 w-0.5 rounded-full bg-accent" />
+                  // LUMEN 2: the reading position glides down the contents with the scroll.
+                  <motion.span
+                    aria-hidden
+                    layoutId="method-toc-active"
+                    transition={reduced ? { duration: 0 } : SPRING.indicator}
+                    className="absolute -left-px inset-y-1 w-0.5 rounded-full bg-accent shadow-[0_0_10px_rgba(86,194,230,0.9)]"
+                  />
                 )}
                 <a
                   href={`#${ROUTES.methodology}#${id}`}
@@ -249,14 +267,18 @@ export default function MethodologyPage() {
   const loading = metrics.status === 'loading';
 
   return (
-    <div className="mx-auto grid w-full max-w-[1280px] grid-cols-1 gap-10 px-6 pb-24 pt-10 lg:grid-cols-[200px_minmax(0,1fr)]">
+    <div className="page-enter mx-auto grid w-full max-w-[1280px] grid-cols-1 gap-10 px-6 pb-24 pt-10 lg:grid-cols-[200px_minmax(0,1fr)]">
       <Toc />
       <article className="flex min-w-0 flex-col gap-12">
         <header className="flex flex-col gap-5">
           <div className="flex max-w-[800px] flex-col gap-3">
-            <p className="eyebrow text-accent">Methodology</p>
-            <h1 className="font-display text-display-2 text-primary text-balance">
-              How CardioTwin is built, validated and explained.
+            <p className="eyebrow inline-flex items-center gap-2 self-start rounded-full bg-accent/[0.08] px-3 py-1 text-accent shadow-[inset_0_0_0_1px_rgba(86,194,230,0.25)]">
+              <span aria-hidden className="size-1.5 rounded-full bg-accent shadow-[0_0_8px_rgba(86,194,230,0.9)]" />
+              Methodology
+            </p>
+            <h1 className="max-w-[22ch] pb-1 font-display text-display-2 text-balance min-[1440px]:text-[3rem] min-[1440px]:leading-[3.375rem]">
+              <span className="text-gradient">How CardioTwin is built, </span>
+              <span className="text-gradient-accent is-animated">validated and explained.</span>
             </h1>
             <p className="max-w-[68ch] text-body text-secondary text-pretty">
               From routine clinical data to vessel-level risk on a real 3D heart. Every number on this page is
@@ -268,17 +290,21 @@ export default function MethodologyPage() {
           {loading ? (
             <Skeleton className="h-[88px] rounded-lg" label="Loading the evaluation report" />
           ) : (
-            <dl className="grid grid-cols-2 gap-px overflow-clip rounded-lg border border-line bg-line sm:grid-cols-3 xl:grid-cols-5">
+            <dl className="grid grid-cols-2 gap-px overflow-clip rounded-lg bg-white/[0.06] shadow-[0_0_0_1px_rgba(255,255,255,0.06),0_18px_40px_-20px_rgba(0,0,0,0.7)] sm:grid-cols-3 xl:grid-cols-5">
               {[
                 ['Patients', facts.n, 'single centre'],
                 ['Clinical inputs', facts.nInputs, 'routine work-up'],
                 ['Modalities', facts.nModalities, 'bedside to echo'],
                 ['Targets', facts.nTargets, TARGET_ORDER.join(' · ')],
                 ['Locked test', facts.nTest, TEST_SET.stat],
-              ].map(([label, value, sub]) => (
-                <div key={label as string} className="flex flex-col gap-1 bg-panel px-4 py-3">
+              ].map(([label, value, sub], i) => (
+                <div
+                  key={label as string}
+                  className="spotlight flex animate-fade-up flex-col gap-1 bg-panel/95 px-4 py-3"
+                  style={{ animationDelay: `${200 + i * 60}ms` }}
+                >
                   <dt className="eyebrow text-tertiary">{label}</dt>
-                  <dd className="num font-display text-[1.75rem] font-semibold leading-8 tracking-[-0.03em] text-primary">
+                  <dd className="num text-gradient font-display text-[1.875rem] font-semibold leading-9 tracking-[-0.03em]">
                     {value ?? '–'}
                   </dd>
                   <dd className="text-label font-normal text-tertiary">{sub}</dd>
@@ -355,7 +381,7 @@ export default function MethodologyPage() {
           {loading ? (
             <Skeleton className="h-64 rounded-lg" />
           ) : (
-            <dl className="grid grid-cols-[112px_minmax(0,1fr)] overflow-clip rounded-lg border border-line bg-panel text-body-s">
+            <dl data-reveal className="card-surface grid grid-cols-[112px_minmax(0,1fr)] overflow-clip text-body-s">
               {card.map((r, i) => (
                 <Fragment key={r.label}>
                   <dt className={cn('px-4 py-2.5 text-tertiary', i > 0 && 'border-t border-hairline')}>
@@ -497,7 +523,7 @@ export default function MethodologyPage() {
           }
         >
           {rows.length > 0 && (
-            <div className="overflow-x-auto rounded-lg border border-line bg-panel">
+            <div data-reveal className="card-surface overflow-x-auto">
               <table className="w-full border-collapse text-body-s">
                 <caption className="sr-only">
                   Deployed model per target with held-out and cross-validated ROC-AUC
@@ -669,7 +695,7 @@ export default function MethodologyPage() {
                 'Recalibrate the Platt parameters and choose a threshold from local decision curves before any use. The rest of the model can stay as it is.',
               ],
             ].map(([t, b]) => (
-              <li key={t} className="flex flex-col gap-1.5 rounded-lg border border-line bg-panel p-4">
+              <li key={t} data-reveal className="card-surface is-interactive spotlight flex flex-col gap-1.5 p-4">
                 <p className="text-body-s font-semibold text-primary">{t}</p>
                 <p className="text-label font-normal text-tertiary text-pretty">{b}</p>
               </li>
@@ -690,7 +716,7 @@ export default function MethodologyPage() {
           }
         >
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-            <div className="flex flex-col gap-2 rounded-lg border border-line bg-panel p-4">
+            <div data-reveal className="card-surface flex flex-col gap-2 p-4">
               <p className="eyebrow text-tertiary">Intended for</p>
               <ul className="flex list-disc flex-col gap-1 pl-4 text-body-s text-secondary marker:text-tertiary">
                 <li>Teaching how routine clinical data relate to angiographic coronary disease</li>
@@ -698,7 +724,7 @@ export default function MethodologyPage() {
                 <li>Adults already being considered for angiography, the population the data come from</li>
               </ul>
             </div>
-            <div className="flex flex-col gap-2 rounded-lg border border-line bg-panel p-4">
+            <div data-reveal className="card-surface flex flex-col gap-2 p-4">
               <p className="eyebrow text-tertiary">Not for</p>
               <ul className="flex list-disc flex-col gap-1 pl-4 text-body-s text-secondary marker:text-tertiary">
                 <li>Diagnosing, triaging or ruling out disease in a patient</li>
@@ -755,7 +781,7 @@ export default function MethodologyPage() {
               </li>
             ))}
           </ul>
-          <p className="rounded-lg border border-line bg-panel px-4 py-3 text-body-s text-secondary">
+          <p data-reveal className="card-surface px-4 py-3 text-body-s text-secondary">
             Decision support and education only:{' '}
             <span className="font-semibold text-primary">not a diagnosis</span>, and not a substitute for
             angiography, CT coronary angiography, functional testing or clinical judgement.

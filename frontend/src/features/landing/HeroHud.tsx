@@ -1,7 +1,9 @@
 import { RefreshCw, Rotate3d } from 'lucide-react';
-import { useMemo } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { RiskPip } from '@/design';
+import { VitalsStrip } from '@/features/vitals/EcgMonitor';
 import { useCohort, useSchemaIndex } from '@/hooks/useData';
+import { useMediaQuery } from '@/hooks/useMediaQuery';
 import { cn } from '@/lib/cn';
 import { usePatientStore } from '@/state/patientStore';
 import { useViewerStore } from '@/state/viewerStore';
@@ -36,8 +38,9 @@ function PatientCaption() {
   const mode = usePatientStore((s) => s.mode);
   const loadPatient = usePatientStore((s) => s.loadPatient);
   const pool = useMemo(() => cohort.data?.patients.filter((p) => p.split === 'test') ?? [], [cohort.data]);
+  const narrow = useMediaQuery('(max-width: 639.98px)');
 
-  if (!patientId && mode === 'cohort') return <span className="skeleton block h-8 w-64 rounded-full" aria-hidden />;
+  if (!patientId && mode === 'cohort') return <span className="skeleton block h-11 w-96 rounded-full" aria-hidden />;
 
   const next = () => {
     if (pool.length === 0) return;
@@ -45,23 +48,31 @@ function PatientCaption() {
     loadPatient(pool[(i + 1) % pool.length]!);
   };
 
+  // LUMEN 2: the caption is the twin's bedside monitor — the live ECG strip (locked to the beating heart) at the
+  // patient's recorded rate, then who this patient is and the way to the next one. Phones keep the strip short
+  // and the patient id only, so the chip never outgrows the screen.
   return (
-    <div className="pointer-events-auto flex h-8 items-center gap-2 rounded-full bg-panel pl-3 pr-1 text-label font-normal text-secondary shadow-e2">
-      {patientId && <span className="mono text-mono-s text-primary">{patientId}</span>}
-      <span aria-hidden className="text-tertiary">·</span>
-      <span>{splitCaption(split, mode)}</span>
+    <div className="glass glass-edge pointer-events-auto flex h-11 max-w-[calc(100vw-24px)] items-center gap-3 rounded-full pl-4 pr-1.5 text-label font-normal text-secondary max-[639.98px]:gap-2 max-[639.98px]:pl-3">
+      <VitalsStrip width={narrow ? 64 : 136} height={28} caption={!narrow} className="relative z-[1]" />
+      <span aria-hidden className="relative z-[1] h-5 w-px bg-white/[0.12]" />
+      <span className="relative z-[1] flex min-w-0 items-center gap-2">
+        {patientId && <span className="mono text-mono-s text-primary">{patientId}</span>}
+        <span aria-hidden className="text-tertiary max-[639.98px]:hidden">·</span>
+        <span className="truncate max-[639.98px]:hidden">{splitCaption(split, mode)}</span>
+      </span>
       {pool.length > 1 && (
-        <>
-          <span aria-hidden className="text-tertiary">·</span>
-          <button
-            type="button"
-            onClick={next}
-            className="inline-flex h-6 items-center gap-1 rounded-full px-2 font-medium text-secondary transition-colors duration-instant hover:bg-surface-2 hover:text-primary"
-            aria-label="Show the next held-out test patient"
-          >
-            Next <RefreshCw aria-hidden className="size-3 stroke-[1.75]" />
-          </button>
-        </>
+        <button
+          type="button"
+          onClick={next}
+          className="group/next relative z-[1] inline-flex h-8 items-center gap-1.5 rounded-full bg-white/[0.06] px-3 font-medium text-primary shadow-[inset_0_0_0_1px_rgba(255,255,255,0.1)] transition-[background-color,box-shadow] duration-fast hover:bg-white/[0.1] hover:shadow-[inset_0_0_0_1px_rgba(86,194,230,0.4),0_0_16px_-6px_rgba(86,194,230,0.7)]"
+          aria-label="Show the next held-out test patient"
+        >
+          Next
+          <RefreshCw
+            aria-hidden
+            className="size-3 stroke-[2] transition-transform duration-base ease-out group-hover/next:rotate-180"
+          />
+        </button>
       )}
     </div>
   );
@@ -80,15 +91,15 @@ function AttractCaption({ target, index }: { target: TargetId; index: number }) 
   return (
     <div
       key={target}
-      className="flex h-8 items-center gap-2 whitespace-nowrap rounded-full bg-panel pl-2.5 pr-3.5 text-body-s shadow-e2 animate-rise-in"
+      className="glass glass-edge flex h-9 max-w-[calc(100vw-24px)] items-center gap-2 whitespace-nowrap rounded-full pl-3 pr-4 text-body-s animate-blur-in"
     >
-      <span aria-hidden className="text-body-s text-tertiary">
+      <span aria-hidden className="relative z-[1] text-body-s text-tertiary">
         {circled(index + 1)}
       </span>
-      <RiskPip p={p} />
-      <span className="font-semibold text-primary">{target}</span>
-      <span className="text-secondary">{blurb.name}</span>
-      {blurb.feeds && <span className="text-tertiary">· {blurb.feeds}</span>}
+      <RiskPip p={p} className="relative z-[1]" />
+      <span className="relative z-[1] font-semibold text-primary">{target}</span>
+      <span className="relative z-[1] min-w-0 truncate text-secondary">{blurb.name}</span>
+      {blurb.feeds && <span className="relative z-[1] text-tertiary max-[639.98px]:hidden">· {blurb.feeds}</span>}
     </div>
   );
 }
@@ -106,17 +117,39 @@ export interface HeroHudProps {
  * lives in the status line on every anatomy route (V2 §5.17).
  * Everything that is not a control lets pointer events through to the canvas.
  */
+/** How long the "drag to rotate" affordance stays up when nobody touches the stage (ms). */
+const HINT_MS = 6000;
+
+function useStageHint(): boolean {
+  const [shown, setShown] = useState(true);
+  useEffect(() => {
+    const hide = () => setShown(false);
+    const t = window.setTimeout(hide, HINT_MS);
+    const onDown = (e: PointerEvent) => {
+      if (e.target instanceof Element && e.target.closest('canvas')) hide();
+    };
+    window.addEventListener('pointerdown', onDown, { passive: true });
+    return () => {
+      window.clearTimeout(t);
+      window.removeEventListener('pointerdown', onDown);
+    };
+  }, []);
+  return shown;
+}
+
 export function HeroHud({ attract, vessels, leaving }: HeroHudProps) {
   const anatomySource = useViewerStore((s) => s.anatomySource);
+  const hintShown = useStageHint();
   return (
     <>
-      {/* Left-to-right bg/app → transparent over 0–45 % of the width guarantees the copy's contrast. */}
+      {/* Left-to-right bg/app → transparent over 0–52 % of the width guarantees the copy's contrast; a faint cyan
+          light pools behind the headline (LUMEN 2). */}
       <div
         aria-hidden
-        className="pointer-events-none absolute inset-y-0 left-0 z-hud hidden w-[45%] min-[1100px]:block"
+        className="pointer-events-none absolute inset-y-0 left-0 z-hud hidden w-[52%] min-[1100px]:block"
         style={{
           background:
-            'linear-gradient(90deg, rgb(var(--c-bg-app)) 0%, rgb(var(--c-bg-app) / 0.86) 42%, rgb(var(--c-bg-app) / 0) 100%)',
+            'radial-gradient(60% 46% at 22% 40%, rgb(var(--c-glow-cyan) / 0.07), transparent 70%), linear-gradient(90deg, rgb(var(--c-bg-app)) 0%, rgb(var(--c-bg-app) / 0.88) 44%, rgb(var(--c-bg-app) / 0) 100%)',
         }}
       />
       <div
@@ -144,12 +177,17 @@ export function HeroHud({ attract, vessels, leaving }: HeroHudProps) {
         >
           <PatientCaption />
         </div>
+        {/* Top-left of the free stage (clear of the monitor chip under the heart and the attract caption). It is
+            an affordance, not content: it bows out after a few seconds or at the first touch of the stage. */}
         <div
-          className="absolute right-4 hidden flex-col items-end gap-0.5 min-[1100px]:flex"
-          style={{ bottom: 'calc(var(--landing-bands-h, 0px) + 14px)' }}
+          className={cn(
+            'absolute top-6 hidden flex-col items-start gap-0.5 transition-[opacity,transform] duration-[640ms] ease-out min-[1100px]:flex',
+            hintShown ? 'opacity-100' : '-translate-y-1 opacity-0',
+          )}
+          style={{ left: 'calc(var(--landing-free-left, 34%) + 8px)' }}
         >
-          <span className="inline-flex items-center gap-1.5 text-label font-normal text-tertiary">
-            <Rotate3d aria-hidden className="size-3.5 stroke-[1.5]" />
+          <span className="inline-flex h-7 items-center gap-1.5 rounded-full bg-white/[0.035] px-2.5 text-label font-normal text-tertiary shadow-[inset_0_0_0_1px_rgba(255,255,255,0.06)]">
+            <Rotate3d aria-hidden className="size-3.5 stroke-[1.5] text-accent" />
             Interactive 3D · drag to rotate
           </span>
         </div>

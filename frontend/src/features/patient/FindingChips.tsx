@@ -43,7 +43,7 @@ function FindingChip({ spec, rowId, target, counterfactuals }: ChipProps) {
         'relative inline-flex h-7 max-w-full items-center gap-1.5 rounded-sm border px-2 text-label transition-colors duration-fast ease-out',
         present
           ? 'border-accent/70 bg-[var(--accent-subtle)] text-primary hover:border-accent'
-          : 'border-line text-secondary hover:border-line-strong hover:bg-surface-1 hover:text-primary',
+          : 'border-line text-secondary hover:border-line-strong hover:bg-white/[0.05] hover:text-primary',
         highlighted && !present && 'bg-surface-1 text-primary',
         imputed && 'border-dashed',
       )}

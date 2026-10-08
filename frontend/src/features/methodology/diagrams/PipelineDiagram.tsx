@@ -68,7 +68,7 @@ export function PipelineDiagram({ phases, nTest, onJump }: PipelineDiagramProps)
                       }}
                       className={cn(
                         'group flex flex-col gap-0.5 rounded-md px-2.5 py-1.5 outline-none transition-colors duration-fast',
-                        'hover:bg-surface-1 focus-visible:shadow-focus',
+                        'hover:bg-white/[0.05] focus-visible:shadow-focus',
                       )}
                     >
                       <span className="flex items-baseline gap-2">

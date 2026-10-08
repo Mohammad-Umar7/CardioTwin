@@ -20,12 +20,12 @@ export function Toggle({ pressed, onPressedChange, icon, children, hint, variant
       aria-pressed={pressed}
       onClick={() => onPressedChange(!pressed)}
       className={cn(
-        'inline-flex h-xs items-center gap-1.5 rounded-sm border px-2 text-label transition-colors duration-fast ease-out',
+        'inline-flex h-xs items-center gap-1.5 rounded-sm border px-2 text-label transition-[color,background-color,border-color,box-shadow] duration-fast ease-out',
         '[&>svg]:size-3.5 [&>svg]:stroke-[1.5]',
-        variant === 'hud' ? 'bg-surface-3/[0.88] shadow-hud' : 'bg-surface-1',
+        variant === 'hud' ? 'hud-chip' : 'bg-white/[0.04]',
         pressed
-          ? 'border-accent/50 text-primary [&>svg]:text-accent'
-          : 'border-line text-secondary hover:bg-surface-2 hover:text-primary',
+          ? 'border-accent/50 bg-accent/[0.1] text-primary shadow-[0_0_14px_-6px_rgba(86,194,230,0.7)] [&>svg]:text-accent'
+          : 'border-white/[0.09] text-secondary hover:bg-white/[0.07] hover:text-primary',
         'disabled:cursor-not-allowed disabled:border-line disabled:text-disabled',
         className,
       )}

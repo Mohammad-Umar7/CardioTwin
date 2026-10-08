@@ -42,7 +42,7 @@ function Metric({ e, className }: { e: Estimate | null | undefined; className?: 
 
 function Tile({ label, children, note }: { label: string; children: ReactNode; note?: ReactNode }) {
   return (
-    <div className="flex min-w-0 flex-col gap-0.5 rounded-md border border-line bg-surface-1 px-3 py-2">
+    <div className="flex min-w-0 flex-col gap-0.5 rounded-md bg-white/[0.04] px-3 py-2 shadow-[inset_0_0_0_1px_rgba(255,255,255,0.08)]">
       <span className="eyebrow text-tertiary">{label}</span>
       <span className="text-body-s font-semibold">{children}</span>
       {note && <span className="text-label font-normal text-tertiary">{note}</span>}

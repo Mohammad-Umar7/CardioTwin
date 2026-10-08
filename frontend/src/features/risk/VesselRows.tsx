@@ -61,13 +61,17 @@ export function VesselRow({ spec, covered = false }: VesselRowProps) {
           'focus-visible:shadow-focus',
           truth ? 'h-[52px] content-center gap-y-0.5' : 'h-9',
           GRID,
-          selected ? 'bg-surface-2' : hovered ? 'bg-surface-1' : 'hover:bg-surface-1',
+          selected
+            ? 'bg-[linear-gradient(90deg,rgba(86,194,230,0.12),rgba(255,255,255,0.03)_70%)] shadow-[inset_0_0_0_1px_rgba(86,194,230,0.18)]'
+            : hovered
+              ? 'bg-white/[0.05]'
+              : 'hover:bg-white/[0.05]',
         )}
       >
         <span
           aria-hidden
           className={cn(
-            'absolute inset-y-1.5 left-0 w-0.5 rounded-full bg-accent transition-opacity duration-instant',
+            'absolute inset-y-1.5 left-0 w-0.5 rounded-full bg-accent shadow-[0_0_8px_rgba(86,194,230,0.9)] transition-opacity duration-instant',
             selected ? 'opacity-100' : 'opacity-0',
           )}
         />

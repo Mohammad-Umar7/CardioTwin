@@ -167,7 +167,7 @@ function CompactWorkstation() {
         value={tab}
         onChange={(mobileTab: MobileTab) => setPanels({ mobileTab })}
         size="md"
-        className="sticky top-[var(--topbar-h)] z-panels bg-app px-3"
+        className="sticky top-[var(--topbar-h)] z-panels bg-app/80 px-3 backdrop-blur-xl"
         items={COMPACT_TABS}
       />
       <div

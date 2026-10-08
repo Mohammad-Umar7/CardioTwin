@@ -1,13 +1,16 @@
+import { motion } from 'framer-motion';
 import { CircleHelp, Play, Search } from 'lucide-react';
+import { useId } from 'react';
 import { NavLink, useLocation, useNavigate } from 'react-router-dom';
 import { Button, HairlineProgress, IconButton, Shortcut, withShortcut } from '@/design';
 import { startGuidedDemo } from '@/features/tour/tourApi';
-import { useDelayedFlag } from '@/hooks/useMediaQuery';
+import { useDelayedFlag, useIsReducedMotion } from '@/hooks/useMediaQuery';
 import { cn } from '@/lib/cn';
 import { ROUTES, loadWorkstation } from '@/routes';
 import { SHORTCUT } from '@/state/commandIds';
 import { usePatientStore } from '@/state/patientStore';
 import { useUiStore } from '@/state/uiStore';
+import { SPRING } from '@/theme/tokens';
 import { EngineBadge } from './EngineBadge';
 import { PatientChip } from './PatientChip';
 
@@ -18,11 +21,29 @@ export const NAV = [
   { to: ROUTES.methodology, label: 'Method' },
 ] as const;
 
-/** Brand mark: a rotated square outline with a heartbeat trace (◆). */
+/**
+ * Brand mark: a rotated square outline with a heartbeat trace (◆). LUMEN 2: the outline is lit with the
+ * accent gradient and the trace re-draws once a second like a monitor sweep (a physiology loop; still under
+ * reduced motion).
+ */
 export function BrandMark({ className }: { className?: string }) {
+  const id = useId().replace(/:/g, '');
   return (
-    <svg viewBox="0 0 32 32" aria-hidden className={cn('size-5', className)} fill="none">
-      <path d="M16 3.5 28.5 16 16 28.5 3.5 16Z" stroke="currentColor" strokeWidth="2.2" strokeLinejoin="round" className="text-accent" />
+    <svg viewBox="0 0 32 32" aria-hidden className={cn('size-5 overflow-visible', className)} fill="none">
+      <defs>
+        <linearGradient id={`bm-${id}`} x1="4" y1="4" x2="28" y2="28" gradientUnits="userSpaceOnUse">
+          <stop offset="0" stopColor="#9BE4F7" />
+          <stop offset="0.55" stopColor="#56C2E6" />
+          <stop offset="1" stopColor="#7AA8FF" />
+        </linearGradient>
+      </defs>
+      <path
+        d="M16 3.5 28.5 16 16 28.5 3.5 16Z"
+        stroke={`url(#bm-${id})`}
+        strokeWidth="2.2"
+        strokeLinejoin="round"
+        style={{ filter: 'drop-shadow(0 0 3px rgba(86,194,230,0.55))' }}
+      />
       <path
         d="M10 16.5h3.4l1.5-3.6 2.6 6.6 1.6-3h3"
         stroke="currentColor"
@@ -31,7 +52,50 @@ export function BrandMark({ className }: { className?: string }) {
         strokeLinejoin="round"
         className="text-primary"
       />
+      <path
+        d="M10 16.5h3.4l1.5-3.6 2.6 6.6 1.6-3h3"
+        stroke="#ffffff"
+        strokeWidth="2.4"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        pathLength={1}
+        className="brand-trace"
+        style={{ filter: 'drop-shadow(0 0 2.5px rgba(52,211,153,0.9))' }}
+      />
     </svg>
+  );
+}
+
+/** Primary nav item; the active page wears a glass pill that glides between items (LUMEN 2). */
+function NavItem({ to, label, onMouseEnter }: { to: string; label: string; onMouseEnter?: () => void }) {
+  const reduced = useIsReducedMotion();
+  return (
+    <NavLink
+      to={to}
+      onMouseEnter={onMouseEnter}
+      className={({ isActive }) =>
+        cn(
+          'relative flex items-center px-3 text-body-s font-medium transition-colors duration-fast max-[899.98px]:px-2',
+          isActive ? 'text-primary' : 'text-secondary hover:text-primary',
+        )
+      }
+    >
+      {({ isActive }) => (
+        <>
+          {isActive && (
+            <motion.span
+              aria-hidden
+              layoutId="topnav-active"
+              transition={reduced ? { duration: 0 } : SPRING.indicator}
+              className="absolute inset-x-0.5 inset-y-[7px] -z-10 rounded-md bg-white/[0.06] shadow-[inset_0_0_0_1px_rgba(255,255,255,0.08),inset_0_1px_0_rgba(255,255,255,0.06)]"
+            >
+              <span className="absolute inset-x-3 -bottom-[7px] h-0.5 rounded-full bg-accent shadow-[0_0_12px_rgba(86,194,230,0.9)]" />
+            </motion.span>
+          )}
+          {label}
+        </>
+      )}
+    </NavLink>
   );
 }
 
@@ -49,8 +113,10 @@ function SearchTrigger() {
         aria-haspopup="dialog"
         aria-keyshortcuts="Control+K Meta+K /"
         className={cn(
-          'hidden h-8 w-[280px] items-center gap-2 rounded-sm border border-line bg-surface-1 pl-2.5 pr-1.5 text-left',
-          'text-body-s text-tertiary transition-colors duration-instant hover:border-line-strong hover:text-secondary',
+          'hidden h-8 w-[300px] items-center gap-2 rounded-md bg-white/[0.04] pl-2.5 pr-1.5 text-left',
+          'shadow-[inset_0_0_0_1px_rgba(255,255,255,0.08),inset_0_1px_0_rgba(255,255,255,0.04)]',
+          'text-body-s text-tertiary transition-[color,background-color,box-shadow] duration-fast ease-out',
+          'hover:bg-white/[0.07] hover:text-secondary hover:shadow-[inset_0_0_0_1px_rgba(86,194,230,0.3),0_0_20px_-8px_rgba(86,194,230,0.6)]',
           'min-[1440px]:inline-flex',
         )}
       >
@@ -88,40 +154,37 @@ export function TopNav() {
   const showProgress = useDelayedFlag(loading, 150);
 
   return (
-    <header data-region="topbar" className="sticky top-0 z-panels h-[var(--topbar-h)] shrink-0 border-b border-hairline bg-app">
+    <header
+      data-region="topbar"
+      className={cn(
+        // LUMEN 2: a glass bar (the stage and the ambient light show through) with a lit hairline below.
+        'sticky top-0 z-panels h-[var(--topbar-h)] shrink-0 border-b border-white/[0.06] bg-app/75 backdrop-blur-xl backdrop-saturate-150',
+        'after:pointer-events-none after:absolute after:inset-x-0 after:-bottom-px after:h-px',
+        'after:bg-[linear-gradient(90deg,transparent_5%,rgba(86,194,230,0.35)_30%,rgba(129,140,248,0.3)_70%,transparent_95%)]',
+      )}
+    >
       <div className="flex h-full items-center gap-2 px-3 min-[1440px]:px-4">
         <NavLink
           to={ROUTES.landing}
-          className="mr-3 flex shrink-0 items-center gap-2 rounded-sm px-1 py-1 text-title-2 text-primary"
+          className="group/brand mr-3 flex shrink-0 items-center gap-2.5 rounded-sm px-1 py-1 text-title-2 text-primary"
           aria-label="CardioTwin home"
         >
-          <BrandMark />
-          <span className="font-display tracking-[-0.02em] max-[899.98px]:sr-only">CardioTwin</span>
+          <span className="relative grid size-7 place-items-center rounded-md bg-[linear-gradient(145deg,rgba(86,194,230,0.16),rgba(129,140,248,0.08))] shadow-[inset_0_0_0_1px_rgba(255,255,255,0.1),0_0_18px_-6px_rgba(86,194,230,0.7)] transition-shadow duration-base group-hover/brand:shadow-[inset_0_0_0_1px_rgba(255,255,255,0.16),0_0_24px_-4px_rgba(86,194,230,0.9)]">
+            <BrandMark />
+          </span>
+          <span className="font-display tracking-[-0.02em] max-[899.98px]:sr-only">
+            Cardio<span className="text-gradient-accent">Twin</span>
+          </span>
         </NavLink>
 
-        <nav aria-label="Primary" className="flex h-full shrink-0 items-stretch max-[639.98px]:hidden">
+        <nav aria-label="Primary" className="isolate flex h-full shrink-0 items-stretch max-[639.98px]:hidden">
           {NAV.map((item) => (
-            <NavLink
+            <NavItem
               key={item.to}
               to={item.to}
+              label={item.label}
               onMouseEnter={item.to === ROUTES.workstation ? () => void loadWorkstation() : undefined}
-              className={({ isActive }) =>
-                cn(
-                  'relative flex items-center px-3 text-body-s font-medium transition-colors duration-fast max-[899.98px]:px-2',
-                  isActive ? 'text-primary' : 'text-secondary hover:text-primary',
-                )
-              }
-            >
-              {({ isActive }) => (
-                <>
-                  {item.label}
-                  <span
-                    aria-hidden
-                    className={cn('absolute inset-x-3 bottom-0 h-0.5 rounded-full', isActive ? 'bg-accent' : 'bg-transparent')}
-                  />
-                </>
-              )}
-            </NavLink>
+            />
           ))}
         </nav>
 

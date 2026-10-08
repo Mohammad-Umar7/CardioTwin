@@ -86,7 +86,7 @@ export function ModalityStrip({ rows, target, unit, labelOf, fmt, total, onPick,
                   aria-label={`${r.label}: ${r.abs === 0 ? 'no effect' : `${up ? 'raises' : 'lowers'} ${target}, ${f.spoken}`}. Show its inputs.`}
                   className={cn(
                     'flex min-w-10 flex-col items-center gap-1 rounded-sm px-1 py-1 outline-none transition-colors duration-instant',
-                    'hover:bg-surface-1 focus-visible:shadow-focus',
+                    'hover:bg-white/[0.05] focus-visible:shadow-focus',
                     active === r.group && 'bg-surface-2',
                   )}
                 >

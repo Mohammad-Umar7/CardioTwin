@@ -8,6 +8,44 @@
 
 *"The only light in the room is the data."* This spec is binding for `frontend/`. It follows `docs/CONTRACTS.md` v1.0.0: target order CAD·LAD·LCX·RCA, band edges 0.25/0.50/0.75, SHAP in log-odds (margin) space, and radiological display, so patient-left (+X) appears on viewer-right.
 
+## LUMEN 2 amendment (presentation layer)
+
+LUMEN 2 keeps every data rule below and changes only the material, light and motion of the chrome, so the
+product reads as a premium instrument rather than a flat dashboard. Where this section and a later section
+disagree on chrome, this section wins; where they disagree on data, the later section wins.
+
+**Unchanged (non-negotiable).** The Ember v2 ramp and every risk rule in §2.2 (risk colour on marks only,
+numerals and band words in `text/primary`, colour never alone, achromatic pending state); the permanent status
+line and its wording; anatomy achromatic; performance charts neutral; AA contrast for every text token; full
+keyboard operation; reduced motion and Calm mode.
+
+**Material.** Floating chrome over the stage (stage cards, HUD chips, drawers, menus, popovers, tooltips,
+the palette, toasts, 3D labels) is *glass*: a dark tint of at least 80 % (`--glass-tint`, denser
+`--glass-tint-strong` for small text), an 18 px backdrop blur, a hairline of light along the top and a
+gradient edge (`.stage-card`, `.glass`, `.glass-strong`, `.glass-edge` in `globals.css`). The blur is dropped
+for the opaque panel material under `prefers-reduced-transparency`, in forced colours, and at render tiers
+C and D (`html[data-tier]`, mirrored from `viewerStore.tier`), so a struggling GPU keeps its frames. Reading
+pages use `.card-surface` (no blur). Radii step up: 6 / 10 / 14 / 20 px (`sm` / `md` / `lg` / `xl`).
+
+**Light.** The root carries an ambient light (a cool key from above, a faint indigo bounce) with a fading
+instrument grid; the stage background adds a soft cool halo behind the heart and two faint corner leaks
+(`three/stage/Background.tsx`, same shader program, background only, never on anatomy). Headlines use the
+white-to-silver `.text-gradient`; one emphasised phrase per page may use `.text-gradient-accent`. The CAD
+numeral sits in a blurred pool of its own ramp colour (a mark, grey while pending).
+
+**Motion.** Still "moves once, decelerates, stops", plus: staggered blur-in arrivals on the landing,
+critically damped springs for drawers and for the active-tab / segment / nav / contents indicators
+(`SPRING` in `theme/tokens.ts`), scroll reveals and chart draw-ins on the reading pages (`useReveal`,
+`[data-reveal]`), SHAP bars that grow from the zero line, a one-off "breath" when the CAD answer changes
+(never a count-up from 0), a light sweep on the primary CTA and a cursor spotlight on cards
+(`useSpotlight`, `.spotlight`). All of it is off under reduced motion / Calm.
+
+**The live monitor.** `features/vitals` draws a schematic lead-II ECG on the scene's physiological cardiac
+phase, so the QRS lands just before the ventricles contract on screen, at the patient's recorded rate (`PR`);
+the heart glyph pulses on each R peak. It is decoration with a stated rate, labelled schematic, and never
+data: it is not this patient's ECG. It runs free when the canvas is idle and is a still trace under reduced
+motion.
+
 ## 0. Decision record
 
 **Base: Concept 1.** It has the reading-room look, graphite chrome, one interaction colour, provenance on every number, and C-arm conventions. Its peel, tiers and 2D fallback are the most buildable on an integrated GPU.

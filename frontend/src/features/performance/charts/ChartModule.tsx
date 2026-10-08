@@ -95,8 +95,10 @@ export function ChartModule({
     <section
       id={id}
       aria-labelledby={titleId}
+      data-reveal
       className={cn(
-        'flex min-w-0 flex-col gap-3 rounded-lg border border-line bg-panel p-4 min-[1440px]:p-5',
+        // LUMEN 2 reading card: lit edge, deep soft shadow; rises into view once (useReveal).
+        'card-surface is-interactive flex min-w-0 flex-col gap-3 p-4 min-[1440px]:p-5',
         className,
       )}
     >
@@ -137,7 +139,7 @@ export function ChartModule({
                       type="button"
                       role="menuitem"
                       onClick={() => doExport(f.id, close)}
-                      className="flex h-8 items-center justify-between rounded-sm px-2 text-left text-label text-secondary hover:bg-surface-2 hover:text-primary focus-visible:bg-surface-2"
+                      className="relative z-[1] flex h-8 items-center justify-between rounded-sm px-2 text-left text-label text-secondary hover:bg-white/[0.07] hover:text-primary focus-visible:bg-white/[0.07]"
                     >
                       {f.label}
                       <span className="text-tertiary">watermarked</span>
@@ -171,10 +173,10 @@ export function ChartModule({
         )}
         {status === 'ready' && !asTable && children}
         {status === 'ready' && asTable && table && (
-          <div className="panel-scroll relative h-full overflow-auto rounded-md border border-hairline">
+          <div className="panel-scroll relative h-full overflow-auto rounded-md border border-white/[0.06] bg-black/15">
             <table className="w-full border-collapse text-label font-normal">
               <caption className="sr-only">{table.caption}</caption>
-              <thead className="sticky top-0 bg-surface-1">
+              <thead className="sticky top-0 bg-surface-1/95 backdrop-blur">
                 <tr>
                   {table.columns.map((c, i) => (
                     <th

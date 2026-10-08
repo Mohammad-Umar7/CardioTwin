@@ -94,7 +94,7 @@ export function Popover({ trigger, children, placement = 'bottom', label, classN
             tabIndex={-1}
             style={{ top: pos?.top ?? -9999, left: pos?.left ?? -9999, width }}
             className={cn(
-              'fixed z-popover rounded-lg bg-surface-3 p-4 text-body-s text-secondary shadow-e3 outline-none',
+              'glass-strong glass-edge fixed z-popover rounded-lg p-4 text-body-s text-secondary outline-none',
               pos ? 'menu-enter' : 'opacity-0',
               className,
             )}

@@ -1,4 +1,4 @@
-import { ChevronRight } from 'lucide-react';
+import { ChevronRight, Gauge, HeartPulse, ShieldCheck, Sparkles, type LucideIcon } from 'lucide-react';
 import { useMemo, type MouseEvent, type ReactNode } from 'react';
 import { Link } from 'react-router-dom';
 import { BandChip, Probability, RiskPip, Skeleton } from '@/design';
@@ -165,9 +165,12 @@ interface PillarProps {
   destination: LandingDestination;
   linkLabel: string;
   onNavigate(destination: LandingDestination): void;
+  icon: LucideIcon;
+  /** Arrival stagger (ms). */
+  delay: number;
 }
 
-function Pillar({ n, verb, sentence, visual, destination, linkLabel, onNavigate }: PillarProps) {
+function Pillar({ n, verb, sentence, visual, destination, linkLabel, onNavigate, icon: Icon, delay }: PillarProps) {
   const onClick = (e: MouseEvent<HTMLAnchorElement>) => {
     if (e.metaKey || e.ctrlKey || e.shiftKey || e.button !== 0) return;
     e.preventDefault();
@@ -178,17 +181,32 @@ function Pillar({ n, verb, sentence, visual, destination, linkLabel, onNavigate 
       to={destination.to}
       onClick={onClick}
       aria-label={`${verb}: ${sentence} ${linkLabel}`}
-      className="group relative grid min-w-0 grid-cols-[minmax(0,1fr)_auto] items-center gap-x-4 gap-y-1 rounded-none bg-app px-5 py-3.5 outline-none transition-colors duration-instant hover:bg-surface-1 focus-visible:z-10 min-[1440px]:px-6 min-[1440px]:py-4"
+      style={{ animationDelay: `${delay}ms` }}
+      className={cn(
+        // LUMEN 2: a floating glass card that lifts toward the pointer and catches its light.
+        'stage-card spotlight group grid min-w-0 animate-fade-up grid-cols-[minmax(0,1fr)_auto] items-center gap-x-4 gap-y-1 px-5 py-3.5 outline-none',
+        'transition-[transform,box-shadow] duration-base ease-out hover:-translate-y-0.5 focus-visible:z-10 motion-reduce:hover:translate-y-0',
+        'hover:shadow-[inset_0_1px_0_rgba(255,255,255,0.08),0_0_0_1px_rgba(86,194,230,0.22),0_26px_50px_-18px_rgba(0,0,0,0.8),0_0_40px_-14px_rgba(86,194,230,0.45)]',
+        'min-[1440px]:px-6 min-[1440px]:py-4',
+      )}
     >
-      <span className="col-start-1 flex items-baseline gap-2.5">
+      <span className="col-start-1 flex items-center gap-2.5">
+        <span
+          aria-hidden
+          className="grid size-6 place-items-center rounded-md bg-accent/[0.12] text-accent shadow-[inset_0_0_0_1px_rgba(86,194,230,0.25)] transition-[background-color,box-shadow] duration-base group-hover:bg-accent/20 group-hover:shadow-[inset_0_0_0_1px_rgba(86,194,230,0.45),0_0_14px_-3px_rgba(86,194,230,0.8)] max-[1439.98px]:hidden"
+        >
+          <Icon className="size-3.5 stroke-[1.75]" />
+        </span>
         <span className="mono text-mono-s text-tertiary">{n}</span>
         <span className="eyebrow text-primary">{verb}</span>
         <ChevronRight
           aria-hidden
-          className="size-3.5 -translate-x-1 self-center stroke-[1.75] text-tertiary opacity-0 transition-[opacity,transform] duration-fast group-hover:translate-x-0 group-hover:opacity-100 group-focus-visible:translate-x-0 group-focus-visible:opacity-100"
+          className="size-3.5 -translate-x-1 stroke-[2] text-accent opacity-0 transition-[opacity,transform] duration-fast group-hover:translate-x-0 group-hover:opacity-100 group-focus-visible:translate-x-0 group-focus-visible:opacity-100"
         />
       </span>
-      <span className="col-start-1 line-clamp-2 text-body-s text-secondary">{sentence}</span>
+      <span className="col-start-1 line-clamp-2 text-body-s text-secondary transition-colors duration-fast group-hover:text-primary/90">
+        {sentence}
+      </span>
       <span className="col-start-2 row-span-2 row-start-1 flex items-center justify-end">
         {visual}
       </span>
@@ -210,14 +228,13 @@ export function Pillars({ onNavigate, className }: { onNavigate(destination: Lan
   return (
     <nav
       aria-label="What CardioTwin does"
-      className={cn(
-        'grid grid-cols-1 gap-px bg-hairline sm:grid-cols-2 min-[1100px]:grid-cols-4',
-        className,
-      )}
+      className={cn('grid grid-cols-1 gap-2 sm:grid-cols-2 min-[1100px]:grid-cols-4', className)}
     >
       <Pillar
         n="01"
         verb="Predict"
+        icon={Gauge}
+        delay={520}
         sentence="Calibrated CAD and per-artery risk."
         visual={<PredictVisual />}
         destination={{ to: ROUTES.workstation }}
@@ -227,6 +244,8 @@ export function Pillars({ onNavigate, className }: { onNavigate(destination: Lan
       <Pillar
         n="02"
         verb="Explain"
+        icon={Sparkles}
+        delay={600}
         sentence="Exact SHAP: what pushes it up or down."
         visual={<ExplainVisual />}
         destination={{
@@ -239,6 +258,8 @@ export function Pillars({ onNavigate, className }: { onNavigate(destination: Lan
       <Pillar
         n="03"
         verb="Map"
+        icon={HeartPulse}
+        delay={680}
         sentence="Each artery coloured on real anatomy."
         visual={<MapVisual vessels={vessels} />}
         destination={{
@@ -251,6 +272,8 @@ export function Pillars({ onNavigate, className }: { onNavigate(destination: Lan
       <Pillar
         n="04"
         verb="Validate"
+        icon={ShieldCheck}
+        delay={760}
         sentence={TEST_SET.pillar}
         visual={<ValidateVisual />}
         destination={{ to: ROUTES.performance }}

@@ -1,5 +1,8 @@
-import { useRef, type KeyboardEvent, type ReactNode } from 'react';
+import { motion } from 'framer-motion';
+import { useId, useRef, type KeyboardEvent, type ReactNode } from 'react';
+import { useIsReducedMotion } from '@/hooks/useMediaQuery';
 import { cn } from '@/lib/cn';
+import { SPRING } from '@/theme/tokens';
 import { tabId, tabPanelId } from './tabIds';
 
 export interface TabItem<V extends string> {
@@ -20,9 +23,14 @@ export interface TabsProps<V extends string> {
 }
 
 
-/** Tabs (DESIGN_SYSTEM §5 TargetTabs / right-panel tabs): 2 px accent underline on the active tab. */
+/**
+ * Tabs (DESIGN_SYSTEM §5 TargetTabs / right-panel tabs): 2 px accent underline on the active tab, which
+ * glides from tab to tab with a soft glow (LUMEN 2; it jumps under reduced motion).
+ */
 export function Tabs<const V extends string>({ items, value, onChange, label, idBase, size = 'sm', className }: TabsProps<V>) {
   const refs = useRef<(HTMLButtonElement | null)[]>([]);
+  const indicatorId = `tabs-indicator-${useId()}`;
+  const reduced = useIsReducedMotion();
 
   const onKeyDown = (e: KeyboardEvent, index: number) => {
     const n = items.length;
@@ -67,13 +75,14 @@ export function Tabs<const V extends string>({ items, value, onChange, label, id
             )}
           >
             {item.label}
-            <span
-              aria-hidden
-              className={cn(
-                'absolute inset-x-1 bottom-0 h-0.5 rounded-full transition-colors duration-fast',
-                active ? 'bg-accent' : 'bg-transparent',
-              )}
-            />
+            {active && (
+              <motion.span
+                aria-hidden
+                layoutId={indicatorId}
+                transition={reduced ? { duration: 0 } : SPRING.indicator}
+                className="absolute inset-x-1 bottom-0 h-0.5 rounded-full bg-accent shadow-[0_0_10px_rgba(86,194,230,0.7)]"
+              />
+            )}
           </button>
         );
       })}

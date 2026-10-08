@@ -90,7 +90,7 @@ export function ContributionRow({ c, spec, target, max, unit, scale, changed, in
             ROW_GRID,
             inset ? 'pl-3' : 'pl-1',
             'focus-visible:shadow-focus',
-            lit ? 'bg-surface-2' : 'hover:bg-surface-1',
+            lit ? 'bg-white/[0.07]' : 'hover:bg-white/[0.05]',
             negligible && 'opacity-40',
           )}
         >
@@ -110,11 +110,14 @@ export function ContributionRow({ c, spec, target, max, unit, scale, changed, in
           <span aria-hidden className="relative h-3">
             <span className="absolute inset-y-0 left-1/2 w-px bg-line-strong" />
             <span
-              className="absolute top-1/2 h-2 -translate-y-1/2 rounded-xs transition-[width,left] duration-base ease-out"
+              // LUMEN 2: bars grow out of the zero line when they appear and carry a soft glow of their colour.
+              className="shap-bar absolute top-1/2 h-2 -translate-y-1/2 rounded-xs transition-[width,left] duration-base ease-out"
               style={{
                 width: `${share * HALF_PCT}%`,
                 left: up ? '50%' : `${50 - share * HALF_PCT}%`,
                 backgroundColor: up ? SHAP_RAISES : SHAP_LOWERS,
+                boxShadow: `0 0 8px ${up ? SHAP_RAISES : SHAP_LOWERS}66`,
+                transformOrigin: up ? 'left center' : 'right center',
               }}
             />
           </span>

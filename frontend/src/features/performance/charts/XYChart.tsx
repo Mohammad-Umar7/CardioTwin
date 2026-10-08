@@ -399,6 +399,9 @@ export function XYChart({
                       strokeDasharray={st.dash}
                       strokeLinejoin="round"
                       strokeLinecap="round"
+                      // LUMEN 2: solid curves draw themselves in when their card scrolls into view (globals.css);
+                      // dashed reference lines keep their dash units, so they are left out.
+                      {...(st.dash ? null : { pathLength: 1, className: 'chart-draw' })}
                     />
                   )}
                   {s.dots &&

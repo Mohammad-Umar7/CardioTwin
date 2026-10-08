@@ -84,6 +84,7 @@ export function useHeroInsets(
       // HUD chips sit just above the bands and centre on the free area; CSS reads the same measurement.
       hero.style.setProperty('--landing-bands-h', `${insets.bottom}px`);
       hero.style.setProperty('--landing-free-cx', `${Math.round((insets.left + box.width - insets.right) / 2)}px`);
+      hero.style.setProperty('--landing-free-left', `${insets.left}px`);
       useUiStore.getState().setStageInsets(insets);
     };
     publish();

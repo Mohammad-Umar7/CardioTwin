@@ -132,16 +132,17 @@ export function MultimodalHeadline({
   if (stats.length === 0) return null;
   return (
     <div
+      data-reveal
       className={cn(
-        'grid gap-px overflow-clip rounded-lg border border-line bg-line',
+        'grid gap-px overflow-clip rounded-lg bg-white/[0.06] shadow-[0_0_0_1px_rgba(255,255,255,0.06),0_18px_40px_-20px_rgba(0,0,0,0.7)]',
         stats.length === 3 ? 'md:grid-cols-3' : stats.length === 2 ? 'md:grid-cols-2' : '',
       )}
       aria-label={`Multimodal evidence for ${target}`}
       role="group"
     >
       {stats.map((s) => (
-        <div key={s.label} className="flex flex-col gap-1.5 bg-panel p-4 min-[1440px]:p-5">
-          <span className="font-display text-[2rem] font-semibold leading-9 tracking-[-0.03em] text-primary">
+        <div key={s.label} className="spotlight flex flex-col gap-1.5 bg-panel/95 p-4 min-[1440px]:p-5">
+          <span className="text-gradient-accent font-display text-[2.25rem] font-semibold leading-10 tracking-[-0.035em]">
             {s.value}
           </span>
           <span className="text-body-s font-medium text-primary text-pretty">{s.label}</span>

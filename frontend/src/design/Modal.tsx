@@ -74,7 +74,7 @@ export function Modal({ open, onClose, title, description, children, footer, wid
       {open && (
         <PresenceLayer key="modal" className="fixed inset-0 z-popover flex items-center justify-center p-4">
           <motion.div
-            className="absolute inset-0 bg-[var(--scrim)]"
+            className="absolute inset-0 bg-[var(--scrim)] backdrop-blur-[3px]"
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
@@ -95,7 +95,7 @@ export function Modal({ open, onClose, title, description, children, footer, wid
             transition={{ duration: MOTION.base / 1000, ease: EASE.out }}
             style={{ maxWidth: width }}
             className={cn(
-              'relative flex max-h-[calc(100vh-var(--status-h)-48px)] w-full flex-col rounded-lg bg-surface-3 shadow-e3 outline-none',
+              'glass-strong glass-edge relative flex max-h-[calc(100vh-var(--status-h)-48px)] w-full flex-col rounded-xl outline-none',
               className,
             )}
           >

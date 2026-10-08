@@ -2,6 +2,7 @@ import { AnimatePresence, motion } from 'framer-motion';
 import { ArrowLeftToLine, ChevronRight, PanelLeftOpen, PencilLine, Search } from 'lucide-react';
 import { useEffect, useRef } from 'react';
 import { Button, ExitInert, IconButton, Kbd, Skeleton, StageCard, Tooltip, withShortcut } from '@/design';
+import { VitalsStrip } from '@/features/vitals/EcgMonitor';
 import { useSchemaIndex } from '@/hooks/useData';
 import { useIsReducedMotion } from '@/hooks/useMediaQuery';
 import { useCommandShortcut } from '@/hooks/useRegisterCommands';
@@ -88,7 +89,7 @@ function KeyRow({ item, value, recorded, target, compare }: { item: KeyInput; va
         'relative -mx-2 grid w-[calc(100%+16px)] grid-cols-[minmax(0,1fr)_auto_24px] items-center gap-2 rounded-sm px-2 text-left transition-colors duration-instant',
         'max-[1439.98px]:grid-cols-[minmax(0,1fr)_auto_20px] max-[1439.98px]:gap-x-1.5',
         ROW_H,
-        highlighted ? 'bg-surface-1' : 'hover:bg-surface-1',
+        highlighted ? 'bg-white/[0.06]' : 'hover:bg-white/[0.05]',
       )}
     >
       <span className="flex min-w-0 items-center">
@@ -175,7 +176,11 @@ function CardBody() {
         </h2>
         <IconButton label="Collapse the patient card" tooltip="Collapse to rail" icon={<ArrowLeftToLine />} size="sm" onClick={() => setOpen(false)} />
       </header>
-      <div className="relative mt-1 h-6">
+      {/* LUMEN 2: the twin's live rhythm, locked to the beating heart, at the recorded rate. */}
+      <div className="mt-2 flex h-9 items-center rounded-md bg-black/25 px-2.5 shadow-[inset_0_0_0_1px_rgba(255,255,255,0.06),inset_0_1px_3px_rgba(0,0,0,0.4)]">
+        <VitalsStrip width={118} height={24} className="w-full justify-between" />
+      </div>
+      <div className="relative mt-2 h-6">
         <AnimatePresence initial={false} mode="popLayout">
           <motion.p
             key={target}
@@ -224,7 +229,7 @@ function CardBody() {
         <button
           type="button"
           onClick={() => openDrawer('inputs', { section: 'abnormal' })}
-          className="-mx-2 mt-0.5 flex h-8 items-center gap-1 rounded-sm px-2 text-label font-medium text-secondary transition-colors duration-instant hover:bg-surface-1 hover:text-primary"
+          className="-mx-2 mt-0.5 flex h-8 items-center gap-1 rounded-sm px-2 text-label font-medium text-secondary transition-colors duration-instant hover:bg-white/[0.05] hover:text-primary"
         >
           {/* The patient's total, not "+ n more": it must not change when another target is selected. */}
           All <span className="num">{abnormal.length}</span> abnormal {abnormal.length === 1 ? 'finding' : 'findings'}

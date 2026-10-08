@@ -23,9 +23,10 @@ export interface StageCardProps extends Omit<HTMLAttributes<HTMLElement>, 'title
 }
 
 /**
- * The one floating material of the V2 stage (WORKSTATION_V2 §5.4, §7): bg/panel, 1 px border/default
- * ring, e-2, r-lg, no blur, `position: relative` and `overflow: clip` (the P0-1 class of bug cannot
- * recur). Enters with y 8 → 0 + fade over `base` (opacity only under reduced motion).
+ * The one floating material of the V2 stage (WORKSTATION_V2 §5.4, §7; LUMEN 2 amendment): glass over the
+ * canvas (≥ 80 % tint, 18 px blur, opaque at tiers C/D and under reduced transparency), a gradient hairline
+ * edge, r-lg, `position: relative` and `overflow: clip` (the P0-1 class of bug cannot recur). Enters with
+ * y 14 → 0, scale .985 → 1 and fade (opacity only under reduced motion).
  *
  * Exit and compact transitions belong to the slot or the owner (they need presence / measured heights).
  */

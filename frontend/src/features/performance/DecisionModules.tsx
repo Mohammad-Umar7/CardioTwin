@@ -202,7 +202,7 @@ export function ThresholdExplorer({
           <button
             type="button"
             onClick={() => onExplore(null)}
-            className="mr-1 inline-flex h-7 items-center gap-1 rounded-full border border-dashed border-accent/60 px-2.5 text-label text-accent hover:bg-surface-2"
+            className="mr-1 inline-flex h-7 items-center gap-1 rounded-full border border-dashed border-accent/60 px-2.5 text-label text-accent hover:bg-white/[0.07]"
           >
             <RotateCcw aria-hidden className="size-3.5 stroke-[1.5]" />
             Back to deployed {f2(dep.threshold)}

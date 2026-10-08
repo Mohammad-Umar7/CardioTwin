@@ -117,7 +117,10 @@ export function ExplainDrawer({ className }: ExplainDrawerProps) {
       returnFocus='[data-drawer-opener="explain"]'
       className={className}
     >
-      <header className="shrink-0 border-b border-hairline px-4 pt-3" data-tour="why">
+      <header
+        className="shrink-0 border-b border-white/[0.06] bg-[radial-gradient(120%_90%_at_0%_0%,rgba(86,194,230,0.09),transparent_62%)] px-4 pt-3"
+        data-tour="why"
+      >
         <div className="flex h-7 items-center gap-2">
           <SegmentedControl<TargetId>
             label="Explanation target"
@@ -156,9 +159,9 @@ export function ExplainDrawer({ className }: ExplainDrawerProps) {
         {/* Fade the new tab in; never an empty frame between tabs (no exit wait). */}
         <motion.div
           key={tab}
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          transition={{ duration: reduced ? 0 : MOTION.fast / 1000, ease: EASE.out }}
+          initial={reduced ? { opacity: 0 } : { opacity: 0, y: 6 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: reduced ? 0 : MOTION.base / 1000, ease: EASE.out }}
         >
           {tab === 'why' && <WhyTab target={target} />}
           {tab === 'whatif' && <WhatIfTab target={target} />}

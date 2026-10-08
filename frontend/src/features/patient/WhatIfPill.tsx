@@ -128,7 +128,7 @@ function Pill({ edits, className }: { edits: number; className?: string }) {
               {...handlers}
               className={cn(
                 'inline-flex h-6 select-none items-center gap-1.5 rounded-full px-2 text-label transition-colors duration-instant',
-                comparing ? 'bg-surface-2 text-accent' : 'text-secondary hover:bg-surface-2 hover:text-primary',
+                comparing ? 'bg-surface-2 text-accent' : 'text-secondary hover:bg-white/[0.07] hover:text-primary',
               )}
             >
               <Columns2 aria-hidden className="size-3.5 stroke-[1.5]" />
@@ -141,7 +141,7 @@ function Pill({ edits, className }: { edits: number; className?: string }) {
       <button
         type="button"
         onClick={resetAllEdits}
-        className="inline-flex h-6 items-center gap-1.5 rounded-full px-2 text-label text-secondary transition-colors duration-instant hover:bg-surface-2 hover:text-primary"
+        className="inline-flex h-6 items-center gap-1.5 rounded-full px-2 text-label text-secondary transition-colors duration-instant hover:bg-white/[0.07] hover:text-primary"
       >
         <RotateCcw aria-hidden className="size-3.5 stroke-[1.5]" />
         Reset

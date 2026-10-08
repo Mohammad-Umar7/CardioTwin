@@ -5,7 +5,7 @@ import { cn } from '@/lib/cn';
 
 /** 1 × 20 hairline between toolbar groups (V2 §5.11). */
 export function ToolbarSeparator() {
-  return <span aria-hidden className="mx-0.5 h-5 w-px shrink-0 bg-hairline" />;
+  return <span aria-hidden className="mx-1 h-5 w-px shrink-0 bg-white/[0.08]" />;
 }
 
 /** Icon-button size inside the toolbar: 32 px at ≥ 1440, 28 px below (V2 §5.11). */
@@ -35,9 +35,9 @@ export const ToolbarTextButton = forwardRef<HTMLButtonElement, ToolbarTextButton
       type="button"
       className={cn(
         'inline-flex h-8 shrink-0 items-center gap-1.5 rounded-sm text-body-s font-medium text-secondary outline-none max-[1439.98px]:h-7',
-        'transition-colors duration-instant ease-instant hover:bg-surface-1 hover:text-primary focus-visible:shadow-focus',
+        'transition-colors duration-instant ease-instant hover:bg-white/[0.07] hover:text-primary focus-visible:shadow-focus',
         iconOnly ? 'w-8 justify-center max-[1439.98px]:w-7' : icon ? 'pl-2 pr-1.5' : 'pl-2.5 pr-1.5',
-        open && 'bg-surface-2 text-primary hover:bg-surface-2',
+        open && 'bg-white/[0.1] text-primary hover:bg-white/[0.1]',
         '[&>svg]:size-4 [&>svg]:shrink-0 [&>svg]:stroke-[1.5]',
         className,
       )}
@@ -79,7 +79,7 @@ export function HudSwitch({ checked, onChange, label, hint, disabled, className 
       onClick={() => onChange(!checked)}
       className={cn(
         'flex h-8 w-full items-center gap-2 rounded-sm px-2 text-left text-body-s text-primary outline-none',
-        'transition-colors duration-instant ease-instant hover:bg-surface-2 focus-visible:bg-surface-2 focus-visible:shadow-focus',
+        'transition-colors duration-instant ease-instant hover:bg-white/[0.07] focus-visible:bg-white/[0.07] focus-visible:shadow-focus',
         'disabled:cursor-not-allowed disabled:text-disabled',
         className,
       )}
@@ -89,8 +89,10 @@ export function HudSwitch({ checked, onChange, label, hint, disabled, className 
       <span
         aria-hidden
         className={cn(
-          'relative inline-flex h-4 w-7 shrink-0 rounded-full border transition-colors duration-fast ease-out',
-          checked ? 'border-accent bg-accent/80' : 'border-line bg-surface-1',
+          'relative inline-flex h-4 w-7 shrink-0 rounded-full border transition-[background-color,border-color,box-shadow] duration-fast ease-out',
+          checked
+            ? 'border-accent bg-accent/80 shadow-[0_0_12px_-2px_rgba(86,194,230,0.8)]'
+            : 'border-white/10 bg-black/30',
         )}
       >
         <span

@@ -1,4 +1,4 @@
-import { Check } from 'lucide-react';
+import { Activity, Check, ClipboardList, Crosshair, Users, type LucideIcon } from 'lucide-react';
 import type { ReactNode } from 'react';
 import { Link } from 'react-router-dom';
 import { Skeleton, Tooltip } from '@/design';
@@ -10,25 +10,43 @@ import { TEST_SET } from '@/lib/testSetCopy';
 import { ROUTES } from '@/routes';
 import { bedsideSentence, formatCv, performanceFor, reconcileTestAndCv, useLandingMetrics, type LandingMetrics } from './landingMetrics';
 
+/** LUMEN 2 tile glyph: a small lit well holding a lucide icon. */
+function Glyph({ icon: Icon }: { icon: LucideIcon }) {
+  return (
+    <span
+      aria-hidden
+      className="grid size-9 shrink-0 place-items-center rounded-md bg-[linear-gradient(145deg,rgba(86,194,230,0.16),rgba(129,140,248,0.06))] text-accent shadow-[inset_0_0_0_1px_rgba(255,255,255,0.09),0_0_20px_-8px_rgba(86,194,230,0.7)] max-[1439.98px]:hidden"
+    >
+      <Icon className="size-4 stroke-[1.75]" />
+    </span>
+  );
+}
+
 function Tile({
   children,
   hint,
   className,
   label,
+  icon,
 }: {
   children: ReactNode;
   hint: ReactNode;
   className?: string;
   label: string;
+  icon: LucideIcon;
 }) {
   return (
     <Tooltip content={hint}>
       <div
         tabIndex={0}
         aria-label={label}
-        className={cn('flex min-w-0 flex-col justify-center gap-0.5 px-5 py-3 outline-none min-[1440px]:px-6', className)}
+        className={cn(
+          'spotlight flex min-w-0 items-center gap-3 px-4 py-3 outline-none transition-colors duration-fast hover:bg-white/[0.02] min-[1440px]:px-6',
+          className,
+        )}
       >
-        {children}
+        <Glyph icon={icon} />
+        <div className="flex min-w-0 flex-col justify-center gap-0.5">{children}</div>
       </div>
     </Tooltip>
   );
@@ -40,7 +58,7 @@ function Value({ value, unit, loading }: { value: ReactNode; unit: string; loadi
       {loading ? (
         <Skeleton className="h-6 w-10" />
       ) : (
-        <span className="font-numeral text-numeral-l text-primary">{value}</span>
+        <span className="text-gradient font-numeral text-[1.5rem] font-semibold leading-7 tracking-[-0.03em]">{value}</span>
       )}
       <span className="truncate text-body-s text-secondary">{unit}</span>
     </div>
@@ -129,11 +147,14 @@ export function KpiStrip({ className }: { className?: string }) {
     <section
       aria-label="Key facts"
       className={cn(
-        'grid grid-cols-2 gap-px bg-hairline min-[1100px]:grid-cols-[minmax(0,0.8fr)_minmax(0,0.9fr)_minmax(0,1fr)_minmax(0,2.5fr)] [&>*]:bg-app',
+        // LUMEN 2: one glass ribbon over the stage, hairline-divided.
+        'stage-card grid grid-cols-2 min-[1100px]:grid-cols-[minmax(0,0.8fr)_minmax(0,0.9fr)_minmax(0,1fr)_minmax(0,2.5fr)]',
+        '[&>*]:border-white/[0.06] max-[1099.98px]:[&>*:nth-child(even)]:border-l max-[1099.98px]:[&>*:nth-child(n+3)]:border-t min-[1100px]:[&>*+*]:border-l',
         className,
       )}
     >
       <Tile
+        icon={Users}
         label={lm ? `${lm.n} patients, single centre` : 'Patients'}
         hint="Extension of the Z-Alizadeh Sani dataset (UCI #411), one centre, CC BY 4.0. Development and held-out test patients."
       >
@@ -141,6 +162,7 @@ export function KpiStrip({ className }: { className?: string }) {
         <Caption>single centre · UCI #411</Caption>
       </Tile>
       <Tile
+        icon={ClipboardList}
         label={schema ? `${schema.features.length} clinical inputs` : 'Clinical inputs'}
         hint="History, symptoms, examination, ECG, laboratory and echocardiography. Constant columns are dropped."
       >
@@ -148,13 +170,16 @@ export function KpiStrip({ className }: { className?: string }) {
         <Caption>routine clinical data</Caption>
       </Tile>
       <Tile
+        icon={Crosshair}
         label={schema ? `${schema.targets.length} targets` : 'Targets'}
         hint="Overall coronary artery disease plus stenosis of each major artery, each with its own calibrated model and threshold."
       >
         <Value loading={sLoading} value={schema?.targets.length ?? EN_DASH} unit="targets" />
         <Caption>{schema ? schema.targets.map((t) => t.short ?? t.id).join(' · ') : 'CAD · LAD · LCX · RCA'}</Caption>
       </Tile>
-      <div className="col-span-2 flex min-w-0 flex-col justify-center gap-1 px-5 py-3 min-[1100px]:col-span-1 min-[1440px]:px-6">
+      <div className="spotlight col-span-2 flex min-w-0 items-center gap-3 px-4 py-3 min-[1100px]:col-span-1 min-[1440px]:px-6">
+        <Glyph icon={Activity} />
+        <div className="flex min-w-0 flex-col justify-center gap-1">
         <Tooltip
           className="max-w-[420px]"
           content={
@@ -182,7 +207,9 @@ export function KpiStrip({ className }: { className?: string }) {
               <Skeleton className="h-6 w-28" />
             ) : (
               <span className="whitespace-nowrap">
-                <span className="font-numeral text-numeral-l text-primary">{formatMetricValue(cad?.testAuc?.value)}</span>{' '}
+                <span className="text-gradient-accent font-numeral text-[1.5rem] font-semibold leading-7 tracking-[-0.03em]">
+                  {formatMetricValue(cad?.testAuc?.value)}
+                </span>{' '}
                 <span className="num text-label font-normal text-tertiary">{formatCi(cad?.testAuc?.ci)}</span>
               </span>
             )}
@@ -198,6 +225,7 @@ export function KpiStrip({ className }: { className?: string }) {
           </div>
         </Tooltip>
         <ProtocolLine />
+        </div>
       </div>
     </section>
   );

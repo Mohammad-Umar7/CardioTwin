@@ -33,11 +33,11 @@ export function StatusLine() {
       aria-label="Clinical safety disclaimer"
       data-region="status-line"
       data-tour="status-line"
-      className="fixed inset-x-0 bottom-0 z-status flex min-h-[var(--status-h)] items-center border-t border-hairline bg-app px-3 min-[1440px]:px-4"
+      className="fixed inset-x-0 bottom-0 z-status flex min-h-[var(--status-h)] items-center border-t border-white/[0.06] bg-app/85 px-3 backdrop-blur-xl backdrop-saturate-150 min-[1440px]:px-4"
     >
       <div className="flex w-full flex-wrap items-center gap-x-3 gap-y-0.5 py-0.5 text-label font-normal text-secondary min-[1100px]:flex-nowrap min-[1440px]:gap-x-4">
         <p className="flex min-w-0 flex-1 items-center gap-2 max-[1099.98px]:basis-full min-[1100px]:flex-initial">
-          <Info aria-hidden className="size-3.5 shrink-0 stroke-[1.5]" />
+          <Info aria-hidden className="size-3.5 shrink-0 stroke-[1.5] text-accent" />
           <span className="min-w-0 min-[1100px]:truncate">
             Decision support &amp; education only — <strong className="font-medium text-primary">not a diagnosis</strong>
             <span className="max-[1279.98px]:sr-only">; not a substitute for angiography, CTCA or formal diagnostic imaging</span>.

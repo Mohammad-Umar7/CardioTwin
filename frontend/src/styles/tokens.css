@@ -53,20 +53,48 @@
   --sp-16: 64px;
   --sp-20: 80px;
 
-  /* radius: instrument-like, not bubbly */
-  --r-xs: 2px;
-  --r-sm: 4px;
-  --r-md: 6px;
-  --r-lg: 8px;
+  /* radius: precise but soft (LUMEN 2) */
+  --r-xs: 3px;
+  --r-sm: 6px;
+  --r-md: 10px;
+  --r-lg: 14px;
+  --r-xl: 20px;
   --r-full: 9999px;
 
-  /* elevation: depth comes from surface steps; shadows only on floating layers */
+  /* elevation: layered soft shadows with a hairline of light on top (LUMEN 2) */
   --e-0: none;
-  --e-1: inset 0 1px 0 rgba(255, 255, 255, 0.03);
-  --e-2: 0 0 0 1px #262e39, 0 8px 24px rgba(0, 0, 0, 0.45);
-  --e-3: 0 0 0 1px #36404d, 0 16px 48px rgba(0, 0, 0, 0.6);
-  --e-hud: 0 2px 8px rgba(0, 0, 0, 0.5);
-  --focus-ring: 0 0 0 2px #0b0e12, 0 0 0 4px #56c2e6;
+  --e-1: inset 0 1px 0 rgba(255, 255, 255, 0.04);
+  --e-2: 0 0 0 1px rgba(255, 255, 255, 0.06), 0 12px 32px -8px rgba(0, 0, 0, 0.6), 0 2px 6px rgba(0, 0, 0, 0.3);
+  --e-3: 0 0 0 1px rgba(255, 255, 255, 0.09), 0 24px 64px -12px rgba(0, 0, 0, 0.75), 0 4px 14px rgba(0, 0, 0, 0.4);
+  --e-hud: 0 8px 24px -6px rgba(0, 0, 0, 0.6), 0 1px 3px rgba(0, 0, 0, 0.4);
+  --focus-ring: 0 0 0 2px #0b0e12, 0 0 0 4px #56c2e6, 0 0 18px 2px rgba(86, 194, 230, 0.45);
+
+  /*
+   * LUMEN 2 light & material. Decorative only: these never encode data (risk stays in src/theme/risk.ts).
+   * The glass material is a dark tint at ≥ 78 % over a blur, so every text token keeps its AA contrast.
+   */
+  --c-glow-cyan: 86 194 230; /* = accent, for light leaks */
+  --c-glow-sky: 125 211 252; /* #7DD3FC */
+  --c-glow-indigo: 129 140 248; /* #818CF8 */
+  --c-glow-teal: 45 212 191; /* #2DD4BF */
+  --c-ecg: 52 211 153; /* #34D399 — the live monitor trace (physiology, not risk) */
+  --glass-tint: linear-gradient(180deg, rgba(23, 29, 38, 0.8) 0%, rgba(14, 18, 24, 0.84) 100%);
+  --glass-tint-strong: linear-gradient(180deg, rgba(32, 39, 50, 0.9) 0%, rgba(22, 27, 35, 0.94) 100%);
+  --glass-blur: blur(18px) saturate(160%);
+  --glass-edge: linear-gradient(
+    155deg,
+    rgba(255, 255, 255, 0.2) 0%,
+    rgba(255, 255, 255, 0.05) 32%,
+    rgba(255, 255, 255, 0.03) 64%,
+    rgba(86, 194, 230, 0.18) 100%
+  );
+  --glass-shine: inset 0 1px 0 rgba(255, 255, 255, 0.07);
+  --glow-accent: 0 0 0 1px rgba(86, 194, 230, 0.45), 0 0 28px -2px rgba(86, 194, 230, 0.45);
+  --gradient-accent: linear-gradient(100deg, #9be4f7 0%, #56c2e6 38%, #7aa8ff 72%, #a5b4fc 100%);
+  --gradient-text: linear-gradient(180deg, #ffffff 0%, #e6edf5 55%, #aab6c4 100%);
+  --dur-slow: 640ms;
+  --dur-reveal: 900ms;
+  --ease-spring: cubic-bezier(0.34, 1.36, 0.64, 1);
 
   /* control heights */
   --h-xs: 24px;

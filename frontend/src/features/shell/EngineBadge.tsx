@@ -22,8 +22,8 @@ import { useViewerStore } from '@/state/viewerStore';
  * cross-check disagreement. System status, never risk: the Ember ramp is not used here.
  */
 const DOT: Record<EnginePillTone, string> = {
-  accent: 'bg-accent',
-  success: 'bg-success',
+  accent: 'bg-accent shadow-[0_0_8px_rgba(86,194,230,0.8)]',
+  success: 'bg-success shadow-[0_0_8px_rgba(63,182,139,0.85)]',
   neutral: 'bg-tertiary',
   warn: 'bg-warn',
   danger: 'bg-danger',
@@ -170,8 +170,8 @@ export function EngineBadge({ className }: { className?: string }) {
             aria-label={`Prediction engine: ${pill.text}`}
             className={cn(
               'inline-flex h-6 min-w-6 items-center justify-center gap-1.5 rounded-full outline-none transition-colors duration-fast',
-              'hover:bg-surface-1 focus-visible:shadow-focus aria-expanded:bg-surface-2',
-              loud && 'border border-line bg-surface-1 px-2 text-label',
+              'hover:bg-white/[0.05] focus-visible:shadow-focus aria-expanded:bg-white/[0.08]',
+              loud && 'border border-white/10 bg-white/[0.04] px-2 text-label',
               pill.tone === 'danger' ? 'text-danger' : pill.tone === 'warn' ? 'text-warn' : 'text-secondary',
               className,
             )}

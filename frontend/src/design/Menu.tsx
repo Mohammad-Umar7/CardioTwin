@@ -180,7 +180,7 @@ export function Menu({ label, trigger, children, placement = 'bottom', width = 2
               onKeyDown={onPanelKeyDown}
               style={{ top: pos?.top ?? -9999, left: pos?.left ?? -9999, minWidth: width }}
               className={cn(
-                'fixed z-popover flex flex-col rounded-lg bg-surface-3 p-1 text-body-s text-primary shadow-e3 outline-none',
+                'glass-strong glass-edge fixed z-popover flex flex-col rounded-lg p-1 text-body-s text-primary outline-none',
                 pos ? 'menu-enter' : 'opacity-0',
                 className,
               )}
@@ -240,8 +240,8 @@ export function MenuItem({
         if (!keepOpen) ctx?.close();
       }}
       className={cn(
-        'flex h-8 w-full items-center gap-2 rounded-sm px-2 text-left text-body-s text-primary outline-none',
-        'transition-colors duration-instant ease-instant hover:bg-surface-2 focus-visible:bg-surface-2 focus:bg-surface-2',
+        'relative z-[1] flex h-8 w-full items-center gap-2 rounded-sm px-2 text-left text-body-s text-primary outline-none',
+        'transition-colors duration-instant ease-instant hover:bg-white/[0.07] focus-visible:bg-white/[0.07] focus:bg-white/[0.07]',
         disabled && 'cursor-not-allowed text-disabled hover:bg-transparent',
         className,
       )}

@@ -3,7 +3,7 @@ import { createContext, useContext, useEffect, useRef, type ReactNode } from 're
 import { useIsReducedMotion } from '@/hooks/useMediaQuery';
 import { cn } from '@/lib/cn';
 import { canTakeFocus, focusableMatch, takeOpener } from '@/lib/focusReturn';
-import { EASE, MOTION } from '@/theme/tokens';
+import { EASE, MOTION, SPRING } from '@/theme/tokens';
 import { ESCAPE_PRIORITY, useEscapeLayer } from './escapeStack';
 import { ExitInert } from './ExitInert';
 import { returnFocusQuietly } from './focus';
@@ -170,14 +170,19 @@ export function Drawer({
             if (!e.currentTarget.contains(e.relatedTarget as Node | null)) focusWithin.current = false;
           }}
           {...enter}
-          transition={{ duration: reduced ? 0.12 : MOTION.flyout / 1000, ease: EASE.out }}
+          transition={reduced ? { duration: 0.12, ease: EASE.out } : SPRING.panel}
           style={{ width: sheet ? '100%' : (width ?? (side === 'left' ? 'var(--drawer-inputs-w)' : 'var(--drawer-explain-w)')) }}
           className={cn(
-            'pointer-events-auto z-flyout flex max-w-full flex-col overflow-clip bg-panel text-primary outline-none',
-            'shadow-[0_16px_48px_rgba(0,0,0,0.6)]',
+            // LUMEN 2: a glass sheet over the stage (dense tint, blur) with a lit inner edge and a deep shadow.
+            'glass pointer-events-auto z-flyout flex max-w-full flex-col overflow-clip text-primary outline-none',
             sheet
               ? 'fixed inset-x-0 bottom-[var(--status-h)] top-[var(--topbar-h)]'
-              : cn('absolute inset-y-0', side === 'left' ? 'left-0 border-r border-line' : 'right-0 border-l border-line'),
+              : cn(
+                  'absolute inset-y-0',
+                  side === 'left'
+                    ? 'left-0 border-r border-white/[0.08] shadow-[inset_-1px_0_0_rgba(255,255,255,0.04),24px_0_60px_-20px_rgba(0,0,0,0.8)]'
+                    : 'right-0 border-l border-white/[0.08] shadow-[inset_1px_0_0_rgba(255,255,255,0.04),-24px_0_60px_-20px_rgba(0,0,0,0.8)]',
+                ),
             className,
           )}
         >

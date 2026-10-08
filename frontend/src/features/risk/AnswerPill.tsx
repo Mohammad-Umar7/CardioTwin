@@ -56,7 +56,7 @@ export function AnswerPill({ className }: AnswerPillProps) {
                 type="button"
                 onClick={exitToRiskCard}
                 aria-label="Coronary artery disease estimate: exit focus mode and show the Risk card"
-                className="flex h-8 items-center gap-2 rounded-full px-2.5 outline-none hover:bg-surface-2 focus-visible:shadow-focus"
+                className="flex h-8 items-center gap-2 rounded-full px-2.5 outline-none hover:bg-white/[0.07] focus-visible:shadow-focus"
               >
                 <span className="text-body-s font-semibold text-secondary">CAD</span>
                 <Probability
@@ -79,7 +79,7 @@ export function AnswerPill({ className }: AnswerPillProps) {
               type="button"
               onClick={() => useUiStore.getState().setChrome('workstation')}
               aria-keyshortcuts={SHORTCUT.focusMode}
-              className="inline-flex h-8 items-center gap-1.5 rounded-full px-2.5 text-label text-secondary outline-none hover:bg-surface-2 hover:text-primary focus-visible:shadow-focus"
+              className="inline-flex h-8 items-center gap-1.5 rounded-full px-2.5 text-label text-secondary outline-none hover:bg-white/[0.07] hover:text-primary focus-visible:shadow-focus"
             >
               Exit <Kbd>{SHORTCUT.focusMode}</Kbd>
             </button>

@@ -51,6 +51,7 @@ function IntervalTrack({ kpi, split }: { kpi: Kpi; split: Split }) {
         fill={UI.textPrimary}
         stroke={UI.bgPanel}
         strokeWidth="2"
+        style={{ filter: 'drop-shadow(0 0 5px rgba(86,194,230,0.75))' }}
       />
       <title>
         {`${kpi.domainLabels[0]} (left) to ${kpi.domainLabels[1]} (right). Dot: ${split === 'test' ? 'held-out estimate' : 'cross-validation mean'}; bar: ${split === 'test' ? '95 % bootstrap interval' : '± 1 sd'}; diamond: ${split === 'test' ? 'cross-validation mean' : 'held-out estimate'}.`}
@@ -59,7 +60,7 @@ function IntervalTrack({ kpi, split }: { kpi: Kpi; split: Split }) {
   );
 }
 
-function KpiTile({ kpi, split }: { kpi: Kpi; split: Split }) {
+function KpiTile({ kpi, split, index }: { kpi: Kpi; split: Split; index: number }) {
   const interval =
     kpi.interval && split === 'test'
       ? `CI ${formatMetricValue(kpi.interval[0])}–${formatMetricValue(kpi.interval[1])}`
@@ -67,7 +68,15 @@ function KpiTile({ kpi, split }: { kpi: Kpi; split: Split }) {
         ? `± ${formatMetricValue(kpi.sd)}`
         : '';
   return (
-    <div className="flex min-w-0 flex-col gap-2 rounded-lg border border-line bg-panel p-4 min-[1440px]:px-5">
+    <div
+      className="card-surface is-interactive spotlight flex min-w-0 animate-fade-up flex-col gap-2 p-4 min-[1440px]:px-5"
+      style={{ animationDelay: `${120 + index * 70}ms` }}
+    >
+      {/* LUMEN 2: a lit hairline along the top edge of every KPI tile. */}
+      <span
+        aria-hidden
+        className="pointer-events-none absolute inset-x-5 top-0 h-px bg-[linear-gradient(90deg,transparent,rgba(86,194,230,0.55),transparent)]"
+      />
       <div className="flex items-center justify-between gap-2">
         <span className="eyebrow text-tertiary">{kpi.label}</span>
         <Tooltip content={kpi.definition} placement="top">
@@ -81,7 +90,7 @@ function KpiTile({ kpi, split }: { kpi: Kpi; split: Split }) {
         </Tooltip>
       </div>
       <div className="flex items-baseline gap-2">
-        <span className="font-display text-[2rem] font-semibold leading-9 tracking-[-0.03em] text-primary">
+        <span className="text-gradient font-display text-[2.25rem] font-semibold leading-10 tracking-[-0.035em]">
           {formatMetricValue(kpi.value)}
         </span>
         {interval && <span className="num text-label font-normal text-tertiary">{interval}</span>}
@@ -105,8 +114,8 @@ export function SummaryTiles({ tiles, split, more }: SummaryTilesProps) {
   return (
     <div className="flex flex-col gap-3">
       <div className="grid grid-cols-2 gap-3 lg:grid-cols-4 min-[1440px]:gap-4">
-        {tiles.map((k) => (
-          <KpiTile key={k.id} kpi={k} split={split} />
+        {tiles.map((k, i) => (
+          <KpiTile key={k.id} kpi={k} split={split} index={i} />
         ))}
       </div>
       <div className="flex flex-wrap items-center justify-between gap-x-6 gap-y-2">
@@ -145,7 +154,7 @@ export function SummaryTiles({ tiles, split, more }: SummaryTilesProps) {
             aria-expanded={open}
             aria-controls={panelId}
             onClick={() => setOpen((o) => !o)}
-            className="inline-flex h-7 items-center gap-1 rounded-sm px-2 text-label text-secondary hover:bg-surface-2 hover:text-primary"
+            className="inline-flex h-7 items-center gap-1 rounded-sm px-2 text-label text-secondary hover:bg-white/[0.07] hover:text-primary"
           >
             More metrics
             <ChevronDown
@@ -156,7 +165,7 @@ export function SummaryTiles({ tiles, split, more }: SummaryTilesProps) {
         )}
       </div>
       {open && (
-        <div id={panelId} className="overflow-x-auto rounded-lg border border-line bg-panel">
+        <div id={panelId} className="card-surface animate-fade-up overflow-x-auto">
           <table className="w-full border-collapse text-body-s">
             <caption className="sr-only">Secondary metrics, held-out test and cross-validation</caption>
             <thead>

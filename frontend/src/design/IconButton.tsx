@@ -26,12 +26,14 @@ export const IconButton = forwardRef<HTMLButtonElement, IconButtonProps>(functio
       aria-label={label}
       aria-pressed={rest['aria-pressed']}
       className={cn(
-        'inline-flex shrink-0 items-center justify-center rounded-sm transition-colors duration-instant ease-instant',
+        'inline-flex shrink-0 items-center justify-center rounded-sm transition-[color,background-color,box-shadow,transform] duration-fast ease-out active:scale-95 motion-reduce:active:scale-100',
         '[&>svg]:size-4 [&>svg]:stroke-[1.5]',
-        variant === 'ghost' && 'text-secondary hover:bg-surface-2 hover:text-primary',
-        variant === 'secondary' && 'border border-line bg-surface-1 text-secondary hover:bg-surface-2 hover:text-primary',
+        variant === 'ghost' && 'text-secondary hover:bg-white/[0.07] hover:text-primary',
+        variant === 'secondary' &&
+          'bg-white/[0.045] text-secondary shadow-[inset_0_0_0_1px_rgba(255,255,255,0.09)] hover:bg-white/[0.08] hover:text-primary',
         variant === 'hud' && 'hud-chip text-secondary hover:text-primary',
-        active && 'bg-surface-2 text-accent hover:text-accent',
+        active &&
+          'bg-accent/[0.14] text-accent shadow-[inset_0_0_0_1px_rgba(86,194,230,0.35),0_0_14px_-4px_rgba(86,194,230,0.6)] hover:bg-accent/[0.18] hover:text-accent',
         'disabled:cursor-not-allowed disabled:text-disabled disabled:hover:bg-transparent',
         SIZE[size],
         className,

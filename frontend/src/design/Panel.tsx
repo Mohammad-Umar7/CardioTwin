@@ -34,8 +34,9 @@ export interface CardProps extends HTMLAttributes<HTMLDivElement> {
 }
 
 /**
- * Card: surface/1, 1 px border/default, r-md, e-1 inset highlight. Opaque by rule (the spec rejects
- * glass blur); `GlassCard` is kept as an alias for components written against the original brief.
+ * Card: surface/1, 1 px border/default, r-md, e-1 inset highlight. Opaque (it sits on panels, not over the
+ * canvas; the stage's glass is `StageCard`); `GlassCard` is kept as an alias for components written against
+ * the original brief.
  */
 export const Card = forwardRef<HTMLDivElement, CardProps>(function Card(
   { padding = 'md', interactive, className, ...rest },
@@ -48,7 +49,7 @@ export const Card = forwardRef<HTMLDivElement, CardProps>(function Card(
         'rounded-md border border-line bg-surface-1 shadow-e1',
         padding === 'sm' && 'p-3',
         padding === 'md' && 'p-3 min-[1440px]:p-4',
-        interactive && 'transition-colors duration-instant hover:bg-surface-2',
+        interactive && 'transition-colors duration-instant hover:bg-white/[0.07]',
         className,
       )}
       {...rest}

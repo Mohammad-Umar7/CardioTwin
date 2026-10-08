@@ -7,7 +7,7 @@ import { protocolItems, type SplitFacts } from './model';
 export function ProtocolStrip({ report, facts }: { report: MetricsReport; facts: SplitFacts }) {
   const items = protocolItems(report, facts);
   return (
-    <div className="flex flex-col gap-4 rounded-lg border border-line bg-panel p-4 min-[1440px]:p-5">
+    <div data-reveal className="card-surface flex flex-col gap-4 p-4 min-[1440px]:p-5">
       <ul className="grid grid-cols-1 gap-x-8 gap-y-2 text-body-s text-secondary md:grid-cols-2">
         {items.map((item) => (
           <li key={item} className="flex items-start gap-2">

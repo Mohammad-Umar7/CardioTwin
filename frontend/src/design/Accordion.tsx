@@ -39,7 +39,7 @@ export function AccordionItem({ open, onToggle, header, aside, children, id, cla
           aria-controls={regionId}
           onClick={onToggle}
           className={cn(
-            'group flex h-md w-full items-center gap-1.5 px-4 text-left transition-colors duration-instant hover:bg-surface-1',
+            'group flex h-md w-full items-center gap-1.5 px-4 text-left transition-colors duration-instant hover:bg-white/[0.05]',
             headerClassName,
           )}
         >

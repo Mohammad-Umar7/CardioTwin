@@ -76,11 +76,13 @@ function Label({ target }: { target: string }) {
       }}
       style={{ opacity: 0 }}
       className={cn(
-        'group pointer-events-auto absolute left-0 top-0 flex items-center whitespace-nowrap rounded-sm border bg-surface-3/[0.88] pl-2 pr-2 shadow-hud outline-none will-change-transform',
-        'transition-[opacity,border-color,height] duration-fast ease-out',
+        // LUMEN 2: a glass pill with a lit top edge; selection glows in the interaction colour.
+        'group pointer-events-auto absolute left-0 top-0 flex items-center whitespace-nowrap rounded-full border pl-2.5 pr-3 outline-none will-change-transform',
+        'bg-[rgba(18,23,31,0.78)] backdrop-blur-md shadow-[inset_0_1px_0_rgba(255,255,255,0.07),0_8px_22px_-6px_rgba(0,0,0,0.7)]',
+        'transition-[opacity,border-color,height,box-shadow] duration-fast ease-out',
         showPct ? 'h-7' : 'h-6',
-        'border-line data-[hovered=true]:border-line-strong',
-        'data-[selected=true]:border-accent data-[selected=true]:shadow-[0_0_0_1px_rgb(var(--c-accent)/0.35),var(--e-hud)]',
+        'border-white/10 data-[hovered=true]:border-white/25',
+        'data-[selected=true]:border-accent/70 data-[selected=true]:shadow-[inset_0_1px_0_rgba(255,255,255,0.08),0_0_0_1px_rgb(var(--c-accent)/0.3),0_0_22px_-4px_rgb(var(--c-accent)/0.6),0_8px_22px_-6px_rgba(0,0,0,0.7)]',
         'data-[dimmed=true]:saturate-50',
       )}
     >
@@ -168,7 +170,7 @@ function ChamberTag({ id, name, valve }: (typeof CHAMBER_TAGS)[number]) {
   return (
     <div ref={register} data-region="chamber-label" data-chamber={id} title={name} style={{ opacity: 0 }} className="absolute left-0 top-0 transition-opacity duration-fast ease-out will-change-transform">
       <span aria-hidden className="absolute left-0 top-0 size-[5px] -translate-x-1/2 -translate-y-1/2 rounded-full bg-primary shadow-[0_0_0_1.5px_rgb(var(--c-void))]" />
-      <span className="absolute left-2 top-0 flex h-5 -translate-y-1/2 items-center whitespace-nowrap rounded-sm border border-line bg-surface-3/[0.88] px-1.5 shadow-hud">
+      <span className="absolute left-2 top-0 flex h-5 -translate-y-1/2 items-center whitespace-nowrap rounded-full border border-white/10 bg-[rgba(18,23,31,0.78)] px-2 shadow-[inset_0_1px_0_rgba(255,255,255,0.06),var(--e-hud)] backdrop-blur-md">
         <span className="eyebrow text-primary">{id}</span>
         {valve && <span className="ml-1 text-label font-normal text-secondary">· {valve}</span>}
       </span>

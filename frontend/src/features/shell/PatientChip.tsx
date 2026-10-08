@@ -45,7 +45,7 @@ export function PatientChip({ className }: { className?: string }) {
             aria-label={`Patient ${title}${edits > 0 ? `, ${edits} ${edits === 1 ? 'edit' : 'edits'}` : ''}. Switch patient`}
             className={cn(
               'relative inline-flex h-8 items-center gap-2 rounded-sm border border-transparent px-2 text-label text-secondary transition-colors duration-fast',
-              'hover:bg-surface-1 aria-expanded:border-line-strong aria-expanded:bg-surface-2',
+              'hover:bg-white/[0.05] aria-expanded:border-white/15 aria-expanded:bg-white/[0.08]',
               className,
             )}
           >

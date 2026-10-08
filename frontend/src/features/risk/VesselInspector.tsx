@@ -75,7 +75,7 @@ function TopDrivers({ target }: { target: TargetId }) {
                 onMouseEnter={() => highlight(c.feature)}
                 onMouseLeave={() => highlight(null)}
                 aria-label={`${spec?.label ?? c.feature}, ${spec ? formatFeatureValue(spec, c.value as never) : c.value}, ${up ? 'raises' : 'lowers'} ${target} risk. Edit this input.`}
-                className="flex h-7 w-full items-center gap-2 rounded-sm px-1 text-left outline-none hover:bg-surface-1 focus-visible:shadow-focus"
+                className="flex h-7 w-full items-center gap-2 rounded-sm px-1 text-left outline-none hover:bg-white/[0.05] focus-visible:shadow-focus"
               >
                 <span aria-hidden className="flex w-3 items-center">
                   <DirectionMark direction={up ? 'raises' : 'lowers'} />
@@ -257,7 +257,7 @@ export function VesselInspector({ className }: VesselInspectorProps) {
                 narrative): the 3D verbs never sit below the fold of a column nobody knows scrolls. */}
             <div
               data-region="inspector-verbs"
-              className="sticky bottom-0 z-[1] -mx-[var(--card-pad)] -mb-[var(--card-pad)] mt-1 flex flex-wrap items-center gap-1 bg-panel px-[var(--card-pad)] pb-[var(--card-pad)] pt-2"
+              className="sticky bottom-0 z-[1] -mx-[var(--card-pad)] -mb-[var(--card-pad)] mt-1 flex flex-wrap items-center gap-1 bg-[rgba(15,19,25,0.92)] px-[var(--card-pad)] backdrop-blur pb-[var(--card-pad)] pt-2"
             >
               <ActionButton
                 pressed={isolate}

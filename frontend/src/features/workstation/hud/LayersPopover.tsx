@@ -97,7 +97,7 @@ export function LayersPopover({ iconOnly = false }: { iconOnly?: boolean }) {
                   type="button"
                   aria-pressed={on}
                   onClick={() => viewer().setLayerVisible(l.id, !on)}
-                  className="flex h-8 w-full items-center gap-2 rounded-sm px-2 text-left text-body-s outline-none transition-colors duration-instant hover:bg-surface-2 focus-visible:bg-surface-2 focus-visible:shadow-focus"
+                  className="flex h-8 w-full items-center gap-2 rounded-sm px-2 text-left text-body-s outline-none transition-colors duration-instant hover:bg-white/[0.07] focus-visible:bg-white/[0.07] focus-visible:shadow-focus"
                 >
                   <span aria-hidden className={cn('inline-flex [&>svg]:size-4 [&>svg]:stroke-[1.5]', on ? 'text-secondary' : 'text-disabled')}>
                     {on ? <Eye /> : <EyeOff />}
@@ -121,7 +121,7 @@ export function LayersPopover({ iconOnly = false }: { iconOnly?: boolean }) {
           <button
             type="button"
             onClick={() => resetLayers()}
-            className="flex h-8 w-full items-center gap-2 rounded-sm px-2 text-left text-body-s text-secondary outline-none transition-colors duration-instant hover:bg-surface-2 hover:text-primary focus-visible:bg-surface-2 focus-visible:shadow-focus [&>svg]:size-4 [&>svg]:stroke-[1.5]"
+            className="flex h-8 w-full items-center gap-2 rounded-sm px-2 text-left text-body-s text-secondary outline-none transition-colors duration-instant hover:bg-white/[0.07] hover:text-primary focus-visible:bg-white/[0.07] focus-visible:shadow-focus [&>svg]:size-4 [&>svg]:stroke-[1.5]"
           >
             <RotateCcw aria-hidden />
             Reset layers

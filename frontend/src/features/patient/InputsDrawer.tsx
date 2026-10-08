@@ -91,7 +91,7 @@ const plural = (n: number, one: string, many = `${one}s`) => `${n} ${n === 1 ? o
 
 function SectionHeader({ title, count, action }: { title: string; count?: number; action?: ReactNode }) {
   return (
-    <header className="sticky top-0 z-10 flex h-8 items-center justify-between gap-2 bg-panel px-4 shadow-[0_1px_0_rgb(var(--c-border-hairline))]">
+    <header className="sticky top-0 z-10 flex h-8 items-center justify-between gap-2 bg-[rgba(17,22,29,0.94)] px-4 shadow-[0_1px_0_rgba(255,255,255,0.06)] backdrop-blur">
       <h3 className="eyebrow m-0 flex min-w-0 items-center gap-1.5 truncate text-tertiary">
         <span className="truncate">{title}</span>
         {count !== undefined && (
@@ -163,7 +163,7 @@ function ChangedTray({
     <section
       aria-label="Changed inputs"
       data-section="changed"
-      className="relative flex h-[clamp(104px,18vh,152px)] shrink-0 flex-col border-t border-hairline bg-panel"
+      className="relative flex h-[clamp(104px,18vh,152px)] shrink-0 flex-col border-t border-white/[0.06] bg-black/20"
       onFocusCapture={(e) => onHold((e.target as HTMLElement).closest<HTMLElement>('[data-feature]')?.dataset.feature ?? null)}
       onBlurCapture={(e) => {
         if (!e.currentTarget.contains(e.relatedTarget as Node | null)) onHold(null);
@@ -177,7 +177,7 @@ function ChangedTray({
             <button
               type="button"
               onClick={resetAllEdits}
-              className="rounded-sm px-1.5 py-0.5 text-label font-medium text-secondary transition-colors duration-instant hover:bg-surface-2 hover:text-primary"
+              className="rounded-sm px-1.5 py-0.5 text-label font-medium text-secondary transition-colors duration-instant hover:bg-white/[0.07] hover:text-primary"
             >
               Reset all
             </button>
@@ -242,7 +242,7 @@ function GroupAccordion({
           aria-expanded={open}
           aria-controls={`${id}-r`}
           onClick={onToggle}
-          className="flex h-8 w-full items-center gap-2 px-4 text-left transition-colors duration-instant hover:bg-surface-1"
+          className="flex h-8 w-full items-center gap-2 px-4 text-left transition-colors duration-instant hover:bg-white/[0.05]"
         >
           <ChevronRight aria-hidden className={cn('size-4 shrink-0 stroke-[1.5] text-tertiary transition-transform duration-fast ease-out', open && 'rotate-90')} />
           <span className="min-w-0 truncate text-body-s font-medium text-primary">{group.label}</span>

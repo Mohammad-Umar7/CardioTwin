@@ -6,7 +6,15 @@
 
 @layer base {
   html {
-    background: rgb(var(--c-bg-app));
+    /* LUMEN 2 ambient light: a cool key from above and a faint indigo bounce, fixed to the viewport. It is
+       the root background (painted below everything, including the grid layer); the stage pages cover it
+       with the canvas, the reading pages (Performance, Method) sit in it. */
+    background:
+      radial-gradient(1100px 560px at 50% -12%, rgb(var(--c-glow-cyan) / 0.11), transparent 62%),
+      radial-gradient(760px 520px at 104% 4%, rgb(var(--c-glow-indigo) / 0.08), transparent 62%),
+      radial-gradient(900px 600px at -8% 100%, rgb(var(--c-glow-teal) / 0.05), transparent 60%),
+      rgb(var(--c-bg-app));
+    background-attachment: fixed;
     color: rgb(var(--c-text-primary));
     color-scheme: dark;
     -webkit-text-size-adjust: 100%;
@@ -24,8 +32,22 @@
     font-feature-settings: 'cv05', 'cv08';
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
-    background: rgb(var(--c-bg-app));
+    /* Transparent: the ambient light lives on <html> so the grid layer below can sit between the two. */
+    background: transparent;
     overflow-x: hidden;
+  }
+
+  /* A fine instrument grid that fades out from the top of the viewport (behind all content). */
+  body::before {
+    content: '';
+    position: fixed;
+    inset: 0;
+    z-index: -1;
+    pointer-events: none;
+    background-image: radial-gradient(rgb(255 255 255 / 0.05) 1px, transparent 1.2px);
+    background-size: 26px 26px;
+    -webkit-mask-image: radial-gradient(ellipse 80% 60% at 50% 0%, #000 0%, transparent 72%);
+    mask-image: radial-gradient(ellipse 80% 60% at 50% 0%, #000 0%, transparent 72%);
   }
 
   #root {
@@ -33,7 +55,7 @@
   }
 
   ::selection {
-    background: rgba(86, 194, 230, 0.28);
+    background: rgba(86, 194, 230, 0.32);
     color: rgb(var(--c-text-primary));
   }
 
@@ -155,10 +177,146 @@
     border-radius: var(--r-sm);
   }
   .hud-chip {
-    background: rgb(var(--c-surface-3) / 0.88);
-    box-shadow: var(--e-hud);
-    border: 1px solid rgb(var(--c-border-default));
+    background: var(--glass-tint);
+    -webkit-backdrop-filter: var(--glass-blur);
+    backdrop-filter: var(--glass-blur);
+    box-shadow: var(--glass-shine), var(--e-hud);
+    border: 1px solid rgb(255 255 255 / 0.08);
     border-radius: var(--r-sm);
+  }
+
+  /*
+   * LUMEN 2 glass: the floating material (popovers, menus, tooltips, dialogs, drawers, HUD). A dark tint of
+   * ≥ 80 % over an 18 px blur, a hairline of light along the top and a soft deep shadow. `glass-strong` is the
+   * denser tint for small text over busy content (tooltips, menus).
+   */
+  .glass,
+  .glass-strong {
+    background: var(--glass-tint);
+    -webkit-backdrop-filter: var(--glass-blur);
+    backdrop-filter: var(--glass-blur);
+    box-shadow: var(--glass-shine), var(--e-3);
+  }
+  .glass-strong {
+    background: var(--glass-tint-strong);
+  }
+
+  /* Gradient hairline edge for any rounded element (brighter top-left, a breath of cyan bottom-right). */
+  .glass-edge {
+    position: relative;
+  }
+  .glass-edge::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    z-index: 0;
+    border-radius: inherit;
+    padding: 1px;
+    pointer-events: none;
+    background: var(--glass-edge);
+    -webkit-mask:
+      linear-gradient(#000 0 0) content-box,
+      linear-gradient(#000 0 0);
+    -webkit-mask-composite: xor;
+    mask:
+      linear-gradient(#000 0 0) content-box,
+      linear-gradient(#000 0 0);
+    mask-composite: exclude;
+  }
+
+  /* Reading-page card (Performance, Method, landing below the fold): no blur needed over the plain ambient. */
+  .card-surface {
+    position: relative;
+    background:
+      linear-gradient(180deg, rgb(255 255 255 / 0.028), rgb(255 255 255 / 0.008)),
+      rgb(var(--c-bg-panel) / 0.86);
+    border-radius: var(--r-lg);
+    box-shadow:
+      inset 0 0 0 1px rgb(255 255 255 / 0.06),
+      inset 0 1px 0 rgb(255 255 255 / 0.05),
+      0 18px 40px -20px rgb(0 0 0 / 0.7);
+    transition:
+      box-shadow var(--dur-base) var(--ease-out),
+      transform var(--dur-base) var(--ease-out);
+  }
+  .card-surface.is-interactive:hover,
+  a.card-surface:hover {
+    box-shadow:
+      inset 0 0 0 1px rgb(var(--c-accent) / 0.22),
+      inset 0 1px 0 rgb(255 255 255 / 0.07),
+      0 24px 48px -20px rgb(0 0 0 / 0.8),
+      0 0 32px -12px rgb(var(--c-accent) / 0.25);
+  }
+
+  /* Headline type: a soft white-to-silver gradient, and the accent gradient for the one emphasised phrase. */
+  .text-gradient {
+    background: var(--gradient-text);
+    -webkit-background-clip: text;
+    background-clip: text;
+    color: transparent;
+  }
+  .text-gradient-accent {
+    background: var(--gradient-accent);
+    background-size: 200% 100%;
+    -webkit-background-clip: text;
+    background-clip: text;
+    color: transparent;
+  }
+
+  /* Cursor spotlight (useSpotlight sets --mx / --my on the hovered `.spotlight`). */
+  .spotlight {
+    position: relative;
+    isolation: isolate;
+  }
+  .spotlight::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    z-index: -1;
+    border-radius: inherit;
+    pointer-events: none;
+    opacity: 0;
+    transition: opacity var(--dur-slow) var(--ease-out);
+    background: radial-gradient(
+      360px circle at var(--mx, 50%) var(--my, 50%),
+      rgb(var(--c-accent) / 0.11),
+      rgb(var(--c-glow-indigo) / 0.04) 40%,
+      transparent 70%
+    );
+  }
+  .spotlight:hover::after,
+  .spotlight:focus-visible::after {
+    opacity: 1;
+  }
+
+  /* A light sweep across the primary call to action on hover. */
+  .btn-shine {
+    overflow: clip;
+    isolation: isolate;
+  }
+  .btn-shine::after {
+    content: '';
+    position: absolute;
+    inset: -2px;
+    z-index: 1;
+    pointer-events: none;
+    background: linear-gradient(105deg, transparent 30%, rgb(255 255 255 / 0.55) 48%, transparent 64%);
+    transform: translateX(-120%);
+    transition: transform 0ms;
+  }
+  .btn-shine:hover::after {
+    transform: translateX(120%);
+    transition: transform 760ms var(--ease-out);
+  }
+
+  /* Live indicator dot (physiology loop): a green core with a soft expanding ring. */
+  .live-dot {
+    display: inline-block;
+    width: 6px;
+    height: 6px;
+    border-radius: 9999px;
+    background: rgb(var(--c-ecg));
+    box-shadow: 0 0 0 0 rgb(var(--c-ecg) / 0.55);
   }
   /* Every scrolling element is its own containing block (P0-1): an absolutely positioned descendant
      (sr-only inputs, tooltips anchors) must never resolve against a clipping ancestor, or focusing it
@@ -168,13 +326,37 @@
     overflow-y: auto;
     overscroll-behavior: contain;
   }
-  /* V2 stage-card material (WORKSTATION_V2 §7): bg/panel, 1 px border/default ring, e-2, r-lg, no blur. */
+  /* LUMEN 2 stage-card material: glass over the canvas (≥ 80 % tint, 18 px blur), a gradient hairline edge
+     and a deep soft shadow; r-lg. Still `position: relative` + `overflow: clip` (P0-1). */
   .stage-card {
     position: relative;
     overflow: clip;
-    background: rgb(var(--c-bg-panel));
+    background: var(--glass-tint);
+    -webkit-backdrop-filter: var(--glass-blur);
+    backdrop-filter: var(--glass-blur);
     border-radius: var(--r-lg);
-    box-shadow: var(--e-2);
+    box-shadow:
+      var(--glass-shine),
+      0 0 0 1px rgb(255 255 255 / 0.04),
+      0 22px 50px -18px rgb(0 0 0 / 0.75),
+      0 2px 8px rgb(0 0 0 / 0.3);
+  }
+  .stage-card::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    border-radius: inherit;
+    padding: 1px;
+    pointer-events: none;
+    background: var(--glass-edge);
+    -webkit-mask:
+      linear-gradient(#000 0 0) content-box,
+      linear-gradient(#000 0 0);
+    -webkit-mask-composite: xor;
+    mask:
+      linear-gradient(#000 0 0) content-box,
+      linear-gradient(#000 0 0);
+    mask-composite: exclude;
   }
 }
 
@@ -184,11 +366,11 @@
   display: none;
 }
 
-/* V2 stage cards enter with y 8 → 0 + fade over `base` (WORKSTATION_V2 §5.4, §8.1). */
+/* LUMEN 2 stage cards arrive: y 14 → 0, scale .985 → 1 and fade, decelerating over 520 ms. */
 @keyframes stage-card-in {
   from {
     opacity: 0;
-    transform: translateY(8px);
+    transform: translateY(14px) scale(0.985);
   }
   to {
     opacity: 1;
@@ -196,14 +378,14 @@
   }
 }
 .stage-card-enter {
-  animation: stage-card-in var(--dur-base) var(--ease-out) both;
+  animation: stage-card-in 520ms var(--ease-data) both;
 }
 
-/* Menus and popovers: fade + y 4 over `fast` (V2 §8.1). */
+/* Menus and popovers: fade + y 6 + scale .97 → 1 over 200 ms from their anchor side. */
 @keyframes menu-in {
   from {
     opacity: 0;
-    transform: translateY(4px);
+    transform: translateY(6px) scale(0.97);
   }
   to {
     opacity: 1;
@@ -211,13 +393,183 @@
   }
 }
 .menu-enter {
-  animation: menu-in var(--dur-fast) var(--ease-out) both;
+  animation: menu-in 200ms var(--ease-out) both;
+  transform-origin: top center;
+}
+
+/* Reading pages arrive once: a short rise (no blur: these pages are thousands of pixels tall). */
+@keyframes page-in {
+  from {
+    opacity: 0;
+    transform: translateY(12px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+.page-enter {
+  animation: page-in 600ms var(--ease-data) both;
+}
+
+/* Scroll reveal (useReveal arms `html.reveal-on`; without it — no JS, no IntersectionObserver, reduced motion —
+   everything is simply visible). */
+html.reveal-on [data-reveal]:not([data-revealed]) {
+  opacity: 0;
+  transform: translateY(18px);
+  filter: blur(4px);
+}
+/* Print and forced colours never wait for a scroll: everything is simply there. */
+@media print, (forced-colors: active) {
+  html.reveal-on [data-reveal],
+  html.reveal-on [data-reveal] .chart-draw {
+    opacity: 1 !important;
+    transform: none !important;
+    filter: none !important;
+    stroke-dashoffset: 0 !important;
+    animation: none !important;
+  }
+}
+/* Chart curves inside a revealing card draw themselves in (XYChart marks solid curves `.chart-draw`). */
+html.reveal-on [data-reveal]:not([data-revealed]) .chart-draw {
+  stroke-dasharray: 1;
+  stroke-dashoffset: 1;
+}
+html.reveal-on [data-reveal][data-revealed] .chart-draw {
+  stroke-dasharray: 1;
+  animation: chart-draw 1.5s var(--ease-data) 120ms both;
+}
+@keyframes chart-draw {
+  from {
+    stroke-dashoffset: 1;
+  }
+  to {
+    stroke-dashoffset: 0;
+  }
+}
+html.reveal-on [data-reveal] {
+  transition:
+    opacity var(--dur-reveal) var(--ease-data),
+    transform var(--dur-reveal) var(--ease-data),
+    filter var(--dur-reveal) var(--ease-data);
+  transition-delay: var(--reveal-delay, 0ms);
 }
 
 @media (prefers-reduced-motion: no-preference) {
   .skeleton {
     animation: shimmer 1.8s linear infinite;
   }
+  .text-gradient-accent.is-animated {
+    animation: gradient-pan 9s ease-in-out infinite;
+  }
+  .live-dot {
+    animation: live-dot 2s cubic-bezier(0.22, 1, 0.36, 1) infinite;
+  }
+}
+
+/* Brand mark: a bright pulse runs along the heartbeat trace once a second (hidden when motion is reduced). */
+.brand-trace {
+  stroke-dasharray: 0 1;
+  opacity: 0;
+}
+@media (prefers-reduced-motion: no-preference) {
+  html:not([data-calm='true']) .brand-trace {
+    opacity: 1;
+    animation: brand-trace 1.6s cubic-bezier(0.45, 0, 0.25, 1) infinite;
+  }
+}
+@keyframes brand-trace {
+  0% {
+    stroke-dasharray: 0.0001 1;
+    stroke-dashoffset: 0;
+  }
+  45% {
+    stroke-dasharray: 0.32 1;
+    stroke-dashoffset: -0.5;
+  }
+  70% {
+    stroke-dasharray: 0.0001 1;
+    stroke-dashoffset: -1;
+  }
+  100% {
+    stroke-dasharray: 0.0001 1;
+    stroke-dashoffset: -1;
+  }
+}
+
+/* SHAP bars grow out of the zero line (the `scale` property, so the bar's own translate is untouched). */
+@media (prefers-reduced-motion: no-preference) {
+  html:not([data-calm='true']) .shap-bar {
+    animation: bar-grow 700ms var(--ease-data) both;
+  }
+  /* The CAD answer breathes once in its own light whenever it changes (keyed by value in CadHeadline). */
+  html:not([data-calm='true']) .value-pop {
+    animation: value-pop 640ms var(--ease-out) both;
+  }
+}
+@keyframes bar-grow {
+  from {
+    scale: 0 1;
+  }
+  to {
+    scale: 1 1;
+  }
+}
+@keyframes value-pop {
+  0% {
+    filter: brightness(1.35) drop-shadow(0 0 14px rgba(255, 255, 255, 0.35));
+    scale: 1.035;
+  }
+  100% {
+    filter: none;
+    scale: 1;
+  }
+}
+
+@keyframes gradient-pan {
+  0%,
+  100% {
+    background-position: 0% 50%;
+  }
+  50% {
+    background-position: 100% 50%;
+  }
+}
+@keyframes live-dot {
+  0% {
+    box-shadow: 0 0 0 0 rgb(var(--c-ecg) / 0.55);
+  }
+  70% {
+    box-shadow: 0 0 0 7px rgb(var(--c-ecg) / 0);
+  }
+  100% {
+    box-shadow: 0 0 0 0 rgb(var(--c-ecg) / 0);
+  }
+}
+
+/* Reduced transparency (OS setting): the glass becomes the opaque LUMEN panel material again. */
+@media (prefers-reduced-transparency: reduce) {
+  .stage-card,
+  .hud-chip,
+  .glass,
+  .glass-strong {
+    background: rgb(var(--c-bg-panel));
+    -webkit-backdrop-filter: none;
+    backdrop-filter: none;
+  }
+}
+/* Render tiers C and D (useTierAttribute): a struggling GPU gets the dense panel without the blur over the
+   canvas — the scene keeps its frames, the chrome keeps its contrast. */
+html[data-tier='C'] :is(.stage-card, .hud-chip, .glass, .glass-strong),
+html[data-tier='D'] :is(.stage-card, .hud-chip, .glass, .glass-strong) {
+  background: rgb(var(--c-bg-panel) / 0.97);
+  -webkit-backdrop-filter: none;
+  backdrop-filter: none;
+}
+html[data-tier='C'] .backdrop-blur-md,
+html[data-tier='D'] .backdrop-blur-md {
+  -webkit-backdrop-filter: none;
+  backdrop-filter: none;
 }
 
 /* Reduced motion (OS setting or in-app Calm mode, which sets data-calm on <html>). */
@@ -243,9 +595,17 @@ html[data-calm='true'] *::after {
 @media (forced-colors: active) {
   .hud-chip,
   .stage-card,
+  .glass,
+  .glass-strong,
+  .card-surface,
   .skeleton {
     border: 1px solid CanvasText;
     background: Canvas;
+  }
+  .text-gradient,
+  .text-gradient-accent {
+    background: none;
+    color: CanvasText;
   }
   :focus-visible {
     outline: 2px solid Highlight;

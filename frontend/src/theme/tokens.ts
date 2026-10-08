@@ -49,6 +49,9 @@ export const ANATOMY = {
   diaphragm: '#6B5F5A',
   sceneBgCentre: '#11161C',
   sceneBgEdge: '#06080A',
+  /** LUMEN 2 stage light (background only, never on anatomy): the halo behind the heart and a corner leak. */
+  sceneGlowCool: '#56C2E6',
+  sceneGlowIndigo: '#818CF8',
   flowParticle: '#F2F5F8',
   outlineHover: '#EDF1F5',
   fresnelRim: '#8CB8FF',
@@ -74,6 +77,15 @@ export const MOTION = {
   flyout: 360,
   peelForward: 1400,
   peelAssemble: 1100,
+} as const;
+
+/**
+ * LUMEN 2 springs (framer-motion). `indicator`: the active tab / segment marker gliding between options,
+ * critically damped (no overshoot). `panel`: drawers and sheets settling into place.
+ */
+export const SPRING = {
+  indicator: { type: 'spring', stiffness: 520, damping: 42, mass: 0.7 },
+  panel: { type: 'spring', stiffness: 380, damping: 38, mass: 0.9 },
 } as const;
 
 export const EASE = {

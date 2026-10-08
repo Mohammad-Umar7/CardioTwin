@@ -89,7 +89,7 @@ export function PeelSlider({ className }: { className?: string }) {
     createPortal(
       <span
         aria-hidden
-        className="pointer-events-none fixed z-popover -translate-x-1/2 -translate-y-full whitespace-nowrap rounded-md bg-surface-3 px-2 py-1 text-label font-normal text-primary shadow-e2"
+        className="pointer-events-none fixed z-popover -translate-x-1/2 -translate-y-full whitespace-nowrap rounded-md glass-strong px-2 py-1 text-label font-normal text-primary shadow-e2"
         style={{ left: rect.left + (rect.width * pct) / 100, top: rect.top - 14 }}
       >
         {detent.label}
@@ -119,7 +119,7 @@ export function PeelSlider({ className }: { className?: string }) {
       onKeyDown={onKeyDown}
       className={cn(
         'group relative flex h-8 w-36 shrink-0 cursor-pointer touch-none select-none items-center rounded-sm px-2 outline-none',
-        'hover:bg-surface-1 focus-visible:shadow-focus max-[1439.98px]:h-7 max-[1439.98px]:w-32',
+        'hover:bg-white/[0.05] focus-visible:shadow-focus max-[1439.98px]:h-7 max-[1439.98px]:w-32',
         playing && 'cursor-default',
         className,
       )}

@@ -159,8 +159,9 @@ export function Tooltip({ content, children, placement = 'top', delay = 120, dis
             role="tooltip"
             style={{ top: pos?.top ?? -9999, left: pos?.left ?? -9999 }}
             className={cn(
-              'pointer-events-none fixed z-popover max-w-[280px] rounded-md bg-surface-3 px-2.5 py-2 text-label font-normal text-primary shadow-e2',
-              pos ? 'opacity-100 transition-opacity duration-fast ease-out' : 'opacity-0',
+              'glass-strong pointer-events-none fixed z-popover max-w-[280px] rounded-md px-3 py-2 text-label font-normal text-primary',
+              'shadow-[inset_0_1px_0_rgba(255,255,255,0.08),0_0_0_1px_rgba(255,255,255,0.08),0_16px_40px_-10px_rgba(0,0,0,0.75)]',
+              pos ? 'animate-scale-in' : 'opacity-0',
               className,
             )}
           >

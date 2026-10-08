@@ -41,7 +41,7 @@ function ToastItem({ toast }: { toast: Toast }) {
       onMouseLeave={arm}
       onFocusCapture={() => clearTimeout(timer.current)}
       onBlurCapture={arm}
-      className="pointer-events-auto flex w-[360px] max-w-[calc(100vw-24px)] items-center gap-2 rounded-md bg-surface-3 px-3 py-2.5 text-body-s text-primary shadow-e2"
+      className="pointer-events-auto flex w-[360px] max-w-[calc(100vw-24px)] items-center gap-2 rounded-lg px-3.5 py-3 text-body-s text-primary glass-strong glass-edge"
     >
       <Icon aria-hidden className={cn('size-4 shrink-0 stroke-[1.5]', TONE[toast.tone])} />
       <span className="min-w-0 flex-1">{toast.message}</span>

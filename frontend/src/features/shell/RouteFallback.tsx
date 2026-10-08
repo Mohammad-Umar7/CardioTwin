@@ -43,8 +43,9 @@ function WorkstationFallback() {
         className="absolute inset-0 h-full w-full select-none object-cover"
       />
       <HairlineProgress label="Loading the workstation" className="absolute inset-x-0 top-0 z-panels" />
-      <div className="stage-card absolute left-[var(--stage-inset)] top-[var(--stage-inset)] flex h-[328px] w-[var(--card-left-w)] flex-col gap-2 p-[var(--card-pad)] max-[1439.98px]:h-[300px]">
+      <div className="stage-card absolute left-[var(--stage-inset)] top-[var(--stage-inset)] flex h-[372px] w-[var(--card-left-w)] flex-col gap-2 p-[var(--card-pad)] max-[1439.98px]:h-[344px]">
         <Skeleton className="h-4 w-28" />
+        <Skeleton className="mt-2 h-9 w-full rounded-md" />
         <Skeleton className="mt-2 h-3 w-24" />
         <SkeletonRows count={5} height={32} />
         <Skeleton className="mt-1 h-8 w-full" />
@@ -63,14 +64,39 @@ function WorkstationFallback() {
   );
 }
 
-/** Shown while a route chunk loads: a 1 px accent hairline, no spinner (DESIGN_SYSTEM §6). */
+/**
+ * Shown while a route chunk loads: a 1 px accent hairline, no spinner (DESIGN_SYSTEM §6). LUMEN 2: the reading
+ * pages also get their title and first cards as glass skeletons, so the page arrives into its own shape.
+ */
 export function RouteFallback() {
   const { pathname } = useLocation();
   const mode = useLayoutMode();
   if (pathname.startsWith(ROUTES.workstation) && mode !== 'compact') return <WorkstationFallback />;
+  const reading = pathname.startsWith(ROUTES.performance) || pathname.startsWith(ROUTES.methodology);
+  if (!reading) {
+    return (
+      <div className="relative flex-1" aria-busy="true">
+        <HairlineProgress label="Loading page" className="absolute inset-x-0 top-0" />
+      </div>
+    );
+  }
   return (
     <div className="relative flex-1" aria-busy="true">
       <HairlineProgress label="Loading page" className="absolute inset-x-0 top-0" />
+      <div className="mx-auto flex w-full max-w-[1120px] flex-col gap-4 px-6 pt-14">
+        <Skeleton className="h-3 w-40" />
+        <Skeleton className="h-10 w-[28rem] max-w-full" />
+        <Skeleton className="h-10 w-[22rem] max-w-full" />
+        <div className="mt-6 grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
+          {[0, 1, 2, 3].map((i) => (
+            <div key={i} className="card-surface flex h-28 flex-col gap-3 p-4">
+              <Skeleton className="h-3 w-20" />
+              <Skeleton className="h-7 w-24" />
+              <Skeleton className="mt-auto h-1.5 w-full" />
+            </div>
+          ))}
+        </div>
+      </div>
     </div>
   );
 }

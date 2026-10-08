@@ -208,7 +208,7 @@ function ChapterRail({
   return (
     <nav
       aria-label="Guided demo chapters"
-      className="fixed left-1/2 z-coachmark flex h-10 -translate-x-1/2 items-center gap-1 rounded-full bg-panel px-1.5 shadow-e2"
+      className="glass glass-edge fixed left-1/2 z-coachmark flex h-10 -translate-x-1/2 items-center gap-1 rounded-full px-1.5"
       style={{ bottom: `calc(var(--status-h) + ${TOUR_RAIL_BOTTOM}px)` }}
     >
       {CHAPTERS.map((c, i) => (
@@ -220,7 +220,7 @@ function ChapterRail({
           aria-label={`Chapter ${i + 1} of ${CHAPTERS.length}: ${c.title}`}
           className={cn(
             'group flex h-8 items-center gap-2 rounded-full px-2.5 transition-colors duration-fast',
-            i === active ? 'bg-surface-2' : 'hover:bg-surface-1',
+            i === active ? 'bg-surface-2' : 'hover:bg-white/[0.05]',
           )}
         >
           <span className={cn('mono text-mono-s', i === active ? 'text-primary' : i < active ? 'text-secondary' : 'text-tertiary')}>
@@ -533,7 +533,7 @@ function TourView() {
         aria-labelledby="tour-title"
         aria-describedby="tour-body"
         className={cn(
-          'fixed z-coachmark flex flex-col gap-2.5 rounded-lg bg-surface-3 p-4 shadow-e3 duration-base ease-out',
+          'glass-strong glass-edge fixed z-coachmark flex flex-col gap-2.5 rounded-xl p-4 duration-base ease-out',
           glide ? 'transition-[top,left,opacity]' : 'transition-opacity',
         )}
         style={{ top: pos?.top ?? -9999, left: pos?.left ?? 0, width: cardW, opacity: pos ? 1 : 0 }}

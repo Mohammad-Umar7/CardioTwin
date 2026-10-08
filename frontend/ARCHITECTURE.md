@@ -19,7 +19,8 @@ frontend/
     types/contracts.ts      TypeScript mirror of CONTRACTS.md (additive fields optional)
     services/               api.ts (REST client), staticData.ts (memoised artifact loaders), engine.ts (engines)
     state/                  patientStore, viewerStore, uiStore, engineStore (zustand)
-    hooks/                  useData (schema/cohort/metrics/manifest…), useEngine, usePrediction, useMediaQuery, useHotkeys
+    hooks/                  useData (schema/cohort/metrics/manifest…), useEngine, usePrediction, useMediaQuery, useHotkeys,
+                            useAmbientEffects (LUMEN 2 cursor spotlight, scroll reveal, render-tier attribute)
     design/                 LUMEN primitives + risk marks (BandChip, RiskTrack, RiskLegend, Probability…)
     features/
       shell/                AppShell, TopNav, EngineBadge, PatientChip, StatusLine (DisclaimerBanner), DisclaimerModal,
@@ -32,6 +33,7 @@ frontend/
       performance/          PerformancePage, LineChart (neutral d3 charts)
       methodology/          MethodologyPage
       tour/                 TourLayer (spotlight coachmark), steps.ts
+      vitals/               ecg.ts (schematic ECG on the cardiac phase), EcgMonitor (live strip locked to the 3D beat)
     three/                  SceneHost + CanvasSlot (persistent canvas), SceneCanvas, anatomy/, camera/, labels/, stage/
     test/                   setup.ts (jsdom polyfills), fixtures.ts (contract-shaped samples)
 ```

@@ -294,7 +294,7 @@ function PalettePanel({ reduced, prewarm = false }: { reduced: boolean; prewarm?
     >
       <motion.div
         aria-hidden
-        className="absolute inset-0 bg-[var(--scrim-palette)]"
+        className="absolute inset-0 bg-[var(--scrim-palette)] backdrop-blur-[3px]"
         initial={{ opacity: 0 }}
         animate={{ opacity: 1 }}
         exit={{ opacity: 0, transition: { duration: 0.11 } }}
@@ -312,15 +312,15 @@ function PalettePanel({ reduced, prewarm = false }: { reduced: boolean; prewarm?
         transition={transition}
         className={cn(
           'absolute left-1/2 top-[calc(var(--topbar-h)+var(--palette-top))] flex w-[min(var(--palette-w),calc(100vw-16px))] origin-top flex-col',
-          'max-h-[min(440px,calc(100vh-var(--topbar-h)-var(--palette-top)-var(--status-h)-16px))] overflow-clip rounded-lg bg-surface-3 text-primary shadow-e3',
+          'max-h-[min(440px,calc(100vh-var(--topbar-h)-var(--palette-top)-var(--status-h)-16px))] overflow-clip rounded-xl text-primary glass-strong glass-edge',
           'max-[1439.98px]:max-h-[min(400px,calc(100vh-var(--topbar-h)-var(--palette-top)-var(--status-h)-16px))]',
         )}
         style={{ x: '-50%' }}
       >
-        <div className="flex h-12 shrink-0 items-center gap-3 border-b border-line px-4">
-          <Search aria-hidden className="size-4 shrink-0 stroke-[1.5] text-tertiary" />
+        <div className="relative z-[1] flex h-12 shrink-0 items-center gap-3 border-b border-white/[0.08] px-4">
+          <Search aria-hidden className="size-4 shrink-0 stroke-[1.75] text-accent" />
           {level && (
-            <span className="shrink-0 rounded-sm bg-surface-2 px-1.5 py-0.5 text-label text-secondary">{level.title}</span>
+            <span className="shrink-0 rounded-sm bg-accent/[0.12] px-1.5 py-0.5 text-label text-accent shadow-[inset_0_0_0_1px_rgba(86,194,230,0.3)]">{level.title}</span>
           )}
           <input
             ref={input}
@@ -341,7 +341,7 @@ function PalettePanel({ reduced, prewarm = false }: { reduced: boolean; prewarm?
           <Kbd>Esc</Kbd>
         </div>
 
-        <div id={listId} role="listbox" aria-label="Results" className="panel-scroll min-h-0 flex-1 py-1">
+        <div id={listId} role="listbox" aria-label="Results" className="panel-scroll z-[1] min-h-0 flex-1 py-1">
           {noResults && (
             <p className="px-4 pb-1 pt-3 text-body-s text-secondary" role="status">
               No match for ‘{query.trim()}’
@@ -375,12 +375,14 @@ function PalettePanel({ reduced, prewarm = false }: { reduced: boolean; prewarm?
                       onClick={() => run(command)}
                       className={cn(
                         'mx-1 flex h-9 cursor-pointer items-center gap-3 rounded-sm px-3 transition-colors duration-instant',
-                        isActive ? 'bg-surface-2' : 'hover:bg-surface-2/60',
+                        isActive
+                          ? 'bg-[linear-gradient(90deg,rgba(86,194,230,0.14),rgba(255,255,255,0.04)_80%)] shadow-[inset_0_0_0_1px_rgba(86,194,230,0.22)]'
+                          : 'hover:bg-white/[0.05]',
                       )}
                     >
                       <span
                         aria-hidden
-                        className={cn('inline-flex size-4 shrink-0 items-center justify-center', isActive ? 'text-primary' : 'text-tertiary')}
+                        className={cn('inline-flex size-4 shrink-0 items-center justify-center', isActive ? 'text-accent' : 'text-tertiary')}
                       >
                         {Icon && <Icon className="size-4 stroke-[1.5]" />}
                       </span>
@@ -423,7 +425,7 @@ function PalettePanel({ reduced, prewarm = false }: { reduced: boolean; prewarm?
           })}
         </div>
 
-        <div className="flex h-9 shrink-0 items-center gap-4 border-t border-line px-4 text-label font-normal text-tertiary">
+        <div className="relative z-[1] flex h-9 shrink-0 items-center gap-4 border-t border-white/[0.08] bg-black/15 px-4 text-label font-normal text-tertiary">
           <span className="inline-flex items-center gap-1.5">
             <Kbd>↑</Kbd>
             <Kbd>↓</Kbd> move

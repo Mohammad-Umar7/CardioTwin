@@ -25,11 +25,18 @@ export interface RiskPipProps {
 }
 
 export function RiskPip({ p, band, size = 8, className, ring }: RiskPipProps) {
-  const color =
-    band != null ? RISK_BAND_STYLES[band].chip : p === null || p === undefined ? RISK_PENDING : riskHex(p);
-  const style: CSSProperties = { width: size, height: size, backgroundColor: color };
+  const pending = band == null && (p === null || p === undefined);
+  const color = band != null ? RISK_BAND_STYLES[band].chip : pending ? RISK_PENDING : riskHex(p as number);
+  // LUMEN 2: a lit pip — the mark glows softly in its own ramp colour (never when pending).
+  const style: CSSProperties = {
+    width: size,
+    height: size,
+    backgroundColor: color,
+    boxShadow: pending ? undefined : `0 0 ${Math.round(size * 0.9)}px ${color}99`,
+    transition: 'background-color 420ms cubic-bezier(.16,1,.3,1), box-shadow 420ms cubic-bezier(.16,1,.3,1)',
+  };
   return (
-    <span aria-hidden className={cn('relative inline-block shrink-0 rounded-full ring-1 ring-line-strong', className)} style={style}>
+    <span aria-hidden className={cn('relative inline-block shrink-0 rounded-full ring-1 ring-white/20', className)} style={style}>
       {ring && (
         <span className="absolute inset-0 animate-pip-ring rounded-full" style={{ boxShadow: `0 0 0 1.5px ${color}` }} />
       )}
@@ -69,11 +76,12 @@ export function BandChip({ band, pending, size = 'md', showMeter = true, classNa
   return (
     <span
       className={cn(
-        'inline-flex h-5 shrink-0 items-center gap-1.5 rounded-sm border-l-2 bg-surface-1 pl-1.5 pr-2',
+        'inline-flex h-5 shrink-0 items-center gap-1.5 rounded-sm border-l-2 pl-1.5 pr-2 shadow-[inset_0_0_0_1px_rgba(255,255,255,0.07)]',
         size === 'sm' && 'h-[18px] gap-1 pr-1.5',
         className,
       )}
-      style={{ borderLeftColor: rule }}
+      // LUMEN 2: the band rule bleeds a short wash of its own colour into the chip (a mark, never the text).
+      style={{ borderLeftColor: rule, backgroundImage: `linear-gradient(90deg, ${rule}2e, rgba(255,255,255,0.035) 70%)` }}
     >
       {showMeter && <RiskMeter level={pending || !style ? 0 : style.level} />}
       <span className={cn('eyebrow whitespace-nowrap', pending ? 'text-tertiary' : 'text-primary')}>{word}</span>
@@ -166,7 +174,15 @@ export function RiskTrack({
   return (
     <div className={cn('relative w-full', className)}>
       <div className={cn('relative', compact ? 'h-3' : 'h-4')}>
-        <div className="absolute inset-x-0 top-1/2 h-0.5 -translate-y-1/2 rounded-full bg-line" />
+        <div className="absolute inset-x-0 top-1/2 h-0.5 -translate-y-1/2 rounded-full bg-white/10" />
+        {has && (
+          // LUMEN 2: the run from 0 to the estimate fills with a soft ramp-coloured light (glides with p).
+          <div
+            aria-hidden
+            className="absolute left-0 top-1/2 h-0.5 -translate-y-1/2 rounded-full transition-[width,background-image] duration-data ease-data"
+            style={{ width: `${x}%`, backgroundImage: `linear-gradient(90deg, ${color}00, ${color}b3)` }}
+          />
+        )}
         {[25, 50, 75].map((t) => (
           <div key={t} aria-hidden className="absolute top-1/2 h-2 w-px -translate-y-1/2 bg-line-strong" style={{ left: `${t}%` }} />
         ))}
@@ -187,8 +203,8 @@ export function RiskTrack({
         {has && (
           <div
             aria-hidden
-            className="absolute top-1/2 size-2.5 -translate-x-1/2 -translate-y-1/2 rounded-full ring-1 ring-app transition-[left,background-color] duration-data ease-data"
-            style={{ left: `${x}%`, backgroundColor: color }}
+            className="absolute top-1/2 size-2.5 -translate-x-1/2 -translate-y-1/2 rounded-full ring-2 ring-app transition-[left,background-color,box-shadow] duration-data ease-data"
+            style={{ left: `${x}%`, backgroundColor: color, boxShadow: pending ? undefined : `0 0 10px ${color}` }}
           />
         )}
       </div>

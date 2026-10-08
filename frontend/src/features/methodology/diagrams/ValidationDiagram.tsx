@@ -107,7 +107,7 @@ export function ValidationDiagram({ facts }: { facts: KeyFacts }) {
   const testShare = nTest / (nDev + nTest);
   return (
     <figure
-      className="flex flex-col gap-4 rounded-lg border border-line bg-panel p-4"
+      data-reveal className="card-surface flex flex-col gap-4 p-4"
       aria-labelledby="validation-caption"
     >
       <div className="grid gap-x-2 gap-y-1" style={cols}>

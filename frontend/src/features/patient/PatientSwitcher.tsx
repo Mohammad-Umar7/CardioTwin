@@ -86,7 +86,7 @@ function FooterButton({ icon, children, onClick }: { icon: ReactNode; children: 
     <button
       type="button"
       onClick={onClick}
-      className="inline-flex h-8 items-center gap-1.5 rounded-sm px-2 text-label text-secondary transition-colors duration-instant hover:bg-surface-2 hover:text-primary [&>svg]:size-3.5 [&>svg]:stroke-[1.5]"
+      className="inline-flex h-8 items-center gap-1.5 rounded-sm px-2 text-label text-secondary transition-colors duration-instant hover:bg-white/[0.07] hover:text-primary [&>svg]:size-3.5 [&>svg]:stroke-[1.5]"
     >
       {icon}
       {children}
@@ -215,7 +215,7 @@ export function PatientSwitcher({ onClose, className }: PatientSwitcherProps) {
         ) : (
           groups.map((g) => (
             <div key={g} role="group" aria-labelledby={`${listId}-g-${g}`}>
-              <div id={`${listId}-g-${g}`} className="eyebrow sticky top-0 z-10 flex h-7 items-center gap-1.5 bg-surface-3 px-3 text-tertiary">
+              <div id={`${listId}-g-${g}`} className="eyebrow sticky top-0 z-10 flex h-7 items-center gap-1.5 bg-[rgba(30,37,48,0.96)] px-3 text-tertiary backdrop-blur">
                 {GROUP_LABEL[g]}
                 {g !== 'curated' && (
                   <>

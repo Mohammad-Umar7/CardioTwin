@@ -7,7 +7,7 @@ import { usePatientStore } from '@/state/patientStore';
 import { useIsReducedMotion } from '@/hooks/useMediaQuery';
 import { cn } from '@/lib/cn';
 import { formatPercent, formatProbability, formatShownDeltaPts } from '@/lib/format';
-import { RISK_BAND_STYLES } from '@/theme/risk';
+import { RISK_BAND_STYLES, RISK_PENDING, riskHex } from '@/theme/risk';
 import { EASE, MOTION } from '@/theme/tokens';
 import { Collapse } from './Collapse';
 import { useFlipAnnouncement } from './useFlipAnnouncement';
@@ -34,8 +34,9 @@ function ModelEstimateTag() {
     >
       <span
         tabIndex={0}
-        className="eyebrow inline-flex h-5 items-center rounded-sm border border-line px-1.5 text-tertiary outline-none focus-visible:shadow-focus"
+        className="eyebrow inline-flex h-5 items-center gap-1 rounded-full border border-white/10 bg-white/[0.04] px-2 text-tertiary outline-none focus-visible:shadow-focus"
       >
+        <span aria-hidden className="size-1 rounded-full bg-accent shadow-[0_0_6px_rgba(86,194,230,0.9)]" />
         Model estimate
       </span>
     </Tooltip>
@@ -153,14 +154,24 @@ export function CadHeadline({ titleId, covered = false, showTrack = true }: CadH
       ) : (
         <>
           <div className="mt-2 flex items-end justify-between gap-3">
-            <div className="flex min-w-0 flex-col">
-              <Probability
-                p={cad.probability}
-                target={covered ? undefined : 'CAD'}
-                size="xl"
-                stale={view.stale}
-                className="[&_.pct-sign]:ml-0.5 [&_.pct-sign]:text-numeral-l"
+            <div className="relative flex min-w-0 flex-col">
+              {/* LUMEN 2: the numeral sits in a pool of its own risk light (a mark: the ramp colour at p, grey while
+                  pending), so the answer is the brightest thing on the card. */}
+              <span
+                aria-hidden
+                className="pointer-events-none absolute -left-10 -top-12 size-36 rounded-full opacity-[0.36] blur-2xl transition-[background-color,opacity] duration-data ease-data"
+                style={{ backgroundColor: view.stale ? RISK_PENDING : riskHex(cad.probability) }}
               />
+              {/* Keyed by the shown value: a what-if that moves the number makes it breathe once (globals.css). */}
+              <span key={formatProbability(cad.probability).text} className="value-pop relative inline-block origin-left">
+                <Probability
+                  p={cad.probability}
+                  target={covered ? undefined : 'CAD'}
+                  size="xl"
+                  stale={view.stale}
+                  className="relative [&_.pct-sign]:ml-0.5 [&_.pct-sign]:text-numeral-l min-[1440px]:text-[3.5rem] min-[1440px]:leading-[3.5rem]"
+                />
+              </span>
               {view.edits > 0 && (
                 <span className="mt-1 h-4 whitespace-nowrap text-label font-normal text-secondary">
                   {view.comparing || !base ? (

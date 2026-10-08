@@ -1,10 +1,12 @@
+import { motion } from 'framer-motion';
 import { useMemo, useState, type ReactNode } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { EmptyState, SegmentedControl, Skeleton, Tabs } from '@/design';
 import { tabPanelId } from '@/design/tabIds';
 import { useMetrics, useSchemaIndex } from '@/hooks/useData';
-import { useMediaQuery } from '@/hooks/useMediaQuery';
+import { useIsReducedMotion, useMediaQuery } from '@/hooks/useMediaQuery';
 import { cn } from '@/lib/cn';
+import { SPRING } from '@/theme/tokens';
 import { formatMetricValue } from '@/lib/format';
 import { deployedModelPhrase } from '@/lib/modelNames';
 import { TEST_SET } from '@/lib/testSetCopy';
@@ -62,19 +64,26 @@ interface SectionProps {
   children: ReactNode;
 }
 
-/** Section rhythm (§6.4 rule 9): overline name, one plain lede, then a 12-column grid of modules. */
+/**
+ * Section rhythm (§6.4 rule 9): overline name, one plain lede, then a 12-column grid of modules. LUMEN 2: the
+ * overline wears an accent tick and a fading rule, and the header rises into view once.
+ */
 function Section({ id, title, lede, children }: SectionProps) {
   return (
     <section
       id={id}
       aria-labelledby={`${id}-title`}
-      className="flex scroll-mt-[calc(var(--topbar-h)+72px)] flex-col gap-4"
+      className="flex scroll-mt-[calc(var(--topbar-h)+72px)] flex-col gap-4 pt-4"
     >
-      <div className="flex flex-col gap-1">
-        <h2 id={`${id}-title`} className="eyebrow text-secondary">
-          {title}
-        </h2>
-        {lede && <p className="max-w-[88ch] text-body-s text-tertiary text-pretty">{lede}</p>}
+      <div data-reveal className="flex flex-col gap-1.5">
+        <div className="flex items-center gap-3">
+          <span aria-hidden className="h-3.5 w-1 rounded-full bg-accent shadow-[0_0_10px_rgba(86,194,230,0.8)]" />
+          <h2 id={`${id}-title`} className="eyebrow text-primary">
+            {title}
+          </h2>
+          <span aria-hidden className="h-px flex-1 bg-[linear-gradient(90deg,rgba(255,255,255,0.12),transparent)]" />
+        </div>
+        {lede && <p className="max-w-[88ch] pl-4 text-body-s text-tertiary text-pretty">{lede}</p>}
       </div>
       {children}
     </section>
@@ -95,8 +104,9 @@ const SECTIONS = [
 
 function SectionNav({ ids }: { ids: readonly (readonly [string, string])[] }) {
   const active = useActiveSection(useMemo(() => ids.map(([id]) => id), [ids]));
+  const reduced = useIsReducedMotion();
   return (
-    <nav aria-label="Sections on this page" className="ml-auto hidden items-center gap-0.5 min-[1360px]:flex">
+    <nav aria-label="Sections on this page" className="isolate ml-auto hidden items-center gap-0.5 min-[1360px]:flex">
       {ids.map(([id, label]) => (
         <button
           key={id}
@@ -108,10 +118,18 @@ function SectionNav({ ids }: { ids: readonly (readonly [string, string])[] }) {
             active === id ? 'text-primary' : 'text-tertiary hover:text-secondary',
           )}
         >
-          {label}
           {active === id && (
-            <span aria-hidden className="absolute inset-x-2 -bottom-[11px] h-0.5 rounded-full bg-accent" />
+            // LUMEN 2: the reading position glides from section to section.
+            <motion.span
+              aria-hidden
+              layoutId="perf-section-active"
+              transition={reduced ? { duration: 0 } : SPRING.indicator}
+              className="absolute inset-0 -z-10 rounded-sm bg-white/[0.06] shadow-[inset_0_0_0_1px_rgba(255,255,255,0.08)]"
+            >
+              <span className="absolute inset-x-2 -bottom-[11px] h-0.5 rounded-full bg-accent shadow-[0_0_10px_rgba(86,194,230,0.9)]" />
+            </motion.span>
           )}
+          {label}
         </button>
       ))}
     </nav>
@@ -206,8 +224,8 @@ export default function PerformancePage() {
   });
 
   return (
-    <div className="flex w-full flex-col">
-      <div className="sticky top-[var(--topbar-h)] z-hud border-b border-hairline bg-app">
+    <div className="page-enter flex w-full flex-col">
+      <div className="sticky top-[var(--topbar-h)] z-hud border-b border-white/[0.06] bg-app/70 backdrop-blur-xl backdrop-saturate-150">
         <div className="mx-auto flex h-14 w-full max-w-[1280px] items-center gap-4 overflow-x-auto px-6 [scrollbar-width:none]">
           <Tabs
             idBase="perf-target"
@@ -262,11 +280,14 @@ export default function PerformancePage() {
               aria-labelledby="summary-title"
               className="flex scroll-mt-[calc(var(--topbar-h)+72px)] flex-col gap-5"
             >
-              <header className="flex flex-col gap-2">
-                <p className="eyebrow text-accent">Model performance · {TARGET_NAMES[target]}</p>
+              <header className="flex flex-col gap-3">
+                <p className="eyebrow inline-flex items-center gap-2 self-start rounded-full bg-accent/[0.08] px-3 py-1 text-accent shadow-[inset_0_0_0_1px_rgba(86,194,230,0.25)]">
+                  <span aria-hidden className="size-1.5 rounded-full bg-accent shadow-[0_0_8px_rgba(86,194,230,0.9)]" />
+                  Model performance · {TARGET_NAMES[target]}
+                </p>
                 <h1
                   id="summary-title"
-                  className="max-w-[30ch] font-display text-display-2 text-primary text-balance"
+                  className="text-gradient max-w-[30ch] pb-1 font-display text-display-2 text-balance min-[1440px]:text-[2.875rem] min-[1440px]:leading-[3.25rem]"
                 >
                   {pageTakeaway(target, m, split, extras.robustness)}
                 </h1>

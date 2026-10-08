@@ -94,7 +94,7 @@ export function HoverTooltip() {
     <div ref={ref} data-region="hover-tooltip" className="pointer-events-none absolute left-0 top-0 z-popover w-max max-w-[280px]">
       <div
         role="tooltip"
-        className="rounded-md bg-surface-3 px-2.5 py-2 text-label font-normal text-secondary shadow-e2 motion-safe:animate-rise-in"
+        className="glass-strong rounded-md px-3 py-2.5 text-label font-normal text-secondary shadow-[inset_0_1px_0_rgba(255,255,255,0.08),0_0_0_1px_rgba(255,255,255,0.08),0_18px_44px_-12px_rgba(0,0,0,0.8)] motion-safe:animate-scale-in"
       >
         <p className="text-body-s font-semibold text-primary">{c.title}</p>
         {c.segment && <p className="mt-0.5 text-label font-medium text-primary">{c.segment}</p>}

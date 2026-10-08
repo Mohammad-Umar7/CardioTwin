@@ -83,7 +83,7 @@ export default function LandingPage() {
         >
           <HeroCopy
             leaving={leaving}
-            className="min-[1100px]:pointer-events-auto min-[1100px]:w-[40%] min-[1100px]:max-w-[580px] min-[1100px]:pb-4"
+            className="min-[1100px]:pointer-events-auto min-[1100px]:w-[44%] min-[1100px]:max-w-[640px] min-[1100px]:pb-4"
             onOpenWorkstation={() => go({ to: ROUTES.workstation })}
             onGuidedDemo={() => leave(() => startGuidedDemo(navigate, `${location.pathname}${location.search}`))}
           />
@@ -93,14 +93,15 @@ export default function LandingPage() {
           ref={bandsRef}
           data-region="landing-bands"
           className={cn(
-            'relative z-panels order-3 border-t border-hairline bg-app transition-[opacity,transform] duration-base min-[1100px]:absolute min-[1100px]:inset-x-0 min-[1100px]:bottom-0',
-            // Soft edge: the stage melts into the bands instead of ending on a hard line.
-            'min-[1100px]:before:pointer-events-none min-[1100px]:before:absolute min-[1100px]:before:inset-x-0 min-[1100px]:before:bottom-full min-[1100px]:before:h-16 min-[1100px]:before:bg-gradient-to-t min-[1100px]:before:from-app min-[1100px]:before:to-transparent',
+            // LUMEN 2: the bands float as glass over the stage's foot; a dark floor fades up behind them so the
+            // glass always reads, and the heart's stage continues underneath instead of ending on a hard line.
+            'relative z-panels order-3 flex flex-col gap-2 px-4 pb-4 pt-2 transition-[opacity,transform] duration-base min-[1100px]:absolute min-[1100px]:inset-x-0 min-[1100px]:bottom-0 min-[1100px]:px-6 min-[1440px]:px-8',
+            'min-[1100px]:before:pointer-events-none min-[1100px]:before:absolute min-[1100px]:before:inset-x-0 min-[1100px]:before:-top-20 min-[1100px]:before:bottom-0 min-[1100px]:before:-z-10 min-[1100px]:before:bg-[linear-gradient(0deg,rgb(var(--c-bg-app))_0%,rgb(var(--c-bg-app)/0.78)_55%,transparent_100%)]',
             leaving ? 'translate-y-2 opacity-0 ease-exit' : 'ease-out',
           )}
         >
-          <KpiStrip />
-          <Pillars onNavigate={go} className="border-t border-hairline" />
+          <KpiStrip className="animate-fade-up [animation-delay:440ms]" />
+          <Pillars onNavigate={go} />
         </div>
       </section>
 

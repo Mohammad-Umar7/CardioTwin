@@ -1,5 +1,6 @@
 import { Suspense, lazy, useLayoutEffect, useRef } from 'react';
 import { Outlet, useLocation } from 'react-router-dom';
+import { useReveal, useSpotlight, useTierAttribute } from '@/hooks/useAmbientEffects';
 import { useUiStore } from '@/state/uiStore';
 import { ReportCommands } from '@/features/report/ReportCommands';
 import { SceneHost } from '@/three/SceneHost';
@@ -45,8 +46,12 @@ function useScrollTopOnRouteChange(pathname: string) {
 export function AppShell() {
   const { pathname } = useLocation();
   useScrollTopOnRouteChange(pathname);
+  useSpotlight();
+  useReveal();
+  useTierAttribute();
   return (
-    <div id="app" className="relative flex min-h-screen flex-col bg-app text-primary">
+    // No background of its own: the LUMEN 2 ambient light on <html> shows through the reading pages.
+    <div id="app" className="relative flex min-h-screen flex-col text-primary">
       <a
         href="#main"
         onClick={(e) => {
