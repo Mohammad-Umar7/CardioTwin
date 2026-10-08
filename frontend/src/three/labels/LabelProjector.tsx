@@ -259,10 +259,16 @@ export function LabelProjector() {
     camera.updateMatrixWorld();
     eye.copy(camera.position);
 
-    // Reveal after the first anatomy frame and the coronary ignition (never before there is a heart).
+    // Reveal after the first anatomy frame and the coronary ignition (never before there is a heart). The landing
+    // hero carries no labels: it shows a reference heart, and the vessel names and estimates belong to the
+    // workstation, where they fade in on arrival.
     const assembly = sceneRuntime.assembly;
     const ignited = assembly.done || assembly.t >= assembly.igniteAt;
-    const ready = useCameraState.getState().firstFrame && viewer.stage !== 'hidden' && (ignited || !sceneRuntime.anatomyReady);
+    const ready =
+      useCameraState.getState().firstFrame &&
+      viewer.stage !== 'hidden' &&
+      viewer.stage !== 'hero' &&
+      (ignited || !sceneRuntime.anatomyReady);
     if (!ready) s.revealAt = 0;
     else if (s.revealAt === 0) s.revealAt = now;
     const visible = viewer.labels && ready;

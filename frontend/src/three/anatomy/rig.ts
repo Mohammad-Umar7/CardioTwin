@@ -35,6 +35,7 @@ import { PointHash, graphComponents, vesselBeatWeights, weldGraph } from './beat
 import { descendingAortaCut, straightCutDistance } from './vesselCuts';
 import { deflateDirections } from './fatDeflate';
 import { cavityAttribute, type CavityInput, type CentrelinePoint } from './cavity';
+import { HERO_GHOST_TINT, heroChestGhost } from './heroChest';
 import { axial, correctWeights, meanAngle, rvShare } from './territory';
 import { FRAME_UNIFORMS } from './shaders';
 import {
@@ -134,6 +135,11 @@ export interface RigInputs {
   beatA: number;
   /** LV twist activation (heartbeat.ts `twist`); absent = follows beatV. */
   beatT?: number;
+  /**
+   * Landing hero only: progress of the "Enter Workstation" dolly, 0..1. At 0 the chest stands closed around the
+   * heart as glass (heroChest.ts); it clears as the camera moves in. Ignored on every other stage.
+   */
+  heroIntro?: number;
 }
 
 export interface RigOptions {
@@ -206,6 +212,14 @@ export const GREAT_VESSEL_CLIP = { centre: [0, 0.05, -0.05] as const, radius: 0.
  */
 export const GREAT_VESSEL_CLIP_SELECTED = { centre: [0, 0.15, 0.22] as const, radius: 0.62, feather: 0.2 } as const;
 /**
+ * Landing hero: inside the closed chest the systemic vessels run on as they do in the body (the aortic arch and
+ * its branches toward the neck, the caval veins), not cut to a specimen; they draw back to GREAT_VESSEL_CLIP as
+ * the "Enter Workstation" dolly moves in, so the heart arrives exactly as the workstation shows it.
+ */
+export const HERO_GREAT_VESSEL_CLIP = { centre: [0, 0.82, -0.05] as const, radius: 1.3, feather: 0.32 } as const;
+/** Dolly progress over which the hero's vessels draw back to the specimen cut. */
+const HERO_VESSEL_RETRACT = [0.08, 0.62] as const;
+/**
  * Outer ghosts in the workstation stay faint (V2 §5.15: α ≤ 0.12, "clean silhouette"): bone and cartilage
  * sit right behind and around the heart, so they are the faintest (≤ 2 % over the stage); skin, muscle and
  * the diaphragm keep a trace of the thorax at the frame's edges.
@@ -213,8 +227,6 @@ export const GREAT_VESSEL_CLIP_SELECTED = { centre: [0, 0.15, 0.22] as const, ra
 const workstationGhost = (kind: TissueKind) => (kind === 'bone' || kind === 'cartilage' ? 0.15 : 0.3);
 /** Workstation skin ghost at Closed: the torso's contour must read ("Skin" is on in Layers). */
 const SKIN_GHOST = 0.85;
-/** Landing hero lung ghost strength: a trace of context, never a smear behind the copy or the cards. */
-const HERO_LUNG_GHOST = 0.4;
 /** Peel value from which the chest counts as set aside (the camera's thorax framing ends just below it). */
 const PEEL_CHEST_AWAY = 0.58;
 
@@ -532,6 +544,8 @@ export class AnatomyRig {
   private look: SceneLook;
   private tier: QualityTier;
   private disposed = false;
+  /** The last update drew the landing hero (its chest presentation and ghost tints). */
+  private hero = false;
 
   constructor(
     readonly root: Object3D,
@@ -940,9 +954,16 @@ export class AnatomyRig {
   setLook(look: SceneLook): void {
     if (look === this.look) return;
     this.look = look;
+    for (const e of this.entries) e.mesh.material = this.solidFor(e);
+    this.tintGhosts();
+  }
+
+  /** Ghost colours: the look's own, except the chest layers on the landing hero (a cool blue-grey glass). */
+  private tintGhosts(): void {
     for (const e of this.entries) {
-      e.mesh.material = this.solidFor(e);
-      setGhostLook(e.ghost, e.kind, look);
+      const hero = this.hero && OUTER_KINDS.has(e.kind) ? HERO_GHOST_TINT[e.kind] : undefined;
+      if (hero) e.ghost.color.set(hero);
+      else setGhostLook(e.ghost, e.kind, this.look);
     }
   }
 
@@ -1142,17 +1163,30 @@ export class AnatomyRig {
 
     const sel = inp.selected;
     const chestAway = inp.stage === 'workstation' && this.e >= PEEL_CHEST_AWAY;
+    // The landing hero and the workstation show the chest differently (closed glass vs. set aside): entering or
+    // leaving the hero switches the amounts at once, while the canvas moves between pages, never as a fade.
+    const hero = inp.stage === 'hero';
+    const switched = hero !== this.hero;
+    if (switched) {
+      this.hero = hero;
+      this.tintGhosts();
+    }
+    const heroIntro = hero ? Math.min(1, Math.max(0, inp.heroIntro ?? 0)) : 0;
 
-    // Great-vessel clip sphere: tighter while a vessel is selected (GREAT_VESSEL_CLIP_SELECTED), gliding.
-    const clipGoal = (sel || inp.trimGreatVessels) && inp.stage === 'workstation' ? GREAT_VESSEL_CLIP_SELECTED : GREAT_VESSEL_CLIP;
+    // Great-vessel clip sphere: tighter while a vessel is selected (GREAT_VESSEL_CLIP_SELECTED), gliding. On the
+    // hero it follows the dolly exactly: the whole vessels at rest, the specimen cut by the time the camera lands.
+    const heroVessels = hero ? 1 - smooth01((heroIntro - HERO_VESSEL_RETRACT[0]) / (HERO_VESSEL_RETRACT[1] - HERO_VESSEL_RETRACT[0])) : 0;
+    const restClip = (sel || inp.trimGreatVessels) && inp.stage === 'workstation' ? GREAT_VESSEL_CLIP_SELECTED : GREAT_VESSEL_CLIP;
+    const towardHero = (rest: number, heroValue: number) => rest + (heroValue - rest) * heroVessels;
     const clip = this.shared.clipGreat;
-    const kClip = inp.reduced ? 1 : 1 - Math.exp(-LAMBDA_SECTION * dt);
-    clip.uClipCentre.value.x += (clipGoal.centre[0] - clip.uClipCentre.value.x) * kClip;
-    clip.uClipCentre.value.y += (clipGoal.centre[1] - clip.uClipCentre.value.y) * kClip;
-    clip.uClipCentre.value.z += (clipGoal.centre[2] - clip.uClipCentre.value.z) * kClip;
-    clip.uClipRadius.value += (clipGoal.radius - clip.uClipRadius.value) * kClip;
-    clip.uClipFeather.value += (clipGoal.feather - clip.uClipFeather.value) * kClip;
-    if (Math.abs(clip.uClipRadius.value - clipGoal.radius) > 1e-3) moving = true;
+    const kClip = inp.reduced || hero || switched ? 1 : 1 - Math.exp(-LAMBDA_SECTION * dt);
+    const goalRadius = towardHero(restClip.radius, HERO_GREAT_VESSEL_CLIP.radius);
+    clip.uClipCentre.value.x += (towardHero(restClip.centre[0], HERO_GREAT_VESSEL_CLIP.centre[0]) - clip.uClipCentre.value.x) * kClip;
+    clip.uClipCentre.value.y += (towardHero(restClip.centre[1], HERO_GREAT_VESSEL_CLIP.centre[1]) - clip.uClipCentre.value.y) * kClip;
+    clip.uClipCentre.value.z += (towardHero(restClip.centre[2], HERO_GREAT_VESSEL_CLIP.centre[2]) - clip.uClipCentre.value.z) * kClip;
+    clip.uClipRadius.value += (goalRadius - clip.uClipRadius.value) * kClip;
+    clip.uClipFeather.value += (towardHero(restClip.feather, HERO_GREAT_VESSEL_CLIP.feather) - clip.uClipFeather.value) * kClip;
+    if (Math.abs(clip.uClipRadius.value - goalRadius) > 1e-3) moving = true;
     const k = (dtLambda: number) => (inp.reduced ? 1 : 1 - Math.exp(-dtLambda * dt));
     const fadeK = k(LAMBDA_FADE);
 
@@ -1177,6 +1211,9 @@ export class AnatomyRig {
     }
 
     for (const entry of this.entries) {
+      const outer = OUTER_KINDS.has(entry.kind);
+      // The hero's chest stands closed around the heart whatever the peel (the heart itself keeps the rest detent).
+      const eEntry = hero && outer ? 0 : this.e;
       // ---- explode delta
       const spec = entry.spec;
       let kPeel = 0;
@@ -1185,7 +1222,7 @@ export class AnatomyRig {
         kPeel = windowProgress(this.e, spec.window);
         riderDelta(spec, entry.wall, kWall, kPeel, entry.explodeMatrix);
       } else if (spec) {
-        kPeel = windowProgress(this.e, spec.window);
+        kPeel = windowProgress(eEntry, spec.window);
         explodeDelta(spec, kPeel, entry.explodeMatrix);
       } else entry.explodeMatrix.identity();
 
@@ -1197,7 +1234,6 @@ export class AnatomyRig {
       entry.mesh.matrixWorldNeedsUpdate = true;
 
       // ---- visibility targets
-      const outer = OUTER_KINDS.has(entry.kind);
       const peeled = outer && peeledAt(entry.layerId, this.e, entry.node);
       // Every layer defaults to visible: the lungs are solid in the closed chest and part during the
       // dissection; at the rest detent they are set aside with the rest of the thorax (chestAway below).
@@ -1221,7 +1257,12 @@ export class AnatomyRig {
       // BodyParts3D vein trees do not line up with them and, trimmed near the heart, doubled them into ragged
       // clusters and claw-like crescents. The atrium's ostia stand for the cut veins, as on a specimen.
       const hiddenTree = entry.kind === 'pulmonaryVeins';
-      if (!layerVisible || inner || hiddenTree || (inp.isolate && sel && !isolateMember) || (entry.kind === 'cardiacVein' && !inp.showVeins)) {
+      if (hero && outer) {
+        // Landing hero: the closed chest as glass around the solid heart (the skin's contour, the rib cage, faint
+        // lungs), clearing through the "Enter Workstation" dolly. The workstation's Layers toggles do not apply.
+        solidT = 0;
+        ghostT = heroChestGhost(entry.kind, heroIntro);
+      } else if (!layerVisible || inner || hiddenTree || (inp.isolate && sel && !isolateMember) || (entry.kind === 'cardiacVein' && !inp.showVeins)) {
         solidT = 0;
       } else if (entry.kind === 'fat' && inp.look === 'clinical') {
         // Clinical: the fat is a translucent ghost over the clay, so the coronaries in their grooves are never
@@ -1240,23 +1281,21 @@ export class AnatomyRig {
         ghostT = inp.ghostLayers || kPeel < 0.5 ? (1 - 0.85 * kPeel) * (inp.stage === 'workstation' ? SKIN_GHOST : 1) : 0;
       } else if (peeled || (entry.kind === 'lung' && inp.look === 'clinical')) {
         solidT = 0;
-        ghostT = peeled && !inp.ghostLayers ? 0 : inp.stage === 'workstation' ? workstationGhost(entry.kind) : HERO_LUNG_GHOST;
+        ghostT = peeled && !inp.ghostLayers ? 0 : inp.stage === 'workstation' ? workstationGhost(entry.kind) : 0;
         // A peeled diaphragm has dropped under the heart, onto the toolbar: no warm glow there.
         if (peeled && entry.kind === 'diaphragm' && inp.stage === 'workstation') ghostT = 0;
       } else if (inp.ghostOthers && sel && !selectedVessel && !outer) {
         solidT = 0;
         ghostT = isVessel ? 0.7 : entry.kind === 'myocardium' ? 1 : 0.6;
       }
-      // Landing hero (V2 §6.1): the heart unboxed with the lungs as its only fresnel ghost — no skin, muscle,
-      // rib, cartilage, diaphragm or bronchial-tree ghosts drifting in front of the lens or behind the copy.
-      if (inp.stage === 'hero' && outer && entry.kind !== 'lung') ghostT = 0;
       // Workstation with the chest open (Lungs aside, Open heart): the thorax has been set aside, so its
       // ghosts leave the stage (no muddy smears at the frame's edges or behind the cards, and ~120 k fewer
       // overdrawn triangles every frame). They come back as soon as the peel closes the chest again, and a
       // layer switched on by hand in Layers keeps its ghost.
       if (chestAway && outer && inp.layerVisibility[entry.layerId] !== true) ghostT = 0;
-      entry.solidAmt += (solidT - entry.solidAmt) * fadeK;
-      entry.ghostAmt += (ghostT - entry.ghostAmt) * fadeK;
+      const kFade = switched ? 1 : fadeK;
+      entry.solidAmt += (solidT - entry.solidAmt) * kFade;
+      entry.ghostAmt += (ghostT - entry.ghostAmt) * kFade;
       if (Math.abs(entry.solidAmt - solidT) < 2e-3) entry.solidAmt = solidT;
       else moving = true;
       if (Math.abs(entry.ghostAmt - ghostT) < 2e-3) entry.ghostAmt = ghostT;

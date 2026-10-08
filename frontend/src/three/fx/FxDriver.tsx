@@ -144,8 +144,11 @@ export function FxDriver() {
     // The anatomy's cold-load assembly flies the parts in first; it tells us when the tree may ignite.
     const { assembly } = sceneRuntime;
     const assembled = assembly.done || assembly.t >= assembly.igniteAt;
+    // The landing hero is a reference heart (no risk colour, no flow): the tree ignites when the workstation opens.
+    const onHero = viewer.stage === 'hero';
     const anatomyReady =
-      (viewer.anatomySource === 'glb' && assembled) || viewer.anatomySource === 'procedural' || viewer.anatomySource === 'error';
+      !onHero &&
+      ((viewer.anatomySource === 'glb' && assembled) || viewer.anatomySource === 'procedural' || viewer.anatomySource === 'error');
     const caseKey = patient.mode === 'custom' ? 'custom' : patient.selectedPatientId ? `cohort:${patient.selectedPatientId}` : null;
     const landed = trigger.update(now, anatomyReady, caseKey, !!prediction && patient.status === 'ready');
     const requested = takeIgnitionRequest();
@@ -164,7 +167,7 @@ export function FxDriver() {
     }
 
     // --- global flow visibility
-    const flowGoal = viewer.bloodFlow && !reduced && viewer.tier !== 'D' ? 1 : 0;
+    const flowGoal = viewer.bloodFlow && !reduced && viewer.tier !== 'D' && !onHero ? 1 : 0;
     f.flowOpacity = reduced ? flowGoal : MathUtils.damp(f.flowOpacity, flowGoal, LAMBDA_FLOW, dt);
     if (Math.abs(f.flowOpacity - flowGoal) < 1e-3) f.flowOpacity = flowGoal;
 

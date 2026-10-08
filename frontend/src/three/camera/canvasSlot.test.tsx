@@ -37,6 +37,15 @@ describe('CanvasSlot loading', () => {
     expect(posterFor('hero', 1270)).toBe('posters/hero-1280.webp');
   });
 
+  it("picks the hero still of the page's layout: beside the copy, or centred when it stacks", () => {
+    // A 1024 px split hero is closer in width to the tablet still, but its torso sits beside the copy.
+    expect(posterFor('hero', 1014, 'split')).toBe('posters/hero-1280.webp');
+    expect(posterFor('hero', 1000, 'stacked')).toBe('posters/hero-820.webp');
+    expect(posterFor('hero', 375, 'stacked')).toBe('posters/hero-390.webp');
+    // Stages without layout-specific stills ignore the hint.
+    expect(posterFor('workstation', 1440, 'stacked')).toBe(WORKSTATION_POSTER);
+  });
+
   it('treats the 2D schematic (tier D) as drawn', () => {
     useViewerStore.setState({ tier: 'D' });
     const { container } = render(<CanvasSlot stage="workstation" />);

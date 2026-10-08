@@ -12,8 +12,21 @@ import { buildTracks } from '../labels/anchorTracks';
 import { SURFACE_PREFERRED, surfaceBestView, type SurfaceViewScore } from './bestView';
 import { collectOccluders, isOccluded } from './occlusion';
 import { angleLabel, useCameraState, type ViewKind } from './cameraState';
+import { heroRuntime, useHeroIntro } from '../stage/heroIntro';
 import { sceneRuntime } from '../stage/sceneRuntime';
 import { cameraRigApi } from './controlsApi';
+import {
+  HERO_BACKDROP_GLOW,
+  HERO_PARALLAX,
+  dollyAt,
+  easeDolly,
+  heroPose,
+  heroSway,
+  orbitDirection,
+  torsoFrame,
+  type DollyPose,
+  type HeroPose,
+} from './heroCamera';
 import {
   HERO_HEART_SHARE,
   WORKSTATION_HEART_SHARE,
@@ -39,9 +52,10 @@ import { CameraHistory, type Pose } from './history';
 import { PROJECTIONS, bestViewFor, fromControlsAngles, toControlsAngles } from './presets';
 
 const DEG = Math.PI / 180;
-/** Landing turntable: 6°/s, stops on pointer-down, resumes after 8 s idle (DESIGN_SYSTEM §6). */
-const TURNTABLE_RAD_PER_S = 6 * DEG;
-const TURNTABLE_RESUME_MS = 8000;
+/** The landing hero frames the whole upper torso, further out than the workstation's orbit clamp. */
+const HERO_MAX_DISTANCE = 16;
+/** A re-framed hero rest pose (the copy column settling as web fonts load, a resize) glides at this rate (λ). */
+const HERO_REFRAME_LAMBDA = 4;
 /** Camera field of view (DESIGN_SYSTEM §7.1). */
 export const CAMERA_FOV = 30;
 /** Thorax view: the exploded thorax fills this share of the free area, 7–18 units away. */
@@ -110,6 +124,7 @@ const poseDistance = (a: Pose, b: Pose) =>
 const movedFrom = (a: Pose, b: Pose) => poseDistance(a, b) > 2e-3;
 
 const clamp01 = (x: number) => (x < 0 ? 0 : x > 1 ? 1 : x);
+const damp = (from: number, to: number, lambda: number, dt: number) => to + (from - to) * Math.exp(-lambda * dt);
 const smooth = (x: number) => {
   const t = clamp01(x);
   return t * t * (3 - 2 * t);
@@ -139,15 +154,17 @@ function insetsFor(stage: Stage): Insets {
 /**
  * Camera (DESIGN_SYSTEM §7.1, §7.5; WORKSTATION_V2 §4.1, §5.15, §8.2): drei CameraControls with Shift-drag
  * pan, smoothTime 0.35 / draggingSmoothTime 0.12. It
- *   - frames the heart at 62 % of the free-area height (workstation home, projections, best views) and at
- *     ~58 % of the hero height on the landing, solved from the manifest's heart box for each direction;
+ *   - frames the heart at 62 % of the free-area height (workstation home, projections, best views), solved from
+ *     the manifest's heart box for each direction, and the upper torso around it on the landing (heroCamera.ts);
  *   - centres the orbit target in the free area with `camera.setViewOffset`, gliding over `flyout` (360 ms)
  *     whenever `uiStore.stageInsets` change — chrome never resizes the canvas;
  *   - executes viewer-store camera commands (home, C-arm projections, fly-to-vessel best views);
  *   - remembers the pose before a selection (`viewerStore.cameraReturn`) and flies back to it when the
  *     selection is cleared by Esc / ✕ / an empty click (H flies home instead) — Primal's reversible modes;
  *   - records settled poses for Back / Forward, publishes the View-menu label, the live C-arm readout and
- *     the first-frame signal, and runs the landing turntable.
+ *     the first-frame signal;
+ *   - on the landing hero: a slow sway and a pointer parallax around the torso pose, and the "Enter Workstation"
+ *     dolly, which lands exactly on the workstation's home pose and view offset (heroIntro.ts).
  */
 export function CameraRig() {
   const ref = useRef<CameraControlsImpl>(null);
@@ -208,7 +225,7 @@ export function CameraRig() {
     const heroDirection = torso
       ? toVec(torso.position as number[], new Vector3(0, 0.3, 6)).sub(toVec(torso.target as number[], new Vector3())).normalize()
       : new Vector3(0, 0.05, 1).normalize();
-    return { box, target, direction, heroDirection };
+    return { box, target, direction, heroDirection, torso: torsoFrame(manifest) };
   }, [manifest]);
 
   // Centre of each vessel target's anatomy (union of its manifest boxes, rest frame), for the selection focus.
@@ -253,11 +270,14 @@ export function CameraRig() {
   // While the peel shows the thorax the camera may sit further out than the orbit clamp.
   const [thoraxView, setThoraxView] = useState(false);
 
-  /** Distance that frames the heart for `direction` at the stage's share of the current free area. */
-  const distanceFor = (direction: Vector3, forStage: Stage = stageRef.current): number => {
+  /**
+   * Distance that frames the heart for `direction` at the stage's share of the current free area (or of
+   * `insets`: the dolly frames the workstation's free area before the workstation has published it).
+   */
+  const distanceFor = (direction: Vector3, forStage: Stage = stageRef.current, insets: Insets = insetsFor(forStage)): number => {
     const { width, height } = sizeRef.current;
     if (!(width > 0) || !(height > 0)) return 3.6;
-    const free = freeArea(width, height, insetsFor(forStage));
+    const free = freeArea(width, height, insets);
     const share =
       forStage === 'hero' ? Math.min(0.8, (HERO_HEART_SHARE * height) / Math.max(1, free.height)) : WORKSTATION_HEART_SHARE;
     const { heart, keep } = sceneRuntime.framing;
@@ -303,8 +323,149 @@ export function CameraRig() {
   };
 
   const flyHome = (animate: boolean) => {
-    const direction = stageRef.current === 'hero' ? geo.heroDirection : geo.direction;
-    flyTo(direction, distanceFor(direction), animate);
+    if (stageRef.current === 'hero') {
+      flyHero(animate);
+      return;
+    }
+    flyTo(geo.direction, distanceFor(geo.direction), animate);
+  };
+
+  // ---- Landing hero. The rest pose frames the torso in the free area beside the copy (`base`); the camera
+  // glides to a re-solved one (`current`), and sways / follows the pointer around it. "Enter Workstation" plays
+  // the dolly from the live pose to the workstation's home pose (`dolly`), on the page's clock.
+  const hero = useRef<{
+    base: HeroPose | null;
+    current: { target: Vector3; distance: number } | null;
+    /** Seconds of idle motion so far (the sway's own clock: it holds still while the hero is off screen). */
+    clock: number;
+    /** Damped pointer parallax, −1..1. */
+    px: number;
+    py: number;
+    /** The dolly's endpoints, and the canvas size its landing was solved for. */
+    dolly: { from: DollyPose; to: DollyPose; pose: DollyPose; width: number; height: number } | null;
+  }>({ base: null, current: null, clock: 0, px: 0, py: 0, dolly: null });
+  const heroDir = useMemo(() => new Vector3(), []);
+  const heroEntering = () => stageRef.current === 'hero' && useHeroIntro.getState().phase === 'entering';
+  /** Arriving on the hero: a fresh rest pose, no dolly, the chest closed. */
+  const resetHero = () => {
+    const h = hero.current;
+    h.base = null;
+    h.current = null;
+    h.dolly = null;
+    heroRuntime.intro = 0;
+  };
+
+  /** Put the camera on `target` + `direction` · `distance` now (the hero drives the pose every frame). */
+  const placeCamera = (target: Vector3, direction: Vector3, distance: number) => {
+    const controls = ref.current;
+    if (!controls) return;
+    const pos = target.clone().addScaledVector(direction, distance);
+    void controls.setLookAt(pos.x, pos.y, pos.z, target.x, target.y, target.z, false);
+    controls.update(0);
+  };
+
+  /** Solve the hero's rest pose for the current canvas and free area; snap to it unless `animate`. */
+  const flyHero = (animate: boolean) => {
+    const h = hero.current;
+    const { width, height } = sizeRef.current;
+    h.base = heroPose({ frame: geo.torso, fov: CAMERA_FOV, width, height, insets: insetsFor('hero') });
+    silhouetteBias.current = ZERO_OFFSET;
+    if (!animate || !h.current) h.current = { target: h.base.target.clone(), distance: h.base.distance };
+    if (heroEntering()) return;
+    const sway = heroSway(h.clock);
+    orbitDirection(geo.heroDirection, sway.azimuth + HERO_PARALLAX.azimuthDeg * DEG * h.px, sway.elevation + HERO_PARALLAX.elevationDeg * DEG * h.py, heroDir);
+    placeCamera(h.current.target, heroDir, h.current.distance);
+    invalidate();
+  };
+
+  /**
+   * Where the dolly lands: the workstation's home pose and view offset for `arrival` (the insets its cards will
+   * publish), solved exactly as the stage switch will solve it, so the route change shows the same frame.
+   */
+  const workstationArrival = (arrival: Insets): DollyPose => {
+    const { width, height } = sizeRef.current;
+    const direction = geo.direction.clone();
+    const distance = distanceFor(direction, 'workstation', arrival);
+    const bias = homeBias(direction, distance);
+    const base = viewOffsetFor(width, height, arrival);
+    return { target: geo.target.clone(), direction, distance, offset: { x: base.x + bias.x, y: base.y + bias.y } };
+  };
+
+  /**
+   * Per frame on the hero. Returns the view offset to apply while the dolly runs (it moves with the camera,
+   * never on the chrome glide), else null.
+   */
+  const heroFrame = (now: number, delta: number): Offset | null => {
+    const controls = ref.current;
+    const h = hero.current;
+    if (!controls) return null;
+    if (!h.base || !h.current) flyHero(false);
+    const intro = useHeroIntro.getState();
+    const { width, height } = sizeRef.current;
+
+    if (intro.phase === 'entering') {
+      const arrival = intro.arrival ?? insetsFor('hero');
+      if (!h.dolly) {
+        const target = controls.getTarget(new Vector3());
+        const position = controls.getPosition(new Vector3());
+        const from: DollyPose = {
+          target,
+          direction: position.clone().sub(target).normalize(),
+          distance: Math.max(1e-3, position.distanceTo(target)),
+          offset: { ...offset.current.current },
+        };
+        const pose: DollyPose = { target: new Vector3(), direction: new Vector3(), distance: 0, offset: { x: 0, y: 0 } };
+        h.dolly = { from, to: workstationArrival(arrival), pose, width, height };
+      } else if (h.dolly.width !== width || h.dolly.height !== height) {
+        // The page dropped its scrollbar as the dolly began: land on the framing for the canvas as it is now.
+        h.dolly.to = workstationArrival(arrival);
+        h.dolly.width = width;
+        h.dolly.height = height;
+      }
+      const u = clamp01((now - intro.startedAt) / intro.duration);
+      const k = easeDolly(u);
+      const pose = dollyAt(h.dolly.from, h.dolly.to, k, h.dolly.pose);
+      heroRuntime.intro = u;
+      heroRuntime.backdropShift = width > 0 ? (pose.offset.x / width) * (1 - k) : 0;
+      heroRuntime.backdropGlow = HERO_BACKDROP_GLOW + (1 - HERO_BACKDROP_GLOW) * k;
+      placeCamera(pose.target, pose.direction, pose.distance);
+      invalidate();
+      return pose.offset;
+    }
+
+    h.dolly = null;
+    heroRuntime.intro = 0;
+    const dt = Math.min(Math.max(delta, 0), 0.1);
+    const reducedNow = reducedRef.current;
+    const live = useHeroIntro.getState().live && !reducedNow;
+    if (live) h.clock += dt;
+    const pointer = heroRuntime.pointer;
+    const goalX = live && pointer.active ? pointer.x : 0;
+    const goalY = live && pointer.active ? pointer.y : 0;
+    h.px = reducedNow ? goalX : damp(h.px, goalX, HERO_PARALLAX.lambda, dt);
+    h.py = reducedNow ? goalY : damp(h.py, goalY, HERO_PARALLAX.lambda, dt);
+    const base = h.base!;
+    const cur = h.current!;
+    const k = reducedNow ? 1 : 1 - Math.exp(-HERO_REFRAME_LAMBDA * dt);
+    cur.target.lerp(base.target, k);
+    cur.distance += (base.distance - cur.distance) * k;
+    const sway = heroSway(h.clock);
+    orbitDirection(
+      geo.heroDirection,
+      sway.azimuth + HERO_PARALLAX.azimuthDeg * DEG * h.px,
+      sway.elevation + HERO_PARALLAX.elevationDeg * DEG * h.py,
+      heroDir,
+    );
+    placeCamera(cur.target, heroDir, cur.distance);
+    heroRuntime.backdropShift = width > 0 ? offset.current.current.x / width : 0;
+    heroRuntime.backdropGlow = HERO_BACKDROP_GLOW;
+    const settling =
+      Math.abs(h.px - goalX) > 1e-3 ||
+      Math.abs(h.py - goalY) > 1e-3 ||
+      cur.target.distanceToSquared(base.target) > 1e-8 ||
+      Math.abs(cur.distance - base.distance) > 1e-4;
+    if (live || settling) invalidate();
+    return null;
   };
 
   const flyToPose = (pose: Pose | CameraPose, animate: boolean) => {
@@ -384,6 +545,7 @@ export function CameraRig() {
     userTouched.current = false;
     resetPeel();
     setThoraxView(false);
+    if (stage === 'hero') resetHero();
     flyHome(false);
     offset.current.applied = '';
     if (stage === 'workstation') {
@@ -410,6 +572,7 @@ export function CameraRig() {
         stageRef.current = s.stage;
         userTouched.current = false;
         resetPeel();
+        if (s.stage === 'hero') resetHero();
         flyHome(false);
         const base = viewOffsetFor(width, height, insetsFor(s.stage));
         const goal = { x: base.x + silhouetteBias.current.x, y: base.y + silhouetteBias.current.y };
@@ -429,6 +592,8 @@ export function CameraRig() {
   useEffect(() => {
     if (stage === 'hidden' || !(size.width > 0)) return;
     const t = window.setTimeout(() => {
+      // The dolly owns the hero's camera until the route changes.
+      if (heroEntering()) return;
       const mode = peel.current.mode;
       if (stage === 'workstation' && mode !== 'heart') return fitOpenHeart(false);
       if (userTouched.current) return;
@@ -450,7 +615,7 @@ export function CameraRig() {
         // The hero re-frames whenever its copy / bands move the free area (web fonts load late); the
         // workstation only right after the stage switch (later chrome changes glide the view offset only).
         const since = performance.now() - stageEnteredAt.current;
-        if (st === 'hidden' || (st === 'workstation' && since > 900)) return;
+        if (st === 'hidden' || (st === 'workstation' && since > 900) || heroEntering()) return;
         if (userTouched.current || peel.current.mode !== 'heart') return;
         const { width, height } = sizeRef.current;
         const free = freeArea(width, height, insetsFor(st));
@@ -934,7 +1099,9 @@ export function CameraRig() {
       // pose the poster was rendered at instead of a zoom.
       const animate = !reduced && useCameraState.getState().firstFrame;
       const mode = st === 'workstation' ? peel.current.mode : 'heart';
-      if (st !== 'hidden' && atHome && !userTouched.current && mode === 'heart') flyHome(animate);
+      if (heroEntering()) {
+        // The dolly re-solves nothing mid-flight.
+      } else if (st !== 'hidden' && atHome && !userTouched.current && mode === 'heart') flyHome(animate);
       else if (mode !== 'heart') peel.current.dirty = true;
     }
 
@@ -942,19 +1109,27 @@ export function CameraRig() {
     // it (the procedural heart) the camera follows here.
     if (stage === 'workstation' && !sceneRuntime.anatomyReady) followPeel();
 
+    // Landing hero: the torso pose with its sway and parallax, or the dolly (which carries its own view offset).
+    const heroOffset = stage === 'hero' ? heroFrame(now, delta) : null;
+    if (stage !== 'hero') {
+      heroRuntime.backdropShift = 0;
+      heroRuntime.backdropGlow = 1;
+    }
+
     // View offset: the orbit target sits at the centre of the free area; glides over `flyout`.
     const { width, height } = size;
     const off = offset.current;
     const base = viewOffsetFor(width, height, insetsFor(stage));
     const bias = stage === 'hidden' ? ZERO_OFFSET : silhouetteBias.current;
-    const goal = { x: base.x + bias.x, y: base.y + bias.y };
+    const goal = heroOffset ?? { x: base.x + bias.x, y: base.y + bias.y };
     if (!sameOffset(goal, off.to)) {
       off.from = off.current;
       off.to = goal;
       off.t0 = now;
     }
-    // The peel follower moves the camera in lockstep with the pieces: its bias is applied at once, not glided.
-    if (snapOffset.current) {
+    // The peel follower moves the camera in lockstep with the pieces, and the dolly moves the frame with the
+    // camera: their offsets apply at once, never glided.
+    if (snapOffset.current || heroOffset) {
       snapOffset.current = false;
       off.from = goal;
       off.to = goal;
@@ -967,11 +1142,6 @@ export function CameraRig() {
       camera.updateProjectionMatrix();
     }
     if (!sameOffset(off.current, off.to, 0.01)) invalidate();
-
-    // Landing turntable only; never in the workstation.
-    if (stage === 'hero' && !reduced && now - lastInteraction.current > TURNTABLE_RESUME_MS) {
-      controls.azimuthAngle += TURNTABLE_RAD_PER_S * Math.min(delta, 0.1);
-    }
 
     // First frame with anatomy (V2 §5.18): the slot crossfades the poster away on this signal.
     if (!useCameraState.getState().firstFrame && stage !== 'hidden') {
@@ -1001,7 +1171,9 @@ export function CameraRig() {
       ref={ref}
       makeDefault
       minDistance={limits.minDistance}
-      maxDistance={thoraxView ? Math.max(limits.maxDistance, THORAX_MAX_DISTANCE) : limits.maxDistance}
+      maxDistance={
+        stage === 'hero' ? HERO_MAX_DISTANCE : thoraxView ? Math.max(limits.maxDistance, THORAX_MAX_DISTANCE) : limits.maxDistance
+      }
       minPolarAngle={limits.minPolar}
       maxPolarAngle={limits.maxPolar}
       smoothTime={0.35}

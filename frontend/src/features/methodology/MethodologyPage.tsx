@@ -3,7 +3,7 @@ import { ArrowUpRight } from 'lucide-react';
 import { Fragment, useEffect, useMemo, useRef, type ReactNode } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { Skeleton } from '@/design';
-import { REPOSITORY_URL } from '@/features/landing/InfoCards';
+import { REPOSITORY_URL } from '@/features/landing/links';
 import { scrollToSection, useActiveSection } from '@/features/performance/useActiveSection';
 import { useManifest, useMetrics, useSchema } from '@/hooks/useData';
 import { useIsReducedMotion } from '@/hooks/useMediaQuery';
