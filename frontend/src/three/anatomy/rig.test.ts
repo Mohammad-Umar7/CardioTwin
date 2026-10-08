@@ -3,7 +3,7 @@ import { describe, expect, it } from 'vitest';
 import type { AnatomyManifest, TargetId } from '@/types/contracts';
 import { BEAT_UNIFORMS } from './beatDeform';
 import { Picker } from './picking';
-import { AnatomyRig, type RigInputs } from './rig';
+import { AnatomyRig, GREAT_VESSEL_CLIP, HERO_GREAT_VESSEL_CLIP, type RigInputs } from './rig';
 
 const ANTERIOR: [number, number, number] = [-0.8074, 0.1839, 0.6917];
 
@@ -181,7 +181,7 @@ describe('anatomy rig: exploded view', () => {
 });
 
 describe('anatomy rig: visibility', () => {
-  it('hides the lungs in the workstation and shows them as a ghost on the landing', () => {
+  it('hides the lungs in the workstation and shows the closed chest as glass on the landing hero', () => {
     const { rig, node } = makeRig();
     rig.update(inputs());
     expect(node('Lung_L').mesh.visible).toBe(false);
@@ -189,6 +189,42 @@ describe('anatomy rig: visibility', () => {
     expect(node('Lung_L').mesh.visible).toBe(true);
     expect(node('Lung_L').ghostMesh.visible).toBe(true);
     expect((node('Lung_L').mesh.material as MeshStandardMaterial).visible).toBe(false);
+    // The heart itself stays solid inside it.
+    expect((node('Heart_Wall_Anterior').mesh.material as MeshStandardMaterial).visible).toBe(true);
+  });
+
+  it('clears the hero chest through the dolly and switches the presentation at once between stages', () => {
+    const { rig, node } = makeRig();
+    rig.update(inputs({ stage: 'hero', reduced: false, heroIntro: 0 }));
+    expect(node('Lung_L').ghostMesh.visible).toBe(true);
+    rig.update(inputs({ stage: 'hero', heroIntro: 1 }));
+    expect(node('Lung_L').mesh.visible).toBe(false);
+    // Back at rest on the hero, then into the workstation without a fade frame (the canvas moves between pages).
+    rig.update(inputs({ stage: 'hero', heroIntro: 0 }));
+    rig.update(inputs({ stage: 'workstation', reduced: false }));
+    expect(node('Lung_L').mesh.visible).toBe(false);
+  });
+
+  it('keeps the hero chest at rest whatever the peel, while the workstation sets it aside', () => {
+    const { rig, node } = makeRig();
+    rig.update(inputs({ stage: 'workstation', explodeTarget: 0.6 }));
+    const aside = worldOf(node('Lung_L').mesh);
+    expect(aside.distanceTo(new Vector3(0.44, 0.07, -0.15))).toBeGreaterThan(0.5);
+    rig.update(inputs({ stage: 'hero', explodeTarget: 0.6 }));
+    expect(worldOf(node('Lung_L').mesh).distanceTo(new Vector3(0.44, 0.07, -0.15))).toBeLessThan(1e-9);
+    // The heart keeps the rest detent on both stages.
+    expect(worldOf(node('Heart_Wall_Anterior').mesh).distanceTo(new Vector3(0, 0, 0.13))).toBeLessThan(1e-9);
+  });
+
+  it('lets the great vessels run on into the hero chest and draws them back to the specimen cut by the landing', () => {
+    const { rig } = makeRig();
+    const radius = () => rig.shared.clipGreat.uClipRadius.value;
+    rig.update(inputs({ stage: 'workstation' }));
+    expect(radius()).toBeCloseTo(GREAT_VESSEL_CLIP.radius, 9);
+    rig.update(inputs({ stage: 'hero', heroIntro: 0 }));
+    expect(radius()).toBeCloseTo(HERO_GREAT_VESSEL_CLIP.radius, 9);
+    rig.update(inputs({ stage: 'hero', heroIntro: 1 }));
+    expect(radius()).toBeCloseTo(GREAT_VESSEL_CLIP.radius, 9);
   });
 
   it('isolates the selected artery with the heart itself (walls, great-vessel roots) and fades the other vessels out', () => {

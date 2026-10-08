@@ -24,8 +24,8 @@ export interface AssemblyStage {
 }
 
 /**
- * The choreography, in the order the owner asked for (outside-in). The chest layers rest as ghosts or are
- * set aside in the workstation and hidden on the landing, so their flights overlap BEFORE t = 0: the first
+ * The choreography, in the order the owner asked for (outside-in). The chest layers rest as ghosts (as glass
+ * around the heart on the landing) or are set aside in the workstation, so their flights overlap BEFORE t = 0: the first
  * frame already shows the great vessels and the posterior half materialising (never an empty stage), and
  * the heart's own motion — posterior half, then the anterior half swinging shut with the coronaries riding
  * it — fills the ≈ 1.7 s.

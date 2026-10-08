@@ -1,24 +1,24 @@
 /**
- * The landing is a chrome preset over the same stage as the workstation (WORKSTATION_V2 §4.1, §6.1):
- * the hero canvas has the stage's exact rectangle, so "Open the workstation" never resizes it.
+ * The landing is a chrome preset over the same stage as the workstation (WORKSTATION_V2 §4.1): on wide screens
+ * the hero canvas has the workstation stage's exact rectangle, so the "Enter Workstation" dolly hands the canvas
+ * over without a resize or a cut.
  *
- *   - `chrome = 'landing'` while the page is mounted (labels carry the %, no stage cards). On leave the
- *     preset returns to `workstation`, which is the moment the labels hand the vessel numbers over to the
- *     Risk card (§6.2).
- *   - The free area is published through `uiStore.stageInsets`: the copy covers at least the left 32 % and
- *     the KPI/pillar bands cover the bottom, so the camera's view offset centres the heart at ≈ 66 % of the
- *     width, above the bands. When the set copy is wider than 32 % (display-1 at 1440), the inset follows
- *     its measured right edge, so the vessel labels' lanes never land on the text. The camera rig owns the
+ *   - `chrome = 'landing'` while the page is mounted (no stage cards, no vessel labels).
+ *   - The free area is published through `uiStore.stageInsets`: the copy column covers the left of the stage,
+ *     from its widest rendered line, so the camera centres the torso in what is left. Below the split
+ *     breakpoint the hero stacks (copy above the canvas) and nothing covers the stage. The camera rig owns the
  *     pose; the page only describes what covers the stage.
  */
-import { useEffect, useLayoutEffect, useState, type RefObject } from 'react';
+import { useEffect, useLayoutEffect, type RefObject } from 'react';
 import { useUiStore } from '@/state/uiStore';
 import { useViewerStore } from '@/state/viewerStore';
 
-/** Share of the stage width covered by the hero copy (heart centre at (0.32 + 1) / 2 = 66 %). */
-export const HERO_COPY_SHARE = 0.32;
-/** Below this width the landing stacks (copy under the canvas) and nothing covers the stage. */
-export const LANDING_STACK_BELOW = 1100;
+/** From this width the hero sits beside its copy; below it the landing stacks. */
+export const LANDING_SPLIT_AT = 1024;
+/** The copy column never covers less than this share of the stage (the torso keeps clear of it). */
+export const HERO_COPY_MIN_SHARE = 0.34;
+/** Breathing room between the copy's widest line and the free area. */
+export const COPY_GAP = 40;
 
 export interface HeroInsets {
   left: number;
@@ -27,18 +27,24 @@ export interface HeroInsets {
   bottom: number;
 }
 
-/** Breathing room between the copy's widest line and the free area (label lanes, heart). */
-export const COPY_GAP = 24;
+const NONE: HeroInsets = Object.freeze({ left: 0, right: 0, top: 0, bottom: 0 });
 
 /**
- * Pure: the stage insets for a hero of `width` px whose bottom `bandsHeight` px are covered and whose copy
- * text ends `copyRight` px from the hero's left edge.
+ * Pure: the stage insets for a hero `width` px wide whose copy text ends `copyRight` px from its left edge.
+ * `split` says whether the page lays the hero out beside its copy; pass the media query's answer, because the
+ * hero's own box is narrower than the viewport by the scrollbar.
  */
-export function heroInsets(width: number, bandsHeight: number, copyRight = 0): HeroInsets {
-  if (!(width > 0) || width < LANDING_STACK_BELOW) return { left: 0, right: 0, top: 0, bottom: 0 };
-  const left = Math.max(Math.round(width * HERO_COPY_SHARE), copyRight > 0 ? Math.round(copyRight + COPY_GAP) : 0);
-  return { left, right: 0, top: 0, bottom: Math.max(0, Math.round(bandsHeight)) };
+export function heroInsets(width: number, copyRight = 0, split = width >= LANDING_SPLIT_AT): HeroInsets {
+  if (!(width > 0) || !split) return NONE;
+  const left = Math.round(Math.max(width * HERO_COPY_MIN_SHARE, copyRight > 0 ? copyRight + COPY_GAP : 0));
+  return { left, right: 0, top: 0, bottom: 0 };
 }
+
+/** The split layout's media query, exactly as the page's `lg:` classes evaluate it. */
+export const splitLayout = (): boolean =>
+  typeof window !== 'undefined' && typeof window.matchMedia === 'function'
+    ? window.matchMedia(`(min-width: ${LANDING_SPLIT_AT}px)`).matches
+    : false;
 
 /** Right edge of the widest rendered text line inside `el` (Range line boxes, not the block's box). */
 export function textRight(el: Element | null): number {
@@ -67,54 +73,42 @@ export function useLandingChrome(): void {
   }, []);
 }
 
-/** Publishes the hero's free area while the landing is mounted. */
-export function useHeroInsets(
-  heroRef: RefObject<HTMLElement>,
-  bandsRef: RefObject<HTMLElement>,
-  copyRef?: RefObject<HTMLElement>,
-): void {
+/** Publishes the hero's free area (beside the copy column) while the landing is mounted. */
+export function useHeroInsets(heroRef: RefObject<HTMLElement>, copyRef: RefObject<HTMLElement>): void {
   useLayoutEffect(() => {
     const hero = heroRef.current;
     if (!hero) return;
     const publish = () => {
       const box = hero.getBoundingClientRect();
-      const bands = bandsRef.current?.getBoundingClientRect().height ?? 0;
-      const copy = textRight(copyRef?.current ?? null);
-      const insets = heroInsets(box.width, bands, copy > 0 ? copy - box.left : 0);
-      // HUD chips sit just above the bands and centre on the free area; CSS reads the same measurement.
-      hero.style.setProperty('--landing-bands-h', `${insets.bottom}px`);
-      hero.style.setProperty('--landing-free-cx', `${Math.round((insets.left + box.width - insets.right) / 2)}px`);
-      hero.style.setProperty('--landing-free-left', `${insets.left}px`);
-      useUiStore.getState().setStageInsets(insets);
+      const copy = textRight(copyRef.current);
+      useUiStore.getState().setStageInsets(heroInsets(box.width, copy > 0 ? copy - box.left : 0, splitLayout()));
     };
     publish();
     const ro = typeof ResizeObserver !== 'undefined' ? new ResizeObserver(publish) : null;
     ro?.observe(hero);
-    if (bandsRef.current) ro?.observe(bandsRef.current);
-    if (copyRef?.current) ro?.observe(copyRef.current);
+    if (copyRef.current) ro?.observe(copyRef.current);
+    // The layout flips at the breakpoint even where the hero's box barely changes (the scrollbar's width).
+    const mql = typeof window.matchMedia === 'function' ? window.matchMedia(`(min-width: ${LANDING_SPLIT_AT}px)`) : null;
+    mql?.addEventListener?.('change', publish);
     // Web fonts change line widths once they load.
     void document.fonts?.ready.then(publish);
-    return () => ro?.disconnect();
-  }, [heroRef, bandsRef, copyRef]);
+    return () => {
+      ro?.disconnect();
+      mql?.removeEventListener?.('change', publish);
+    };
+  }, [heroRef, copyRef]);
 }
 
-/**
- * The copy's exit before a route change (§6.2: 240 ms, y −8). Returns `leaving` for the exit styles and
- * `leave(run)`, which plays the exit and then calls `run` (immediately under reduced motion).
- */
-export function useLeaveTransition(reduced: boolean): { leaving: boolean; leave(run: () => void): void } {
-  const [leaving, setLeaving] = useState(false);
-  const [pending, setPending] = useState<(() => void) | null>(null);
+/** True while `el` is at least partly on screen (null = unknown: assume on screen). */
+export function useOnScreen(ref: RefObject<HTMLElement>, onChange: (visible: boolean) => void): void {
   useEffect(() => {
-    if (!pending) return;
-    const t = setTimeout(pending, reduced ? 0 : 240);
-    return () => clearTimeout(t);
-  }, [pending, reduced]);
-  return {
-    leaving,
-    leave(run) {
-      setLeaving(true);
-      setPending(() => run);
-    },
-  };
+    const el = ref.current;
+    if (!el || typeof IntersectionObserver === 'undefined') {
+      onChange(true);
+      return;
+    }
+    const io = new IntersectionObserver(([entry]) => onChange(!!entry?.isIntersecting), { threshold: 0.05 });
+    io.observe(el);
+    return () => io.disconnect();
+  }, [ref, onChange]);
 }

@@ -6,11 +6,11 @@ import { cn } from '@/lib/cn';
 import { assetUrl } from '@/services/staticData';
 import { useViewerStore, type Stage } from '@/state/viewerStore';
 import { useCameraState } from './camera/cameraState';
-import { posterFor } from './posters';
+import { posterFor, type PosterLayout } from './posters';
 import { useSceneSlot } from './sceneSlot';
 
 export interface CanvasSlotProps {
-  /** Which camera pose / behaviour the page wants ('hero' = landing turntable, 'workstation' = home pose). */
+  /** Which camera pose / behaviour the page wants ('hero' = landing torso, 'workstation' = home pose). */
   stage: Exclude<Stage, 'hidden'>;
   /** HUD overlays rendered above the canvas (z-hud). */
   children?: ReactNode;
@@ -20,6 +20,8 @@ export interface CanvasSlotProps {
    * stage's own still (`POSTERS`, V2 §5.18) — e.g. the landing's backdrop gradient.
    */
   placeholder?: ReactNode;
+  /** The page's layout of the stage, when its stills differ by layout as well as size (the landing hero). */
+  posterLayout?: PosterLayout;
 }
 
 /** V2 §5.18: the canvas crossfades in over 300 ms on its first rendered frame. */
@@ -141,7 +143,7 @@ function StageLoader({ loading }: { loading: boolean }) {
  * it, then crossfades in over 300 ms — on that frame, not on the GLB load, so no blank frame is ever
  * visible. Once the canvas has drawn, later visits show it at once.
  */
-export function CanvasSlot({ stage, children, className, placeholder }: CanvasSlotProps) {
+export function CanvasSlot({ stage, children, className, placeholder, posterLayout }: CanvasSlotProps) {
   const ref = useRef<HTMLDivElement>(null);
   const register = useSceneSlot((s) => s.register);
   const unregister = useSceneSlot((s) => s.unregister);
@@ -159,7 +161,7 @@ export function CanvasSlot({ stage, children, className, placeholder }: CanvasSl
   const poster = (
     <div aria-hidden className="absolute inset-0 bg-void">
       {placeholder}
-      <StagePoster src={posterFor(stage, width)} />
+      <StagePoster src={posterFor(stage, width, posterLayout)} />
     </div>
   );
   // Keep the poster under the canvas until the crossfade has finished, then drop it.

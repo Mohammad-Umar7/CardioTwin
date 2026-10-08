@@ -1,117 +1,94 @@
-import { useEffect, useMemo, useRef } from 'react';
+import { useEffect, useRef } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
-import { useSchemaIndex } from '@/hooks/useData';
-import { useReducedMotion } from '@/hooks/useMediaQuery';
 import { cn } from '@/lib/cn';
-import { ROUTES, loadWorkstation } from '@/routes';
-import { usePatientStore } from '@/state/patientStore';
-import { useUiStore } from '@/state/uiStore';
-import { CanvasSlot } from '@/three/CanvasSlot';
+import { loadWorkstation } from '@/routes';
 import { startGuidedDemo } from '@/features/tour/tourApi';
-import { waitForStage } from '@/features/tour/waitFor';
+import { registerWorkstationEntry } from './entry';
+import { EvidenceSection } from './EvidenceSection';
 import { HeroCopy } from './HeroCopy';
-import { HeroHud, HeroPoster } from './HeroHud';
-import { DataAnatomyCard, IntendedUseCard } from './InfoCards';
-import { KpiStrip } from './KpiStrip';
-import { Pillars, type LandingDestination } from './Pillars';
-import { useAttractMode } from './useAttractMode';
-import { useHeroInsets, useLandingChrome, useLeaveTransition } from './useLandingStage';
+import { HeroStage } from './HeroStage';
+import { useEnterWorkstation } from './useEnterWorkstation';
+import { useHeroInsets, useLandingChrome } from './useLandingStage';
 
 /**
- * Landing, "the heart unboxed" (WORKSTATION_V2 §6.1–6.2).
+ * Landing: one cinematic hero and a short evidence section.
  *
- * The hero is the stage itself: the persistent canvas fills the same rectangle the workstation uses
- * (between the top bar and the status line), the copy floats over its left edge behind a bg/app → clear
- * gradient, and the KPI strip and verb pillars are opaque bands along its bottom edge. The page publishes
- * that coverage as the stage insets, so the camera centres the heart in what is left. "Open the
- * workstation" plays the copy exit and changes route; the canvas keeps its size, the camera glides to
- * the workstation home, and the labels hand their % over to the Risk card as the chrome preset changes.
+ * The hero is the stage itself: on wide screens the persistent canvas fills the same rectangle the workstation
+ * stage uses (between the top bar and the status line), showing the upper torso with the heart inside it; the
+ * copy sits over its left edge behind a plain veil and publishes that coverage as the stage insets, so the camera
+ * centres the torso in the rest. "Enter Workstation" (or the top bar's Workstation link) plays the dolly into the
+ * heart and opens the existing workstation on the same canvas (useEnterWorkstation). Below 1024 px the hero
+ * stacks: the copy, then the stage.
  */
 export default function LandingPage() {
   const navigate = useNavigate();
   const location = useLocation();
-  const reduced = useReducedMotion();
   const heroRef = useRef<HTMLElement>(null);
-  const bandsRef = useRef<HTMLDivElement>(null);
   const copyRef = useRef<HTMLDivElement>(null);
-  const schema = useSchemaIndex();
-  const vessels = useMemo(() => schema?.vessels.map((t) => t.id) ?? ['LAD', 'LCX', 'RCA'], [schema]);
-  const tourOpen = useUiStore((s) => s.tourOpen);
-  const hasPrediction = usePatientStore((s) => s.prediction !== null);
-  const { leaving, leave } = useLeaveTransition(reduced);
+  const stageRef = useRef<HTMLDivElement>(null);
+  const { leaving, enter, leave } = useEnterWorkstation(stageRef);
 
   useLandingChrome();
-  useHeroInsets(heroRef, bandsRef, copyRef);
-  const attract = useAttractMode(heroRef, vessels, !reduced && !tourOpen && !leaving && hasPrediction);
+  useHeroInsets(heroRef, copyRef);
 
   useEffect(() => {
-    // Same canvas, same patient: preload the workstation chunk so the glide never waits on the network.
-    // A failed preload is harmless; the route's own lazy import retries on navigation.
+    // Preload the workstation chunk so the route change at the end of the dolly never waits on the network. A
+    // failed preload is harmless; the route's own lazy import retries on navigation.
     loadWorkstation().catch(() => undefined);
   }, []);
 
-  const go = (destination: LandingDestination) =>
-    leave(() => {
-      window.scrollTo({ top: 0 });
-      navigate(destination.to);
-      const after = destination.after;
-      if (after && !destination.to.startsWith(ROUTES.performance)) {
-        void waitForStage('workstation').then((ok) => ok && after());
-      }
-    });
+  useEffect(() => registerWorkstationEntry(enter), [enter]);
+
+  const cinematic = leaving === 'cinematic';
 
   return (
-    <div className="flex w-full flex-col">
+    <div className="flex w-full flex-col bg-void">
       <section
         ref={heroRef}
         aria-labelledby="hero-title"
         data-region="landing-hero"
-        className="relative flex flex-col min-[1100px]:block min-[1100px]:h-[calc(100svh-var(--topbar-h)-var(--status-h))] min-[1100px]:min-h-[600px]"
+        className="relative isolate flex flex-col lg:block lg:h-[calc(100vh-var(--topbar-h)-var(--status-h))] lg:min-h-[560px]"
       >
-        <CanvasSlot
-          stage="hero"
-          className="order-2 h-[52svh] min-h-[320px] min-[1100px]:!absolute min-[1100px]:inset-0 min-[1100px]:h-auto min-[1100px]:min-h-0"
-          placeholder={<HeroPoster />}
-        >
-          <HeroHud attract={attract} vessels={vessels} leaving={leaving} />
-        </CanvasSlot>
+        <div ref={stageRef} className="relative order-2 h-[56svh] min-h-[340px] max-h-[620px] lg:absolute lg:inset-0 lg:h-auto lg:max-h-none">
+          <HeroStage className="absolute inset-0" />
+        </div>
+
+        {/* Plain veils, no light: the copy's contrast on wide screens, and the torso's crop under the rib cage. Both
+            clear with the copy as the camera moves in, so the workstation's first frame has nothing over it. */}
+        <div
+          aria-hidden
+          className={cn(
+            'pointer-events-none absolute inset-y-0 left-0 z-hud hidden w-[62%] transition-opacity ease-out lg:block',
+            cinematic ? 'opacity-0 duration-[700ms]' : 'duration-base',
+          )}
+          style={{
+            background:
+              'linear-gradient(90deg, rgb(var(--c-bg-void)) 0%, rgb(var(--c-bg-void) / 0.94) 38%, rgb(var(--c-bg-void) / 0.6) 62%, rgb(var(--c-bg-void) / 0) 100%)',
+          }}
+        />
+        <div
+          aria-hidden
+          className={cn(
+            'pointer-events-none absolute inset-x-0 bottom-0 z-hud h-[18%] min-h-[72px] transition-opacity ease-out',
+            cinematic ? 'opacity-0 duration-[900ms]' : 'duration-base',
+          )}
+          style={{ background: 'linear-gradient(0deg, rgb(var(--c-bg-void)) 0%, rgb(var(--c-bg-void) / 0) 100%)' }}
+        />
 
         <div
           ref={copyRef}
-          className="relative z-panels order-1 px-6 pb-8 pt-8 min-[1100px]:pointer-events-none min-[1100px]:absolute min-[1100px]:inset-x-0 min-[1100px]:top-0 min-[1100px]:flex min-[1100px]:items-center min-[1100px]:py-0 min-[1100px]:pl-[clamp(24px,5.4vw,88px)]"
-          style={{ bottom: 'var(--landing-bands-h, 0px)' }}
+          className="relative z-panels order-1 px-5 pb-5 pt-8 sm:px-8 sm:pb-8 sm:pt-14 lg:pointer-events-none lg:absolute lg:inset-y-0 lg:left-0 lg:flex lg:w-[50%] lg:max-w-[760px] lg:items-center lg:py-0 lg:pl-[clamp(40px,6.4vw,120px)] lg:pr-0"
         >
           <HeroCopy
             leaving={leaving}
-            className="min-[1100px]:pointer-events-auto min-[1100px]:w-[44%] min-[1100px]:max-w-[640px] min-[1100px]:pb-4"
-            onOpenWorkstation={() => go({ to: ROUTES.workstation })}
+            onEnter={enter}
             onGuidedDemo={() => leave(() => startGuidedDemo(navigate, `${location.pathname}${location.search}`))}
+            className="lg:pointer-events-auto lg:pb-6"
           />
         </div>
-
-        <div
-          ref={bandsRef}
-          data-region="landing-bands"
-          className={cn(
-            // LUMEN 2: the bands float as glass over the stage's foot; a dark floor fades up behind them so the
-            // glass always reads, and the heart's stage continues underneath instead of ending on a hard line.
-            'relative z-panels order-3 flex flex-col gap-2 px-4 pb-4 pt-2 transition-[opacity,transform] duration-base min-[1100px]:absolute min-[1100px]:inset-x-0 min-[1100px]:bottom-0 min-[1100px]:px-6 min-[1440px]:px-8',
-            'min-[1100px]:before:pointer-events-none min-[1100px]:before:absolute min-[1100px]:before:inset-x-0 min-[1100px]:before:-top-20 min-[1100px]:before:bottom-0 min-[1100px]:before:-z-10 min-[1100px]:before:bg-[linear-gradient(0deg,rgb(var(--c-bg-app))_0%,rgb(var(--c-bg-app)/0.78)_55%,transparent_100%)]',
-            leaving ? 'translate-y-2 opacity-0 ease-exit' : 'ease-out',
-          )}
-        >
-          <KpiStrip className="animate-fade-up [animation-delay:440ms]" />
-          <Pillars onNavigate={go} />
-        </div>
       </section>
 
-      <section
-        aria-label="Intended use and sources"
-        className="mx-auto grid w-full max-w-[1248px] grid-cols-1 gap-4 px-6 pb-12 pt-10 md:grid-cols-2"
-      >
-        <IntendedUseCard />
-        <DataAnatomyCard />
-      </section>
+      <EvidenceSection />
     </div>
   );
 }

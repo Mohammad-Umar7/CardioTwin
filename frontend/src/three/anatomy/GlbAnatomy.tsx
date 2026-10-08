@@ -10,6 +10,7 @@ import type { AnatomyManifest, TargetId, TargetSpec } from '@/types/contracts';
 import { useCameraState } from '../camera/cameraState';
 import { cameraRigApi } from '../camera/controlsApi';
 import { debugHandles } from '../stage/debug';
+import { heroRuntime } from '../stage/heroIntro';
 import { pickPointer, usePickStore } from '../stage/pickStore';
 import { readScene, useSceneControls } from '../stage/sceneControls';
 import { sceneRuntime } from '../stage/sceneRuntime';
@@ -396,8 +397,12 @@ export function GlbAnatomy({ url }: { url: string }) {
     invalidate();
   }, [assemblyNonce, rig, reduced, invalidate]);
 
-  // The heart starts beating once it has closed (LUMEN: the beat starts after ignition).
-  const beatGate = useCallback(() => !!rig && (rig.assembly.done || rig.assembly.t >= ASSEMBLY_IGNITE_AT), [rig]);
+  // The heart starts beating once it has closed (LUMEN: the beat starts after ignition). The landing hero is a
+  // still reference heart: the patient's own beat starts as the workstation opens (the envelope fades it in).
+  const beatGate = useCallback(
+    () => !!rig && useViewerStore.getState().stage !== 'hero' && (rig.assembly.done || rig.assembly.t >= ASSEMBLY_IGNITE_AT),
+    [rig],
+  );
   const beat = useBeat(beatGate);
 
   // One mutable inputs object, refilled every frame (no per-frame allocation).
@@ -413,10 +418,11 @@ export function GlbAnatomy({ url }: { url: string }) {
     if (viewer.tier !== 'D') rig.setTier(viewer.tier);
     const inp = (inputs.current ??= { ...EMPTY_INPUTS });
     inp.dt = delta;
-    // The landing hero always shows the heart unboxed at the peel rest state, with no workstation selection
-    // (isolate, ghost-others) leaking into it; the workstation's own values come back with its stage.
+    // The landing hero always shows the heart at the peel rest state inside its closed chest, with no workstation
+    // selection (isolate, ghost-others) leaking into it; the workstation's own values come back with its stage.
     const hero = viewer.stage === 'hero';
     inp.explodeTarget = hero ? PEEL_REST : viewer.explode;
+    inp.heroIntro = hero ? heroRuntime.intro : 0;
     inp.look = read.look;
     inp.stage = viewer.stage;
     inp.layerVisibility = viewer.layerVisibility;
@@ -442,15 +448,14 @@ export function GlbAnatomy({ url }: { url: string }) {
       for (const t of lazy.textures) upload(t);
       rig.markMapsReady(lazy.entry);
     }
-    // Landing hero: ghosts (the fresnel lungs) fade out over the copy column, so the headline keeps its
-    // contrast; the workstation keeps them everywhere (faint anyway).
+    // Landing hero: the chest's glass fades out at the copy column, so the headline keeps its contrast; the
+    // workstation keeps its ghosts everywhere (faint anyway).
     const mask = GHOST_MASK.uGhostMask.value;
     const width = state.size.width;
-    if (hero && width > 0) {
-      // Zero at the copy column's edge, full strength 8 % of the width beyond it: no ghost behind the headline.
-      const left = useUiStore.getState().stageInsets.left / width;
-      mask.set(left + 0.08, 0.08);
-    } else mask.set(-1, 1);
+    const copyLeft = hero && width > 0 ? useUiStore.getState().stageInsets.left / width : 0;
+    // Zero just inside the copy column's edge, full strength 4 % of the width beyond it (none when the hero stacks).
+    if (copyLeft > 0) mask.set(copyLeft + 0.04, 0.07);
+    else mask.set(-1, 1);
     // Labels follow the wall they sit on through the peel and the assembly (never the beat).
     for (const a of anchorRest.current) {
       const entry = rig.byNode.get(a.node);

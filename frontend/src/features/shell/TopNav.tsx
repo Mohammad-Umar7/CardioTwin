@@ -1,8 +1,9 @@
 import { motion } from 'framer-motion';
 import { CircleHelp, Play, Search } from 'lucide-react';
-import { useId } from 'react';
+import { useId, type MouseEvent } from 'react';
 import { NavLink, useLocation, useNavigate } from 'react-router-dom';
 import { Button, HairlineProgress, IconButton, Shortcut, withShortcut } from '@/design';
+import { enterWorkstationFromLanding } from '@/features/landing/entry';
 import { startGuidedDemo } from '@/features/tour/tourApi';
 import { useDelayedFlag, useIsReducedMotion } from '@/hooks/useMediaQuery';
 import { cn } from '@/lib/cn';
@@ -67,12 +68,23 @@ export function BrandMark({ className }: { className?: string }) {
 }
 
 /** Primary nav item; the active page wears a glass pill that glides between items (LUMEN 2). */
-function NavItem({ to, label, onMouseEnter }: { to: string; label: string; onMouseEnter?: () => void }) {
+function NavItem({
+  to,
+  label,
+  onMouseEnter,
+  onClick,
+}: {
+  to: string;
+  label: string;
+  onMouseEnter?: () => void;
+  onClick?: (event: MouseEvent<HTMLAnchorElement>) => void;
+}) {
   const reduced = useIsReducedMotion();
   return (
     <NavLink
       to={to}
       onMouseEnter={onMouseEnter}
+      onClick={onClick}
       className={({ isActive }) =>
         cn(
           'relative flex items-center px-3 text-body-s font-medium transition-colors duration-fast max-[899.98px]:px-2',
@@ -152,6 +164,12 @@ export function TopNav() {
   const onLanding = location.pathname === ROUTES.landing;
   const loading = usePatientStore((s) => s.status === 'loading');
   const showProgress = useDelayedFlag(loading, 150);
+  // From the landing, "Workstation" plays the hero's dolly into the heart (a plain click only: a new tab or
+  // window opens the route as usual).
+  const enterFromLanding = (event: MouseEvent<HTMLAnchorElement>) => {
+    if (event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
+    if (enterWorkstationFromLanding()) event.preventDefault();
+  };
 
   return (
     <header
@@ -184,6 +202,7 @@ export function TopNav() {
               to={item.to}
               label={item.label}
               onMouseEnter={item.to === ROUTES.workstation ? () => void loadWorkstation() : undefined}
+              onClick={item.to === ROUTES.workstation && onLanding ? enterFromLanding : undefined}
             />
           ))}
         </nav>

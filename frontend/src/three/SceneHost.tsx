@@ -1,7 +1,7 @@
 import { Component, Suspense, lazy, useEffect, useLayoutEffect, useRef, useState, type ReactNode } from 'react';
 import { createPortal } from 'react-dom';
 import { useViewerStore } from '@/state/viewerStore';
-import { useSceneSlot } from './sceneSlot';
+import { sameSlotRect, takeSeamlessHandoff, useSceneSlot } from './sceneSlot';
 import { WebGLFallback } from './WebGLFallback';
 import { probeWebGL } from './webgl';
 
@@ -119,8 +119,11 @@ export function SceneHost() {
     if (host.parentElement !== target) {
       target.appendChild(host);
       // Moving into another page's slot: veil the canvas until it has drawn at the new slot's size with the
-      // new stage's pose (no frame of the previous page's framing, no stretched frame before R3F resizes).
-      if (slot && shownOnce.current) veilUntilDrawn(host);
+      // new stage's pose (no frame of the previous page's framing, no stretched frame before R3F resizes) —
+      // unless the previous page handed over at this exact rectangle, already on this page's framing.
+      const handoff = takeSeamlessHandoff();
+      const seamless = !!slot && !!handoff && sameSlotRect(handoff, slot.getBoundingClientRect());
+      if (slot && shownOnce.current && !seamless) veilUntilDrawn(host);
     }
     if (slot) {
       shownOnce.current = true;

@@ -1,11 +1,12 @@
 import { useFrame, useThree } from '@react-three/fiber';
 import { useEffect, useRef } from 'react';
-import { MathUtils, type Color, type IUniform, type Vector3 } from 'three';
+import { Color, MathUtils, type IUniform, type Vector3 } from 'three';
 import { useReducedMotion } from '@/hooks/useMediaQuery';
 import { pendingColor } from '@/lib/riskColor';
 import { riskLinear } from '@/theme/risk';
 import { selectDisplayedPrediction, usePatientStore } from '@/state/patientStore';
 import { useViewerStore } from '@/state/viewerStore';
+import { heroRuntime } from '../stage/heroIntro';
 import { readScene } from '../stage/sceneControls';
 
 /** Damping rates λ (DESIGN_SYSTEM §6): p 6 (~450 ms), territory 4 (~600 ms), emissive / dim 8. */
@@ -55,12 +56,27 @@ export const SELECTED_LIFT = 0.35;
  */
 export const DIM = { desaturate: 0.75, luminance: 0.24, glow: 0.12, gloss: 0.3 } as const;
 
+/**
+ * Landing hero: a reference heart, not a patient's result. Its coronaries wear one restrained warm anatomical
+ * tone with a faint warmth (never the risk ramp, which needs the legend and the cards to be read); the risk
+ * colours arrive over this window of the "Enter Workstation" dolly, as the camera reaches the workstation.
+ */
+export const HERO_VESSEL = { color: '#D8A389', emissive: 0.05, reveal: [0.5, 0.96] as const } as const;
+const heroVesselLinear = new Color(HERO_VESSEL.color);
+
+const smoothstep = (a: number, b: number, x: number) => {
+  const t = Math.min(1, Math.max(0, (x - a) / (b - a)));
+  return t * t * (3 - 2 * t);
+};
+
 interface Anim {
   p: number;
   pending: number;
   dim: number;
   hover: number;
   sel: number;
+  /** 1 = the hero's anatomical tone, 0 = the risk colour. */
+  hero: number;
 }
 
 export interface VesselLike {
@@ -133,15 +149,19 @@ export function useRiskAnimation({ vessels, territories }: RiskAnimationTargets)
     };
 
     // A workstation selection never dims vessels or tints a territory on the landing hero.
-    const selected = viewer.stage === 'hero' ? null : viewer.selectedStructure;
+    const onHero = viewer.stage === 'hero';
+    const selected = onHero ? null : viewer.selectedStructure;
+    // On the hero the tone follows the dolly exactly; anywhere else it hands back to the risk colour.
+    const heroTone = onHero ? 1 - smoothstep(HERO_VESSEL.reveal[0], HERO_VESSEL.reveal[1], heroRuntime.intro) : 0;
     for (const [target, materials] of vessels()) {
       const goal = prediction?.predictions[target]?.probability;
       const hasGoal = typeof goal === 'number';
       let a = anim.current.get(target);
       if (!a) {
-        a = { p: hasGoal ? goal : 0, pending: hasGoal ? 0 : 1, dim: 0, hover: 0, sel: 0 };
+        a = { p: hasGoal ? goal : 0, pending: hasGoal ? 0 : 1, dim: 0, hover: 0, sel: 0, hero: heroTone };
         anim.current.set(target, a);
       }
+      a.hero = onHero ? heroTone : step(a.hero, 0, LAMBDA_FAST);
       if (hasGoal) a.p = step(a.p, goal, LAMBDA_P);
       const unavailable = !hasGoal || (patient.status === 'error' && !prediction);
       a.pending = step(a.pending, unavailable ? 1 : stale ? 0.6 : 0, LAMBDA_FAST);
@@ -161,6 +181,9 @@ export function useRiskAnimation({ vessels, territories }: RiskAnimationTargets)
       r = (r + (lum - r) * desat) * k;
       g = (g + (lum - g) * desat) * k;
       b = (b + (lum - b) * desat) * k;
+      r += (heroVesselLinear.r - r) * a.hero;
+      g += (heroVesselLinear.g - g) * a.hero;
+      b += (heroVesselLinear.b - b) * a.hero;
       const live = 1 - a.pending;
       const dimGlow = 1 - (1 - DIM.glow) * a.dim;
       const lift = live * (1 + 0.2 * a.hover + SELECTED_LIFT * a.sel) * dimGlow;
@@ -176,10 +199,11 @@ export function useRiskAnimation({ vessels, territories }: RiskAnimationTargets)
           if (material.envMapIntensity !== undefined) material.envMapIntensity = ct.gloss[0] * g;
           if (material.clearcoat !== undefined) material.clearcoat = ct.gloss[1] * g;
         }
-        material.emissiveIntensity =
+        const riskEmissive =
           ct?.look === 'realistic'
             ? (emissiveRealisticFor(a.p) * (1 + 0.5 * a.hover) + SELECTED_LIFT_REALISTIC * a.sel) * live * dimGlow
             : emissiveFor(a.p, ct?.floorScale ?? 1) * lift;
+        material.emissiveIntensity = riskEmissive + (HERO_VESSEL.emissive - riskEmissive) * a.hero;
       }
     }
 

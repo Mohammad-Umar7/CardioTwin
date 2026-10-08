@@ -18,6 +18,7 @@ import { QualityMonitor } from './stage/QualityMonitor';
 import { dprFor, resolvedDpr } from './stage/dpr';
 import { debugHandles } from './stage/debug';
 import { installProbes } from './stage/debugProbes';
+import { useHeroIntro } from './stage/heroIntro';
 import { usePickStore } from './stage/pickStore';
 import { ensureRealisticDefault, useSceneControls } from './stage/sceneControls';
 import { probeWebGL } from './webgl';
@@ -67,9 +68,10 @@ function useDocumentVisible(): boolean {
  * The single persistent WebGL canvas (DESIGN_SYSTEM §4, §7). Rendered by SceneHost into whichever page
  * slot is active; `active = false` (no slot) pauses rendering entirely.
  *
- * Render loop (§7.7): "always" only while something animates (heartbeat, landing turntable), the tab is
- * visible and a page shows the canvas; otherwise "demand" (frames on input or data change); "never" when
- * parked or hidden, and while the anatomy's shaders warm up.
+ * Render loop (§7.7): "always" only while something animates (the heartbeat in the workstation; on the landing
+ * hero its slow sway while it is on screen, and the dolly), the tab is visible and a page shows the canvas;
+ * otherwise "demand" (frames on input or data change); "never" when parked or hidden, and while the anatomy's
+ * shaders warm up.
  */
 export default function SceneCanvas({ active }: { active: boolean }) {
   const tier = useViewerStore((s) => s.tier);
@@ -77,6 +79,7 @@ export default function SceneCanvas({ active }: { active: boolean }) {
   const heartbeat = useViewerStore((s) => s.heartbeat);
   const warming = useViewerStore((s) => s.warming);
   const setTier = useViewerStore((s) => s.setTier);
+  const heroMoving = useHeroIntro((s) => s.live || s.phase === 'entering');
   const reduced = useReducedMotion();
   const visible = useDocumentVisible();
   const summaryId = useId();
@@ -91,7 +94,7 @@ export default function SceneCanvas({ active }: { active: boolean }) {
     if (!probeWebGL().halfFloat && !useViewerStore.getState().tierLocked) setTier('C', true);
   }, [setTier]);
 
-  const animating = !reduced && (heartbeat || stage === 'hero');
+  const animating = !reduced && (stage === 'hero' ? heroMoving : heartbeat);
   // No frames while the anatomy's shaders compile (stage/warmup.ts): a frame drawn now would compile them
   // synchronously and freeze the page. The poster covers the stage until the first frame.
   const frameloop = !active || !visible || warming ? 'never' : animating ? 'always' : 'demand';

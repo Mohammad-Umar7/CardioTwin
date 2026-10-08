@@ -13,7 +13,7 @@ import {
   type Object3D,
 } from 'three';
 import { useReducedMotion } from '@/hooks/useMediaQuery';
-import type { RenderTier } from '@/state/viewerStore';
+import { useViewerStore, type RenderTier } from '@/state/viewerStore';
 import { ANATOMY, UI } from '@/theme/tokens';
 import { mulberry32 } from './particles';
 import { isAttached } from './sceneNodes';
@@ -209,7 +209,8 @@ export function Atmosphere({ tier }: { tier: RenderTier }) {
     u.uTime!.value = time.current;
     u.uPixelRatio!.value = state.gl.getPixelRatio();
     (u.uCentre!.value as Vector3).copy(centre);
-    const goal = showDust ? 1 : 0;
+    // No motes on the landing hero: its chest glass is the only thing in the air there.
+    const goal = showDust && useViewerStore.getState().stage !== 'hero' ? 1 : 0;
     u.uOpacity!.value += (goal - (u.uOpacity!.value as number)) * Math.min(1, delta * 3);
     dust.visible = (u.uOpacity!.value as number) > 0.002;
   });
